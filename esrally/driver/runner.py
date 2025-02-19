@@ -23,18 +23,19 @@ import random
 import re
 import sys
 import time
-import types
 from collections import Counter, OrderedDict
 from copy import deepcopy
 from enum import Enum
 from functools import total_ordering
 from io import BytesIO
 from os.path import commonprefix
-from typing import List, Optional
+from types import FunctionType
+from typing import Optional
 
 import ijson
 
-from esrally import exceptions, track
+from esrally import exceptions, track, types
+from esrally.utils import convert
 from esrally.utils.versions import Version
 
 # Mapping from operation type to specific runner
@@ -42,15 +43,15 @@ from esrally.utils.versions import Version
 __RUNNERS = {}
 
 
-def register_default_runners():
+def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.Bulk, BulkIndex(), async_runner=True)
     register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
-    register_runner(track.OperationType.Search, Query(), async_runner=True)
-    register_runner(track.OperationType.PaginatedSearch, Query(), async_runner=True)
-    register_runner(track.OperationType.CompositeAgg, Query(), async_runner=True)
-    register_runner(track.OperationType.ScrollSearch, Query(), async_runner=True)
+    register_runner(track.OperationType.Search, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.PaginatedSearch, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.CompositeAgg, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.ScrollSearch, Query(config=config), async_runner=True)
     register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
     register_runner(track.OperationType.Composite, Composite(), async_runner=True)
     register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch(), async_runner=True)
@@ -60,6 +61,7 @@ def register_default_runners():
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
+    register_runner(track.OperationType.Esql, Esql(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -72,11 +74,11 @@ def register_default_runners():
     register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
     register_runner(track.OperationType.Refresh, Retry(Refresh()), async_runner=True)
     register_runner(track.OperationType.CreateIndex, Retry(CreateIndex()), async_runner=True)
-    register_runner(track.OperationType.DeleteIndex, Retry(DeleteIndex()), async_runner=True)
+    register_runner(track.OperationType.DeleteIndex, Retry(DeleteIndex(config=config)), async_runner=True)
     register_runner(track.OperationType.CreateComponentTemplate, Retry(CreateComponentTemplate()), async_runner=True)
     register_runner(track.OperationType.DeleteComponentTemplate, Retry(DeleteComponentTemplate()), async_runner=True)
     register_runner(track.OperationType.CreateComposableTemplate, Retry(CreateComposableTemplate()), async_runner=True)
-    register_runner(track.OperationType.DeleteComposableTemplate, Retry(DeleteComposableTemplate()), async_runner=True)
+    register_runner(track.OperationType.DeleteComposableTemplate, Retry(DeleteComposableTemplate(config=config)), async_runner=True)
     register_runner(track.OperationType.CreateDataStream, Retry(CreateDataStream()), async_runner=True)
     register_runner(track.OperationType.DeleteDataStream, Retry(DeleteDataStream()), async_runner=True)
     register_runner(track.OperationType.CreateIndexTemplate, Retry(CreateIndexTemplate()), async_runner=True)
@@ -142,7 +144,7 @@ def register_runner(operation_type, runner, **kwargs):
                 logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
             cluster_aware_runner = _multi_cluster_runner(runner, str(runner))
     # we'd rather use callable() but this will erroneously also classify a class as callable...
-    elif isinstance(runner, types.FunctionType):
+    elif isinstance(runner, FunctionType):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
         cluster_aware_runner = _single_cluster_runner(runner, runner.__name__)
@@ -168,9 +170,14 @@ class Runner:
     Base class for all operations against Elasticsearch.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, config=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.logger = logging.getLogger(__name__)
+        self.serverless_mode = False
+        self.serverless_operator = False
+        if config:
+            self.serverless_mode = convert.to_bool(config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
+            self.serverless_operator = convert.to_bool(config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
 
     async def __aenter__(self):
         return self
@@ -204,16 +211,29 @@ class Runner:
         # filter Nones
         return dict(filter(lambda kv: kv[1] is not None, full_result.items()))
 
-    def _transport_request_params(self, params):
+    @staticmethod
+    def _transport_request_params(params):
+        """
+        Takes all of a runner's params and splits out request parameters, transport
+        level parameters, and headers into their own respective dicts.
+
+        :param params: A hash with all the respective runner's parameters.
+        :return: A tuple of the specific runner's params, request level parameters, transport level parameters, and headers, respectively.
+        """
+        transport_params = {}
         request_params = params.get("request-params", {})
-        request_timeout = params.get("request-timeout")
-        if request_timeout is not None:
-            request_params["request_timeout"] = request_timeout
-        headers = params.get("headers") or {}
-        opaque_id = params.get("opaque-id")
-        if opaque_id is not None:
+
+        if request_timeout := params.pop("request-timeout", None):
+            transport_params["request_timeout"] = request_timeout
+
+        if (ignore_status := request_params.pop("ignore", None)) or (ignore_status := params.pop("ignore", None)):
+            transport_params["ignore_status"] = ignore_status
+
+        headers = params.pop("headers", None) or {}
+        if opaque_id := params.pop("opaque-id", None):
             headers.update({"x-opaque-id": opaque_id})
-        return request_params, headers
+
+        return params, request_params, transport_params, headers
 
 
 class Delegator:
@@ -421,14 +441,6 @@ def mandatory(params, key, op):
         )
 
 
-# TODO: remove and use https://docs.python.org/3/library/stdtypes.html#str.removeprefix
-#  once Python 3.9 becomes the minimum version
-def remove_prefix(string, prefix):
-    if string.startswith(prefix):
-        return string[len(prefix) :]
-    return string
-
-
 def escape(v):
     """
     Escapes values so they can be used as query parameters
@@ -479,6 +491,9 @@ class BulkIndex(Runner):
         * ``timeout``: a time unit value indicating the server-side timeout for the operation
         * ``request-timeout``: a non-negative float indicating the client-side timeout for the operation.  If not present, defaults to
          ``None`` and potentially falls back to the global timeout setting.
+        * ``refresh``: If ``"true"``, Elasticsearch will issue an async refresh to the index; i.e., ``?refresh=true``.
+        If ``"wait_for"``, Elasticsearch issues a synchronous refresh to the index; i.e., ``?refresh=wait_for``.
+        If ``"false""``, Elasticsearch will use refresh defaults; i.e., ``?refresh=false``.
         """
         detailed_results = params.get("detailed-results", False)
         api_kwargs = self._default_kw_params(params)
@@ -488,6 +503,13 @@ class BulkIndex(Runner):
             bulk_params["timeout"] = params["timeout"]
         if "pipeline" in params:
             bulk_params["pipeline"] = params["pipeline"]
+        if "refresh" in params:
+            valid_refresh_values = ("wait_for", "true", "false")
+            if params["refresh"] not in valid_refresh_values:
+                raise exceptions.RallyAssertionError(
+                    f"Unsupported bulk refresh value: {params['refresh']}. Use one of [{', '.join(valid_refresh_values)}]."
+                )
+            bulk_params["refresh"] = params["refresh"]
 
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         bulk_size = mandatory(params, "bulk-size", self)
@@ -628,14 +650,44 @@ class BulkIndex(Runner):
         else:
             error_details.add((data["status"], None))
 
+    def _error_status_summary(self, error_details):
+        """
+        Generates error status code summary.
+
+        :param error_details: accumulated error details
+        :return: error status summary
+        """
+        status_counts = {}
+        for status, _ in error_details:
+            status_counts[status] = status_counts.get(status, 0) + 1
+        status_summaries = []
+        for status in sorted(status_counts.keys()):
+            status_summaries.append(f"{status_counts[status]}x{status}")
+        return ", ".join(status_summaries)
+
     def error_description(self, error_details):
+        """
+        Generates error description with an arbitrary limit of 5 errors.
+
+        :param error_details: accumulated error details
+        :return: error description
+        """
         error_descriptions = []
-        for status, reason in error_details:
-            if reason:
-                error_descriptions.append(f"HTTP status: {status}, message: {reason}")
+        is_truncated = False
+        for count, error_detail in enumerate(sorted(error_details)):
+            status, reason = error_detail
+            if count < 5:
+                if reason:
+                    error_descriptions.append(f"HTTP status: {status}, message: {reason}")
+                else:
+                    error_descriptions.append(f"HTTP status: {status}")
             else:
-                error_descriptions.append(f"HTTP status: {status}")
-        return " | ".join(sorted(error_descriptions))
+                is_truncated = True
+                break
+        description = " | ".join(error_descriptions)
+        if is_truncated:
+            description = description + " | TRUNCATED " + self._error_status_summary(error_details)
+        return description
 
     def __repr__(self, *args, **kwargs):
         return "bulk-index"
@@ -730,13 +782,13 @@ class NodeStats(Runner):
 
     async def __call__(self, es, params):
         request_timeout = params.get("request-timeout")
-        await es.nodes.stats(metric="_all", request_timeout=request_timeout)
+        await es.options(request_timeout=request_timeout).nodes.stats(metric="_all")
 
     def __repr__(self, *args, **kwargs):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: List[str] = None) -> dict:
+def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
@@ -841,13 +893,15 @@ class Query(Runner):
     * ``pages``: Total number of pages that have been retrieved.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config=None):
+        super().__init__(config=config)
         self._search_after_extractor = SearchAfterExtractor()
         self._composite_agg_extractor = CompositeAggExtractor()
 
     async def __call__(self, es, params):
-        request_params, headers = self._transport_request_params(params)
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        # we don't set headers at the options level because the Query runner sets them via the client's '_perform_request' method
+        es = es.options(**transport_params)
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
         # composite context where there is no actual parameter source and the entire request structure must be provided
         # by the composite's parameter source.
@@ -864,6 +918,8 @@ class Query(Runner):
         cache = params.get("cache")
         if cache is not None:
             request_params["request_cache"] = str(cache).lower()
+        elif self.serverless_mode and not self.serverless_operator:
+            request_params["request_cache"] = "false"
         if not bool(headers):
             # counter-intuitive but preserves prior behavior
             headers = None
@@ -892,7 +948,11 @@ class Query(Runner):
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = self._search_after_extractor(response, bool(pit_op), results.get("hits"))
+                parsed, last_sort = self._search_after_extractor(
+                    response,
+                    bool(pit_op),
+                    results.get("hits"),  # type: ignore[arg-type]  # TODO remove the below ignore when introducing type hints
+                )
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -949,7 +1009,12 @@ class Query(Runner):
 
                 body_to_send = tree_copy_composite_agg(body, path_to_composite)
                 response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
-                parsed = self._composite_agg_extractor(response, bool(pit_op), path_to_composite, results.get("hits"))
+                parsed = self._composite_agg_extractor(
+                    response,
+                    bool(pit_op),
+                    path_to_composite,
+                    results.get("hits"),  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+                )
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -1092,11 +1157,12 @@ class Query(Runner):
                         took = props.get("took", 0)
                         all_results_collected = (size is not None and hits < size) or hits == 0
                     else:
+                        # /_search/scroll does not accept request_cache so not providing params
                         r = await es.perform_request(
                             method="GET",
                             path="/_search/scroll",
                             body={"scroll_id": scroll_id, "scroll": "10s"},
-                            params=request_params,
+                            params=None,
                             headers=headers,
                         )
                         props = parse(r, ["timed_out", "took"], ["hits.hits"])
@@ -1173,7 +1239,7 @@ class SearchAfterExtractor:
         # extracts e.g. '[1609780186, "2"]' from '"sort": [1609780186, "2"]'
         self.sort_pattern = re.compile(r"sort\":([^\]]*])")
 
-    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> (dict, List):
+    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> (dict, list):
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
         if get_point_in_time:
@@ -1206,7 +1272,7 @@ class SearchAfterExtractor:
 
 
 class CompositeAggExtractor:
-    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: List, hits_total: Optional[int]) -> dict:
+    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: list, hits_total: Optional[int]) -> dict:
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
         if get_point_in_time:
@@ -1217,7 +1283,8 @@ class CompositeAggExtractor:
 
         after_key = "aggregations." + (".".join(path_to_composite_agg)) + ".after_key"
 
-        parsed = parse(response, properties, None, [after_key])
+        # TODO remove the below ignore when introducing type hints
+        parsed = parse(response, properties, None, [after_key])  # type: ignore[arg-type]
 
         if get_point_in_time and not parsed.get("pit_id"):
             raise exceptions.RallyAssertionError("Paginated query failure: pit_id was expected but not found in the response.")
@@ -1389,23 +1456,24 @@ class DeleteIndex(Runner):
         indices = mandatory(params, "indices", self)
         only_if_exists = params.get("only-if-exists", False)
         request_params = params.get("request-params", {})
-        prior_destructive_setting = await set_destructive_requires_name(es, False)
+
+        # bypass cluster settings access for serverless
+        prior_destructive_setting = None
+        if not self.serverless_mode or self.serverless_operator:
+            prior_destructive_setting = await set_destructive_requires_name(es, False)
+
         try:
             for index_name in indices:
                 if not only_if_exists:
+                    await es.indices.delete(index=index_name, ignore=[404], params=request_params)
+                    ops += 1
+                elif only_if_exists and await es.indices.exists(index=index_name):
+                    self.logger.info("Index [%s] already exists. Deleting it.", index_name)
                     await es.indices.delete(index=index_name, params=request_params)
                     ops += 1
-                elif only_if_exists:
-                    # here we use .get() and check for 404 instead of exists due to a bug in some versions
-                    # of elasticsearch-py/elastic-transport with HEAD calls.
-                    # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
-                    get_response = await es.indices.get(index=index_name, ignore=[404])
-                    if not get_response.get("status") == 404:
-                        self.logger.info("Index [%s] already exists. Deleting it.", index_name)
-                        await es.indices.delete(index=index_name, params=request_params)
-                        ops += 1
         finally:
-            await set_destructive_requires_name(es, prior_destructive_setting)
+            if not self.serverless_mode or self.serverless_operator:
+                await set_destructive_requires_name(es, prior_destructive_setting)
         return {
             "weight": ops,
             "unit": "ops",
@@ -1432,15 +1500,10 @@ class DeleteDataStream(Runner):
             if not only_if_exists:
                 await es.indices.delete_data_stream(name=data_stream, ignore=[404], params=request_params)
                 ops += 1
-            elif only_if_exists:
-                # here we use .get() and check for 404 instead of exists due to a bug in some versions
-                # of elasticsearch-py/elastic-transport with HEAD calls.
-                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
-                get_response = await es.indices.get(index=data_stream, ignore=[404])
-                if not get_response.get("status") == 404:
-                    self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
-                    await es.indices.delete_data_stream(name=data_stream, params=request_params)
-                    ops += 1
+            elif only_if_exists and await es.indices.exists(index=data_stream):
+                self.logger.info("Data stream [%s] already exists. Deleting it.", data_stream)
+                await es.indices.delete_data_stream(name=data_stream, params=request_params)
+                ops += 1
 
         return {
             "weight": ops,
@@ -1461,8 +1524,8 @@ class CreateComponentTemplate(Runner):
     async def __call__(self, es, params):
         templates = mandatory(params, "templates", self)
         request_params = mandatory(params, "request-params", self)
-        for template, body in templates:
-            await es.cluster.put_component_template(name=template, body=body, params=request_params)
+        for name, body in templates:
+            await es.cluster.put_component_template(name=name, template=body["template"], params=request_params)
         return {
             "weight": len(templates),
             "unit": "ops",
@@ -1489,15 +1552,10 @@ class DeleteComponentTemplate(Runner):
             if not only_if_exists:
                 await es.cluster.delete_component_template(name=template_name, params=request_params, ignore=[404])
                 ops_count += 1
-            elif only_if_exists:
-                # here we use .get() and check for 404 instead of exists_component_template due to a bug in some versions
-                # of elasticsearch-py/elastic-transport with HEAD calls.
-                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
-                component_template_exists = await es.cluster.get_component_template(name=template_name, ignore=[404])
-                if not component_template_exists.get("status") == 404:
-                    self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
-                    await es.cluster.delete_component_template(name=template_name, params=request_params)
-                    ops_count += 1
+            elif only_if_exists and await es.cluster.exists_component_template(name=template_name):
+                self.logger.info("Component Index template [%s] already exists. Deleting it.", template_name)
+                await es.cluster.delete_component_template(name=template_name, params=request_params)
+                ops_count += 1
         return {
             "weight": ops_count,
             "unit": "ops",
@@ -1540,22 +1598,32 @@ class DeleteComposableTemplate(Runner):
         request_params = mandatory(params, "request-params", self)
         ops_count = 0
 
-        for template_name, delete_matching_indices, index_pattern in templates:
-            if not only_if_exists:
-                await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
-                ops_count += 1
-            elif only_if_exists:
-                # here we use .get() and check for 404 instead of exists_index_template due to a bug in some versions
-                # of elasticsearch-py/elastic-transport with HEAD calls.
-                # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
-                index_template_exists = await es.indices.get_index_template(name=template_name, ignore=[404])
-                if not index_template_exists.get("status") == 404:
+        prior_destructive_setting = None
+        current_destructive_setting = None
+        try:
+            for template_name, delete_matching_indices, index_pattern in templates:
+                if not only_if_exists:
+                    await es.indices.delete_index_template(name=template_name, params=request_params, ignore=[404])
+                    ops_count += 1
+                elif only_if_exists and await es.indices.exists_index_template(name=template_name):
                     self.logger.info("Composable Index template [%s] already exists. Deleting it.", template_name)
                     await es.indices.delete_index_template(name=template_name, params=request_params)
                     ops_count += 1
-            # ensure that we do not provide an empty index pattern by accident
-            if delete_matching_indices and index_pattern:
-                await es.indices.delete(index=index_pattern)
+                # 1. Ignore delete matching indices in serverless as wildcard deletes are not supported
+                # 2. Ensure that we do not provide an empty index pattern by accident
+                if not self.serverless_mode or self.serverless_operator:
+                    if delete_matching_indices and index_pattern:
+                        # only set if really required
+                        if current_destructive_setting is None:
+                            current_destructive_setting = False
+                            prior_destructive_setting = await set_destructive_requires_name(es, current_destructive_setting)
+                            ops_count += 1
+
+                        await es.indices.delete(index=index_pattern)
+                        ops_count += 1
+        finally:
+            if current_destructive_setting is not None:
+                await set_destructive_requires_name(es, prior_destructive_setting)
                 ops_count += 1
 
         return {
@@ -1600,20 +1668,31 @@ class DeleteIndexTemplate(Runner):
         request_params = params.get("request-params", {})
         ops_count = 0
 
-        for template_name, delete_matching_indices, index_pattern in template_names:
-            if not only_if_exists:
-                await es.indices.delete_template(name=template_name, params=request_params)
-                ops_count += 1
-            # here we use .get_template() and check for empty instead of exists_template due to a bug in some versions
-            # of elasticsearch-py/elastic-transport with HEAD calls.
-            # can change back once using elasticsearch-py >= 8.0.0 and elastic-transport >= 8.1.0
-            elif only_if_exists and await es.indices.get_template(name=template_name, ignore=[404]):
-                self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
-                await es.indices.delete_template(name=template_name, params=request_params)
-                ops_count += 1
-            # ensure that we do not provide an empty index pattern by accident
-            if delete_matching_indices and index_pattern:
-                await es.indices.delete(index=index_pattern)
+        prior_destructive_setting = None
+        current_destructive_setting = None
+
+        try:
+            for template_name, delete_matching_indices, index_pattern in template_names:
+                if not only_if_exists:
+                    await es.indices.delete_template(name=template_name, ignore=[404], params=request_params)
+                    ops_count += 1
+                elif only_if_exists and await es.indices.exists_template(name=template_name):
+                    self.logger.info("Index template [%s] already exists. Deleting it.", template_name)
+                    await es.indices.delete_template(name=template_name, params=request_params)
+                    ops_count += 1
+                # ensure that we do not provide an empty index pattern by accident
+                if delete_matching_indices and index_pattern:
+                    # only set if really required
+                    if current_destructive_setting is None:
+                        current_destructive_setting = False
+                        prior_destructive_setting = await set_destructive_requires_name(es, current_destructive_setting)
+                        ops_count += 1
+
+                    await es.indices.delete(index=index_pattern)
+                    ops_count += 1
+        finally:
+            if current_destructive_setting is not None:
+                await set_destructive_requires_name(es, prior_destructive_setting)
                 ops_count += 1
 
         return {
@@ -1690,7 +1769,7 @@ class ShrinkIndex(Runner):
             target_body["settings"]["index.routing.allocation.require._name"] = None
             target_body["settings"]["index.blocks.write"] = None
             # kick off the shrink operation
-            index_suffix = remove_prefix(source_index, source_indices_stem)
+            index_suffix = source_index.removeprefix(source_indices_stem)
             final_target_index = target_index if len(index_suffix) == 0 else target_index + index_suffix
             await es.indices.shrink(index=source_index, target=final_target_index, body=target_body)
 
@@ -1721,16 +1800,13 @@ class CreateMlDatafeed(Runner):
         body = mandatory(params, "body", self)
         try:
             await es.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
-        except elasticsearch.TransportError as e:
-            # fallback to old path
-            if e.status_code == 400:
-                await es.perform_request(
-                    method="PUT",
-                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
-                    body=body,
-                )
-            else:
-                raise e
+        except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
+            await es.perform_request(
+                method="PUT",
+                path=f"/_xpack/ml/datafeeds/{datafeed_id}",
+                body=body,
+            )
 
     def __repr__(self, *args, **kwargs):
         return "create-ml-datafeed"
@@ -1750,16 +1826,13 @@ class DeleteMlDatafeed(Runner):
         try:
             # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
             await es.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
-        except elasticsearch.TransportError as e:
-            # fallback to old path (ES < 7)
-            if e.status_code == 400:
-                await es.perform_request(
-                    method="DELETE",
-                    path=f"/_xpack/ml/datafeeds/{datafeed_id}",
-                    params={"force": escape(force), "ignore": 404},
-                )
-            else:
-                raise e
+        except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
+            await es.perform_request(
+                method="DELETE",
+                path=f"/_xpack/ml/datafeeds/{datafeed_id}",
+                params={"force": escape(force), "ignore": 404},
+            )
 
     def __repr__(self, *args, **kwargs):
         return "delete-ml-datafeed"
@@ -1781,16 +1854,13 @@ class StartMlDatafeed(Runner):
         timeout = params.get("timeout")
         try:
             await es.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
-        except elasticsearch.TransportError as e:
-            # fallback to old path (ES < 7)
-            if e.status_code == 400:
-                await es.perform_request(
-                    method="POST",
-                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
-                    body=body,
-                )
-            else:
-                raise e
+        except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
+            await es.perform_request(
+                method="POST",
+                path=f"/_xpack/ml/datafeeds/{datafeed_id}/_start",
+                body=body,
+            )
 
     def __repr__(self, *args, **kwargs):
         return "start-ml-datafeed"
@@ -1810,21 +1880,18 @@ class StopMlDatafeed(Runner):
         timeout = params.get("timeout")
         try:
             await es.ml.stop_datafeed(datafeed_id=datafeed_id, force=force, timeout=timeout)
-        except elasticsearch.TransportError as e:
-            # fallback to old path (ES < 7)
-            if e.status_code == 400:
-                request_params = {
-                    "force": escape(force),
-                }
-                if timeout:
-                    request_params["timeout"] = escape(timeout)
-                await es.perform_request(
-                    method="POST",
-                    path=f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
-                    params=request_params,
-                )
-            else:
-                raise e
+        except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
+            request_params = {
+                "force": escape(force),
+            }
+            if timeout:
+                request_params["timeout"] = escape(timeout)
+            await es.perform_request(
+                method="POST",
+                path=f"/_xpack/ml/datafeeds/{datafeed_id}/_stop",
+                params=request_params,
+            )
 
     def __repr__(self, *args, **kwargs):
         return "stop-ml-datafeed"
@@ -1843,16 +1910,13 @@ class CreateMlJob(Runner):
         body = mandatory(params, "body", self)
         try:
             await es.ml.put_job(job_id=job_id, body=body)
-        except elasticsearch.TransportError as e:
-            # fallback to old path (ES < 7)
-            if e.status_code == 400:
-                await es.perform_request(
-                    method="PUT",
-                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
-                    body=body,
-                )
-            else:
-                raise e
+        except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
+            await es.perform_request(
+                method="PUT",
+                path=f"/_xpack/ml/anomaly_detectors/{job_id}",
+                body=body,
+            )
 
     def __repr__(self, *args, **kwargs):
         return "create-ml-job"
@@ -1872,16 +1936,13 @@ class DeleteMlJob(Runner):
         # we don't want to fail if a job does not exist, thus we ignore 404s.
         try:
             await es.ml.delete_job(job_id=job_id, force=force, ignore=[404])
-        except elasticsearch.TransportError as e:
-            # fallback to old path (ES < 7)
-            if e.status_code == 400:
-                await es.perform_request(
-                    method="DELETE",
-                    path=f"/_xpack/ml/anomaly_detectors/{job_id}",
-                    params={"force": escape(force), "ignore": 404},
-                )
-            else:
-                raise e
+        except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
+            await es.perform_request(
+                method="DELETE",
+                path=f"/_xpack/ml/anomaly_detectors/{job_id}",
+                params={"force": escape(force), "ignore": 404},
+            )
 
     def __repr__(self, *args, **kwargs):
         return "delete-ml-job"
@@ -1899,15 +1960,12 @@ class OpenMlJob(Runner):
         job_id = mandatory(params, "job-id", self)
         try:
             await es.ml.open_job(job_id=job_id)
-        except elasticsearch.TransportError as e:
-            # fallback to old path (ES < 7)
-            if e.status_code == 400:
-                await es.perform_request(
-                    method="POST",
-                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
-                )
-            else:
-                raise e
+        except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
+            await es.perform_request(
+                method="POST",
+                path=f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
+            )
 
     def __repr__(self, *args, **kwargs):
         return "open-ml-job"
@@ -1927,22 +1985,19 @@ class CloseMlJob(Runner):
         timeout = params.get("timeout")
         try:
             await es.ml.close_job(job_id=job_id, force=force, timeout=timeout)
-        except elasticsearch.TransportError as e:
-            # fallback to old path (ES < 7)
-            if e.status_code == 400:
-                request_params = {
-                    "force": escape(force),
-                }
-                if timeout:
-                    request_params["timeout"] = escape(timeout)
+        except elasticsearch.BadRequestError:
+            # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
+            request_params = {
+                "force": escape(force),
+            }
+            if timeout:
+                request_params["timeout"] = escape(timeout)
 
-                await es.perform_request(
-                    method="POST",
-                    path=f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
-                    params=request_params,
-                )
-            else:
-                raise e
+            await es.perform_request(
+                method="POST",
+                path=f"/_xpack/ml/anomaly_detectors/{job_id}/_close",
+                params=request_params,
+            )
 
     def __repr__(self, *args, **kwargs):
         return "close-ml-job"
@@ -1950,16 +2005,19 @@ class CloseMlJob(Runner):
 
 class RawRequest(Runner):
     async def __call__(self, es, params):
-        request_params, headers = self._transport_request_params(params)
-        if "ignore" in params:
-            request_params["ignore"] = params["ignore"]
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
+
         path = mandatory(params, "path", self)
+
         if not path.startswith("/"):
             self.logger.error("RawRequest failed. Path parameter: [%s] must begin with a '/'.", path)
             raise exceptions.RallyAssertionError(f"RawRequest [{path}] failed. Path parameter must begin with a '/'.")
+
         if not bool(headers):
             # counter-intuitive, but preserves prior behavior
             headers = None
+
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
 
@@ -1993,7 +2051,7 @@ class DeleteSnapshotRepository(Runner):
     """
 
     async def __call__(self, es, params):
-        await es.snapshot.delete_repository(repository=mandatory(params, "repository", repr(self)))
+        await es.snapshot.delete_repository(repository=mandatory(params, "repository", repr(self)), ignore=[404])
 
     def __repr__(self, *args, **kwargs):
         return "delete-snapshot-repository"
@@ -2007,7 +2065,7 @@ class CreateSnapshotRepository(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
         await es.snapshot.create_repository(
-            repository=mandatory(params, "repository", repr(self)), body=mandatory(params, "body", repr(self)), params=request_params
+            name=mandatory(params, "repository", repr(self)), body=mandatory(params, "body", repr(self)), params=request_params
         )
 
     def __repr__(self, *args, **kwargs):
@@ -2096,33 +2154,17 @@ class WaitForCurrentSnapshotsCreate(Runner):
         repository = mandatory(params, "repository", repr(self))
         wait_period = params.get("completion-recheck-wait-period", 1)
         es_info = await es.info()
-        es_version = Version.from_string(es_info["version"]["number"])
-        api = es.snapshot.get
+        es_version = es_info["version"].get("number", "8.3.0")
+
         request_args = {"repository": repository, "snapshot": "_current", "verbose": False}
 
         # significantly reduce response size when lots of snapshots have been taken
         # only available since ES 8.3.0 (https://github.com/elastic/elasticsearch/pull/86269)
-        if (es_version.major, es_version.minor) >= (8, 3):
-            request_params, headers = self._transport_request_params(params)
-            headers["Content-Type"] = "application/json"
-
-            request_params["index_names"] = "false"
-            request_params["verbose"] = "false"
-
-            request_args = {
-                "method": "GET",
-                "path": f"_snapshot/{repository}/_current",
-                "headers": headers,
-                "params": request_params,
-            }
-
-            # TODO: Switch to native es.snapshot.get once `index_names` becomes supported in
-            #       `es.snapshot.get` of the elasticsearch-py client and we've upgraded the client in Rally, see:
-            #       https://elasticsearch-py.readthedocs.io/en/latest/api.html#elasticsearch.client.SnapshotClient.get
-            api = es.perform_request
+        if (Version.from_string(es_version) >= Version.from_string("8.3.0")) or es.is_serverless:
+            request_args["index_names"] = False
 
         while True:
-            response = await api(**request_args)
+            response = await es.snapshot.get(**request_args)
 
             if int(response.get("total")) == 0:
                 break
@@ -2142,13 +2184,15 @@ class RestoreSnapshot(Runner):
     """
 
     async def __call__(self, es, params):
+        wait_for_completion = params.get("wait-for-completion", False)
+        params.get("request-params", {}).update({"wait_for_completion": wait_for_completion})
         api_kwargs = self._default_kw_params(params)
-        await es.snapshot.restore(
-            repository=mandatory(params, "repository", repr(self)),
-            snapshot=mandatory(params, "snapshot", repr(self)),
-            wait_for_completion=params.get("wait-for-completion", False),
-            **api_kwargs,
-        )
+        repo = mandatory(params, "repository", repr(self))
+        snapshot = mandatory(params, "snapshot", repr(self))
+
+        # TODO: Replace 'perform_request' with 'SnapshotClient.restore()' when https://github.com/elastic/elasticsearch-py/issues/2168
+        # is fixed
+        await es.perform_request(method="POST", path=f"/_snapshot/{repo}/{snapshot}/_restore", **api_kwargs)
 
     def __repr__(self, *args, **kwargs):
         return "restore-snapshot"
@@ -2443,10 +2487,14 @@ class TransformStats(Runner):
 class SubmitAsyncSearch(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
+
+        # defaults wait_for_completion_timeout = 0 to avoid sync fallback for fast searches
+        if "wait_for_completion_timeout" not in request_params:
+            request_params["wait_for_completion_timeout"] = 0
+
         response = await es.async_search.submit(body=mandatory(params, "body", self), index=params.get("index"), params=request_params)
 
         op_name = mandatory(params, "name", self)
-        # id may be None if the operation has already returned
         search_id = response.get("id")
         CompositeContext.put(op_name, search_id)
 
@@ -2458,7 +2506,6 @@ def async_search_ids(op_names):
     subjects = [op_names] if isinstance(op_names, str) else op_names
     for subject in subjects:
         subject_id = CompositeContext.get(subject)
-        # skip empty ids, searches have already completed
         if subject_id:
             yield subject_id, subject
 
@@ -2475,11 +2522,13 @@ class GetAsyncSearch(Runner):
             success = success and not is_running
             if not is_running:
                 stats[search] = {
-                    "hits": response["response"]["hits"]["total"]["value"],
-                    "hits_relation": response["response"]["hits"]["total"]["relation"],
                     "timed_out": response["response"]["timed_out"],
                     "took": response["response"]["took"],
                 }
+
+                if "total" in response["response"]["hits"].keys():
+                    stats[search]["hits"] = response["response"]["hits"]["total"]["value"]
+                    stats[search]["hits_relation"] = response["response"]["hits"]["total"]["relation"]
 
         return {
             # only count completed searches - there is one key per search id in `stats`
@@ -2541,7 +2590,7 @@ class CompositeContext:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        CompositeContext.ctx.reset(self.token)
+        CompositeContext.ctx.reset(self.token)  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
         return False
 
     @staticmethod
@@ -2581,6 +2630,8 @@ class Composite(Runner):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Since Composite is marked as serverless.Status.Public, only add public
+        # operation types here.
         self.supported_op_types = [
             "open-point-in-time",
             "close-point-in-time",
@@ -2669,8 +2720,31 @@ class CreateIlmPolicy(Runner):
     async def __call__(self, es, params):
         policy_name = mandatory(params, "policy-name", self)
         body = mandatory(params, "body", self)
+        policy = body.get("policy", {})
+
+        if not policy:
+            # The es client automatically inserts the runner's 'body' within a top level a 'policy' field, so if a user
+            # provides a 'body' missing the 'policy' field, the request fails with a misleading exception message, so
+            # let's raise a more helpful error message.
+            raise exceptions.DataError(
+                "Request body does not contain the expected root field [policy]. Please ensure that the request body contains "
+                "a top-level 'policy' field and try again."
+            )
+
         request_params = params.get("request-params", {})
-        await es.ilm.put_lifecycle(policy=policy_name, body=body, params=request_params)
+        error_trace = request_params.get("error_trace", None)
+        filter_path = request_params.get("filter_path", None)
+        master_timeout = request_params.get("master_timeout", None)
+        timeout = request_params.get("timeout", None)
+
+        await es.ilm.put_lifecycle(
+            name=policy_name,
+            policy=policy,
+            error_trace=error_trace,
+            filter_path=filter_path,
+            master_timeout=master_timeout,
+            timeout=timeout,
+        )
         return {
             "weight": 1,
             "unit": "ops",
@@ -2690,7 +2764,14 @@ class DeleteIlmPolicy(Runner):
     async def __call__(self, es, params):
         policy_name = mandatory(params, "policy-name", self)
         request_params = params.get("request-params", {})
-        await es.ilm.delete_lifecycle(policy=policy_name, params=request_params)
+        error_trace = request_params.get("error_trace", None)
+        filter_path = request_params.get("filter_path", None)
+        master_timeout = request_params.get("master_timeout", None)
+        timeout = request_params.get("timeout", None)
+
+        await es.ilm.delete_lifecycle(
+            name=policy_name, error_trace=error_trace, filter_path=filter_path, master_timeout=master_timeout, timeout=timeout, ignore=[404]
+        )
         return {
             "weight": 1,
             "unit": "ops",
@@ -2743,8 +2824,8 @@ class Downsample(Runner):
     """
 
     async def __call__(self, es, params):
-
-        request_params, request_headers = self._transport_request_params(params)
+        params, request_params, transport_params, request_headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
 
         fixed_interval = mandatory(params, "fixed-interval", self)
         if fixed_interval is None:
@@ -2801,6 +2882,28 @@ class FieldCaps(Runner):
         return "field-caps"
 
 
+class Esql(Runner):
+    async def __call__(self, es, params):
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
+        query = mandatory(params, "query", self)
+        body = params.get("body", {})
+        body["query"] = query
+        query_filter = params.get("filter")
+        if query_filter:
+            body["filter"] = query_filter
+        if not bool(headers):
+            # counter-intuitive, but preserves prior behavior
+            headers = None
+        # disable eager response parsing - responses might be huge thus skewing results
+        es.return_raw_response()
+        await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
+        return {"success": True, "unit": "ops", "weight": 1}
+
+    def __repr__(self, *args, **kwargs):
+        return "esql"
+
+
 class RequestTiming(Runner, Delegator):
     def __init__(self, delegate):
         super().__init__(delegate=delegate)
@@ -2811,7 +2914,7 @@ class RequestTiming(Runner, Delegator):
 
     async def __call__(self, es, params):
         absolute_time = time.time()
-        async with es["default"].new_request_context() as request_context:
+        with es["default"].new_request_context() as request_context:
             return_value = await self.delegate(es, params)
             if isinstance(return_value, tuple) and len(return_value) == 2:
                 total_ops, total_ops_unit = return_value
@@ -2911,7 +3014,7 @@ class Retry(Runner, Delegator):
                 if last_attempt or not retry_on_timeout:
                     raise
                 await asyncio.sleep(sleep_time)
-            except elasticsearch.exceptions.TransportError as e:
+            except elasticsearch.ApiError as e:
                 if last_attempt or not retry_on_timeout:
                     raise e
 
@@ -2919,6 +3022,16 @@ class Retry(Runner, Delegator):
                     self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
                     await asyncio.sleep(sleep_time)
                 else:
+                    raise e
+
+            except elasticsearch.exceptions.ConnectionTimeout as e:
+                if last_attempt or not retry_on_timeout:
+                    raise e
+
+                self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
+                await asyncio.sleep(sleep_time)
+            except elasticsearch.exceptions.TransportError as e:
+                if last_attempt or not retry_on_timeout:
                     raise e
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

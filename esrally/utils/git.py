@@ -26,7 +26,8 @@ def probed(f):
     def probe(src, *args, **kwargs):
         # Probe for -C
         if not process.exit_status_as_bool(
-            lambda: process.run_subprocess_with_logging(f"git -C {io.escape_path(src)} --version", level=logging.DEBUG), quiet=True
+            lambda: process.run_subprocess_with_logging(f"git -C {io.escape_path(src)} --version", level=logging.DEBUG),
+            quiet=True,
         ):
             version = process.run_subprocess_with_output("git --version")
             if version:
@@ -51,13 +52,14 @@ def is_working_copy(src):
 @probed
 def is_branch(src_dir, identifier):
     show_ref_cmd = f"git -C {src_dir} show-ref {identifier}"
+    completed_process = process.run_subprocess_with_logging_and_output(show_ref_cmd)
 
     # if we get an non-zero exit code, we know that the identifier is not a branch (local or remote)
-    if not process.exit_status_as_bool(lambda: process.run_subprocess_with_logging(show_ref_cmd)):
+    if not process.exit_status_as_bool(lambda: completed_process.returncode):
         return False
 
     # it's possible the identifier could be a tag, so we explicitly check that here
-    ref = process.run_subprocess_with_output(show_ref_cmd)
+    ref = completed_process.stdout.split("\n")
     if "refs/tags" in ref[0]:
         return False
 
@@ -103,10 +105,14 @@ def pull(src_dir, *, remote, branch):
 
 
 @probed
-def pull_ts(src_dir, ts, *, remote, branch):
+def pull_ts(src_dir, ts, *, remote, branch, default_branch):
     fetch(src_dir, remote=remote)
     clean_src = io.escape_path(src_dir)
-    rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
+    # non-default ES branches might receive merges from default ES branch which we want to filter out
+    if branch != default_branch:
+        rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{default_branch}..{remote}/{branch}'
+    else:
+        rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
     revision = process.run_subprocess_with_output(rev_list_command)[0].strip()
     if process.run_subprocess_with_logging(f"git -C {clean_src} checkout {revision}"):
         raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)
@@ -147,12 +153,18 @@ def tags(src_dir):
     return _cleanup_tag_names(process.run_subprocess_with_output(f"git -C {io.escape_path(src_dir)} tag"))
 
 
-def _cleanup_remote_branch_names(branch_names):
-    return [(b[b.index("/") + 1 :]).strip() for b in branch_names if not b.endswith("/HEAD")]
+def _cleanup_remote_branch_names(refs):
+    branches = []
+    for ref in refs:
+        # git >= 2.40.0 reports an `origin` ref without a slash while previous versions
+        # reported a `origin/HEAD` ref.
+        if "/" in ref and not ref.endswith("/HEAD"):
+            branches.append(ref[ref.index("/") + 1 :].strip())
+    return branches
 
 
-def _cleanup_local_branch_names(branch_names):
-    return [b.strip() for b in branch_names if not b.endswith("HEAD")]
+def _cleanup_local_branch_names(refs):
+    return [ref.strip() for ref in refs if not ref.endswith("HEAD")]
 
 
 def _cleanup_tag_names(tag_names):

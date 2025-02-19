@@ -24,11 +24,13 @@ import logging
 import math
 import multiprocessing
 import queue
+import sys
 import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
+from io import BytesIO
+from typing import Callable, Optional
 
 import thespian.actors
 
@@ -42,6 +44,7 @@ from esrally import (
     paths,
     telemetry,
     track,
+    types,
 )
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
@@ -59,7 +62,7 @@ class PrepareBenchmark:
     Initiates preparation steps for a benchmark. The benchmark should only be started after StartBenchmark is sent.
     """
 
-    def __init__(self, config, track):
+    def __init__(self, config: types.Config, track):
         """
         :param config: Rally internal configuration object.
         :param track: The track to use.
@@ -77,8 +80,9 @@ class Bootstrap:
     Prompts loading of track code on new actors
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config, worker_id=None):
         self.config = cfg
+        self.worker_id = worker_id
 
 
 class PrepareTrack:
@@ -99,13 +103,13 @@ class TrackPrepared:
 
 
 class StartTaskLoop:
-    def __init__(self, track_name, cfg):
+    def __init__(self, track_name, cfg: types.Config):
         self.track_name = track_name
         self.cfg = cfg
 
 
 class DoTask:
-    def __init__(self, task, cfg):
+    def __init__(self, task, cfg: types.Config):
         self.task = task
         self.cfg = cfg
 
@@ -140,7 +144,7 @@ class StartWorker:
     Starts a worker.
     """
 
-    def __init__(self, worker_id, config, track, client_allocations, client_contexts):
+    def __init__(self, worker_id, config: types.Config, track, client_allocations, client_contexts):
         """
         :param worker_id: Unique (numeric) id of the worker.
         :param config: Rally internal configuration object.
@@ -225,26 +229,26 @@ class DriverActor(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        self.start_sender = None
-        self.coordinator = None
+        self.benchmark_actor = None
+        self.driver = None
         self.status = "init"
         self.post_process_timer = 0
         self.cluster_details = {}
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
-        self.coordinator.close()
-        self.send(self.start_sender, actor.BenchmarkFailure("Fatal track or load generator indication", poisonmsg.details))
+        self.driver.close()
+        self.send(self.benchmark_actor, actor.BenchmarkFailure("Fatal track or load generator indication", poisonmsg.details))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         self.logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
-        self.coordinator.close()
-        self.send(self.start_sender, msg)
+        self.driver.close()
+        self.send(self.benchmark_actor, msg)
 
     def receiveMsg_BenchmarkCancelled(self, msg, sender):
         self.logger.info("Main driver received a notification that the benchmark has been cancelled.")
-        self.coordinator.close()
-        self.send(self.start_sender, msg)
+        self.driver.close()
+        self.send(self.benchmark_actor, msg)
 
     def receiveMsg_ActorExitRequest(self, msg, sender):
         self.logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
@@ -252,13 +256,13 @@ class DriverActor(actor.RallyActor):
 
     def receiveMsg_ChildActorExited(self, msg, sender):
         # is it a worker?
-        if msg.childAddress in self.coordinator.workers:
-            worker_index = self.coordinator.workers.index(msg.childAddress)
+        if msg.childAddress in self.driver.workers:
+            worker_index = self.driver.workers.index(msg.childAddress)
             if self.status == "exiting":
                 self.logger.debug("Worker [%d] has exited.", worker_index)
             else:
                 self.logger.error("Worker [%d] has exited prematurely. Aborting benchmark.", worker_index)
-                self.send(self.start_sender, actor.BenchmarkFailure(f"Worker [{worker_index}] has exited prematurely."))
+                self.send(self.benchmark_actor, actor.BenchmarkFailure(f"Worker [{worker_index}] has exited prematurely."))
         else:
             self.logger.debug("A track preparator has exited.")
 
@@ -267,48 +271,48 @@ class DriverActor(actor.RallyActor):
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareBenchmark(self, msg, sender):
-        self.start_sender = sender
-        self.coordinator = Driver(self, msg.config)
-        self.coordinator.prepare_benchmark(msg.track)
+        self.benchmark_actor = sender
+        self.driver = Driver(self, msg.config)
+        self.driver.prepare_benchmark(msg.track)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartBenchmark(self, msg, sender):
-        self.start_sender = sender
-        self.coordinator.start_benchmark()
+        self.benchmark_actor = sender
+        self.driver.start_benchmark()
         self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_TrackPrepared(self, msg, sender):
+    def receiveMsg_TrackPrepared(self, msg, track_preparation_actor):
         self.transition_when_all_children_responded(
-            sender, msg, expected_status=None, new_status=None, transition=self._after_track_prepared
+            track_preparation_actor, msg, expected_status=None, new_status=None, transition=self._after_track_prepared
         )
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_JoinPointReached(self, msg, sender):
-        self.coordinator.joinpoint_reached(msg.worker_id, msg.worker_timestamp, msg.task)
+        self.driver.joinpoint_reached(msg.worker_id, msg.worker_timestamp, msg.task)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_UpdateSamples(self, msg, sender):
-        self.coordinator.update_samples(msg.samples)
+        self.driver.update_samples(msg.samples)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WakeupMessage(self, msg, sender):
         if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
-            self.coordinator.reset_relative_time()
-        elif not self.coordinator.finished():
+            self.driver.reset_relative_time()
+        elif not self.driver.finished():
             self.post_process_timer += DriverActor.WAKEUP_INTERVAL_SECONDS
             if self.post_process_timer >= DriverActor.POST_PROCESS_INTERVAL_SECONDS:
                 self.post_process_timer = 0
-                self.coordinator.post_process_samples()
-            self.coordinator.update_progress_message()
+                self.driver.post_process_samples()
+            self.driver.update_progress_message()
             self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
-    def create_client(self, host, cfg):
+    def create_client(self, host, cfg: types.Config, worker_id):
         worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
-        self.send(worker, Bootstrap(cfg))
+        self.send(worker, Bootstrap(cfg, worker_id))
         return worker
 
-    def start_worker(self, driver, worker_id, cfg, track, allocations, client_contexts=None):
+    def start_worker(self, driver, worker_id, cfg: types.Config, track, allocations, client_contexts=None):
         self.send(driver, StartWorker(worker_id, cfg, track, allocations, client_contexts))
 
     def drive_at(self, driver, client_start_timestamp):
@@ -321,8 +325,8 @@ class DriverActor(actor.RallyActor):
         if next_task_scheduled_in > 0:
             self.wakeupAfter(datetime.timedelta(seconds=next_task_scheduled_in), payload=DriverActor.RESET_RELATIVE_TIME_MARKER)
         else:
-            self.coordinator.reset_relative_time()
-        self.send(self.start_sender, TaskFinished(metrics, next_task_scheduled_in))
+            self.driver.reset_relative_time()
+        self.send(self.benchmark_actor, TaskFinished(metrics, next_task_scheduled_in))
 
     def _requirements(self, host):
         if host == "localhost":
@@ -330,7 +334,7 @@ class DriverActor(actor.RallyActor):
         else:
             return {"ip": host}
 
-    def prepare_track(self, hosts, cfg, track):
+    def prepare_track(self, hosts, cfg: types.Config, track):
         self.track = track
         self.logger.info("Starting prepare track process on hosts [%s]", hosts)
         self.children = [self._create_track_preparator(h) for h in hosts]
@@ -339,34 +343,38 @@ class DriverActor(actor.RallyActor):
             self.send(child, msg)
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_ReadyForWork(self, msg, sender):
+    def receiveMsg_ReadyForWork(self, msg, task_preparation_actor):
         msg = PrepareTrack(self.track)
-        self.send(sender, msg)
+        self.send(task_preparation_actor, msg)
 
     def _create_track_preparator(self, host):
         return self.createActor(TrackPreparationActor, targetActorRequirements=self._requirements(host))
 
     def _after_track_prepared(self):
         cluster_version = self.cluster_details["version"] if self.cluster_details else {}
+        # manually compiled versions don't expose build_flavor but Rally expects a value in telemetry devices
+        # we should default to trial/basic, but let's default to oss for now to avoid breaking the charts
+        build_flavor = cluster_version.get("build_flavor", "oss")
+        build_version = cluster_version.get("number", build_flavor)
+        build_hash = cluster_version.get("build_hash", build_flavor)
+
         for child in self.children:
             self.send(child, thespian.actors.ActorExitRequest())
         self.children = []
         self.send(
-            self.start_sender,
+            self.benchmark_actor,
             PreparationComplete(
-                # manually compiled versions don't expose build_flavor but Rally expects a value in telemetry devices
-                # we should default to trial/basic, but let's default to oss for now to avoid breaking the charts
-                cluster_version.get("build_flavor", "oss"),
-                cluster_version.get("number"),
-                cluster_version.get("build_hash"),
+                build_flavor,
+                build_version,
+                build_hash,
             ),
         )
 
     def on_benchmark_complete(self, metrics):
-        self.send(self.start_sender, BenchmarkComplete(metrics))
+        self.send(self.benchmark_actor, BenchmarkComplete(metrics))
 
 
-def load_local_config(coordinator_config):
+def load_local_config(coordinator_config) -> types.Config:
     cfg = config.auto_load_local_config(
         coordinator_config,
         additional_sections=[
@@ -394,33 +402,36 @@ class TaskExecutionActor(actor.RallyActor):
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.executor_future = None
         self.wakeup_interval = 5
-        self.parent = None
+        self.task_preparation_actor = None
         self.logger = logging.getLogger(__name__)
         self.track_name = None
-        self.cfg = None
+        self.cfg: Optional[types.Config] = None
 
     @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartTaskLoop(self, msg, sender):
-        self.parent = sender
+        self.task_preparation_actor = sender
         self.track_name = msg.track_name
         self.cfg = load_local_config(msg.cfg)
         if self.cfg.opts("track", "test.mode.enabled"):
             self.wakeup_interval = 0.5
         track.load_track_plugins(self.cfg, self.track_name)
-        self.send(self.parent, ReadyForWork())
+        self.send(self.task_preparation_actor, ReadyForWork())
 
     @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
     def receiveMsg_DoTask(self, msg, sender):
         # actor can arbitrarily execute code based on these messages. if anyone besides our parent sends a task, ignore
-        if sender != self.parent:
-            msg = f"TaskExecutionActor expected message from [{self.parent}] but the received the following from [{sender}]: {vars(msg)}"
+        if sender != self.task_preparation_actor:
+            msg = (
+                f"TaskExecutionActor expected message from [{self.task_preparation_actor}]"
+                " but the received the following from [{sender}]: {vars(msg)}"
+            )
             raise exceptions.RallyError(msg)
         task = msg.task
         if self.executor_future is not None:
             msg = f"TaskExecutionActor received DoTask message [{vars(msg)}], but was already busy"
             raise exceptions.RallyError(msg)
         if task is None:
-            self.send(self.parent, WorkerIdle())
+            self.send(self.task_preparation_actor, WorkerIdle())
         else:
             # this is a potentially long-running operation so we offload it a background thread so we don't block
             # the actor (e.g. logging works properly as log messages are forwarded timely).
@@ -435,16 +446,16 @@ class TaskExecutionActor(actor.RallyActor):
                 self.logger.exception("Worker failed. Notifying parent...", exc_info=e)
                 # the exception might be user-defined and not be on the load path of the original sender. Hence, it
                 # cannot be deserialized on the receiver so we convert it here to a plain string.
-                self.send(self.parent, actor.BenchmarkFailure("Error in task executor", str(e)))
+                self.send(self.task_preparation_actor, actor.BenchmarkFailure("Error in task executor", str(e)))
             else:
                 self.executor_future = None
-                self.send(self.parent, ReadyForWork())
+                self.send(self.task_preparation_actor, ReadyForWork())
         else:
             self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our no_retry infrastructure; forward to master
-        self.send(self.parent, msg)
+        self.send(self.task_preparation_actor, msg)
 
 
 class TrackPreparationActor(actor.RallyActor):
@@ -456,26 +467,27 @@ class TrackPreparationActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
         self.processors = queue.Queue()
-        self.original_sender = None
+        self.driver_actor = None
         self.logger.info("Track Preparator started")
         self.status = self.Status.INITIALIZING
         self.children = []
         self.tasks = []
-        self.cfg = None
+        self.cfg: Optional[types.Config] = None
         self.data_root_dir = None
         self.track = None
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Track Preparator received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
-        self.send(self.original_sender, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
+        self.send(self.driver_actor, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_Bootstrap(self, msg, sender):
+        self.driver_actor = sender
         # load node-specific config to have correct paths available
         self.cfg = load_local_config(msg.config)
         # this instance of load_track occurs once per host, so install dependencies if necessary
         load_track(self.cfg, install_dependencies=False)
-        self.send(sender, ReadyForWork())
+        self.send(self.driver_actor, ReadyForWork())
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_ActorExitRequest(self, msg, sender):
@@ -486,11 +498,11 @@ class TrackPreparationActor(actor.RallyActor):
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our generic worker; forward to parent
-        self.send(self.original_sender, msg)
+        self.send(self.driver_actor, msg)
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
-        self.original_sender = sender
+        assert self.cfg is not None
         self.data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
         tpr = TrackProcessorRegistry(self.cfg)
         self.track = msg.track
@@ -510,13 +522,14 @@ class TrackPreparationActor(actor.RallyActor):
         )
 
     def resume(self):
+        assert self.cfg is not None
         if not self.processors.empty():
             self._seed_tasks(self.processors.get())
             self.send_to_children_and_transition(
                 self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE, self.Status.PROCESSOR_RUNNING
             )
         else:
-            self.send(self.original_sender, TrackPrepared())
+            self.send(self.driver_actor, TrackPrepared())
 
     def _seed_tasks(self, processor):
         self.tasks = list(WorkerTask(func, params) for func, params in processor.on_prepare_track(self.track, self.data_root_dir))
@@ -525,21 +538,22 @@ class TrackPreparationActor(actor.RallyActor):
         return self.createActor(TaskExecutionActor)
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_ReadyForWork(self, msg, sender):
+    def receiveMsg_ReadyForWork(self, msg, task_execution_actor):
+        assert self.cfg is not None
         if self.tasks:
             next_task = self.tasks.pop()
         else:
             next_task = None
         new_msg = DoTask(next_task, self.cfg)
-        self.logger.debug("Track Preparator sending %s to %s", vars(new_msg), sender)
-        self.send(sender, new_msg)
+        self.logger.debug("Track Preparator sending %s to %s", vars(new_msg), task_execution_actor)
+        self.send(task_execution_actor, new_msg)
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_WorkerIdle(self, msg, sender):
         self.transition_when_all_children_responded(sender, msg, self.Status.PROCESSOR_RUNNING, self.Status.PROCESSOR_COMPLETE, self.resume)
 
 
-def num_cores(cfg):
+def num_cores(cfg: types.Config):
     return int(cfg.opts("system", "available.cores", mandatory=False, default_value=multiprocessing.cpu_count()))
 
 
@@ -550,11 +564,11 @@ ApiKey = collections.namedtuple("ApiKey", ["id", "secret"])
 class ClientContext:
     client_id: int
     parent_worker_id: int
-    api_key: ApiKey = None
+    api_key: Optional[ApiKey] = None
 
 
 class Driver:
-    def __init__(self, target, config, es_client_factory_class=client.EsClientFactory):
+    def __init__(self, driver_actor, config: types.Config, es_client_factory_class=client.EsClientFactory):
         """
         Coordinates all workers. It is technology-agnostic, i.e. it does not know anything about actors. To allow us to hook in an actor,
         we provide a ``target`` parameter which will be called whenever some event has occurred. The ``target`` can use this to send
@@ -564,7 +578,7 @@ class Driver:
         :param config: The current config object.
         """
         self.logger = logging.getLogger(__name__)
-        self.target = target
+        self.driver_actor = driver_actor
         self.config = config
         self.es_client_factory = es_client_factory_class
         self.default_sync_es_client = None
@@ -597,16 +611,20 @@ class Driver:
 
     def create_es_clients(self):
         all_hosts = self.config.opts("client", "hosts").all_hosts
+        distribution_version = self.config.opts("mechanic", "distribution.version", mandatory=False)
+        distribution_flavor = self.config.opts("mechanic", "distribution.flavor", mandatory=False)
         es = {}
         for cluster_name, cluster_hosts in all_hosts.items():
             all_client_options = self.config.opts("client", "options").all_client_options
             cluster_client_options = dict(all_client_options[cluster_name])
             # Use retries to avoid aborts on long living connections for telemetry devices
-            cluster_client_options["retry-on-timeout"] = True
-            es[cluster_name] = self.es_client_factory(cluster_hosts, cluster_client_options).create()
+            cluster_client_options["retry_on_timeout"] = True
+            es[cluster_name] = self.es_client_factory(
+                cluster_hosts, cluster_client_options, distribution_version=distribution_version, distribution_flavor=distribution_flavor
+            ).create()
         return es
 
-    def prepare_telemetry(self, es, enable, index_names, data_stream_names):
+    def prepare_telemetry(self, es, enable, index_names, data_stream_names, build_hash, serverless_mode, serverless_operator):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
@@ -617,7 +635,7 @@ class Driver:
             devices = [
                 telemetry.NodeStats(telemetry_params, es, self.metrics_store),
                 telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
-                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store),
+                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store, build_hash),
                 telemetry.JvmStatsSummary(es_default, self.metrics_store),
                 telemetry.IndexStats(es_default, self.metrics_store),
                 telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
@@ -631,10 +649,17 @@ class Driver:
                 telemetry.DataStreamStats(telemetry_params, es, self.metrics_store),
                 telemetry.IngestPipelineStats(es, self.metrics_store),
                 telemetry.DiskUsageStats(telemetry_params, es_default, self.metrics_store, index_names, data_stream_names),
+                telemetry.BlobStoreStats(telemetry_params, es, self.metrics_store),
+                telemetry.GeoIpStats(es_default, self.metrics_store),
             ]
         else:
             devices = []
-        self.telemetry = telemetry.Telemetry(enabled_devices, devices=devices)
+        self.telemetry = telemetry.Telemetry(
+            enabled_devices,
+            devices=devices,
+            serverless_mode=serverless_mode,
+            serverless_operator=serverless_operator,
+        )
 
     def wait_for_rest_api(self, es):
         es_default = es["default"]
@@ -650,6 +675,17 @@ class Driver:
             return es["default"].info()
         except BaseException:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
+            return None
+
+    def retrieve_build_hash_from_nodes_info(self, es):
+        try:
+            nodes_info = es["default"].nodes.info(filter_path="**.build_hash")
+            nodes = nodes_info["nodes"]
+            # assumption: build hash is the same across all the nodes
+            first_node_id = next(iter(nodes))
+            return nodes[first_node_id]["build_hash"]
+        except BaseException:
+            self.logger.exception("Could not retrieve build hash from nodes info")
             return None
 
     def create_api_key(self, es, client_id):
@@ -680,13 +716,27 @@ class Driver:
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
+        serverless_mode = convert.to_bool(self.config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
+        serverless_operator = convert.to_bool(self.config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
+        build_hash = None
         if skip_rest_api_check:
             self.logger.info("Skipping REST API check as requested explicitly.")
         elif uses_static_responses:
             self.logger.info("Skipping REST API check as static responses are used.")
         else:
-            self.wait_for_rest_api(es_clients)
-            self.target.cluster_details = self.retrieve_cluster_info(es_clients)
+            if serverless_mode and not serverless_operator:
+                self.logger.info("Skipping REST API check while targetting serverless cluster with a public user.")
+            else:
+                self.wait_for_rest_api(es_clients)
+            self.driver_actor.cluster_details = self.retrieve_cluster_info(es_clients)
+            if serverless_mode:
+                # overwrite static serverless version number
+                self.driver_actor.cluster_details["version"]["number"] = "serverless"
+                if serverless_operator:
+                    # overwrite build hash if running as operator
+                    build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
+                    self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
+                    self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
@@ -695,6 +745,9 @@ class Driver:
             enable=not uses_static_responses,
             index_names=self.track.index_names(),
             data_stream_names=self.track.data_stream_names(),
+            build_hash=build_hash,
+            serverless_mode=serverless_mode,
+            serverless_operator=serverless_operator,
         )
 
         for host in self.config.opts("driver", "load_driver_hosts"):
@@ -709,7 +762,7 @@ class Driver:
 
             self.load_driver_hosts.append(host_config)
 
-        self.target.prepare_track([h["host"] for h in self.load_driver_hosts], self.config, self.track)
+        self.driver_actor.prepare_track([h["host"] for h in self.load_driver_hosts], self.config, self.track)
 
     def start_benchmark(self):
         self.logger.info("Benchmark is about to start.")
@@ -724,7 +777,11 @@ class Driver:
         self.number_of_steps = len(allocator.join_points) - 1
         self.tasks_per_join_point = allocator.tasks_per_joinpoint
 
-        self.logger.info("Benchmark consists of [%d] steps executed by [%d] clients.", self.number_of_steps, len(self.allocations))
+        self.logger.info(
+            "Benchmark consists of [%d] steps executed by [%d] clients.",
+            self.number_of_steps,
+            len(self.allocations),  # type: ignore[arg-type]  # TODO remove the below ignore when introducing type hints
+        )
         # avoid flooding the log if there are too many clients
         if allocator.clients < 128:
             self.logger.debug("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
@@ -738,7 +795,7 @@ class Driver:
                 # don't assign workers without any clients
                 if len(clients) > 0:
                     self.logger.debug("Allocating worker [%d] on [%s] with [%d] clients.", worker_id, host, len(clients))
-                    worker = self.target.create_client(host, self.config)
+                    worker = self.driver_actor.create_client(host, self.config, worker_id)
 
                     client_allocations = ClientAllocations()
                     worker_client_contexts = {}
@@ -753,7 +810,7 @@ class Driver:
 
                         worker_client_contexts[client_id] = client_context
                         self.client_contexts[worker_id] = worker_client_contexts
-                    self.target.start_worker(
+                    self.driver_actor.start_worker(
                         worker, worker_id, self.config, self.track, client_allocations, client_contexts=worker_client_contexts
                     )
                     self.workers.append(worker)
@@ -806,7 +863,7 @@ class Driver:
                             "Please check the logs for details."
                         )
                 self.logger.debug("Sending benchmark results...")
-                self.target.on_benchmark_complete(m)
+                self.driver_actor.on_benchmark_complete(m)
             else:
                 self.move_to_next_task(workers_curr_step)
         else:
@@ -825,7 +882,7 @@ class Driver:
         # Some metrics store implementations return None because no external representation is required.
         # pylint: disable=assignment-from-none
         m = self.metrics_store.to_externalizable(clear=True)
-        self.target.on_task_finished(m, waiting_period)
+        self.driver_actor.on_task_finished(m, waiting_period)
         # Using a perf_counter here is fine also in the distributed case as we subtract it from `master_received_msg_at` making it
         # a relative instead of an absolute value.
         start_next_task = time.perf_counter() + waiting_period
@@ -838,7 +895,7 @@ class Driver:
                 worker_start_timestamp,
                 start_next_task,
             )
-            self.target.drive_at(worker, worker_start_timestamp)
+            self.driver_actor.drive_at(worker, worker_start_timestamp)
 
     def may_complete_current_task(self, task_allocations):
         any_joinpoints_completing_parent = [a for a in task_allocations if a.task.any_task_completes_parent]
@@ -869,7 +926,7 @@ class Driver:
 
             self.complete_current_task_sent = True
             for worker in self.workers:
-                self.target.complete_current_task(worker)
+                self.driver_actor.complete_current_task(worker)
 
         # If we have a specific 'completed-by' task specified, then we want to make sure that all clients for that task
         # are able to complete their runners as expected before completing the parent
@@ -897,7 +954,7 @@ class Driver:
                 self.complete_current_task_sent = True
                 self.logger.info("All affected clients have finished. Notifying all clients to complete their current tasks.")
                 for worker in self.workers:
-                    self.target.complete_current_task(worker)
+                    self.driver_actor.complete_current_task(worker)
             else:
                 if len(pending_client_ids) > 32:
                     self.logger.info("[%d] clients did not yet finish.", len(pending_client_ids))
@@ -969,12 +1026,14 @@ class SamplePostprocessor:
         for idx, sample in enumerate(raw_samples):
             if idx % self.downsample_factor == 0:
                 final_sample_count += 1
+                client_id_meta_data = {"client_id": sample.client_id}
                 meta_data = self.merge(
                     self.track_meta_data,
                     self.challenge_meta_data,
                     sample.operation_meta_data,
                     sample.task.meta_data,
                     sample.request_meta_data,
+                    client_id_meta_data,
                 )
 
                 self.metrics_store.put_value_cluster_level(
@@ -1027,7 +1086,7 @@ class SamplePostprocessor:
                         sample_type=timing.sample_type,
                         absolute_time=timing.absolute_time,
                         relative_time=timing.relative_time,
-                        meta_data=timing.request_meta_data,
+                        meta_data=self.merge(timing.request_meta_data, client_id_meta_data),
                     )
 
         end = time.perf_counter()
@@ -1159,9 +1218,9 @@ class Worker(actor.RallyActor):
 
     def __init__(self):
         super().__init__()
-        self.master = None
+        self.driver_actor = None
         self.worker_id = None
-        self.config = None
+        self.config: Optional[types.Config] = None
         self.track = None
         self.client_allocations = None
         self.client_contexts = None
@@ -1181,16 +1240,18 @@ class Worker(actor.RallyActor):
         self.sample_queue_size = None
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_RallyConfig(self, msg, sender):
+    def receiveMsg_Bootstrap(self, msg, sender):
+        self.driver_actor = sender
+        self.worker_id = msg.worker_id
+        # load node-specific config to have correct paths available
         self.config = load_local_config(msg.config)
-        load_track(self.config)
+        load_track(self.config, install_dependencies=False)
+        self.logger.debug("Worker[%d] has Python load path %s after bootstrap.", self.worker_id, sys.path)
 
     @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartWorker(self, msg, sender):
+        assert self.config is not None
         self.logger.info("Worker[%d] is about to start.", msg.worker_id)
-        self.master = sender
-        self.worker_id = msg.worker_id
-        self.config = load_local_config(msg.config)
         self.on_error = self.config.opts("driver", "on.error")
         self.sample_queue_size = int(self.config.opts("reporting", "sample.queue.size", mandatory=False, default_value=1 << 20))
         self.track = msg.track
@@ -1202,7 +1263,7 @@ class Worker(actor.RallyActor):
         # we need to wake up more often in test mode
         if self.config.opts("track", "test.mode.enabled"):
             self.wakeup_interval = 0.5
-        runner.register_default_runners()
+        runner.register_default_runners(self.config)
         if self.track.has_plugins:
             track.load_track_plugins(self.config, self.track.name, runner.register_runner, scheduler.register_scheduler)
         self.drive()
@@ -1246,7 +1307,7 @@ class Worker(actor.RallyActor):
             current_samples = self.send_samples()
             if self.cancel.is_set():
                 self.logger.info("Worker[%s] has detected that benchmark has been cancelled. Notifying master...", str(self.worker_id))
-                self.send(self.master, actor.BenchmarkCancelled())
+                self.send(self.driver_actor, actor.BenchmarkCancelled())
             elif self.executor_future is not None and self.executor_future.done():
                 e = self.executor_future.exception(timeout=0)
                 if e:
@@ -1255,7 +1316,7 @@ class Worker(actor.RallyActor):
                     )
                     # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
                     # deserialized on the receiver so we convert it here to a plain string.
-                    self.send(self.master, actor.BenchmarkFailure(f"Error in load generator [{self.worker_id}]", str(e)))
+                    self.send(self.driver_actor, actor.BenchmarkFailure(f"Error in load generator [{self.worker_id}]", str(e)))
                 else:
                     self.logger.debug("Worker[%s] is ready for the next task.", str(self.worker_id))
                     self.executor_future = None
@@ -1288,12 +1349,13 @@ class Worker(actor.RallyActor):
 
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our no_retry infrastructure; forward to master
-        self.send(self.master, msg)
+        self.send(self.driver_actor, msg)
 
     def receiveUnrecognizedMessage(self, msg, sender):
         self.logger.debug("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
 
     def drive(self):
+        assert self.config is not None
         task_allocations = self.current_tasks_and_advance()
         # skip non-tasks in the task list
         while len(task_allocations) == 0:
@@ -1309,7 +1371,7 @@ class Worker(actor.RallyActor):
             self.complete.clear()
             self.executor_future = None
             self.sampler = None
-            self.send(self.master, JoinPointReached(self.worker_id, task_allocations))
+            self.send(self.driver_actor, JoinPointReached(self.worker_id, task_allocations))
         else:
             # There may be a situation where there are more (parallel) tasks than workers. If we were asked to complete all tasks, we not
             # only need to complete actively running tasks but actually all scheduled tasks until we reach the next join point.
@@ -1351,7 +1413,7 @@ class Worker(actor.RallyActor):
         if self.sampler:
             samples = self.sampler.samples
             if len(samples) > 0:
-                self.send(self.master, UpdateSamples(self.worker_id, samples))
+                self.send(self.driver_actor, UpdateSamples(self.worker_id, samples))
             return samples
         return None
 
@@ -1519,7 +1581,7 @@ class Sample:
         return result
 
 
-def select_challenge(config, t):
+def select_challenge(config: types.Config, t):
     challenge_name = config.opts("track", "challenge.name")
     selected_challenge = t.find_challenge_or_default(challenge_name)
 
@@ -1693,7 +1755,7 @@ class ThroughputCalculator:
 
 
 class AsyncIoAdapter:
-    def __init__(self, cfg, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts, worker_id):
+    def __init__(self, cfg: types.Config, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts, worker_id):
         self.cfg = cfg
         self.track = track
         self.task_allocations = task_allocations
@@ -1709,16 +1771,13 @@ class AsyncIoAdapter:
         self.logger = logging.getLogger(__name__)
 
     def __call__(self, *args, **kwargs):
-        # only possible in Python 3.7+ (has introduced get_running_loop)
-        # try:
-        #     loop = asyncio.get_running_loop()
-        # except RuntimeError:
-        #     loop = asyncio.new_event_loop()
-        #     asyncio.set_event_loop(loop)
-        loop = asyncio.new_event_loop()
-        loop.set_debug(self.debug_event_loop)
-        loop.set_exception_handler(self._logging_exception_handler)
-        asyncio.set_event_loop(loop)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            loop.set_debug(self.debug_event_loop)
+            loop.set_exception_handler(self._logging_exception_handler)
+            asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(self.run())
         finally:
@@ -1728,12 +1787,17 @@ class AsyncIoAdapter:
         self.logger.error("Uncaught exception in event loop: %s", context)
 
     async def run(self):
-        def es_clients(client_id, all_hosts, all_client_options):
+        def es_clients(client_id, all_hosts, all_client_options, distribution_version, distribution_flavor):
             es = {}
             context = self.client_contexts.get(client_id)
             api_key = context.api_key
             for cluster_name, cluster_hosts in all_hosts.items():
-                es[cluster_name] = client.EsClientFactory(cluster_hosts, all_client_options[cluster_name]).create_async(api_key=api_key)
+                es[cluster_name] = client.EsClientFactory(
+                    cluster_hosts,
+                    all_client_options[cluster_name],
+                    distribution_version=distribution_version,
+                    distribution_flavor=distribution_flavor,
+                ).create_async(api_key=api_key, client_id=client_id)
             return es
 
         if self.assertions_enabled:
@@ -1741,7 +1805,7 @@ class AsyncIoAdapter:
         runner.enable_assertions(self.assertions_enabled)
 
         clients = []
-        aws = []
+        awaitables = []
         # A parameter source should only be created once per task - it is partitioned later on per client.
         params_per_task = {}
         for client_id, task_allocation in self.task_allocations:
@@ -1750,18 +1814,24 @@ class AsyncIoAdapter:
                 param_source = track.operation_parameters(self.track, task)
                 params_per_task[task] = param_source
             schedule = schedule_for(task_allocation, params_per_task[task])
-            es = es_clients(client_id, self.cfg.opts("client", "hosts").all_hosts, self.cfg.opts("client", "options"))
+            es = es_clients(
+                client_id,
+                self.cfg.opts("client", "hosts").all_hosts,
+                self.cfg.opts("client", "options"),
+                self.cfg.opts("mechanic", "distribution.version", mandatory=False),
+                self.cfg.opts("mechanic", "distribution.flavor", mandatory=False),
+            )
             clients.append(es)
             async_executor = AsyncExecutor(
                 client_id, task, schedule, es, self.sampler, self.cancel, self.complete, task.error_behavior(self.abort_on_error)
             )
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
-            aws.append(final_executor())
+            awaitables.append(final_executor())
         task_names = [t.task.task.name for t in self.task_allocations]
         self.logger.info("Worker[%s] executing tasks: %s", self.parent_worker_id, task_names)
         run_start = time.perf_counter()
         try:
-            _ = await asyncio.gather(*aws)
+            _ = await asyncio.gather(*awaitables)
         finally:
             run_end = time.perf_counter()
             self.logger.info(
@@ -1863,7 +1933,7 @@ class AsyncExecutor:
                 absolute_processing_start = time.time()
                 processing_start = time.perf_counter()
                 self.schedule_handle.before_request(processing_start)
-                async with self.es["default"].new_request_context() as request_context:
+                with self.es["default"].new_request_context() as request_context:
                     total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                     request_start = request_context.request_start
                     request_end = request_context.request_end
@@ -1981,20 +2051,70 @@ async def execute_single(runner, es, params, on_error):
         total_ops = 0
         total_ops_unit = "ops"
         request_meta_data = {"success": False, "error-type": "transport"}
-        # The ES client will sometimes return string like "N/A" or "TIMEOUT" for connection errors.
-        if isinstance(e.status_code, int):
-            request_meta_data["http-status"] = e.status_code
+        # For the 'errors' attribute, errors are ordered from
+        # most recently raised (index=0) to least recently raised (index=N)
+        #
+        # If an HTTP status code is available with the error it
+        # will be stored under 'status'. If HTTP headers are available
+        # they are stored under 'headers'.
+        if e.errors:
+            if hasattr(e.errors[0], "status"):
+                request_meta_data["http-status"] = e.errors[0].status
         # connection timeout errors don't provide a helpful description
         if isinstance(e, elasticsearch.ConnectionTimeout):
             request_meta_data["error-description"] = "network connection timed out"
-        elif e.info:
-            request_meta_data["error-description"] = f"{e.error} ({e.info})"
+        else:
+            error_description = e.message
+            request_meta_data["error-description"] = error_description
+    except elasticsearch.ApiError as e:
+        total_ops = 0
+        total_ops_unit = "ops"
+        request_meta_data = {"success": False, "error-type": "api"}
+        error_message = ""
+
+        # Some runners return a raw response, causing the 'error' property to be a string literal of the bytes/BytesIO object,
+        # we should avoid bubbling that up
+        # e.g. ApiError(413, '<_io.BytesIO object at 0xffffaf146a70>')
+        if isinstance(e.body, bytes):
+            # could be an empty body
+            if error_body := e.body.decode("utf-8"):
+                error_message = error_body
+            else:
+                # to be consistent with an empty 'e.error'
+                error_message = str(None)
+        elif isinstance(e.body, BytesIO):
+            # could be an empty body
+            if error_body := e.body.read().decode("utf-8"):
+                error_message = error_body
+            else:
+                # to be consistent with an empty 'e.error'
+                error_message = str(None)
+        # fallback to 'error' property if the body isn't bytes/BytesIO
         else:
             if isinstance(e.error, bytes):
-                error_description = e.error.decode("utf-8")
+                error_message = e.error.decode("utf-8")
+            elif isinstance(e.error, BytesIO):
+                error_message = e.error.read().decode("utf-8")
             else:
-                error_description = str(e.error)
-            request_meta_data["error-description"] = error_description
+                # if the 'error' is empty, we get back str(None)
+                error_message = e.error
+
+        if isinstance(e.info, bytes):
+            error_info = e.info.decode("utf-8")
+        elif isinstance(e.info, BytesIO):
+            error_info = e.info.read().decode("utf-8")
+        else:
+            error_info = e.info
+
+        if error_info:
+            error_message += f" ({error_info})"
+
+        error_description = error_message
+
+        request_meta_data["error-description"] = error_description
+        if e.status_code:
+            request_meta_data["http-status"] = e.status_code
+
     except KeyError as e:
         logging.getLogger(__name__).exception("Cannot execute runner [%s]; most likely due to missing parameters.", str(runner))
         msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
@@ -2003,10 +2123,15 @@ async def execute_single(runner, es, params, on_error):
     if not request_meta_data["success"]:
         if on_error == "abort" or fatal_error:
             msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
-            description = request_meta_data.get("error-description")
-            if description:
-                msg += ", Description: %s" % description
+
+            if description := request_meta_data.get("error-description"):
+                msg += f", Description: {description}"
+
+            if http_status := request_meta_data.get("http-status"):
+                msg += f", HTTP Status: {http_status}"
+
             raise exceptions.RallyAssertionError(msg)
+
     return total_ops, total_ops_unit, request_meta_data
 
 

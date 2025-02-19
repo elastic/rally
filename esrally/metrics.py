@@ -26,15 +26,13 @@ import pickle
 import random
 import statistics
 import sys
-import time
 import uuid
 import zlib
 from enum import Enum, IntEnum
-from http.client import responses
 
 import tabulate
 
-from esrally import client, config, exceptions, paths, time, version
+from esrally import client, config, exceptions, paths, time, types, version
 from esrally.utils import console, convert, io, versions
 
 
@@ -47,37 +45,28 @@ class EsClient:
         self._client = client
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
-
-    # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
-    def probe_version(self):
-        info = self.guarded(self._client.info)
-        try:
-            self._cluster_version = versions.components(info["version"]["number"])
-        except BaseException:
-            msg = "Could not determine version of metrics cluster"
-            self.logger.exception(msg)
-            raise exceptions.RallyError(msg)
+        self.retryable_status_codes = [502, 503, 504, 429]
 
     def put_template(self, name, template):
-        return self.guarded(self._client.indices.put_template, name=name, body=template)
+        tmpl = json.loads(template)
+        return self.guarded(self._client.indices.put_index_template, name=name, **tmpl)
 
     def template_exists(self, name):
-        return self.guarded(self._client.indices.exists_template, name=name)
-
-    def delete_template(self, name):
-        self.guarded(self._client.indices.delete_template, name=name)
+        return self.guarded(self._client.indices.exists_index_template, name=name)
 
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
 
     def delete(self, index, id):
+        # ignore 404 status code (NotFoundError) when index does not exist
         return self.guarded(self._client.delete, index=index, id=id, ignore=404)
 
     def get_index(self, name):
         return self.guarded(self._client.indices.get, name=name)
 
-    def create_index(self, index, body=None):
-        return self.guarded(self._client.indices.create, index=index, body=body, ignore=400)
+    def create_index(self, index):
+        # ignore 400 status code (BadRequestError) when index already exists
+        return self.guarded(self._client.indices.create, index=index, ignore=400)
 
     def exists(self, index):
         return self.guarded(self._client.indices.exists, index=index)
@@ -103,70 +92,101 @@ class EsClient:
     def guarded(self, target, *args, **kwargs):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
+        import elasticsearch.helpers
+        from elastic_transport import ApiError, TransportError
 
-        max_execution_count = 11
+        max_execution_count = 10
         execution_count = 0
 
-        while execution_count < max_execution_count:
+        while execution_count <= max_execution_count:
             time_to_sleep = 2**execution_count + random.random()
             execution_count += 1
 
             try:
                 return target(*args, **kwargs)
-            except elasticsearch.exceptions.AuthenticationException:
-                # we know that it is just one host (see EsClientFactory)
-                node = self._client.transport.hosts[0]
-                msg = (
-                    "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at "
-                    "port [%s] (wrong password?). Please fix the configuration in [%s]."
-                    % (node["host"], node["port"], config.ConfigFile().location)
-                )
-                self.logger.exception(msg)
-                raise exceptions.SystemSetupError(msg)
-            except elasticsearch.exceptions.AuthorizationException:
-                node = self._client.transport.hosts[0]
-                msg = (
-                    "The configured user does not have enough privileges to run the operation [%s] against your Elasticsearch metrics "
-                    "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough "
-                    "privileges in the configuration in [%s]." % (target.__name__, node["host"], node["port"], config.ConfigFile().location)
-                )
-                self.logger.exception(msg)
-                raise exceptions.SystemSetupError(msg)
-            except elasticsearch.exceptions.ConnectionTimeout:
-                if execution_count < max_execution_count:
-                    self.logger.debug("Connection timeout in attempt [%d/%d].", execution_count, max_execution_count)
+            except elasticsearch.exceptions.ConnectionTimeout as e:
+                if execution_count <= max_execution_count:
+                    self.logger.debug(
+                        "Connection timeout [%s] in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                        e.message,
+                        execution_count,
+                        max_execution_count,
+                        time_to_sleep,
+                    )
                     time.sleep(time_to_sleep)
                 else:
                     operation = target.__name__
                     self.logger.exception("Connection timeout while running [%s] (retried %d times).", operation, max_execution_count)
-                    node = self._client.transport.hosts[0]
+                    node = self._client.transport.node_pool.get()
                     msg = (
                         "A connection timeout occurred while running the operation [%s] against your Elasticsearch metrics store on "
-                        "host [%s] at port [%s]." % (operation, node["host"], node["port"])
+                        "host [%s] at port [%s]." % (operation, node.host, node.port)
                     )
                     raise exceptions.RallyError(msg)
-            except elasticsearch.exceptions.ConnectionError:
-                node = self._client.transport.hosts[0]
+            except elasticsearch.exceptions.ConnectionError as e:
+                if execution_count <= max_execution_count:
+                    self.logger.debug(
+                        "Connection error [%s] in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                        e.message,
+                        execution_count,
+                        max_execution_count,
+                        time_to_sleep,
+                    )
+                    time.sleep(time_to_sleep)
+                else:
+                    node = self._client.transport.node_pool.get()
+                    msg = (
+                        "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s]"
+                        " or fix the configuration in [%s]." % (node.host, node.port, config.ConfigFile().location)
+                    )
+                    self.logger.exception(msg)
+                    # connection errors doesn't neccessarily mean it's during setup
+                    raise exceptions.RallyError(msg)
+            except elasticsearch.exceptions.AuthenticationException:
+                # we know that it is just one host (see EsClientFactory)
+                node = self._client.transport.node_pool.get()
                 msg = (
-                    "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [%s] at port [%s]"
-                    " or fix the configuration in [%s]." % (node["host"], node["port"], config.ConfigFile().location)
+                    "The configured user could not authenticate against your Elasticsearch metrics store running on host [%s] at "
+                    "port [%s] (wrong password?). Please fix the configuration in [%s]."
+                    % (node.host, node.port, config.ConfigFile().location)
                 )
                 self.logger.exception(msg)
                 raise exceptions.SystemSetupError(msg)
-            except elasticsearch.TransportError as e:
-                if e.status_code == 404 and e.error == "index_not_found_exception":
-                    node = self._client.transport.hosts[0]
-                    msg = (
-                        "The operation [%s] against your Elasticsearch metrics store on "
-                        "host [%s] at port [%s] failed because index [%s] does not exist."
-                        % (target.__name__, node["host"], node["port"], kwargs.get("index"))
+            except elasticsearch.exceptions.AuthorizationException:
+                node = self._client.transport.node_pool.get()
+                msg = (
+                    "The configured user does not have enough privileges to run the operation [%s] against your Elasticsearch metrics "
+                    "store running on host [%s] at port [%s]. Please adjust your x-pack configuration or specify a user with enough "
+                    "privileges in the configuration in [%s]." % (target.__name__, node.host, node.port, config.ConfigFile().location)
+                )
+                self.logger.exception(msg)
+                raise exceptions.SystemSetupError(msg)
+            except elasticsearch.helpers.BulkIndexError as e:
+                for err in e.errors:
+                    err_type = err.get("index", {}).get("error", {}).get("type", None)
+                    if err.get("index", {}).get("status", None) not in self.retryable_status_codes:
+                        msg = f"Unretryable error encountered when sending metrics to remote metrics store: [{err_type}]"
+                        self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
+                        raise exceptions.RallyError(msg)
+
+                if execution_count <= max_execution_count:
+                    self.logger.debug(
+                        "Error in sending metrics to remote metrics store [%s] in attempt [%d/%d]. Sleeping for [%f] seconds.",
+                        e,
+                        execution_count,
+                        max_execution_count,
+                        time_to_sleep,
                     )
-                    self.logger.exception(msg)
+                    time.sleep(time_to_sleep)
+                else:
+                    msg = f"Failed to send metrics to remote metrics store: [{e.errors}]"
+                    self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
                     raise exceptions.RallyError(msg)
-                if e.status_code in (502, 503, 504, 429) and execution_count < max_execution_count:
+            except ApiError as e:
+                if e.status_code in self.retryable_status_codes and execution_count <= max_execution_count:
                     self.logger.debug(
                         "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
-                        responses[e.status_code],
+                        e.error,
                         e.status_code,
                         execution_count,
                         max_execution_count,
@@ -174,19 +194,24 @@ class EsClient:
                     )
                     time.sleep(time_to_sleep)
                 else:
-                    node = self._client.transport.hosts[0]
+                    node = self._client.transport.node_pool.get()
                     msg = (
-                        "A transport error occurred while running the operation [%s] against your Elasticsearch metrics store on "
-                        "host [%s] at port [%s]." % (target.__name__, node["host"], node["port"])
+                        "An error [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] "
+                        "at port [%s]." % (e.error, target.__name__, node.host, node.port)
                     )
                     self.logger.exception(msg)
+                    # this does not necessarily mean it's a system setup problem...
                     raise exceptions.RallyError(msg)
+            except TransportError as e:
+                node = self._client.transport.node_pool.get()
 
-            except elasticsearch.exceptions.ElasticsearchException:
-                node = self._client.transport.hosts[0]
+                if e.errors:
+                    err = e.errors
+                else:
+                    err = e
                 msg = (
-                    "An unknown error occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] "
-                    "at port [%s]." % (target.__name__, node["host"], node["port"])
+                    "Transport error(s) [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on "
+                    "host [%s] at port [%s]." % (err, target.__name__, node.host, node.port)
                 )
                 self.logger.exception(msg)
                 # this does not necessarily mean it's a system setup problem...
@@ -198,13 +223,25 @@ class EsClientFactory:
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
+        hosts = [{"host": host, "port": port}]
         secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
         user = self._config.opts("reporting", "datastore.user")
-        password = self._config.opts("reporting", "datastore.password")
+        distribution_version = None
+        distribution_flavor = None
+        try:
+            password = os.environ["RALLY_REPORTING_DATASTORE_PASSWORD"]
+        except KeyError:
+            try:
+                password = self._config.opts("reporting", "datastore.password")
+            except exceptions.ConfigError:
+                raise exceptions.ConfigError(
+                    "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+                ) from None
+
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
         self.probe_version = self._config.opts("reporting", "datastore.probe.cluster_version", default_value=True, mandatory=False)
@@ -221,13 +258,23 @@ class EsClientFactory:
             client_options["basic_auth_user"] = user
             client_options["basic_auth_password"] = password
 
-        factory = client.EsClientFactory(hosts=[{"host": host, "port": port}], client_options=client_options)
+        # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
+        if self.probe_version:
+            distribution_flavor, distribution_version, _, _ = client.cluster_distribution_version(
+                hosts=hosts, client_options=client_options
+            )
+            self._cluster_version = distribution_version
+
+        factory = client.EsClientFactory(
+            hosts=hosts,
+            client_options=client_options,
+            distribution_version=distribution_version,
+            distribution_flavor=distribution_flavor,
+        )
         self._client = factory.create()
 
     def create(self):
         c = EsClient(self._client)
-        if self.probe_version:
-            c.probe_version()
         return c
 
 
@@ -236,7 +283,7 @@ class IndexTemplateProvider:
     Abstracts how the Rally index template is retrieved. Intended for testing.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self._config = cfg
         self._number_of_shards = self._config.opts("reporting", "datastore.number_of_shards", default_value=None, mandatory=False)
         self._number_of_replicas = self._config.opts("reporting", "datastore.number_of_replicas", default_value=None, mandatory=False)
@@ -263,9 +310,9 @@ class IndexTemplateProvider:
                         f"The setting: datastore.number_of_shards must be >= 1. Please "
                         f"check the configuration in {self._config.config_file.location}"
                     )
-                template["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
+                template["template"]["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
             if self._number_of_replicas is not None:
-                template["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
+                template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
             return json.dumps(template)
 
 
@@ -295,7 +342,7 @@ def calculate_system_results(store, node_name):
     return calc()
 
 
-def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, meta_info=None):
+def metrics_store(cfg: types.Config, read_only=True, track=None, challenge=None, car=None, meta_info=None):
     """
     Creates a proper metrics store based on the current configuration.
 
@@ -315,7 +362,7 @@ def metrics_store(cfg, read_only=True, track=None, challenge=None, car=None, met
     return store
 
 
-def metrics_store_class(cfg):
+def metrics_store_class(cfg: types.Config):
     if cfg.opts("reporting", "datastore.type") == "elasticsearch":
         return EsMetricsStore
     else:
@@ -332,7 +379,7 @@ class MetricsStore:
     Abstract metrics store
     """
 
-    def __init__(self, cfg, clock=time.Clock, meta_info=None):
+    def __init__(self, cfg: types.Config, clock=time.Clock, meta_info=None):
         """
         Creates a new metrics store.
 
@@ -428,9 +475,9 @@ class MetricsStore:
         metrics on close (in order to avoid additional latency during the benchmark).
         """
         self.logger.info("Closing metrics store.")
+        self.opened = False
         self.flush()
         self._clear_meta_info()
-        self.opened = False
 
     def add_meta_info(self, scope, scope_key, key, value):
         """
@@ -824,7 +871,7 @@ class EsMetricsStore(MetricsStore):
 
     def __init__(
         self,
-        cfg,
+        cfg: types.Config,
         client_factory_class=EsClientFactory,
         index_template_provider_class=IndexTemplateProvider,
         clock=time.Clock,
@@ -1081,7 +1128,7 @@ class EsMetricsStore(MetricsStore):
 
 
 class InMemoryMetricsStore(MetricsStore):
-    def __init__(self, cfg, clock=time.Clock, meta_info=None):
+    def __init__(self, cfg: types.Config, clock=time.Clock, meta_info=None):
         """
 
         Creates a new metrics store.
@@ -1213,7 +1260,7 @@ class InMemoryMetricsStore(MetricsStore):
         return "in-memory metrics store"
 
 
-def race_store(cfg):
+def race_store(cfg: types.Config):
     """
     Creates a proper race store based on the current configuration.
     :param cfg: Config object. Mandatory.
@@ -1228,7 +1275,7 @@ def race_store(cfg):
         return FileRaceStore(cfg)
 
 
-def results_store(cfg):
+def results_store(cfg: types.Config):
     """
     Creates a proper race store based on the current configuration.
     :param cfg: Config object. Mandatory.
@@ -1243,23 +1290,23 @@ def results_store(cfg):
         return NoopResultsStore()
 
 
-def delete_race(cfg):
+def delete_race(cfg: types.Config):
     race_store(cfg).delete_race()
 
 
-def delete_annotation(cfg):
+def delete_annotation(cfg: types.Config):
     race_store(cfg).delete_annotation()
 
 
-def list_annotations(cfg):
+def list_annotations(cfg: types.Config):
     race_store(cfg).list_annotations()
 
 
-def add_annotation(cfg):
+def add_annotation(cfg: types.Config):
     race_store(cfg).add_annotation()
 
 
-def list_races(cfg):
+def list_races(cfg: types.Config):
     def format_dict(d):
         if d:
             items = sorted(d.items())
@@ -1310,7 +1357,7 @@ def list_races(cfg):
         console.println("No recent races found.")
 
 
-def create_race(cfg, track, challenge, track_revision=None):
+def create_race(cfg: types.Config, track, challenge, track_revision=None):
     car = cfg.opts("mechanic", "car.names")
     environment = cfg.opts("system", "env.name")
     race_id = cfg.opts("system", "race.id")
@@ -1464,7 +1511,7 @@ class Race:
             # allow to logically delete records, e.g. for UI purposes when we only want to show the latest result
             "active": True,
         }
-        if self.distribution_version:
+        if versions.is_version_identifier(self.distribution_version):
             result_template["distribution-major-version"] = versions.major_version(self.distribution_version)
         if self.team_revision:
             result_template["team-revision"] = self.team_revision
@@ -1518,7 +1565,7 @@ class Race:
 
 
 class RaceStore:
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self.cfg = cfg
         self.environment_name = cfg.opts("system", "env.name")
 
@@ -1575,6 +1622,9 @@ class RaceStore:
 
     def _id(self):
         return self.cfg.opts("system", "delete.id")
+
+    def _challenge(self):
+        return self.cfg.opts("system", "list.challenge", mandatory=False)
 
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.
@@ -1680,7 +1730,7 @@ class FileRaceStore(RaceStore):
 class EsRaceStore(RaceStore):
     INDEX_PREFIX = "rally-races-"
 
-    def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
         Creates a new metrics store.
 
@@ -1727,8 +1777,9 @@ class EsRaceStore(RaceStore):
             )
         else:
             if not self.client.exists(index="rally-annotations"):
-                body = self.index_template_provider.annotations_template()
-                self.client.create_index(index="rally-annotations", body=body)
+                # create or overwrite template on index creation
+                self.client.put_template("rally-annotations", self.index_template_provider.annotations_template())
+                self.client.create_index(index="rally-annotations")
             self.client.index(
                 index="rally-annotations",
                 id=annotation_id,
@@ -1832,6 +1883,7 @@ class EsRaceStore(RaceStore):
         name = self._benchmark_name()
         from_date = self._from_date()
         to_date = self._to_date()
+        challenge = self._challenge()
 
         filters = [
             {
@@ -1863,6 +1915,8 @@ class EsRaceStore(RaceStore):
             query["query"]["bool"]["filter"].append(
                 {"bool": {"should": [{"term": {"user-tags.benchmark-name": name}}, {"term": {"user-tags.name": name}}]}}
             )
+        if challenge:
+            query["query"]["bool"]["filter"].append({"bool": {"should": [{"term": {"challenge": challenge}}]}})
 
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
@@ -1908,7 +1962,7 @@ class EsResultsStore:
 
     INDEX_PREFIX = "rally-results-"
 
-    def __init__(self, cfg, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
         Creates a new results store.
 
@@ -2030,6 +2084,7 @@ class GlobalStatsCalculator:
         result.memory_norms = self.median("segments_norms_memory_in_bytes")
         result.memory_points = self.median("segments_points_memory_in_bytes")
         result.memory_stored_fields = self.median("segments_stored_fields_memory_in_bytes")
+        result.dataset_size = self.sum("dataset_size_in_bytes")
         result.store_size = self.sum("store_size_in_bytes")
         result.translog_size = self.sum("translog_size_in_bytes")
 
@@ -2216,6 +2271,7 @@ class GlobalStats:
         self.memory_norms = self.v(d, "memory_norms")
         self.memory_points = self.v(d, "memory_points")
         self.memory_stored_fields = self.v(d, "memory_stored_fields")
+        self.dataset_size = self.v(d, "dataset_size")
         self.store_size = self.v(d, "store_size")
         self.translog_size = self.v(d, "translog_size")
         self.segment_count = self.v(d, "segment_count")

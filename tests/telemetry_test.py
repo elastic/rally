@@ -20,16 +20,18 @@ import copy
 import logging
 import random
 from collections import namedtuple
+from dataclasses import dataclass
 from unittest import mock
 from unittest.mock import call
 
+import elastic_transport
 import elasticsearch
 import pytest
 
 from esrally import config, exceptions, metrics, telemetry
 from esrally.mechanic import cluster
 from esrally.metrics import MetaInfoScope
-from esrally.utils import console
+from esrally.utils import console, serverless
 
 
 class TestSamplerThread:
@@ -101,13 +103,25 @@ def create_config():
     return cfg
 
 
-class MockTelemetryDevice(telemetry.InternalTelemetryDevice):
+class MockJavaOptsTelemetryDevice(telemetry.InternalTelemetryDevice):
     def __init__(self, mock_java_opts):
         super().__init__()
         self.mock_java_opts = mock_java_opts
 
     def instrument_java_opts(self):
         return self.mock_java_opts
+
+
+class MockTelemetryDevice(telemetry.TelemetryDevice):
+    def __init__(self, *, internal: bool, serverless_status: serverless.Status):
+        super().__init__()
+        self.internal = internal
+        self.serverless_status = serverless_status
+        self.command = f"{'default' if internal else 'optional'}-{serverless_status.name.lower()}"
+        self.on_benchmark_start_called = False
+
+    def on_benchmark_start(self):
+        self.on_benchmark_start_called = True
 
 
 class TestTelemetry:
@@ -118,9 +132,9 @@ class TestTelemetry:
         cfg.add(config.Scope.application, "benchmarks", "metrics.log.dir", "telemetry")
 
         devices = [
-            MockTelemetryDevice(["-Xms256M"]),
-            MockTelemetryDevice(["-Xmx512M"]),
-            MockTelemetryDevice(["-Des.network.host=127.0.0.1"]),
+            MockJavaOptsTelemetryDevice(["-Xms256M"]),
+            MockJavaOptsTelemetryDevice(["-Xmx512M"]),
+            MockJavaOptsTelemetryDevice(["-Des.network.host=127.0.0.1"]),
         ]
 
         t = telemetry.Telemetry(enabled_devices=None, devices=devices)
@@ -128,6 +142,54 @@ class TestTelemetry:
         opts = t.instrument_candidate_java_opts()
 
         assert opts == ["-Xms256M", "-Xmx512M", "-Des.network.host=127.0.0.1"]
+
+
+@pytest.mark.parametrize(
+    ["enabled_devices", "serverless_mode", "serverless_operator", "started", "expected_msgs"],
+    [
+        (["optional-blocked"], False, False, {"default-public", "default-internal", "default-blocked", "optional-blocked"}, []),
+        ([], True, False, {"default-public"}, []),
+        ([], True, True, {"default-public", "default-internal"}, []),
+        (
+            ["optional-public", "optional-internal"],
+            True,
+            False,
+            {"default-public", "optional-public"},
+            ["Excluding telemetry device [optional-internal] as it is unavailable on serverless."],
+        ),
+    ],
+)
+def test_serverless_exclusion(enabled_devices, serverless_mode, serverless_operator, started, expected_msgs, monkeypatch):
+    info_msg = []
+
+    def console_info(msg):
+        nonlocal info_msg
+        info_msg.append(msg)
+
+    monkeypatch.setattr(telemetry.console, "info", console_info)
+    devices = {
+        "default-public": MockTelemetryDevice(internal=True, serverless_status=serverless.Status.Public),
+        "default-internal": MockTelemetryDevice(internal=True, serverless_status=serverless.Status.Internal),
+        "default-blocked": MockTelemetryDevice(internal=True, serverless_status=serverless.Status.Blocked),
+        "optional-public": MockTelemetryDevice(internal=False, serverless_status=serverless.Status.Public),
+        "optional-internal": MockTelemetryDevice(internal=False, serverless_status=serverless.Status.Internal),
+        "optional-blocked": MockTelemetryDevice(internal=False, serverless_status=serverless.Status.Blocked),
+    }
+
+    t = telemetry.Telemetry(
+        enabled_devices=enabled_devices,
+        devices=devices.values(),
+        serverless_mode=serverless_mode,
+        serverless_operator=serverless_operator,
+    )
+    t.on_benchmark_start()
+    actually_started = set()
+    for device_key, device in devices.items():
+        if device.on_benchmark_start_called:
+            actually_started.add(device_key)
+
+    assert actually_started == started
+    assert info_msg == expected_msgs
 
 
 class TestStartupTime:
@@ -150,7 +212,7 @@ class TestStartupTime:
 
 
 class Client:
-    def __init__(self, *, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None):
+    def __init__(self, *, nodes=None, info=None, indices=None, transform=None, cluster=None, transport_client=None, is_serverless=None):
         self.nodes = nodes
         self._info = wrap(info)
         self.indices = indices
@@ -158,6 +220,7 @@ class Client:
         self.cluster = cluster
         if transport_client:
             self.transport = transport_client
+        self.is_serverless = is_serverless
 
     def info(self):
         return self._info()
@@ -206,6 +269,23 @@ class ResponseSupplier:
         return self.response
 
 
+class ApiErrorSupplier:
+    @dataclass
+    class ApiResponseMeta:
+        status: int
+
+    def __call__(self, status=None, body=None, message=None):
+        return elasticsearch.ApiError(
+            # TODO remove this ignore when introducing type hints
+            meta=self.ApiResponseMeta(status=status),  # type: ignore[arg-type]
+            body=body,
+            message=message,
+        )
+
+
+raiseApiError = ApiErrorSupplier()
+
+
 class TransportErrorSupplier:
     def __call__(self, *args, **kwargs):
         raise elasticsearch.TransportError
@@ -215,7 +295,7 @@ raiseTransportError = TransportErrorSupplier()
 
 
 class TransportClient:
-    def __init__(self, *, response=None, force_error=False, error=elasticsearch.TransportError):
+    def __init__(self, response=None, force_error=False, error=elasticsearch.TransportError(message="transport error")):
         self._response = response
         self._force_error = force_error
         self._error = error
@@ -353,7 +433,6 @@ class TestSegmentStats:
     @mock.patch("elasticsearch.Elasticsearch")
     @mock.patch("builtins.open", new_callable=mock.mock_open)
     def test_generates_log_file(self, file_mock, es):
-
         stats_response = """
         index    shard prirep ip        segment generation docs.count docs.deleted   size size.memory committed searchable version compound
         geonames 0     p      127.0.0.1 _0               0        212            0 72.3kb        9621 true      true       8.4.0   true
@@ -1674,7 +1753,18 @@ class TestSearchableSnapshotsStats:
         metrics_store = metrics.EsMetricsStore(cfg)
         client = Client(
             transport_client=TransportClient(
-                force_error=True, error=elasticsearch.NotFoundError("", "", {"error": {"reason": "No searchable snapshots indices found"}})
+                force_error=True,
+                error=elasticsearch.NotFoundError(
+                    message="",
+                    meta=elastic_transport.ApiResponseMeta(
+                        status=404,
+                        http_version="1.1",
+                        headers=elastic_transport.HttpHeaders(),
+                        duration=0,
+                        node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+                    ),
+                    body={"error": {"reason": "No searchable snapshots indices found"}},
+                ),
             )
         )
         recorder = telemetry.SearchableSnapshotsStatsRecorder(
@@ -2010,6 +2100,41 @@ class TestNodeStatsRecorder:
                         },
                     }
                 },
+                "fs": {
+                    "timestamp": 1704343978936,
+                    "total": {"total_in_bytes": 1055735832576, "free_in_bytes": 105574690816, "available_in_bytes": 105557913600},
+                    "data": [
+                        {
+                            "path": "/usr/share/elasticsearch/data",
+                            "mount": "/usr/share/elasticsearch/data (/dev/sdc)",
+                            "type": "ext4",
+                            "total_in_bytes": 1055735832576,
+                            "free_in_bytes": 105574690816,
+                            "available_in_bytes": 105557913600,
+                        }
+                    ],
+                    "io_stats": {
+                        "devices": [
+                            {
+                                "device_name": "sdc",
+                                "operations": 31184,
+                                "read_operations": 6,
+                                "write_operations": 31178,
+                                "read_kilobytes": 104,
+                                "write_kilobytes": 30343968,
+                                "io_time_in_millis": 58668,
+                            }
+                        ],
+                        "total": {
+                            "operations": 31184,
+                            "read_operations": 6,
+                            "write_operations": 31178,
+                            "read_kilobytes": 104,
+                            "write_kilobytes": 30343968,
+                            "io_time_in_millis": 58668,
+                        },
+                    },
+                },
             }
         },
     }
@@ -2084,6 +2209,12 @@ class TestNodeStatsRecorder:
             "jvm_gc_collectors_young_collection_time_in_millis": 309,
             "jvm_gc_collectors_old_collection_count": 2,
             "jvm_gc_collectors_old_collection_time_in_millis": 229,
+            "os_cgroup_cpuacct_usage_nanos": 1394207523870751,
+            "os_cgroup_cpu_cfs_period_micros": 100000,
+            "os_cgroup_cpu_cfs_quota_micros": 793162,
+            "os_cgroup_cpu_stat_number_of_elapsed_periods": 41092415,
+            "os_cgroup_cpu_stat_number_of_times_throttled": 41890,
+            "os_cgroup_cpu_stat_time_throttled_nanos": 29380593023188,
             "os_mem_total_in_bytes": 62277025792,
             "os_mem_free_in_bytes": 4934840320,
             "os_mem_used_in_bytes": 57342185472,
@@ -2114,6 +2245,16 @@ class TestNodeStatsRecorder:
             "indexing_pressure_memory_total_coordinating_rejections": 0,
             "indexing_pressure_memory_total_primary_rejections": 0,
             "indexing_pressure_memory_total_replica_rejections": 0,
+            "fs_timestamp": 1704343978936,
+            "fs_total_total_in_bytes": 1055735832576,
+            "fs_total_free_in_bytes": 105574690816,
+            "fs_total_available_in_bytes": 105557913600,
+            "fs_io_stats_total_operations": 31184,
+            "fs_io_stats_total_read_operations": 6,
+            "fs_io_stats_total_write_operations": 31178,
+            "fs_io_stats_total_read_kilobytes": 104,
+            "fs_io_stats_total_write_kilobytes": 30343968,
+            "fs_io_stats_total_io_time_in_millis": 58668,
         }
     )
 
@@ -2129,12 +2270,7 @@ class TestNodeStatsRecorder:
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="default", client=client, metrics_store=metrics_store)
 
     def test_flatten_indices_fields(self):
-        client = Client(nodes=SubClient(stats=self.node_stats_response))
-        cfg = create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        telemetry_params = {}
-        recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
-        flattened_fields = recorder.flatten_stats_fields(
+        flattened_fields = telemetry.flatten_stats_fields(
             prefix="indices",
             stats=self.node_stats_response["nodes"]["Zbl_e8EyRXmiR47gbHgPfg"]["indices"],
         )
@@ -2156,7 +2292,8 @@ class TestNodeStatsRecorder:
 
         expected_doc = collections.OrderedDict()
         expected_doc["name"] = "node-stats"
-        expected_doc.update(self.default_stats_response_flattened)
+        # TODO remove the below ignore when introducing type hints
+        expected_doc.update(self.default_stats_response_flattened)  # type: ignore[arg-type]
 
         metrics_store_put_doc.assert_called_once_with(
             expected_doc, level=MetaInfoScope.node, node_name="rally0", meta_data=metrics_store_meta_data
@@ -2203,8 +2340,11 @@ class TestNodeStatsRecorder:
                         "refresh": {
                             "total": 747,
                             "total_time_in_millis": 277382,
+                            "external_total": 979,
+                            "external_total_time_in_millis": 14199,
                             "listeners": 0,
                         },
+                        "flush": {"total": 71, "periodic": 71, "total_time_in_millis": 34545},
                         "query_cache": {
                             "memory_size_in_bytes": 0,
                             "total_count": 0,
@@ -2390,6 +2530,41 @@ class TestNodeStatsRecorder:
                             },
                         }
                     },
+                    "fs": {
+                        "timestamp": 1704343978936,
+                        "total": {"total_in_bytes": 1055735832576, "free_in_bytes": 105574690816, "available_in_bytes": 105557913600},
+                        "data": [
+                            {
+                                "path": "/usr/share/elasticsearch/data",
+                                "mount": "/usr/share/elasticsearch/data (/dev/sdc)",
+                                "type": "ext4",
+                                "total_in_bytes": 1055735832576,
+                                "free_in_bytes": 105574690816,
+                                "available_in_bytes": 105557913600,
+                            }
+                        ],
+                        "io_stats": {
+                            "devices": [
+                                {
+                                    "device_name": "sdc",
+                                    "operations": 31184,
+                                    "read_operations": 6,
+                                    "write_operations": 31178,
+                                    "read_kilobytes": 104,
+                                    "write_kilobytes": 30343968,
+                                    "io_time_in_millis": 58668,
+                                }
+                            ],
+                            "total": {
+                                "operations": 31184,
+                                "read_operations": 6,
+                                "write_operations": 31178,
+                                "read_kilobytes": 104,
+                                "write_kilobytes": 30343968,
+                                "io_time_in_millis": 58668,
+                            },
+                        },
+                    },
                 }
             },
         }
@@ -2397,7 +2572,7 @@ class TestNodeStatsRecorder:
         client = Client(nodes=SubClient(stats=node_stats_response))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        telemetry_params = {"node-stats-include-indices": True}
+        telemetry_params = {"node-stats-include-indices": True, "node-stats-include-cgroup": True}
         recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
         recorder.record()
 
@@ -2412,6 +2587,9 @@ class TestNodeStatsRecorder:
                 "indices_docs_deleted": 324530,
                 "indices_fielddata_evictions": 17,
                 "indices_fielddata_memory_size_in_bytes": 6936,
+                "indices_flush_periodic": 71,
+                "indices_flush_total": 71,
+                "indices_flush_total_time_in_millis": 34545,
                 "indices_indexing_throttle_time_in_millis": 0,
                 "indices_merges_current": 0,
                 "indices_merges_current_docs": 0,
@@ -2423,6 +2601,11 @@ class TestNodeStatsRecorder:
                 "indices_query_cache_memory_size_in_bytes": 0,
                 "indices_query_cache_miss_count": 0,
                 "indices_query_cache_total_count": 0,
+                "indices_refresh_external_total": 979,
+                "indices_refresh_external_total_time_in_millis": 14199,
+                "indices_refresh_listeners": 0,
+                "indices_refresh_total": 747,
+                "indices_refresh_total_time_in_millis": 277382,
                 "indices_request_cache_evictions": 0,
                 "indices_request_cache_hit_count": 0,
                 "indices_request_cache_memory_size_in_bytes": 0,
@@ -2476,6 +2659,12 @@ class TestNodeStatsRecorder:
                 "jvm_gc_collectors_young_collection_time_in_millis": 309,
                 "jvm_gc_collectors_old_collection_count": 2,
                 "jvm_gc_collectors_old_collection_time_in_millis": 229,
+                "os_cgroup_cpuacct_usage_nanos": 1394207523870751,
+                "os_cgroup_cpu_cfs_period_micros": 100000,
+                "os_cgroup_cpu_cfs_quota_micros": 793162,
+                "os_cgroup_cpu_stat_number_of_elapsed_periods": 41092415,
+                "os_cgroup_cpu_stat_number_of_times_throttled": 41890,
+                "os_cgroup_cpu_stat_time_throttled_nanos": 29380593023188,
                 "os_mem_total_in_bytes": 62277025792,
                 "os_mem_free_in_bytes": 4934840320,
                 "os_mem_used_in_bytes": 57342185472,
@@ -2501,6 +2690,16 @@ class TestNodeStatsRecorder:
                 "indexing_pressure_memory_total_coordinating_rejections": 0,
                 "indexing_pressure_memory_total_primary_rejections": 0,
                 "indexing_pressure_memory_total_replica_rejections": 0,
+                "fs_timestamp": 1704343978936,
+                "fs_total_total_in_bytes": 1055735832576,
+                "fs_total_free_in_bytes": 105574690816,
+                "fs_total_available_in_bytes": 105557913600,
+                "fs_io_stats_total_operations": 31184,
+                "fs_io_stats_total_read_operations": 6,
+                "fs_io_stats_total_write_operations": 31178,
+                "fs_io_stats_total_read_kilobytes": 104,
+                "fs_io_stats_total_write_kilobytes": 30343968,
+                "fs_io_stats_total_io_time_in_millis": 58668,
             },
             level=MetaInfoScope.node,
             node_name="rally0",
@@ -2789,6 +2988,12 @@ class TestNodeStatsRecorder:
                 "jvm_gc_collectors_young_collection_time_in_millis": 309,
                 "jvm_gc_collectors_old_collection_count": 2,
                 "jvm_gc_collectors_old_collection_time_in_millis": 229,
+                "os_cgroup_cpuacct_usage_nanos": 1394207523870751,
+                "os_cgroup_cpu_cfs_period_micros": 100000,
+                "os_cgroup_cpu_cfs_quota_micros": 793162,
+                "os_cgroup_cpu_stat_number_of_elapsed_periods": 41092415,
+                "os_cgroup_cpu_stat_number_of_times_throttled": 41890,
+                "os_cgroup_cpu_stat_time_throttled_nanos": 29380593023188,
                 "os_mem_total_in_bytes": 62277025792,
                 "os_mem_free_in_bytes": 4934840320,
                 "os_mem_used_in_bytes": 57342185472,
@@ -2832,6 +3037,235 @@ class TestNodeStatsRecorder:
             match="The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string but was <class 'dict'>",
         ):
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_logs_debug_on_missing_cgroup_stats(self, metrics_store_put_doc):
+        node_stats_response = {
+            "cluster_name": "elasticsearch",
+            "nodes": {
+                "Zbl_e8EyRXmiR47gbHgPfg": {
+                    "timestamp": 1524379617017,
+                    "name": "rally0",
+                    "transport_address": "127.0.0.1:9300",
+                    "host": "127.0.0.1",
+                    "ip": "127.0.0.1:9300",
+                    "roles": [
+                        "master",
+                        "data",
+                        "ingest",
+                    ],
+                    "indices": {
+                        "docs": {
+                            "count": 76892364,
+                            "deleted": 324530,
+                        },
+                        "store": {
+                            "size_in_bytes": 983409834,
+                        },
+                        "indexing": {
+                            "is_throttled": False,
+                            "throttle_time_in_millis": 0,
+                        },
+                        "search": {
+                            "open_contexts": 0,
+                            "query_total": 0,
+                            "query_time_in_millis": 0,
+                        },
+                        "merges": {
+                            "current": 0,
+                            "current_docs": 0,
+                            "current_size_in_bytes": 0,
+                        },
+                        "refresh": {
+                            "total": 747,
+                            "total_time_in_millis": 277382,
+                            "listeners": 0,
+                        },
+                        "query_cache": {
+                            "memory_size_in_bytes": 0,
+                            "total_count": 0,
+                            "hit_count": 0,
+                            "miss_count": 0,
+                            "cache_size": 0,
+                            "cache_count": 0,
+                            "evictions": 0,
+                        },
+                        "fielddata": {
+                            "memory_size_in_bytes": 6936,
+                            "evictions": 17,
+                        },
+                        "completion": {
+                            "size_in_bytes": 0,
+                        },
+                        "segments": {
+                            "count": 0,
+                            "memory_in_bytes": 0,
+                            "max_unsafe_auto_id_timestamp": -9223372036854775808,
+                            "file_sizes": {},
+                        },
+                        "translog": {
+                            "operations": 0,
+                            "size_in_bytes": 0,
+                            "uncommitted_operations": 0,
+                            "uncommitted_size_in_bytes": 0,
+                        },
+                        "request_cache": {
+                            "memory_size_in_bytes": 0,
+                            "evictions": 0,
+                            "hit_count": 0,
+                            "miss_count": 0,
+                        },
+                        "recovery": {
+                            "current_as_source": 0,
+                            "current_as_target": 0,
+                            "throttle_time_in_millis": 0,
+                        },
+                    },
+                    "jvm": {
+                        "buffer_pools": {
+                            "mapped": {
+                                "count": 7,
+                                "used_in_bytes": 3120,
+                                "total_capacity_in_bytes": 9999,
+                            },
+                            "direct": {
+                                "count": 6,
+                                "used_in_bytes": 73868,
+                                "total_capacity_in_bytes": 73867,
+                            },
+                        },
+                        "classes": {
+                            "current_loaded_count": 9992,
+                            "total_loaded_count": 9992,
+                            "total_unloaded_count": 0,
+                        },
+                        "mem": {
+                            "heap_used_in_bytes": 119073552,
+                            "heap_used_percent": 19,
+                            "heap_committed_in_bytes": 626393088,
+                            "heap_max_in_bytes": 626393088,
+                            "non_heap_used_in_bytes": 110250424,
+                            "non_heap_committed_in_bytes": 118108160,
+                            "pools": {
+                                "young": {
+                                    "used_in_bytes": 66378576,
+                                    "max_in_bytes": 139591680,
+                                    "peak_used_in_bytes": 139591680,
+                                    "peak_max_in_bytes": 139591680,
+                                },
+                                "survivor": {
+                                    "used_in_bytes": 358496,
+                                    "max_in_bytes": 17432576,
+                                    "peak_used_in_bytes": 17432576,
+                                    "peak_max_in_bytes": 17432576,
+                                },
+                                "old": {
+                                    "used_in_bytes": 52336480,
+                                    "max_in_bytes": 469368832,
+                                    "peak_used_in_bytes": 52336480,
+                                    "peak_max_in_bytes": 469368832,
+                                },
+                            },
+                        },
+                        "gc": {
+                            "collectors": {
+                                "young": {
+                                    "collection_count": 3,
+                                    "collection_time_in_millis": 309,
+                                },
+                                "old": {
+                                    "collection_count": 2,
+                                    "collection_time_in_millis": 229,
+                                },
+                            }
+                        },
+                    },
+                    "process": {
+                        "timestamp": 1526045135857,
+                        "open_file_descriptors": 312,
+                        "max_file_descriptors": 1048576,
+                        "cpu": {
+                            "percent": 10,
+                            "total_in_millis": 56520,
+                        },
+                        "mem": {
+                            "total_virtual_in_bytes": 2472173568,
+                        },
+                    },
+                    "os": {
+                        "timestamp": 1655950949872,
+                        "cpu": {"percent": 3, "load_average": {"1m": 3.38, "5m": 3.79, "15m": 3.84}},
+                        "mem": {
+                            "total_in_bytes": 62277025792,
+                            "free_in_bytes": 4934840320,
+                            "used_in_bytes": 57342185472,
+                            "free_percent": 8,
+                            "used_percent": 92,
+                        },
+                        "swap": {"total_in_bytes": 0, "free_in_bytes": 0, "used_in_bytes": 0},
+                    },
+                    "thread_pool": {
+                        "generic": {
+                            "threads": 4,
+                            "queue": 0,
+                            "active": 0,
+                            "rejected": 0,
+                            "largest": 4,
+                            "completed": 8,
+                        },
+                    },
+                    "transport": {
+                        "server_open": 12,
+                        "rx_count": 77,
+                        "rx_size_in_bytes": 98723498,
+                        "tx_count": 88,
+                        "tx_size_in_bytes": 23879803,
+                    },
+                    "breakers": {
+                        "parent": {
+                            "limit_size_in_bytes": 726571417,
+                            "limit_size": "692.9mb",
+                            "estimated_size_in_bytes": 0,
+                            "estimated_size": "0b",
+                            "overhead": 1.0,
+                            "tripped": 0,
+                        }
+                    },
+                    "indexing_pressure": {
+                        "memory": {
+                            "current": {
+                                "combined_coordinating_and_primary_in_bytes": 0,
+                                "coordinating_in_bytes": 0,
+                                "primary_in_bytes": 0,
+                                "replica_in_bytes": 0,
+                                "all_in_bytes": 0,
+                            },
+                            "total": {
+                                "combined_coordinating_and_primary_in_bytes": 0,
+                                "coordinating_in_bytes": 0,
+                                "primary_in_bytes": 0,
+                                "replica_in_bytes": 0,
+                                "all_in_bytes": 0,
+                                "coordinating_rejections": 0,
+                                "primary_rejections": 0,
+                                "replica_rejections": 0,
+                            },
+                        }
+                    },
+                }
+            },
+        }
+
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        logger = logging.getLogger("esrally.telemetry")
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"node-stats-include-cgroup": True}
+        recorder = telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+
+        with mock.patch.object(logger, "debug") as mocked_debug:
+            recorder.record()
+            mocked_debug.assert_called_once_with("Node cgroup stats requested with none present.")
 
 
 class TestTransformStats:
@@ -2999,23 +3433,13 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(nodes=SubClient(info=nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "6.0.0-alpha1"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "oss"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_vendor", "Oracle Corporation"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "jvm_version", "1.8.0_74"),
-            mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_vendor", "Oracle Corporation"),
-            mock.call(metrics.MetaInfoScope.node, "rally1", "jvm_version", "1.8.0_102"),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "plugins", ["ingest-geoip"]),
-            mock.call(metrics.MetaInfoScope.node, "rally1", "plugins", ["ingest-geoip"]),
-            # can push up to cluster level as all nodes have the same plugins installed
-            mock.call(metrics.MetaInfoScope.cluster, None, "plugins", ["ingest-geoip"]),
-            mock.call(metrics.MetaInfoScope.node, "rally0", "attribute_group", "cold_nodes"),
-            mock.call(metrics.MetaInfoScope.node, "rally1", "attribute_group", "hot_nodes"),
         ]
 
         metrics_store_add_meta_info.assert_has_calls(calls)
@@ -3025,11 +3449,59 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(nodes=SubClient(stats=raiseTransportError, info=raiseTransportError), info=raiseTransportError)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 
         assert metrics_store_add_meta_info.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_static_serverless_version_overwrite(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "version": {
+                "build_hash": "00000000",
+                "number": "8.11.0",
+                "build_flavor": "serverless",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+        calls = [
+            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "00000000"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "serverless"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "serverless"),
+        ]
+
+        metrics_store_add_meta_info.assert_has_calls(calls)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_revision_override(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "version": {
+                "build_hash": "00000000",
+                "number": "8.11.0",
+                "build_flavor": "serverless",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, "abc123")
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+        calls = [
+            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "serverless"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "serverless"),
+        ]
+
+        metrics_store_add_meta_info.assert_has_calls(calls)
 
 
 class TestNodeEnvironmentInfo:
@@ -3566,6 +4038,7 @@ class TestIndexStats:
                 "total": {
                     "store": {
                         "size_in_bytes": 2113867510,
+                        "total_data_set_size_in_bytes": 112113867510,
                     },
                     "translog": {
                         "operations": 6840000,
@@ -3749,6 +4222,7 @@ class TestIndexStats:
                 mock.call("segments_terms_memory_in_bytes", 256, "byte"),
                 # we don't have norms, so nothing should have been called
                 mock.call("store_size_in_bytes", 2113867510, "byte"),
+                mock.call("dataset_size_in_bytes", 112113867510, "byte"),
                 mock.call("translog_size_in_bytes", 2647984713, "byte"),
             ],
             any_order=True,
@@ -3946,7 +4420,6 @@ class TestMasterNodeStatsRecorder:
 
 
 class TestIngestPipelineStats:
-
     ingest_pipeline_stats_start_response = {
         "_nodes": {"total": 1, "successful": 1, "failed": 0},
         "cluster_name": "docker-cluster",
@@ -4319,7 +4792,6 @@ class TestIngestPipelineStats:
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_node_level")
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     def test_logs_warning_on_missing_stats(self, metrics_put_value_cluster_level, metrics_put_value_node_level):
-
         cfg = create_config()
         logger = logging.getLogger("esrally.telemetry")
         metrics_store = metrics.EsMetricsStore(cfg)
@@ -4357,171 +4829,182 @@ class TestDiskUsageStats:
     def test_uses_indices_by_default(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        tc = TransportClient(response={"_shards": {"failed": 0}})
-        es = Client(transport_client=tc)
+        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.kwargs == [
-            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
-            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
-        ]
+        es.indices.disk_usage.assert_has_calls(
+            [
+                call(index="foo", run_expensive_tasks=True),
+                call(index="bar", run_expensive_tasks=True),
+            ]
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_data_streams_by_default(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        tc = TransportClient(response={"_shards": {"failed": 0}})
-        es = Client(transport_client=tc)
+        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=["foo", "bar"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.kwargs == [
-            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
-            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
-        ]
+        es.indices.disk_usage.assert_has_calls(
+            [
+                call(index="foo", run_expensive_tasks=True),
+                call(index="bar", run_expensive_tasks=True),
+            ]
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_indices_param_if_specified_instead_of_index_names(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        tc = TransportClient(response={"_shards": {"failed": 0}})
-        es = Client(transport_client=tc)
+        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats(
             {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=["baz"], data_stream_names=[]
         )
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.kwargs == [
-            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
-            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
-        ]
+        es.indices.disk_usage.assert_has_calls(
+            [
+                call(index="foo", run_expensive_tasks=True),
+                call(index="bar", run_expensive_tasks=True),
+            ]
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_indices_param_if_specified_instead_of_data_stream_names(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        tc = TransportClient(response={"_shards": {"failed": 0}})
-        es = Client(transport_client=tc)
+        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats(
             {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=[], data_stream_names=["baz"]
         )
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        assert tc.kwargs == [
-            {"method": "POST", "path": "/foo/_disk_usage", "params": {"run_expensive_tasks": "true"}},
-            {"method": "POST", "path": "/bar/_disk_usage", "params": {"run_expensive_tasks": "true"}},
-        ]
+        es.indices.disk_usage.assert_has_calls(
+            [
+                call(index="foo", run_expensive_tasks=True),
+                call(index="bar", run_expensive_tasks=True),
+            ]
+        )
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_error_on_retrieval_does_not_store_metrics(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                force_error=True,
-                error=elasticsearch.RequestError,
-            )
+        es.indices.disk_usage.side_effect = elasticsearch.RequestError(
+            message="error",
+            meta=elastic_transport.ApiResponseMeta(
+                status=400,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                duration=0,
+                node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+            ),
+            body=None,
         )
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
             t.on_benchmark_stop()
+        assert "A transport error occurred while collecting disk usage for foo" in caplog.text
         assert metrics_store_cluster_level.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_no_indices_fails(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_no_indices_fails(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                force_error=True,
-                error=elasticsearch.RequestError,
-            )
-        )
+        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         with pytest.raises(exceptions.RallyError):
             t.on_benchmark_start()
+        msg = (
+            "No indices defined for disk-usage-stats. Set disk-usage-stats-indices "
+            "telemetry param or add indices or data streams to the track config."
+        )
+        assert msg in caplog.text
         assert metrics_store_cluster_level.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_missing_all_fails(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_missing_all_fails(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                force_error=True,
-                error=elasticsearch.RequestError,
-            )
+        es.indices.disk_usage.side_effect = elasticsearch.NotFoundError(
+            message="error",
+            meta=elastic_transport.ApiResponseMeta(
+                status=404,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                duration=0,
+                node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+            ),
+            body=None,
         )
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         with pytest.raises(exceptions.RallyError):
             t.on_benchmark_stop()
+
+        assert "Requested disk usage for missing index foo" in caplog.text
+        assert "Requested disk usage for missing index bar" in caplog.text
+        assert "Couldn't find any indices for disk usage foo,bar" in caplog.text
         assert metrics_store_cluster_level.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_some_mising_succeeds(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_some_mising_succeeds(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-
-        class TwoTransportClients:
-            def __init__(self, first, rest):
-                self.first = first
-                self.rest = rest
-
-            def perform_request(self, *args, **kwargs):
-                if self.first:
-                    first = self.first
-                    self.first = None
-                    return first.perform_request(args, kwargs)
-                else:
-                    return self.rest.perform_request(args, kwargs)
-
-        not_found_transport_client = TransportClient(
-            force_error=True,
-            error=elasticsearch.NotFoundError,
+        not_found_response = elasticsearch.NotFoundError(
+            message="error",
+            meta=elastic_transport.ApiResponseMeta(
+                status=404,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                duration=0,
+                node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+            ),
+            body=None,
         )
-        successful_client = TransportClient(
-            response={
-                "_shards": {"failed": 0},
-                "foo": {
-                    "fields": {
-                        "_id": {
-                            "total_in_bytes": 21079,
-                            "inverted_index": {"total_in_bytes": 17110},
-                            "stored_fields_in_bytes": 3969,
-                        }
+        successful_response = {
+            "_shards": {"failed": 0},
+            "foo": {
+                "fields": {
+                    "_id": {
+                        "total_in_bytes": 21079,
+                        "inverted_index": {"total_in_bytes": 17110},
+                        "stored_fields_in_bytes": 3969,
                     }
-                },
-            }
-        )
-
-        es = Client(transport_client=TwoTransportClients(not_found_transport_client, successful_client))
+                }
+            },
+        }
+        es.indices.disk_usage.side_effect = [not_found_response, successful_response]
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
+        assert "Requested disk usage for missing index foo" in caplog.text
         assert metrics_store_cluster_level.call_count == 3
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_successful_shards(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_successful_shards(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                response={
-                    "_shards": {"total": 1, "successful": 1, "failed": 0},
-                }
-            )
-        )
+        es.indices.disk_usage.return_value = {
+            "_shards": {"total": 1, "successful": 1, "failed": 0},
+        }
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4529,16 +5012,13 @@ class TestDiskUsageStats:
         assert metrics_store_cluster_level.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_unsuccessful_shards(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_unsuccessful_shards(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                response={
-                    "_shards": {"total": 1, "successful": 0, "failed": 1, "failures": "hello there!"},
-                }
-            )
-        )
+        es.indices.disk_usage.return_value = {
+            "_shards": {"total": 1, "successful": 0, "failed": 1, "failures": "hello there!"},
+        }
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4547,24 +5027,21 @@ class TestDiskUsageStats:
         assert metrics_store_cluster_level.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_source(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_source(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                response={
-                    "_shards": {"failed": 0},
-                    "foo": {
-                        "fields": {
-                            "_source": {
-                                "total_in_bytes": 40676,
-                                "stored_fields_in_bytes": 40676,
-                            }
-                        }
-                    },
+        es.indices.disk_usage.return_value = {
+            "_shards": {"failed": 0},
+            "foo": {
+                "fields": {
+                    "_source": {
+                        "total_in_bytes": 40676,
+                        "stored_fields_in_bytes": 40676,
+                    }
                 }
-            )
-        )
+            },
+        }
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4575,25 +5052,22 @@ class TestDiskUsageStats:
         ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_id(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_id(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                response={
-                    "_shards": {"failed": 0},
-                    "foo": {
-                        "fields": {
-                            "_id": {
-                                "total_in_bytes": 21079,
-                                "inverted_index": {"total_in_bytes": 17110},
-                                "stored_fields_in_bytes": 3969,
-                            }
-                        }
-                    },
+        es.indices.disk_usage.return_value = {
+            "_shards": {"failed": 0},
+            "foo": {
+                "fields": {
+                    "_id": {
+                        "total_in_bytes": 21079,
+                        "inverted_index": {"total_in_bytes": 17110},
+                        "stored_fields_in_bytes": 3969,
+                    }
                 }
-            )
-        )
+            },
+        }
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4605,7 +5079,8 @@ class TestDiskUsageStats:
         ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_empty_field(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_empty_field(self, es, metrics_store_cluster_level):
         """
         Fields like _primary_term commonly have take 0 bytes at all. But they
         are declared fields so we return their total size just so no one
@@ -4613,24 +5088,20 @@ class TestDiskUsageStats:
         """
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                response={
-                    "_shards": {"failed": 0},
-                    "foo": {
-                        "fields": {
-                            "_primary_term": {
-                                "total_in_bytes": 0,
-                                "inverted_index": {"total_in_bytes": 0},
-                                "stored_fields_in_bytes": 0,
-                                "doc_values_in_bytes": 0,
-                                "points_in_bytes": 0,
-                            }
-                        }
-                    },
+        es.indices.disk_usage.return_value = {
+            "_shards": {"failed": 0},
+            "foo": {
+                "fields": {
+                    "_primary_term": {
+                        "total_in_bytes": 0,
+                        "inverted_index": {"total_in_bytes": 0},
+                        "stored_fields_in_bytes": 0,
+                        "doc_values_in_bytes": 0,
+                        "points_in_bytes": 0,
+                    }
                 }
-            )
-        )
+            },
+        }
         device = telemetry.DiskUsageStats({"disk-usage-stats-indices": "foo"}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4640,25 +5111,22 @@ class TestDiskUsageStats:
         ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_number(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_number(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                response={
-                    "_shards": {"failed": 0},
-                    "foo": {
-                        "fields": {
-                            "prcp": {
-                                "total_in_bytes": 1498,
-                                "doc_values_in_bytes": 748,
-                                "points_in_bytes": 750,
-                            }
-                        }
-                    },
+        es.indices.disk_usage.return_value = {
+            "_shards": {"failed": 0},
+            "foo": {
+                "fields": {
+                    "prcp": {
+                        "total_in_bytes": 1498,
+                        "doc_values_in_bytes": 748,
+                        "points_in_bytes": 750,
+                    }
                 }
-            )
-        )
+            },
+        }
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4670,25 +5138,22 @@ class TestDiskUsageStats:
         ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_keyword(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_keyword(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                response={
-                    "_shards": {"failed": 0},
-                    "foo": {
-                        "fields": {
-                            "station.country_code": {
-                                "total_in_bytes": 346,
-                                "doc_values_in_bytes": 328,
-                                "points_in_bytes": 18,
-                            }
-                        }
-                    },
+        es.indices.disk_usage.return_value = {
+            "_shards": {"failed": 0},
+            "foo": {
+                "fields": {
+                    "station.country_code": {
+                        "total_in_bytes": 346,
+                        "doc_values_in_bytes": 328,
+                        "points_in_bytes": 18,
+                    }
                 }
-            )
-        )
+            },
+        }
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4700,19 +5165,14 @@ class TestDiskUsageStats:
         ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
-    def test_indexed_vector(self, metrics_store_cluster_level):
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_indexed_vector(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es = Client(
-            transport_client=TransportClient(
-                response={
-                    "_shards": {"failed": 0},
-                    "foo": {
-                        "fields": {"title_vector": {"total_in_bytes": 64179820, "doc_values_in_bytes": 0, "knn_vectors_in_bytes": 64179820}}
-                    },
-                }
-            )
-        )
+        es.indices.disk_usage.return_value = {
+            "_shards": {"failed": 0},
+            "foo": {"fields": {"title_vector": {"total_in_bytes": 64179820, "doc_values_in_bytes": 0, "knn_vectors_in_bytes": 64179820}}},
+        }
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4724,3 +5184,196 @@ class TestDiskUsageStats:
 
     def _mock_store(self, name, size, field):
         return mock.call(name, size, meta_data={"index": "foo", "field": field}, unit="byte")
+
+
+class TestBlobStoreStats:
+    def test_negative_sample_interval_forbidden(self):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"blob-store-stats-sample-interval": -1}
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match=r"The telemetry parameter 'blob-store-stats-sample-interval' must be greater than zero but was .*\.",
+        ):
+            telemetry.BlobStoreStats(telemetry_params, Client(), metrics_store)
+
+    def test_non_serverless_is_skipped_and_serverless_is_not_skipped(self, caplog):
+        caplog.set_level(logging.DEBUG)
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"blob-store-stats-sample-interval": 1}
+
+        clients = {
+            "default": Client(is_serverless=False),
+            "cluster_b": Client(is_serverless=True),
+        }
+        t = telemetry.BlobStoreStats(telemetry_params, clients, metrics_store)
+        t.on_benchmark_start()
+
+        assert (
+            "Cannot attach telemetry device [blob-store-stats] to cluster [default],"
+            " [blob-store-stats] is only supported with serverless Elasticsearch" in caplog.text
+        )
+
+        assert "Gathering [blob-store-stats] for [cluster_b]" in caplog.text
+
+
+class TestBlobStoreStatsRecorder:
+    blob_store_stats_response = {
+        "_nodes": {"total": 2, "successful": 2, "failed": 0},
+        "cluster_name": "es",
+        "_all": {
+            "object_store_stats": {
+                "request_counts": {
+                    "ListObjects": 20,
+                    "PutMultipartObject": 20,
+                    "DeleteObjects": 20,
+                    "AbortMultipartObject": 20,
+                    "PutObject": 20,
+                    "GetObject": 20,
+                }
+            },
+            "operational_backup_service_stats": {
+                "request_counts": {
+                    "ListObjects": 22,
+                    "PutMultipartObject": 22,
+                    "DeleteObjects": 22,
+                    "AbortMultipartObject": 22,
+                    "PutObject": 22,
+                    "GetObject": 22,
+                }
+            },
+        },
+        "nodes": {
+            "PaIdh023RvS0J99uWF_A7Q": {
+                "object_store_stats": {
+                    "request_counts": {
+                        "ListObjects": 10,
+                        "PutMultipartObject": 10,
+                        "DeleteObjects": 10,
+                        "AbortMultipartObject": 10,
+                        "PutObject": 10,
+                        "GetObject": 10,
+                    }
+                },
+                "operational_backup_service_stats": {
+                    "request_counts": {
+                        "ListObjects": 22,
+                        "PutMultipartObject": 22,
+                        "DeleteObjects": 22,
+                        "AbortMultipartObject": 22,
+                        "PutObject": 22,
+                        "GetObject": 22,
+                    }
+                },
+            },
+            "4RKUvXhKTMOoslA9V_4EmA": {
+                "object_store_stats": {
+                    "request_counts": {
+                        "ListObjects": 10,
+                        "PutMultipartObject": 10,
+                        "DeleteObjects": 10,
+                        "AbortMultipartObject": 10,
+                        "PutObject": 10,
+                        "GetObject": 10,
+                    }
+                },
+                "operational_backup_service_stats": {"request_counts": {}},
+            },
+            "ufg1tLOiTIiHkmgGiztW9Q": {
+                "object_store_stats": {"request_counts": {}},
+                "operational_backup_service_stats": {"request_counts": {}},
+            },
+        },
+    }
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_store_blob_store_stats(self, metrics_store_put_doc):
+        client = Client(transport_client=TransportClient(response=self.blob_store_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.BlobStoreStatsRecorder(cluster_name="default", client=client, metrics_store=metrics_store, sample_interval=1)
+        recorder.record()
+
+        metrics_store_put_doc.assert_has_calls(
+            [
+                mock.call(
+                    {
+                        "name": "blob-store-stats",
+                        "node": "_all",
+                        "object_store_request_counts_ListObjects": 20,
+                        "object_store_request_counts_PutMultipartObject": 20,
+                        "object_store_request_counts_DeleteObjects": 20,
+                        "object_store_request_counts_AbortMultipartObject": 20,
+                        "object_store_request_counts_PutObject": 20,
+                        "object_store_request_counts_GetObject": 20,
+                        "operational_backup_request_counts_ListObjects": 22,
+                        "operational_backup_request_counts_PutMultipartObject": 22,
+                        "operational_backup_request_counts_DeleteObjects": 22,
+                        "operational_backup_request_counts_AbortMultipartObject": 22,
+                        "operational_backup_request_counts_PutObject": 22,
+                        "operational_backup_request_counts_GetObject": 22,
+                    },
+                    level=MetaInfoScope.cluster,
+                    meta_data={"cluster": "es", "_nodes": {"total": 2, "successful": 2, "failed": 0}},
+                ),
+                mock.call(
+                    {
+                        "name": "blob-store-stats",
+                        "node": "PaIdh023RvS0J99uWF_A7Q",
+                        "object_store_request_counts_ListObjects": 10,
+                        "object_store_request_counts_PutMultipartObject": 10,
+                        "object_store_request_counts_DeleteObjects": 10,
+                        "object_store_request_counts_AbortMultipartObject": 10,
+                        "object_store_request_counts_PutObject": 10,
+                        "object_store_request_counts_GetObject": 10,
+                        "operational_backup_request_counts_ListObjects": 22,
+                        "operational_backup_request_counts_PutMultipartObject": 22,
+                        "operational_backup_request_counts_DeleteObjects": 22,
+                        "operational_backup_request_counts_AbortMultipartObject": 22,
+                        "operational_backup_request_counts_PutObject": 22,
+                        "operational_backup_request_counts_GetObject": 22,
+                    },
+                    level=MetaInfoScope.node,
+                    node_name="PaIdh023RvS0J99uWF_A7Q",
+                    meta_data={"cluster": "es", "_nodes": {"total": 2, "successful": 2, "failed": 0}},
+                ),
+                mock.call(
+                    {
+                        "name": "blob-store-stats",
+                        "node": "4RKUvXhKTMOoslA9V_4EmA",
+                        "object_store_request_counts_ListObjects": 10,
+                        "object_store_request_counts_PutMultipartObject": 10,
+                        "object_store_request_counts_DeleteObjects": 10,
+                        "object_store_request_counts_AbortMultipartObject": 10,
+                        "object_store_request_counts_PutObject": 10,
+                        "object_store_request_counts_GetObject": 10,
+                    },
+                    level=MetaInfoScope.node,
+                    node_name="4RKUvXhKTMOoslA9V_4EmA",
+                    meta_data={"cluster": "es", "_nodes": {"total": 2, "successful": 2, "failed": 0}},
+                ),
+            ],
+        )
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_raises_exception_on_api_error(self, metrics_store_put_doc, caplog):
+        client = Client(transport_client=TransportClient(error=raiseApiError(status=429, body={}, message="api error"), force_error=True))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+
+        recorder = telemetry.BlobStoreStatsRecorder(cluster_name="default", client=client, metrics_store=metrics_store, sample_interval=1)
+        recorder.record()
+        assert "An API error [ApiError(429, 'api error')] occurred while collecting [blob-store-stats] on cluster [default]" in caplog.text
+        assert metrics_store_put_doc.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_raises_exception_on_transport_error(self, metrics_store_put_doc, caplog):
+        client = Client(transport_client=TransportClient(response={}, force_error=True))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+
+        recorder = telemetry.BlobStoreStatsRecorder(cluster_name="default", client=client, metrics_store=metrics_store, sample_interval=1)
+        recorder.record()
+        assert "A transport error [transport error] occurred while collecting [blob-store-stats] on cluster [default]" in caplog.text
+        assert metrics_store_put_doc.call_count == 0

@@ -126,4 +126,11 @@ class RallyRepository:
         git.checkout(self.repo_dir, branch=revision)
 
     def correct_revision(self, revision):
-        return git.head_revision(self.repo_dir) == revision
+        if git.is_branch(self.repo_dir, revision):
+            current_branch = git.current_branch(self.repo_dir)
+            self.logger.info("Checking current branch [%s] is equal to specified branch [%s].", current_branch, revision)
+            return current_branch == revision
+
+        current_revision = git.head_revision(self.repo_dir)
+        self.logger.info("Checking current revision [%s] is equal to specified revision [%s].", current_revision, revision)
+        return current_revision == revision

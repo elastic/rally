@@ -37,6 +37,7 @@ If you invoke ``esrally list telemetry``, it will show which telemetry devices a
    data-stream-stats           Data Stream Stats           Regularly samples data stream stats
    ingest-pipeline-stats       Ingest Pipeline Stats       Reports Ingest Pipeline stats at the end of the benchmark.
    disk-usage-stats            Disk usage of each field    Runs the indices disk usage API after benchmarking
+   geoip-stats                 GeoIp Stats                 Writes geo ip stats to the metrics store at the end of the benchmark.
 
    Keep in mind that each telemetry device may incur a runtime overhead which can skew results.
 
@@ -45,7 +46,7 @@ The remaining telemetry devices i.e. ``jit``, ``gc``, ``jfr`` and ``heapdump`` c
 
 .. note::
 
-    If you are using the experimental `cluster management commands <cluster_management>`_, setup level telemetry devices (and their parameters) should only be specified via the ``start`` subcommand and not via the ``race`` subcommand. For more details check ``esrally start --help``.
+    If you are using the experimental :doc:`cluster management commands </cluster_management>`, setup level telemetry devices (and their parameters) should only be specified via the ``start`` subcommand and not via the ``race`` subcommand. For more details check ``esrally start --help``.
 
 jfr
 ---
@@ -115,10 +116,12 @@ The node-stats telemetry device regularly calls the `cluster node-stats API <htt
 * JVM buffer pool stats (key ``jvm.buffer_pools`` in the node-stats API)
 * JVM gc stats (key ``jvm.gc`` in the node-stats API)
 * OS mem stats (key ``os.mem`` in the node-stats API)
+* OS cgroup stats (key ``os.cgroup`` in the node-stats API)
 * JVM mem stats (key ``jvm.mem`` in the node-stats API)
 * Circuit breaker stats (key ``breakers`` in the node-stats API)
 * Network-related stats (key ``transport`` in the node-stats API)
 * Process cpu stats (key ``process.cpu`` in the node-stats API)
+* Filesystem stats (key ``fs`` in the node-stats API)
 
 Supported telemetry parameters:
 
@@ -132,9 +135,11 @@ Supported telemetry parameters:
 * ``node-stats-include-breakers`` (default: ``true``): A boolean indicating whether circuit breaker stats should be included.
 * ``node-stats-include-gc`` (default: ``true``): A boolean indicating whether JVM gc stats should be included.
 * ``node-stats-include-mem`` (default: ``true``): A boolean indicating whether both JVM heap, and OS mem stats should be included.
+* ``node-stats-include-cgroup`` (default: ``true``): A boolean to include operating system cgroup stats. Memory stats are omitted since Elasticsearch emits them as string values. Use ``os_mem_*`` fields instead.
 * ``node-stats-include-network`` (default: ``true``): A boolean indicating whether network-related stats should be included.
 * ``node-stats-include-process`` (default: ``true``): A boolean indicating whether process cpu stats should be included.
-* ``node-stats-include-indexing-pressure`` (default: ``true``): A boolean indicating whether indexing pressuer stats should be included.
+* ``node-stats-include-indexing-pressure`` (default: ``true``): A boolean indicating whether indexing pressure stats should be included.
+* ``node-stats-include-fs`` (default: ``true``): A boolean indicating whether overall filesystem stats should be included. Per-device filesystem metrics are not included.
 
 recovery-stats
 --------------
@@ -326,3 +331,99 @@ It also works with ``esrally compare``::
 .. note::
 
     This telemetry device has no runtime overhead. It does all of it's work after the race is complete.
+
+blob-store-stats
+----------------
+
+The blob-store-stats telemetry device regularly calls the blob store stats API and records one metrics document for cluster level stats (``_all``), and one metrics document per node.
+
+Supported telemetry parameters:
+
+* ``blob-store-stats-sample-interval`` (default 1): A positive number greater than zero denoting the sampling interval in seconds.
+
+Example of recorded documents given two nodes in the target cluster::
+
+
+    {
+      "name": "blob-store-stats",
+      "node": "_all",
+      "meta": {
+        "cluster": "es",
+        "_nodes": {
+          "total": 2,
+          "successful": 2,
+          "failed": 0
+        }
+      },
+      "object_store_request_counts_ListObjects": 20,
+      "object_store_request_counts_PutMultipartObject": 20,
+      "object_store_request_counts_DeleteObjects": 20,
+      "object_store_request_counts_AbortMultipartObject": 20,
+      "object_store_request_counts_PutObject": 20,
+      "object_store_request_counts_GetObject": 20,
+      "operational_backup_request_counts_ListObjects": 22,
+      "operational_backup_request_counts_PutMultipartObject": 22,
+      "operational_backup_request_counts_DeleteObjects": 22,
+      "operational_backup_request_counts_AbortMultipartObject": 22,
+      "operational_backup_request_counts_PutObject": 22,
+      "operational_backup_request_counts_GetObject": 22
+    },
+    {
+      "name": "blob-store-stats",
+      "node": "OkuSgfZWSq2fprKXD6CNOw",
+      "meta": {
+        "cluster": "es",
+        "_nodes": {
+          "total": 2,
+          "successful": 2,
+          "failed": 0
+        }
+      },
+      "object_store_request_counts_ListObjects": 10,
+      "object_store_request_counts_PutMultipartObject": 10,
+      "object_store_request_counts_DeleteObjects": 10,
+      "object_store_request_counts_AbortMultipartObject": 10,
+      "object_store_request_counts_PutObject": 10,
+      "object_store_request_counts_GetObject": 10,
+      "operational_backup_request_counts_ListObjects": 22,
+      "operational_backup_request_counts_PutMultipartObject": 22,
+      "operational_backup_request_counts_DeleteObjects": 22,
+      "operational_backup_request_counts_AbortMultipartObject": 22,
+      "operational_backup_request_counts_PutObject": 22,
+      "operational_backup_request_counts_GetObject": 22
+    },
+    {
+      "name": "blob-store-stats",
+      "node": "ufg1tLOiTIiHkmgGiztW9Q",
+      "meta": {
+        "cluster": "es",
+        "_nodes": {
+          "total": 2,
+          "successful": 2,
+          "failed": 0
+        },
+      "object_store_request_counts_ListObjects": 10,
+      "object_store_request_counts_PutMultipartObject": 10,
+      "object_store_request_counts_DeleteObjects": 10,
+      "object_store_request_counts_AbortMultipartObject": 10,
+      "object_store_request_counts_PutObject": 10,
+      "object_store_request_counts_GetObject": 10
+      }
+    }
+
+
+.. note::
+
+    This telemetry device is only applicable to `Elastic Serverless <https://docs.elastic.co/serverless>`_ and requires elevated privleges only available to Elastic developers.
+
+geoip-stats
+----------------
+
+The geoip-stats telemetry device fetches data from the `GeoIP Stats API <https://www.elastic.co/guide/en/elasticsearch/reference/current/geoip-stats-api.html>`_ at the end of the run, and stores geoip cache stats as metrics for the run. This is available only in Elasticsearch 8.14.0 and higher. Stored metrics include:
+
+* ``geoip_cache_count``: The number of items in the cache.
+* ``geoip_cache_hits``: The number of times an IP address was found in the cache.
+* ``geoip_cache_misses``: The number of times an IP address was not found in the cache.
+* ``geoip_cache_evictions``: The number of times an entry was evicted from the cache because the max cache size had been reached.
+* ``geoip_cache_hits_time_in_millis``: The total amount of time spent fetching data from the cache, for cache hits only.
+* ``geoip_cache_misses_time_in_millis``: The total amount of time spent fetching data from the cache, for cache misses only. This includes time spent fetching data from the geoip database.

@@ -603,7 +603,7 @@ You can specify the revision in different formats:
 * ``--revision=current``: Use the current revision (i.e. don't alter the local source tree).
 * ``--revision=abc123``: Where ``abc123`` is some git revision hash.
 * ``--revision=v8.4.0``: Where ``v8.4.0`` is some git tag.
-* ``--revision=@2013-07-27T10:37:00Z``: Determines the revision that is closest to the provided date. Rally logs to which git revision hash the date has been resolved and if you use Elasticsearch as metrics store (instead of the default in-memory one), :doc:`each metric record will contain the git revision hash also in the meta-data section </metrics>`.
+* ``--revision=<optional branch name>@2013-07-27T10:37:00Z``: Determines the revision that is closest to the provided date. By default, assumes ``main`` is the branch, but it can be overriden with ``branchname@timestamp``. Rally logs to which git revision hash the date has been resolved and if you use Elasticsearch as metrics store (instead of the default in-memory one), :doc:`each metric record will contain the git revision hash also in the meta-data section </metrics>`.
 * ``--revision=my-branch-name``: Where ``my-branch-name`` is the name of an existing branch name. If you are using a :ref:`remote source repository <configuration_source>`, Rally will fetch and checkout the remote branch.
 
 Supported date format: If you specify a date, it has to be ISO-8601 conformant and must start with an ``@`` sign to make it easier for Rally to determine that you actually mean a date.
@@ -711,12 +711,16 @@ Rally recognizes the following client options in addition:
 * ``static_responses``: The path to a JSON file containing path patterns and the corresponding responses. When this value is set to ``true``, Rally will not send requests to Elasticsearch but return static responses as specified by the file. This is useful to diagnose performance issues in Rally itself. See below for a specific example.
 * ``create_api_key_per_client`` (default: ``false``): If set to ``true``, Rally will create a unique `Elasticsearch API key <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html>`_ for each simulated client that issues requests against Elasticsearch during the benchmark. This is useful for simulating workloads where data is indexed by many distinct agents, each configured with its own API key, as is typical with Elastic Agent. Note that ``basic_auth_user`` and ``basic_auth_password`` must also be provided, and the ``basic_auth_user`` must have `sufficient privileges <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html#security-api-create-api-key-prereqs>`_ to create API keys. These basic auth credentials are used to create the API keys at the start of the benchmark and delete them at the end, but only the generated API keys will be used during benchmark execution.
 
-**Examples**
+**Authentication**
 
-Here are a few common examples:
+You can choose between two authentication modes:
 
-* Enable HTTP compression: ``--client-options="http_compress:true"``
-* Enable basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
+* API key authentication (preferred): ``--client-options="api_key:'a0V...2dw=='"``
+* Basic authentication: ``--client-options="basic_auth_user:'user',basic_auth_password:'password'"``. Avoid the characters ``'``, ``,`` and ``:`` in user name and password as Rally's parsing of these options is currently really simple and there is no possibility to escape characters.
+
+**HTTP compression**
+
+Enable HTTP compression using ``--client-options="http_compress:true"``.
 
 **TLS/SSL**
 
@@ -765,34 +769,31 @@ Define a JSON file containing a list of objects with the following properties:
 
 * ``path``: A path or path pattern that should be matched. Only leading and trailing wildcards (``*``) are supported. A path containing only a wildcard acts matches any path.
 * ``body``: The respective response body.
-* ``body-encoding``: Either ``raw`` or ``json``. Use ``json`` by default and ``raw`` for the operation-type ``bulk`` and ``search``.
 
 Here we define the necessary responses for a track that bulk-indexes data::
 
     [
       {
+        "path": "/_cluster/settings",
+        "body": {
+          "transient": {
+              "action.destructive_requires_name": "true"
+          }
+        }
+      },
+      {
         "path": "*/_bulk",
         "body": {
           "errors": false,
           "took": 1
-        },
-        "body-encoding": "raw"
+        }
       },
       {
         "path": "/_cluster/health*",
         "body": {
           "status": "green",
           "relocating_shards": 0
-        },
-        "body-encoding": "json"
-      },
-      {
-        "path": "/_cluster/settings",
-        "body": {
-          "persistent": {},
-          "transient": {}
-        },
-        "body-encoding": "json"
+        }
       },
       {
         "path": "/_all/_stats/_all",
@@ -804,13 +805,11 @@ Here we define the necessary responses for a track that bulk-indexes data::
               }
             }
           }
-        },
-        "body-encoding": "json"
+        }
       },
       {
         "path": "*",
-        "body": {},
-        "body-encoding": "json"
+        "body": {}
       }
     ]
 
@@ -1002,6 +1001,21 @@ Use index patterns::
 
 .. note::
    If the cluster requires authentication specify credentials via ``--client-options`` as described in the :ref:`command line reference <clr_client_options>`.
+
+``batch-size``
+~~~~~~~~~~~~~~~~
+
+The number of records to request per batch when generating a track with the ``create-track`` subcommand. The default value is 1000
+
+**Example**
+
+Run with 10000 records per batch::
+
+    esrally create-track --track=acme --batch-size 10000 --target-hosts=127.0.0.1:9200 --output-path=~/tracks
+
+
+.. note::
+   The larger the batch size, the more data will be downloaded per call to Elasticsearch. As such, you should ensure that you have a stable network connection between where you are running rally and the Elasticsearch cluster.
 
 .. _command_line_reference_advanced_topics:
 

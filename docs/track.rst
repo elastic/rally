@@ -281,7 +281,7 @@ Each composable template in this list consists of the following properties:
 
 * ``name`` (mandatory): Composable template name.
 * ``index-pattern`` (mandatory): Index pattern that matches the composable template. This must match the definition in the template file.
-* ``delete-matching-indices`` (optional, defaults to ``true``): Delete all indices that match the provided index pattern if the template is deleted.
+* ``delete-matching-indices`` (optional, defaults to ``true``): Delete all indices that match the provided index pattern if the template is deleted. This setting is ignored in `Elastic Serverless <https://docs.elastic.co/serverless>`_ - please use data streams and ``delete-data-stream`` operation instead.
 * ``template`` (mandatory): Composable template file name.
 * ``template-path`` (optional): JSON field inside the file content that contains the template.
 
@@ -343,7 +343,7 @@ Each entry in the ``documents`` list consists of the following properties:
   * S3 according to `docs <https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration>`_.
   * Google Storage: Either using `client library authentication <https://cloud.google.com/storage/docs/reference/libraries#setting_up_authentication>`_ or by presenting an `oauth2 token <https://cloud.google.com/storage/docs/authentication>`_ via the ``GOOGLE_AUTH_TOKEN`` environment variable, typically done using: ``export GOOGLE_AUTH_TOKEN=$(gcloud auth print-access-token)``.
 * ``source-format`` (optional, default: ``bulk``): Defines in which format Rally should interpret the data file specified by ``source-file``. Currently, only ``bulk`` is supported.
-* ``source-file`` (mandatory): File name of the corresponding documents. For local use, this file can be a ``.json`` file. If you provide a ``base-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz`` or ``.tar.bz2``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
+* ``source-file`` (mandatory): File name of the corresponding documents. For local use, this file can be a ``.json`` file. If you provide a ``base-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz``, ``.tar.bz2`` or ``zst``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
 * ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an `action and meta-data <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-desc>`_ line (``true``) or only documents (``false``).
 
     .. note::
@@ -474,6 +474,7 @@ The ``schedule`` element contains a list of tasks that are executed by Rally, i.
 * ``target-throughput`` (optional): Defines the benchmark mode. If it is not defined, Rally assumes this is a throughput benchmark and will run the task as fast as it can. This is mostly needed for batch-style operations where it is more important to achieve the best throughput instead of an acceptable latency. If it is defined, it specifies the number of requests per second over all clients. E.g. if you specify ``target-throughput: 1000`` with 8 clients, it means that each client will issue 125 (= 1000 / 8) requests per second. In total, all clients will issue 1000 requests each second. If Rally reports less than the specified throughput then Elasticsearch simply cannot reach it.
 * ``target-interval`` (optional): This is just ``1 / target-throughput`` (in seconds) and may be more convenient for cases where the throughput is less than one operation per second. Define either ``target-throughput`` or ``target-interval`` but not both (otherwise Rally will raise an error).
 * ``ignore-response-error-level`` (optional): Controls whether to ignore errors encountered during task execution when the benchmark is run with :ref:`on-error=abort <command_line_reference_on_error>`. The only allowable value is ``non-fatal`` which, combined with the cli option ``--on-error=abort``, will ignore non-fatal errors during the execution of the task.
+* ``run-on-serverless`` (optional, default to unset): By default, Rally skips operations that are not supported in `Elastic Serverless <https://docs.elastic.co/serverless>`_, such as :ref:`node-stats<operation_node_stats>`. Setting this option to ``true`` or ``false`` will override that detection.
 
     .. note::
 
@@ -757,6 +758,8 @@ Properties
 * ``recency`` (optional, defaults to 0): A number between [0,1] indicating whether to bias conflicting ids towards more recent ids (``recency`` towards 1) or whether to consider all ids for id conflicts (``recency`` towards 0). See the diagram below for details.
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data for bulk requests. As it analyzes the corresponding bulk response in more detail, this might incur additional overhead which can skew measurement results. See the section below for the meta-data that are returned. This property must be set to ``true`` for individual bulk request failures to be logged by Rally.
 * ``timeout`` (optional, defaults to ``1m``): Defines the `time period that Elasticsearch will wait per action <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-query-params>`_ until it has finished processing the following operations: automatic index creation, dynamic mapping updates, waiting for active shards.
+* ``refresh`` (optional): Control Elasticsearch refresh behavior for bulk requests via the ``refresh`` bulk API query parameter. Valid values are ``true``, ``wait_for``, and ``false``. Parameter values are specified as a string. If ``true``, Elasticsearch will refresh target shards in the background. If ``wait_for``, Elasticsearch blocks bulk requests until affected shards have been refreshed. If ``false``, Elasticsearch will use the default refresh behavior.
+* ``looped`` (optional, defaults to ``false``): If set to ``true``, ``bulk`` operation will continue from the beginning upon completing the corpus. This option should be combined with ``time-period`` or ``iteration`` properties at the task level, otherwise Rally will never finish the task.
 
 With multiple ``clients``, Rally will split each document using as many splits as there are ``clients``. This ensures that the bulk index operations are efficiently parallelized but has the drawback that the ingestion is not done in the order of each document. For example, if ``clients`` is set to 2, one client will index the document starting from the beginning, while the other will index starting from the middle.
 
@@ -961,6 +964,8 @@ Meta-data
 * ``unit``: Always "ops".
 * ``success``: A boolean indicating whether the operation has succeeded.
 
+.. _operation_node_stats:
+
 node-stats
 ~~~~~~~~~~
 
@@ -983,7 +988,7 @@ Properties
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
 * ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
-* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version. When Rally is used against `Elastic Serverless <https://docs.elastic.co/serverless>`_ the default is ``false``.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
     .. note::
@@ -1043,7 +1048,7 @@ Properties
 """"""""""
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
-* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version. When Rally is used against `Elastic Serverless <https://docs.elastic.co/serverless>`_ the default is ``false``.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
     .. note::
@@ -1103,7 +1108,7 @@ Properties
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
 * ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
-* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version. When Rally is used against `Elastic Serverless <https://docs.elastic.co/serverless>`_ the default is ``false``.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
     .. note::
@@ -1154,7 +1159,7 @@ Properties
 """"""""""
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
-* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version.
+* ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version. When Rally is used against `Elastic Serverless <https://docs.elastic.co/serverless>`_ the default is ``false``.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
     .. note::
@@ -1891,8 +1896,8 @@ If you want it to delete one specific index template instead, you can specify th
 
 * ``template`` (mandatory): The name of the composable template that should be deleted.
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
-* ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern.
-* ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
+* ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern. This setting is ignored in `Elastic Serverless <https://docs.elastic.co/serverless>`_ - please use data streams and the ``delete-data-stream`` operation instead.
+* ``index-pattern`` (mandatory if ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
 * ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete index template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 **Examples**
@@ -1999,7 +2004,7 @@ If you want it to delete one specific index template instead, you can specify th
 * ``template`` (mandatory): The name of the index that should be deleted.
 * ``only-if-exists`` (optional, defaults to ``true``): Defines whether the index template should only be deleted if it exists.
 * ``delete-matching-indices`` (optional, defaults to ``false``): Whether to delete indices that match the index template's index pattern.
-* ``index-pattern`` (mandatory iff ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
+* ``index-pattern`` (mandatory if ``delete-matching-indices`` is ``true``): Specifies the index pattern to delete.
 * ``request-params`` (optional): A structure containing any request parameters that are allowed by the delete template API. Rally will not attempt to serialize the parameters and pass them as is. Always use "true" / "false" strings for boolean parameters.
 
 **Examples**
@@ -2290,11 +2295,11 @@ In the following example we show how Rally can be used to benchmark a hypothetic
             "body": {
               "include-metrics": ["system", "jvm"],
               "exclude-metrics": ["hardware"]
-            },
-            "warmup-iterations": 100,
-            "iterations": 100,
-            "target-throughput": 10
-          }
+            }
+          },
+          "warmup-iterations": 100,
+          "iterations": 100,
+          "target-throughput": 10
         }
       ]
     }
@@ -3130,6 +3135,40 @@ Meta-data
 
 The operation returns no meta-data.
 
+esql
+~~~~~~~~~~~~~
+
+With the operation type ``esql`` you can execute an `ES|QL query <https://www.elastic.co/guide/en/elasticsearch/reference/current/esql.html>`_.
+
+Properties
+""""""""""
+
+* ``query`` (mandatory): An ES|QL query which starts with a source command followed by processing commands.
+* ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
+* ``body`` (optional): The query body.
+
+Example::
+
+    {
+      "name": "default",
+      "operation-type": "esql",
+      "query": "FROM logs-* | STATS count=count(*) BY agent.hostname | SORT count DESC | LIMIT 20",
+      "filter": {
+        "range": {
+          "timestamp": {
+            "gte": "now-1d/d",
+            "lte": "now/d"
+          }
+        }
+      }
+    }
+
+Meta-data
+"""""""""
+
+* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
+* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
+* ``success``: A boolean indicating whether the query has succeeded.
 
 .. _track_dependencies:
 

@@ -1,7 +1,0 @@
----
-
-jjbb-template: it.yml
-vars:
-  - jobname: push
-  - branch: master
-  - py_version: "38"

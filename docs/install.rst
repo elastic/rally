@@ -18,11 +18,11 @@ Rally does not support Windows and is only actively tested on macOS and Linux. I
 Python
 ~~~~~~
 
-* Python 3.8 or better available as ``python3`` on the path. Verify with: ``python3 --version``.
+* Python 3.9 or better available as ``python3`` on the path. Verify with: ``python3 --version``.
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 
-We recommend to use `pyenv <https://github.com/pyenv/pyenv>`_ to manage installation of Python. For details refer to their `installation instructions <https://github.com/pyenv/pyenv#installation>`_ and **ensure that all of** `pyenv's prerequisites <https://github.com/pyenv/pyenv/wiki/common-build-problems#prerequisites>`_ are installed.
+If you need multiple Python versions, consider using `pyenv <https://github.com/pyenv/pyenv>`_. For details refer to their `installation instructions <https://github.com/pyenv/pyenv#installation>`_ and **ensure that all** `prerequisites for pyenv <https://github.com/pyenv/pyenv/wiki/common-build-problems#prerequisites>`_ are installed.
 
 Once ``pyenv`` is installed, install a compatible Python version::
 
@@ -68,11 +68,12 @@ In all other cases, Rally requires ``git 1.9`` or better. Verify with ``git --ve
 
 ``git`` is already installed on macOS.
 
-pbzip2
-~~~~~~
+pbzip2, pigz, zstd
+~~~~~~~~~~~~~~~~~~
 
 It is strongly recommended to install ``pbzip2`` to speed up decompressing the corpora of Rally `standard tracks <https://github.com/elastic/rally-tracks>`_.
 If you have created :doc:`custom tracks </adding_tracks>` using corpora compressed with ``gzip`` instead of ``bzip2``, it's also advisable to install ``pigz`` to speed up the process.
+Rally also supports ``zst`` compressed corpora out of the box, installing ``zstd`` speeds up the process.
 
 **Debian / Ubuntu**
 

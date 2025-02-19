@@ -18,9 +18,10 @@
 import collections
 import numbers
 import re
-from enum import Enum, unique
+from enum import Enum, auto, unique
 
 from esrally import exceptions
+from esrally.utils import serverless
 
 
 class Index:
@@ -611,6 +612,7 @@ class Challenge:
         self.meta_data = meta_data if meta_data else {}
         self.description = description
         self.user_info = user_info
+        self.serverless_info = []
         self.default = default
         self.selected = selected
         self.auto_generated = auto_generated
@@ -666,70 +668,87 @@ class Challenge:
 
 
 @unique
+class AdminStatus(Enum):
+    # We can't use True/False as they are keywords
+    Yes = auto()
+    No = auto()
+
+
+@unique
 class OperationType(Enum):
-    # for the time being we are not considering this action as administrative
-    IndexStats = 1
-    NodeStats = 2
-    Search = 3
-    Bulk = 4
-    RawRequest = 5
-    WaitForRecovery = 6
-    WaitForSnapshotCreate = 7
-    Composite = 8
-    SubmitAsyncSearch = 9
-    GetAsyncSearch = 10
-    DeleteAsyncSearch = 11
-    PaginatedSearch = 12
-    ScrollSearch = 13
-    OpenPointInTime = 14
-    ClosePointInTime = 15
-    Sql = 16
-    FieldCaps = 17
-    CompositeAgg = 18
-    WaitForCurrentSnapshotsCreate = 19
-    Downsample = 20
+    # TODO replace manual counts with auto() when we drop support for Python 3.10
+    # https://docs.python.org/3/library/enum.html#enum.auto
+    IndexStats = (1, AdminStatus.No, serverless.Status.Internal)
+    NodeStats = (2, AdminStatus.No, serverless.Status.Internal)
+    Search = (3, AdminStatus.No, serverless.Status.Public)
+    Bulk = (4, AdminStatus.No, serverless.Status.Public)
+    # Public as we can't verify the actual status
+    RawRequest = (5, AdminStatus.No, serverless.Status.Public)
+    WaitForRecovery = (6, AdminStatus.No, serverless.Status.Internal)
+    WaitForSnapshotCreate = (7, AdminStatus.No, serverless.Status.Internal)
+    # Public as all supported operation types are Public too (including RawRequest as
+    # mentioned above)
+    Composite = (8, AdminStatus.No, serverless.Status.Public)
+    SubmitAsyncSearch = (9, AdminStatus.No, serverless.Status.Public)
+    GetAsyncSearch = (10, AdminStatus.No, serverless.Status.Public)
+    DeleteAsyncSearch = (11, AdminStatus.No, serverless.Status.Public)
+    PaginatedSearch = (12, AdminStatus.No, serverless.Status.Public)
+    ScrollSearch = (13, AdminStatus.No, serverless.Status.Public)
+    OpenPointInTime = (14, AdminStatus.No, serverless.Status.Public)
+    ClosePointInTime = (15, AdminStatus.No, serverless.Status.Public)
+    Sql = (16, AdminStatus.No, serverless.Status.Public)
+    FieldCaps = (17, AdminStatus.No, serverless.Status.Public)
+    CompositeAgg = (18, AdminStatus.No, serverless.Status.Public)
+    WaitForCurrentSnapshotsCreate = (19, AdminStatus.No, serverless.Status.Internal)
+    Downsample = (20, AdminStatus.No, serverless.Status.Internal)
+    Esql = (21, AdminStatus.No, serverless.Status.Public)
 
     # administrative actions
-    ForceMerge = 1001
-    ClusterHealth = 1002
-    PutPipeline = 1003
-    Refresh = 1004
-    CreateIndex = 1005
-    DeleteIndex = 1006
-    CreateIndexTemplate = 1007
-    DeleteIndexTemplate = 1008
-    ShrinkIndex = 1009
-    CreateMlDatafeed = 1010
-    DeleteMlDatafeed = 1011
-    StartMlDatafeed = 1012
-    StopMlDatafeed = 1013
-    CreateMlJob = 1014
-    DeleteMlJob = 1015
-    OpenMlJob = 1016
-    CloseMlJob = 1017
-    Sleep = 1018
-    DeleteSnapshotRepository = 1019
-    CreateSnapshotRepository = 1020
-    CreateSnapshot = 1021
-    RestoreSnapshot = 1022
-    PutSettings = 1023
-    CreateTransform = 1024
-    StartTransform = 1025
-    WaitForTransform = 1026
-    DeleteTransform = 1027
-    CreateDataStream = 1028
-    DeleteDataStream = 1029
-    CreateComposableTemplate = 1030
-    DeleteComposableTemplate = 1031
-    CreateComponentTemplate = 1032
-    DeleteComponentTemplate = 1033
-    TransformStats = 1034
-    CreateIlmPolicy = 1035
-    DeleteIlmPolicy = 1036
+    ForceMerge = (22, AdminStatus.Yes, serverless.Status.Internal)
+    ClusterHealth = (23, AdminStatus.Yes, serverless.Status.Internal)
+    PutPipeline = (24, AdminStatus.Yes, serverless.Status.Public)
+    Refresh = (25, AdminStatus.Yes, serverless.Status.Public)
+    CreateIndex = (26, AdminStatus.Yes, serverless.Status.Public)
+    DeleteIndex = (27, AdminStatus.Yes, serverless.Status.Public)
+    CreateIndexTemplate = (28, AdminStatus.Yes, serverless.Status.Blocked)
+    DeleteIndexTemplate = (29, AdminStatus.Yes, serverless.Status.Blocked)
+    ShrinkIndex = (30, AdminStatus.Yes, serverless.Status.Blocked)
+    CreateMlDatafeed = (31, AdminStatus.Yes, serverless.Status.Public)
+    DeleteMlDatafeed = (32, AdminStatus.Yes, serverless.Status.Public)
+    StartMlDatafeed = (33, AdminStatus.Yes, serverless.Status.Public)
+    StopMlDatafeed = (34, AdminStatus.Yes, serverless.Status.Public)
+    CreateMlJob = (35, AdminStatus.Yes, serverless.Status.Public)
+    DeleteMlJob = (36, AdminStatus.Yes, serverless.Status.Public)
+    OpenMlJob = (37, AdminStatus.Yes, serverless.Status.Public)
+    CloseMlJob = (38, AdminStatus.Yes, serverless.Status.Public)
+    Sleep = (39, AdminStatus.Yes, serverless.Status.Public)
+    DeleteSnapshotRepository = (40, AdminStatus.Yes, serverless.Status.Internal)
+    CreateSnapshotRepository = (41, AdminStatus.Yes, serverless.Status.Internal)
+    CreateSnapshot = (42, AdminStatus.Yes, serverless.Status.Internal)
+    RestoreSnapshot = (43, AdminStatus.Yes, serverless.Status.Internal)
+    PutSettings = (44, AdminStatus.Yes, serverless.Status.Internal)
+    CreateTransform = (45, AdminStatus.Yes, serverless.Status.Public)
+    StartTransform = (46, AdminStatus.Yes, serverless.Status.Public)
+    WaitForTransform = (47, AdminStatus.Yes, serverless.Status.Public)
+    DeleteTransform = (48, AdminStatus.Yes, serverless.Status.Public)
+    CreateDataStream = (49, AdminStatus.Yes, serverless.Status.Public)
+    DeleteDataStream = (50, AdminStatus.Yes, serverless.Status.Public)
+    CreateComposableTemplate = (51, AdminStatus.Yes, serverless.Status.Public)
+    DeleteComposableTemplate = (52, AdminStatus.Yes, serverless.Status.Public)
+    CreateComponentTemplate = (53, AdminStatus.Yes, serverless.Status.Public)
+    DeleteComponentTemplate = (54, AdminStatus.Yes, serverless.Status.Public)
+    TransformStats = (55, AdminStatus.Yes, serverless.Status.Public)
+    CreateIlmPolicy = (56, AdminStatus.Yes, serverless.Status.Blocked)
+    DeleteIlmPolicy = (57, AdminStatus.Yes, serverless.Status.Blocked)
+
+    def __init__(self, id: int, admin_status: AdminStatus, serverless_status: serverless.Status):
+        self.id = id
+        self.admin_status = admin_status
+        self.serverless_status = serverless_status
 
     @property
     def admin_op(self):
-        return self.value > 1000
+        return self.admin_status == AdminStatus.Yes
 
     def to_hyphenated_string(self):
         """
@@ -852,6 +871,8 @@ class OperationType(Enum):
             return OperationType.FieldCaps
         elif v == "downsample":
             return OperationType.Downsample
+        elif v == "esql":
+            return OperationType.Esql
         else:
             raise KeyError(f"No enum value for [{v}]")
 
@@ -1149,6 +1170,10 @@ class Operation:
     @property
     def include_in_reporting(self):
         return self.params.get("include-in-reporting", True)
+
+    @property
+    def run_on_serverless(self):
+        return self.params.get("run-on-serverless", None)
 
     def __hash__(self):
         return hash(self.name)

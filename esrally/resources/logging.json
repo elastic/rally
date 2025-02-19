@@ -6,6 +6,17 @@
       "datefmt": "%Y-%m-%d %H:%M:%S",
       "()": "esrally.log.configure_utc_formatter"
     },
+    "json": {
+      "format": "%(message)s %(taskName)s",
+      "exclude_fields": [
+        "log.original"
+      ],
+      "mutators": [
+        "esrally.log.rename_actor_fields",
+        "esrally.log.rename_async_fields"
+      ],
+      "()": "esrally.log.configure_ecs_formatter"
+    },
     "profile": {
       "format": "%(asctime)s,%(msecs)d PID:%(process)d %(name)s %(levelname)s %(message)s",
       "datefmt": "%Y-%m-%d %H:%M:%S",
@@ -19,33 +30,58 @@
   },
   "handlers": {
     "rally_log_handler": {
-      "class": "logging.handlers.WatchedFileHandler",
-      "filename": "${LOG_PATH}rally.log",
+      "()": "esrally.log.configure_file_handler",
+      "filename": "${LOG_PATH}/rally.log",
       "encoding": "UTF-8",
       "formatter": "normal",
-      "filters": ["isActorLog"]
+      "filters": [
+        "isActorLog"
+      ]
     },
     "rally_profile_handler": {
-      "class": "logging.FileHandler",
-      "filename": "${LOG_PATH}profile.log",
+      "()": "esrally.log.configure_profile_file_handler",
+      "filename": "${LOG_PATH}/profile.log",
       "delay": true,
       "encoding": "UTF-8",
       "formatter": "profile"
+    },
+    "rally_json_handler": {
+      "()": "esrally.log.configure_file_handler",
+      "filename": "${LOG_PATH}/rally.json",
+      "encoding": "UTF-8",
+      "formatter": "json",
+      "filters": [
+        "isActorLog"
+      ]
     }
   },
   "root": {
-    "handlers": ["rally_log_handler"],
+    "handlers": [
+      "rally_log_handler",
+      "rally_json_handler"
+    ],
     "level": "INFO"
   },
   "loggers": {
     "elasticsearch": {
-      "handlers": ["rally_log_handler"],
+      "handlers": [
+        "rally_log_handler"
+      ],
       "level": "WARNING",
       "propagate": false
     },
     "rally.profile": {
-      "handlers": ["rally_profile_handler"],
+      "handlers": [
+        "rally_profile_handler"
+      ],
       "level": "INFO",
+      "propagate": false
+    },
+    "elastic_transport": {
+      "handlers": [
+        "rally_log_handler"
+      ],
+      "level": "WARNING",
       "propagate": false
     }
   }

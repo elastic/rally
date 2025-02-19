@@ -1,0 +1,43 @@
+agents:
+  provider: "gcp"
+  zone: "us-central1-a"
+
+steps:
+  - input: "Build parameters"
+    fields:
+      - text: "RELEASE_VERSION"
+        key: "RELEASE_VERSION"
+        default: ""
+        hint: "The version to release e.g. '2.8.0'."
+      - select: "PUSH_LATEST"
+        key: "PUSH_LATEST"
+        hint: "Update the latest tag in the registry."
+        # True, because we want the scheduled pipeline to update the latest tag, eventually
+        default: "true"
+        options:
+          - label: "Yes"
+            value: "true"
+          - label: "No"
+            value: "false"
+
+  - wait
+  - label: "Release Docker Artifacts for Rally"
+    command: bash .buildkite/release-docker/run.sh build amd64
+    # Run on GCP to use `docker`
+    key: "amd64"
+    agents:
+      machineType: "n2-standard-8"
+      image: family/core-ubuntu-2204
+  - label: "Release Docker Artifacts for Rally"
+    command: bash .buildkite/release-docker/run.sh build arm64
+    # Run on GCP to use `docker`
+    key: "arm64"
+    agents:
+      machineType: "t2a-standard-8"
+      image: family/core-ubuntu-2204-aarch64
+  - label: ":docker: build docker manifest"
+    command: bash .buildkite/release-docker/run.sh manifest
+    key: "manifest"
+    depends_on:
+      - "amd64"
+      - "arm64"

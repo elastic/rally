@@ -24,10 +24,12 @@ import math
 import random
 from unittest import mock
 
+import elastic_transport
 import elasticsearch
 import pytest
 
-from esrally import client, exceptions
+from esrally import client, config, exceptions
+from esrally.client.asynchronous import RallyAsyncElasticsearch
 from esrally.driver import runner
 
 
@@ -1241,6 +1243,280 @@ class TestBulkIndexRunner:
 
         es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_error_produces_detailed_stats_body_with_limit(self, es):
+        es.bulk = mock.AsyncMock(
+            return_value={
+                "took": 5,
+                "errors": True,
+                "items": [
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[1]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[2]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[3]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[4]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[5]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 409,
+                            "error": {
+                                "type": "version_conflict_engine_exception",
+                                "reason": "[6]: version conflict, document already exists (current version [1])",
+                            },
+                        }
+                    },
+                    {
+                        "create": {
+                            "_index": "test",
+                            "status": 429,
+                            "error": {
+                                "type": "cluster_block_exception",
+                                "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
+                                "flood-stage watermark, index has read-only-allow-delete block];",
+                            },
+                        }
+                    },
+                ],
+            }
+        )
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body(
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #1"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #2"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #3"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #4"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #5"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #6"}',
+                '{ "index" : { "_index" : "test" } }',
+                '{"message" : "in a bottle #7"}',
+            ),
+            "action-metadata-present": True,
+            "bulk-size": 7,
+            "unit": "docs",
+            "detailed-results": True,
+            "index": "test",
+        }
+
+        with mock.patch.object(bulk.logger, "warning") as mocked_warning_logger:
+            result = await bulk(es, bulk_params)
+            mocked_warning_logger.assert_has_calls([mock.call("Bulk request failed: [%s]", result["error-description"])])
+
+        assert result == {
+            "took": 5,
+            "index": "test",
+            "weight": 7,
+            "unit": "docs",
+            "success": False,
+            "success-count": 0,
+            "error-count": 7,
+            "error-type": "bulk",
+            "error-description": (
+                "HTTP status: 409, message: [1]: version conflict, document already exists (current version [1]) | "
+                "HTTP status: 409, message: [2]: version conflict, document already exists (current version [1]) | "
+                "HTTP status: 409, message: [3]: version conflict, document already exists (current version [1]) | "
+                "HTTP status: 409, message: [4]: version conflict, document already exists (current version [1]) | "
+                "HTTP status: 409, message: [5]: version conflict, document already exists (current version [1]) | "
+                "TRUNCATED 6x409, 1x429"
+            ),
+            "ops": {"create": collections.Counter({"item-count": 7})},
+            "shards_histogram": [],
+            "total-document-size-bytes": 210,
+            "bulk-request-size-bytes": 455,
+        }
+
+        es.bulk.assert_awaited_with(body=bulk_params["body"], params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_success_with_refresh_default(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8,
+            "items": [{"create": {"_index": "test", "result": "created", "status": 201}}],
+        }
+        es.bulk = mock.AsyncMock(return_value=bulk_response)
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body("index_line"),
+            "index": "test",
+            "action-metadata-present": False,
+            "type": "_doc",
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "refresh": "false",
+        }
+
+        result = await bulk(es, dict(bulk_params))
+
+        assert result == {
+            "took": 8,
+            "index": "test",
+            "weight": 1,
+            "unit": "docs",
+            "success": True,
+            "success-count": 1,
+            "error-count": 0,
+            "bulk-request-size-bytes": 10,
+            "ops": {"create": collections.Counter({"item-count": 1, "created": 1})},
+            "shards_histogram": [],
+            "total-document-size-bytes": 10,
+        }
+
+        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "false"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_success_with_refresh_true(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8,
+            "items": [{"create": {"_index": "test", "result": "created", "status": 201, "forced_refresh": True}}],
+        }
+        es.bulk = mock.AsyncMock(return_value=bulk_response)
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body("index_line"),
+            "index": "test",
+            "action-metadata-present": False,
+            "type": "_doc",
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "refresh": "true",
+        }
+
+        result = await bulk(es, dict(bulk_params))
+
+        assert result == {
+            "took": 8,
+            "index": "test",
+            "weight": 1,
+            "unit": "docs",
+            "success": True,
+            "success-count": 1,
+            "error-count": 0,
+            "bulk-request-size-bytes": 10,
+            "ops": {"create": collections.Counter({"item-count": 1, "created": 1})},
+            "shards_histogram": [],
+            "total-document-size-bytes": 10,
+        }
+
+        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "true"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_success_with_refresh_wait_for(self, es):
+        bulk_response = {
+            "errors": False,
+            "took": 8,
+        }
+        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+
+        bulk = runner.BulkIndex()
+
+        bulk_params = {
+            "body": _build_bulk_body("index_line"),
+            "index": "test",
+            "action-metadata-present": False,
+            "type": "_doc",
+            "bulk-size": 1,
+            "unit": "docs",
+            "refresh": "wait_for",
+        }
+
+        result = await bulk(es, bulk_params)
+
+        assert result == {
+            "took": 8,
+            "index": "test",
+            "weight": 1,
+            "unit": "docs",
+            "success": True,
+            "success-count": 1,
+            "error-count": 0,
+        }
+
+        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "wait_for"})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_success_with_refresh_invalid(self, es):
+        bulk_params = {
+            "body": _build_bulk_body("index_line"),
+            "index": "test",
+            "action-metadata-present": False,
+            "type": "_doc",
+            "bulk-size": 1,
+            "unit": "docs",
+            "detailed-results": True,
+            "refresh": "invalidvalue",
+        }
+        bulk = runner.BulkIndex()
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await bulk(es, dict(bulk_params))
+
+        assert exc.value.args[0] == ("Unsupported bulk refresh value: invalidvalue. Use one of [wait_for, true, false].")
+
 
 class TestForceMergeRunner:
     @mock.patch("elasticsearch.Elasticsearch")
@@ -1295,7 +1571,7 @@ class TestForceMergeRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_force_merge_with_polling(self, es):
-        es.indices.forcemerge = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout())
+        es.indices.forcemerge = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="connection timeout"))
         es.tasks.list = mock.AsyncMock(
             side_effect=[
                 {
@@ -1342,7 +1618,7 @@ class TestForceMergeRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_force_merge_with_polling_and_params(self, es):
-        es.indices.forcemerge = mock.AsyncMock(return_value=elasticsearch.ConnectionTimeout())
+        es.indices.forcemerge = mock.AsyncMock(return_value=elasticsearch.ConnectionTimeout("connection timeout"))
         es.tasks.list = mock.AsyncMock(
             side_effect=[
                 {
@@ -1546,6 +1822,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_match_only_request_body_defined(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1599,6 +1876,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_with_timeout_and_headers(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1640,10 +1918,11 @@ class TestQueryRunner:
             "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
         }
 
+        es.options.assert_called_once_with(request_timeout=3.0)
         es.perform_request.assert_awaited_once_with(
             method="GET",
             path="/_all/_search",
-            params={"request_timeout": 3.0, "request_cache": "true"},
+            params={"request_cache": "true"},
             body=params["body"],
             headers={"header1": "value1", "x-opaque-id": "test-id1"},
         )
@@ -1652,6 +1931,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_match_using_request_params(self, es):
+        es.options.return_value = es
         response = {
             "timed_out": False,
             "took": 62,
@@ -1710,6 +1990,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_no_detailed_results(self, es):
+        es.options.return_value = es
         response = {
             "timed_out": False,
             "took": 62,
@@ -1763,6 +2044,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_hits_total_as_number(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1819,6 +2101,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_match_all(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1878,6 +2161,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_match_all_doc_type_fallback(self, es):
+        es.options.return_value = es
         search_response = {
             "timed_out": False,
             "took": 5,
@@ -1934,6 +2218,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_only_one_page(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -1997,6 +2282,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_no_request_cache(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2055,6 +2341,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_only_one_page_only_request_body_defined(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2117,6 +2404,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_with_explicit_number_of_pages(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2190,6 +2478,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_cannot_clear_scroll(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2204,7 +2493,7 @@ class TestQueryRunner:
         }
 
         es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
-        es.clear_scroll = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout())
+        es.clear_scroll = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="connection timeout"))
 
         query_runner = runner.Query()
 
@@ -2240,6 +2529,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_scroll_query_request_all_pages(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2308,6 +2598,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_runner_search_with_pages_logs_warning_and_executes(self, es):
+        es.options.return_value = es
         # page 1
         search_response = {
             "_scroll_id": "some-scroll-id",
@@ -2365,6 +2656,7 @@ class TestQueryRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_query_runner_fails_with_unknown_operation_type(self, es):
+        es.options.return_value = es
         query_runner = runner.Query()
 
         params = {
@@ -2380,6 +2672,160 @@ class TestQueryRunner:
         with pytest.raises(exceptions.RallyError) as exc:
             await query_runner(es, params)
         assert exc.value.args[0] == "No runner available for operation-type: [unknown]"
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_no_request_cache_by_default(self, es):
+        es.options.return_value = es
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+            "hits": {
+                "total": {
+                    "value": 0,
+                    "relation": "eq",
+                },
+                "hits": [],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        cfg = config.Config()
+        query_runner = runner.Query(config=cfg)
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
+            },
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "hits": 0,
+            "hits_relation": "eq",
+            "timed_out": False,
+            "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+        }
+
+        es.perform_request.assert_awaited_once_with(method="GET", path="/_all/_search", params={}, body=params["body"], headers=None)
+        es.clear_scroll.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_no_request_cache_in_serverless_with_operator(self, es):
+        es.options.return_value = es
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+            "hits": {
+                "total": {
+                    "value": 0,
+                    "relation": "eq",
+                },
+                "hits": [],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        query_runner = runner.Query(config=cfg)
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
+            },
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "hits": 0,
+            "hits_relation": "eq",
+            "timed_out": False,
+            "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+        }
+
+        es.perform_request.assert_awaited_once_with(method="GET", path="/_all/_search", params={}, body=params["body"], headers=None)
+        es.clear_scroll.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_request_cache_false_in_serverless(self, es):
+        es.options.return_value = es
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+            "hits": {
+                "total": {
+                    "value": 0,
+                    "relation": "eq",
+                },
+                "hits": [],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
+
+        query_runner = runner.Query(config=cfg)
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {
+                "query": {
+                    "match_all": {},
+                },
+            },
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "hits": 0,
+            "hits_relation": "eq",
+            "timed_out": False,
+            "took": 5,
+            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+        }
+
+        es.perform_request.assert_awaited_once_with(
+            method="GET", path="/_all/_search", params={"request_cache": "false"}, body=params["body"], headers=None
+        )
+        es.clear_scroll.assert_not_called()
 
 
 class TestPutPipelineRunner:
@@ -2726,11 +3172,71 @@ class TestDeleteIndexRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_existing_indices(self, es):
-        es.indices.get = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
+        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
         es.indices.delete = mock.AsyncMock()
         es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
         es.cluster.put_settings = mock.AsyncMock()
-        r = runner.DeleteIndex()
+
+        cfg = config.Config()
+        r = runner.DeleteIndex(config=cfg)
+
+        params = {"indices": ["indexA", "indexB"], "only-if-exists": True}
+
+        result = await r(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+        }
+
+        es.cluster.put_settings.assert_has_awaits(
+            [
+                mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+                mock.call(body={"transient": {"action.destructive_requires_name": True}}),
+            ]
+        )
+        es.indices.delete.assert_awaited_once_with(index="indexB", params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_deletes_existing_indices_in_serverless(self, es):
+        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
+        r = runner.DeleteIndex(config=cfg)
+
+        params = {"indices": ["indexA", "indexB"], "only-if-exists": True}
+
+        result = await r(es, params)
+
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+        }
+
+        es.cluster.get_settings.assert_not_awaited()
+        es.cluster.put_settings.assert_not_awaited()
+        es.indices.delete.assert_awaited_once_with(index="indexB", params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_deletes_existing_indices_in_serverless_with_operator(self, es):
+        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
+        es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        r = runner.DeleteIndex(config=cfg)
 
         params = {"indices": ["indexA", "indexB"], "only-if-exists": True}
 
@@ -2756,7 +3262,9 @@ class TestDeleteIndexRunner:
         es.indices.delete = mock.AsyncMock()
         es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {}})
         es.cluster.put_settings = mock.AsyncMock()
-        r = runner.DeleteIndex()
+
+        cfg = config.Config()
+        r = runner.DeleteIndex(config=cfg)
 
         params = {
             "indices": ["indexA", "indexB"],
@@ -2780,8 +3288,8 @@ class TestDeleteIndexRunner:
         )
         es.indices.delete.assert_has_awaits(
             [
-                mock.call(index="indexA", params=params["request-params"]),
-                mock.call(index="indexB", params=params["request-params"]),
+                mock.call(index="indexA", params=params["request-params"], ignore=[404]),
+                mock.call(index="indexB", params=params["request-params"], ignore=[404]),
             ]
         )
         assert es.indices.exists.call_count == 0
@@ -2791,7 +3299,7 @@ class TestDeleteDataStreamRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_existing_data_streams(self, es):
-        es.indices.get = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
+        es.indices.exists = mock.AsyncMock(side_effect=[False, True])
         es.indices.delete_data_stream = mock.AsyncMock()
 
         r = runner.DeleteDataStream()
@@ -2894,6 +3402,8 @@ class TestDeleteIndexTemplateRunner:
     async def test_deletes_all_index_templates(self, es):
         es.indices.delete_template = mock.AsyncMock()
         es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
 
         r = runner.DeleteIndexTemplate()
 
@@ -2901,27 +3411,43 @@ class TestDeleteIndexTemplateRunner:
             "templates": [
                 ("templateA", False, None),
                 ("templateB", True, "logs-*"),
+                ("templateC", True, "metrics-*"),
             ],
             "request-params": {"timeout": 60},
         }
         result = await r(es, params)
 
-        # 2 times delete index template, one time delete matching indices
+        # 3 times delete index template, 2 times to set/reset transient cluster settings, 2 times delete matching indices
         assert result == {
-            "weight": 3,
+            "weight": 7,
             "unit": "ops",
             "success": True,
         }
 
         es.indices.delete_template.assert_has_awaits(
-            [mock.call(name="templateA", params=params["request-params"]), mock.call(name="templateB", params=params["request-params"])]
+            [
+                mock.call(name="templateA", ignore=[404], params=params["request-params"]),
+                mock.call(name="templateB", ignore=[404], params=params["request-params"]),
+                mock.call(name="templateC", ignore=[404], params=params["request-params"]),
+            ]
         )
-        es.indices.delete.assert_awaited_once_with(index="logs-*")
+        es.indices.delete.assert_has_awaits(
+            [
+                mock.call(index="logs-*"),
+                mock.call(index="metrics-*"),
+            ]
+        )
+        es.cluster.put_settings.assert_has_awaits(
+            [
+                mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+                mock.call(body={"transient": {"action.destructive_requires_name": True}}),
+            ]
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.get_template = mock.AsyncMock(side_effect=[False, True])
+        es.indices.exists_template = mock.AsyncMock(side_effect=[False, True])
         es.indices.delete_template = mock.AsyncMock()
         es.indices.delete = mock.AsyncMock()
 
@@ -2990,12 +3516,12 @@ class TestCreateComponentTemplateRunner:
             [
                 mock.call(
                     name="templateA",
-                    body={"template": {"mappings": {"properties": {"@timestamp": {"type": "date"}}}}},
+                    template={"mappings": {"properties": {"@timestamp": {"type": "date"}}}},
                     params=params["request-params"],
                 ),
                 mock.call(
                     name="templateB",
-                    body={"template": {"settings": {"index.number_of_shards": 1, "index.number_of_replicas": 1}}},
+                    template={"settings": {"index.number_of_shards": 1, "index.number_of_replicas": 1}},
                     params=params["request-params"],
                 ),
             ]
@@ -3051,8 +3577,8 @@ class TestDeleteComponentTemplateRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_deletes_only_existing_index_templates(self, es):
-        es.cluster.get_component_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
+    async def test_deletes_only_existing_component_templates(self, es):
+        es.cluster.exists_component_template = mock.AsyncMock(side_effect=[False, True])
         es.cluster.delete_component_template = mock.AsyncMock()
 
         r = runner.DeleteComponentTemplate()
@@ -3181,20 +3707,75 @@ class TestDeleteComposableTemplateRunner:
     async def test_deletes_all_index_templates(self, es):
         es.indices.delete_index_template = mock.AsyncMock()
         es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
 
-        r = runner.DeleteComposableTemplate()
+        cfg = config.Config()
+        r = runner.DeleteComposableTemplate(config=cfg)
 
         params = {
             "templates": [
                 ("templateA", False, None),
                 ("templateB", True, "logs-*"),
+                ("templateC", True, "metrics-*"),
             ],
             "request-params": {"timeout": 60},
             "only-if-exists": False,
         }
         result = await r(es, params)
 
-        # 2 times delete index template, one time delete matching indices
+        # 3 times delete index template, 2 times to set/reset transient cluster settings, 2 times delete matching indices
+        assert result == {
+            "weight": 7,
+            "unit": "ops",
+            "success": True,
+        }
+
+        es.indices.delete_index_template.assert_has_awaits(
+            [
+                mock.call(name="templateA", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateB", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateC", params=params["request-params"], ignore=[404]),
+            ]
+        )
+        es.cluster.put_settings.assert_has_awaits(
+            [
+                mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+                mock.call(body={"transient": {"action.destructive_requires_name": True}}),
+            ]
+        )
+        es.indices.delete.assert_has_awaits(
+            [
+                mock.call(index="logs-*"),
+                mock.call(index="metrics-*"),
+            ]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_deletes_all_index_templates_in_serverless(self, es):
+        es.indices.delete_index_template = mock.AsyncMock()
+        es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", False)
+        r = runner.DeleteComposableTemplate(config=cfg)
+
+        params = {
+            "templates": [
+                ("templateA", False, None),
+                ("templateB", True, "logs-*"),
+                ("templateC", True, "metrics-*"),
+            ],
+            "request-params": {"timeout": 60},
+            "only-if-exists": False,
+        }
+        result = await r(es, params)
+
+        # 3 times delete index template
         assert result == {
             "weight": 3,
             "unit": "ops",
@@ -3205,14 +3786,67 @@ class TestDeleteComposableTemplateRunner:
             [
                 mock.call(name="templateA", params=params["request-params"], ignore=[404]),
                 mock.call(name="templateB", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateC", params=params["request-params"], ignore=[404]),
             ]
         )
-        es.indices.delete.assert_awaited_once_with(index="logs-*")
+        es.cluster.put_settings.assert_not_awaited()
+        es.indices.delete.assert_not_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_deletes_all_index_templates_in_serverless_with_operator(self, es):
+        es.indices.delete_index_template = mock.AsyncMock()
+        es.indices.delete = mock.AsyncMock()
+        es.cluster.get_settings = mock.AsyncMock(return_value={"persistent": {}, "transient": {"action.destructive_requires_name": True}})
+        es.cluster.put_settings = mock.AsyncMock()
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        r = runner.DeleteComposableTemplate(config=cfg)
+
+        params = {
+            "templates": [
+                ("templateA", False, None),
+                ("templateB", True, "logs-*"),
+                ("templateC", True, "metrics-*"),
+            ],
+            "request-params": {"timeout": 60},
+            "only-if-exists": False,
+        }
+        result = await r(es, params)
+
+        # 3 times delete index template, 2 times to set/reset transient cluster settings, 2 times delete matching indices
+        assert result == {
+            "weight": 7,
+            "unit": "ops",
+            "success": True,
+        }
+
+        es.indices.delete_index_template.assert_has_awaits(
+            [
+                mock.call(name="templateA", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateB", params=params["request-params"], ignore=[404]),
+                mock.call(name="templateC", params=params["request-params"], ignore=[404]),
+            ]
+        )
+        es.cluster.put_settings.assert_has_awaits(
+            [
+                mock.call(body={"transient": {"action.destructive_requires_name": False}}),
+                mock.call(body={"transient": {"action.destructive_requires_name": True}}),
+            ]
+        )
+        es.indices.delete.assert_has_awaits(
+            [
+                mock.call(index="logs-*"),
+                mock.call(index="metrics-*"),
+            ]
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_deletes_only_existing_index_templates(self, es):
-        es.indices.get_index_template = mock.AsyncMock(side_effect=[{"status": 404}, {"status": 200}])
+        es.indices.exists_index_template = mock.AsyncMock(side_effect=[False, True])
         es.indices.delete_index_template = mock.AsyncMock()
 
         r = runner.DeleteComposableTemplate()
@@ -3271,7 +3905,14 @@ class TestCreateMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_datafeed_fallback(self, es):
-        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
         body = {"job_id": "total-requests", "indices": ["server-metrics"]}
@@ -3300,7 +3941,16 @@ class TestDeleteMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_datafeed_fallback(self, es):
-        es.ml.delete_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.delete_datafeed = mock.AsyncMock(
+            side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request")
+        )
 
         es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
@@ -3333,7 +3983,14 @@ class TestStartMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_body_fallback(self, es):
-        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
         body = {"end": "now"}
         params = {"datafeed-id": "some-data-feed", "body": body}
@@ -3381,7 +4038,14 @@ class TestStopMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_stop_ml_datafeed_fallback(self, es):
-        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         params = {
@@ -3432,7 +4096,14 @@ class TestCreateMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_job_fallback(self, es):
-        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         body = {
@@ -3474,7 +4145,14 @@ class TestDeleteMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_job_fallback(self, es):
-        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -3505,7 +4183,14 @@ class TestOpenMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_open_ml_job_fallback(self, es):
-        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -3536,7 +4221,14 @@ class TestCloseMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_close_ml_job_fallback(self, es):
-        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.TransportError(400, "Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         params = {
@@ -3559,6 +4251,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_raises_missing_slash(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3575,6 +4268,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_request_with_defaults(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3586,6 +4280,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_delete_index(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3598,14 +4293,13 @@ class TestRawRequestRunner:
             },
         }
         await r(es, params)
-
-        es.perform_request.assert_called_once_with(
-            method="DELETE", path="/twitter", headers=None, body=None, params={"ignore": [400, 404], "pretty": "true"}
-        )
+        es.options.assert_called_once_with(ignore_status=[400, 404])
+        es.perform_request.assert_called_once_with(method="DELETE", path="/twitter", headers=None, body=None, params={"pretty": "true"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_create_index(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3629,6 +4323,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_issue_msearch(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3660,6 +4355,7 @@ class TestRawRequestRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_raw_with_timeout_and_opaqueid(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         r = runner.RawRequest()
 
@@ -3677,6 +4373,8 @@ class TestRawRequestRunner:
         }
         await r(es, params)
 
+        es.options.assert_called_once_with(request_timeout=3.0)
+
         es.perform_request.assert_called_once_with(
             method="GET",
             path="/_msearch",
@@ -3687,7 +4385,7 @@ class TestRawRequestRunner:
                 {"index": "test", "search_type": "dfs_query_then_fetch"},
                 {"query": {"match_all": {}}},
             ],
-            params={"request_timeout": 3.0},
+            params={},
         )
 
 
@@ -3734,7 +4432,7 @@ class TestDeleteSnapshotRepository:
         r = runner.DeleteSnapshotRepository()
         await r(es, params)
 
-        es.snapshot.delete_repository.assert_called_once_with(repository="backups")
+        es.snapshot.delete_repository.assert_called_once_with(repository="backups", ignore=[404])
 
 
 class TestCreateSnapshotRepository:
@@ -3756,7 +4454,7 @@ class TestCreateSnapshotRepository:
         await r(es, params)
 
         es.snapshot.create_repository.assert_called_once_with(
-            repository="backups", body={"type": "fs", "settings": {"location": "/var/backups"}}, params={}
+            name="backups", body={"type": "fs", "settings": {"location": "/var/backups"}}, params={}
         )
 
 
@@ -4042,6 +4740,7 @@ class TestWaitForCurrentSnapshotsCreate:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_wait_for_current_snapshots_create_before_8_3_0(self, es):
+        es.is_serverless = False
         es.info = mock.AsyncMock(
             return_value={
                 "name": "es01",
@@ -4149,7 +4848,7 @@ class TestWaitForCurrentSnapshotsCreate:
             "completion-recheck-wait-period": 0,
         }
 
-        es.perform_request = mock.AsyncMock(
+        es.snapshot.get = mock.AsyncMock(
             side_effect=[
                 {
                     "snapshots": [
@@ -4192,14 +4891,9 @@ class TestWaitForCurrentSnapshotsCreate:
         r = runner.WaitForCurrentSnapshotsCreate()
         result = await r(es, task_params)
 
-        es.perform_request.assert_awaited_with(
-            method="GET",
-            path=f"_snapshot/{repository}/_current",
-            headers={"Content-Type": "application/json"},
-            params={"index_names": "false", "verbose": "false"},
-        )
+        es.snapshot.get.assert_awaited_with(repository=repository, snapshot="_current", verbose=False, index_names=False)
 
-        assert es.perform_request.await_count == 2
+        assert es.snapshot.get.await_count == 2
 
         assert result is None
 
@@ -4207,8 +4901,8 @@ class TestWaitForCurrentSnapshotsCreate:
 class TestRestoreSnapshot:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_restore_snapshot(self, es):
-        es.snapshot.restore = mock.AsyncMock()
+    async def test_restore_snapshot_with_wait(self, es):
+        es.perform_request = mock.AsyncMock()
 
         params = {
             "repository": "backups",
@@ -4220,14 +4914,14 @@ class TestRestoreSnapshot:
         r = runner.RestoreSnapshot()
         await r(es, params)
 
-        es.snapshot.restore.assert_awaited_once_with(
-            repository="backups", snapshot="snapshot-001", wait_for_completion=True, params={"request_timeout": 7200}
+        es.perform_request.assert_awaited_once_with(
+            method="POST", path="/_snapshot/backups/snapshot-001/_restore", params={"request_timeout": 7200, "wait_for_completion": True}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_restore_snapshot_with_body(self, es):
-        es.snapshot.restore = mock.AsyncMock()
+        es.perform_request = mock.AsyncMock()
         params = {
             "repository": "backups",
             "snapshot": "snapshot-001",
@@ -4245,9 +4939,9 @@ class TestRestoreSnapshot:
         r = runner.RestoreSnapshot()
         await r(es, params)
 
-        es.snapshot.restore.assert_awaited_once_with(
-            repository="backups",
-            snapshot="snapshot-001",
+        es.perform_request.assert_awaited_once_with(
+            method="POST",
+            path="/_snapshot/backups/snapshot-001/_restore",
             body={
                 "indices": "index1,index2",
                 "include_global_state": False,
@@ -4255,8 +4949,7 @@ class TestRestoreSnapshot:
                     "index.number_of_replicas": 0,
                 },
             },
-            wait_for_completion=True,
-            params={"request_timeout": 7200},
+            params={"request_timeout": 7200, "wait_for_completion": True},
         )
 
 
@@ -5092,7 +5785,6 @@ class TestTransformStatsRunner:
 
 
 class TestCreateIlmPolicyRunner:
-
     params = {
         "policy-name": "my-ilm-policy",
         "request-params": {"master_timeout": "30s", "timeout": "30s"},
@@ -5117,7 +5809,12 @@ class TestCreateIlmPolicyRunner:
         }
 
         es.ilm.put_lifecycle.assert_awaited_once_with(
-            policy=self.params["policy-name"], body=self.params["body"], params=self.params["request-params"]
+            name=self.params["policy-name"],
+            policy=self.params["body"]["policy"],
+            master_timeout=self.params["request-params"].get("master_timeout"),
+            timeout=self.params["request-params"].get("timeout"),
+            error_trace=None,
+            filter_path=None,
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -5134,11 +5831,33 @@ class TestCreateIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.put_lifecycle.assert_awaited_once_with(policy=params["policy-name"], body=params["body"], params={})
+        es.ilm.put_lifecycle.assert_awaited_once_with(
+            name=params["policy-name"],
+            policy=self.params["body"]["policy"],
+            master_timeout=None,
+            timeout=None,
+            error_trace=None,
+            filter_path=None,
+        )
+
+    @mock.patch("esrally.client.asynchronous.IlmClient")
+    @pytest.mark.asyncio
+    async def test_RallyIlmClient_rewrites_kwargs(self, es_ilm):
+        es = RallyAsyncElasticsearch(hosts=["http://localhost:9200"])
+        es_ilm.put_lifecycle = mock.AsyncMock(return_value={})
+
+        # simulating a custom runner that hasn't been refactored
+        # to suit the new 'elasticsearch-py' 8.x kwarg only method signature
+        await es.ilm.put_lifecycle("test-name", body=self.params["body"])
+
+        es_ilm.put_lifecycle.assert_awaited_once_with(
+            es.ilm,
+            policy=self.params["body"]["policy"],
+            name="test-name",
+        )
 
 
 class TestDeleteIlmPolicyRunner:
-
     params = {"policy-name": "my-ilm-policy", "request-params": {"master_timeout": "30s", "timeout": "30s"}}
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -5153,7 +5872,14 @@ class TestDeleteIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.delete_lifecycle.assert_awaited_once_with(policy=self.params["policy-name"], params=self.params["request-params"])
+        es.ilm.delete_lifecycle.assert_awaited_once_with(
+            name=self.params["policy-name"],
+            master_timeout=self.params["request-params"].get("master_timeout"),
+            timeout=self.params["request-params"].get("timeout"),
+            error_trace=None,
+            filter_path=None,
+            ignore=[404],
+        )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -5169,7 +5895,14 @@ class TestDeleteIlmPolicyRunner:
             "success": True,
         }
 
-        es.ilm.delete_lifecycle.assert_awaited_once_with(policy=params["policy-name"], params={})
+        es.ilm.delete_lifecycle.assert_awaited_once_with(
+            name=self.params["policy-name"],
+            master_timeout=None,
+            timeout=None,
+            error_trace=None,
+            filter_path=None,
+            ignore=[404],
+        )
 
 
 class TestSqlRunner:
@@ -5298,6 +6031,7 @@ class TestDownsampleRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_index_downsample(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Downsample()
@@ -5324,6 +6058,7 @@ class TestDownsampleRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_fixed_interval_in_body_param(self, es):
+        es.options.return_value = es
         sql_runner = runner.Downsample()
         params = {"operation-type": "downsample", "source-index": "source-index", "target-index": "target-index"}
 
@@ -5337,6 +6072,7 @@ class TestDownsampleRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_source_index_in_body_param(self, es):
+        es.options.return_value = es
         sql_runner = runner.Downsample()
         params = {"operation-type": "downsample", "fixed-interval": "1d", "target-index": "target-index"}
 
@@ -5350,6 +6086,7 @@ class TestDownsampleRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_mandatory_target_index_in_body_param(self, es):
+        es.options.return_value = es
         sql_runner = runner.Downsample()
         params = {"operation-type": "downsample", "fixed-interval": "1d", "source-index": "source-index"}
 
@@ -5382,7 +6119,9 @@ class TestSubmitAsyncSearch:
             # search id is registered in context
             assert runner.CompositeContext.get("search-1") == "12345"
 
-        es.async_search.submit.assert_awaited_once_with(body={"query": {"match_all": {}}}, index="_all", params={})
+        es.async_search.submit.assert_awaited_once_with(
+            body={"query": {"match_all": {}}}, index="_all", params={"wait_for_completion_timeout": 0}
+        )
 
 
 class TestGetAsyncSearch:
@@ -5500,6 +6239,7 @@ class TestQueryWithSearchAfterScroll:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_search_after_with_pit(self, es):
+        es.options.return_value = es
         pit_op = "open-point-in-time1"
         pit_id = "0123456789abcdef"
         params = {
@@ -5612,6 +6352,7 @@ class TestQueryWithSearchAfterScroll:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_search_after_without_pit(self, es):
+        es.options.return_value = es
         params = {
             "name": "search-with-pit",
             "operation-type": "paginated-search",
@@ -5774,6 +6515,7 @@ class TestCompositeAgg:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_composite_agg_without_pit(self, es):
+        es.options.return_value = es
         params = {
             "name": "composite-agg-without-pit",
             "operation-type": "composite-agg",
@@ -5900,6 +6642,7 @@ class TestCompositeAgg:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_composite_agg_with_pit(self, es):
+        es.options.return_value = es
         pit_op = "open-point-in-time1"
         pit_id = "0123456789abcdef"
         params = {
@@ -6275,6 +7018,7 @@ class TestComposite:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_execute_multiple_streams(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock(
             side_effect=[
                 # raw-request
@@ -6348,6 +7092,7 @@ class TestComposite:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_propagates_violated_assertions(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock(
             side_effect=[
                 # search
@@ -6615,7 +7360,7 @@ class TestRequestTiming:
             self.task_start = task_start
             self.current_request_start = self.task_start
 
-        async def __aenter__(self):
+        def __enter__(self):
             # pretend time advances on each request
             self.current_request_start += 5
             return self
@@ -6628,7 +7373,7 @@ class TestRequestTiming:
         def request_end(self):
             return self.current_request_start + 0.1
 
-        async def __aexit__(self, exc_type, exc_val, exc_tb):
+        def __exit__(self, exc_type, exc_val, exc_tb):
             return False
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -6706,7 +7451,7 @@ class TestRetry:
 
     @pytest.mark.asyncio
     async def test_is_transparent_on_exception_when_no_retries(self):
-        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
+        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionError(message="no route to host"))
         es = None
         params = {
             # no retries
@@ -6749,10 +7494,10 @@ class TestRetry:
     async def test_retries_on_timeout_if_wanted_and_raises_if_no_recovery(self):
         delegate = mock.AsyncMock(
             side_effect=[
-                elasticsearch.ConnectionError("N/A", "no route to host"),
-                elasticsearch.ConnectionError("N/A", "no route to host"),
-                elasticsearch.ConnectionError("N/A", "no route to host"),
-                elasticsearch.ConnectionError("N/A", "no route to host"),
+                elasticsearch.ConnectionError(message="no route to host"),
+                elasticsearch.ConnectionError(message="no route to host"),
+                elasticsearch.ConnectionError(message="no route to host"),
+                elasticsearch.ConnectionError(message="no route to host"),
             ]
         )
         es = None
@@ -6776,7 +7521,7 @@ class TestRetry:
 
         delegate = mock.AsyncMock(
             side_effect=[
-                elasticsearch.ConnectionError("N/A", "no route to host"),
+                elasticsearch.ConnectionError(message="no route to host"),
                 failed_return_value,
             ]
         )
@@ -6798,7 +7543,7 @@ class TestRetry:
 
     @pytest.mark.asyncio
     async def test_retries_mixed_timeout_and_application_errors(self):
-        connection_error = elasticsearch.ConnectionError("N/A", "no route to host")
+        connection_error = elasticsearch.ConnectionError(message="no route to host")
         failed_return_value = {"weight": 1, "unit": "ops", "success": False}
         success_return_value = {"weight": 1, "unit": "ops", "success": False}
 
@@ -6844,7 +7589,7 @@ class TestRetry:
 
     @pytest.mark.asyncio
     async def test_does_not_retry_on_timeout_if_not_wanted(self):
-        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(408, "timed out"))
+        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="timed out"))
         es = None
         params = {"retries": 3, "retry-wait-period": 0.01, "retry-on-timeout": False, "retry-on-error": True}
         retrier = runner.Retry(delegate)
@@ -6929,13 +7674,13 @@ class TestRetry:
 
 class TestRemovePrefix:
     def test_remove_matching_prefix(self):
-        suffix = runner.remove_prefix("index-20201117", "index")
+        suffix = "index-20201117".removeprefix("index")
 
         assert suffix == "-20201117"
 
     def test_prefix_doesnt_exit(self):
         index_name = "index-20201117"
-        suffix = runner.remove_prefix(index_name, "unrelatedprefix")
+        suffix = index_name.removeprefix("unrelatedprefix")
 
         assert index_name == suffix
 
@@ -6982,3 +7727,41 @@ class TestFieldCapsRunner:
 
         expected_body = {"index_filter": index_filter}
         es.field_caps.assert_awaited_once_with(index="_all", fields="time-*", body=expected_body, params=None)
+
+
+class TestEsqlRunner:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_without_query_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock()
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from logs-* | stats c = count(*)"})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from logs-* | stats c = count(*)"}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_with_query_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock()
+        esql = runner.Esql()
+        query_filter = {"range": {"@timestamp": {"gte": "2023"}}}
+        result = await esql(es, params={"query": "from * | limit 1", "filter": query_filter})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from * | limit 1", "filter": query_filter}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_with_body(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock()
+        esql = runner.Esql()
+        pragma = {"data_partitioning": "doc"}
+        result = await esql(es, params={"query": "from * | limit 1", "body": {"pragma": pragma}})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+
+        expected_body = {"pragma": pragma, "query": "from * | limit 1"}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})

@@ -10,13 +10,13 @@ path = "esrally/_version.py"
 name = "esrally"
 dynamic = ["version"]
 authors = [
-  {name="Daniel Mitterdorfer", email="daniel.mitterdorfer@gmail.com"},
+    { name = "Daniel Mitterdorfer", email = "daniel.mitterdorfer@gmail.com" },
 ]
 description = "Macrobenchmarking framework for Elasticsearch"
 readme = "README.md"
-license = {text = "Apache License 2.0"}
-requires-python = ">=3.8"
-classifiers=[
+license = { text = "Apache License 2.0" }
+requires-python = ">=3.9"
+classifiers = [
     "Topic :: System :: Benchmark",
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: Apache Software License",
@@ -25,9 +25,10 @@ classifiers=[
     "Operating System :: POSIX",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3 :: Only",
 ]
 ################################################################################################
@@ -39,14 +40,17 @@ classifiers=[
 ################################################################################################
 dependencies = [
     # License: Apache 2.0
-    # transitive dependencies:
-    #   urllib3: MIT
-    #   aiohttp: Apache 2.0
-    "elasticsearch[async]==7.14.0",
-    "urllib3==1.26.9",
+    "elasticsearch[async]==8.6.1",
+    "elastic-transport==8.4.1",
+    # License: MIT
+    "urllib3==1.26.19",
+    # License: Apache 2.0
+    "aiohttp==3.10.11",
     "docker==6.0.0",
+    # avoid specific requests version to fix bug in docker-py
+    "requests<2.32.0",
     # License: BSD
-    "psutil==5.8.0",
+    "psutil==5.9.4",
     # License: MIT
     "py-cpuinfo==7.0.0",
     # License: MIT
@@ -55,7 +59,7 @@ dependencies = [
     "jsonschema==3.1.1",
     # License: BSD
     # transitive dependency Markupsafe: BSD
-    "Jinja2==2.11.3",
+    "Jinja2==3.1.5",
     "markupsafe==2.0.1",
     # License: MIT
     "thespian==3.10.7",
@@ -65,7 +69,7 @@ dependencies = [
     # License: MPL 2.0
     "certifi",
     # License: MIT
-    "yappi==1.3.3",
+    "yappi==1.5.1",
     # License: BSD
     "ijson==2.6.1",
     # License: Apache 2.0
@@ -74,6 +78,14 @@ dependencies = [
     "google-resumable-media[requests]==1.1.0",
     # License: Apache 2.0
     "google-auth==1.22.1",
+    # License: BSD
+    "zstandard==0.21.0",
+    # License: Python Software Foundation License
+    "typing-extensions==4.12.2",
+    # License:  BSD-2-Clause license 
+    "python-json-logger==2.0.7",
+    # License: Apache 2.0
+    "ecs-logging==2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -83,12 +95,12 @@ s3 = [
     #   botocore: Apache 2.0
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
-    "boto3==1.18.46",
+    "boto3==1.34.68",
 ]
 # These packages are only required when developing Rally
 develop = [
     # s3
-    "boto3==1.18.46",
+    "boto3==1.34.68",
     # tests
     "ujson",
     "pytest==7.1.2",
@@ -96,16 +108,24 @@ develop = [
     "pytest-asyncio==0.19.0",
     "pytest-httpserver==1.0.5",
     "tox==3.25.0",
-    "nox==2022.11.21",
+    "nox==2024.3.2",
     "sphinx==5.1.1",
     "furo==2022.06.21",
-    "twine==4.0.1",
-    "wheel==0.37.1",
     "github3.py==3.2.0",
     "pre-commit==2.20.0",
-    "pylint==2.14.5",
+    "pylint==3.1.0",
     "trustme==0.9.0",
     "GitPython==3.1.30",
+    # formatting
+    "black==24.10.0",
+    # mypy
+    "boto3-stubs==1.26.125",
+    "mypy==1.10.1",
+    "types-psutil==5.9.4",
+    "types-tabulate==0.8.9",
+    "types-urllib3==1.26.19",
+    "types-requests<2.32.0",
+    "types-jsonschema==3.2.0",
 ]
 
 [project.scripts]
@@ -121,7 +141,7 @@ esrallyd = "esrally.rallyd:main"
 
 [tool.black]
 line-length = 140
-target-version = ['py38']
+target-version = ['py39', 'py310', 'py311', 'py312']
 
 [tool.isort]
 profile = 'black'
@@ -135,3 +155,72 @@ testpaths = "tests"
 junit_family = "xunit2"
 junit_logging = "all"
 asyncio_mode = "strict"
+xfail_strict = true
+
+# With exceptions specified in mypy override section, Rally does not use type
+# hints (they were a novelty when Rally came to be). Hints are being slowly and
+# opportunistically introduced whenever we revisit a group of modules.
+#
+# The intention of the following largely reduced global config scope is
+# verification of argument types in config.Config methods while introducing
+# configuration properties (props). The intention of "disable_error_code" option
+# is to keep "arg-type" error code, while disabling other error codes.
+# Ref: https://github.com/elastic/rally/pull/1798
+[tool.mypy]
+python_version = "3.12"
+# subset of "strict", kept at global config level as some of the options are
+# supported only at this level
+# https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_equality = true
+extra_checks = true
+check_untyped_defs = true
+disable_error_code = [
+    "assignment",
+    "attr-defined",
+    "call-arg",
+    "call-overload",
+    "dict-item",
+    "import-not-found",
+    "import-untyped",
+    "index",
+    "list-item",
+    "misc",
+    "name-defined",
+    "operator",
+    "str-bytes-safe",
+    "syntax",
+    "union-attr",
+    "var-annotated",
+]
+files = ["esrally/", "it/", "tests/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "esrally.mechanic.team",
+    "esrally.utils.modules",
+    "esrally.utils.io",
+    "esrally.utils.process",
+]
+disallow_incomplete_defs = true
+# this should be a copy of disabled_error_code from above
+enable_error_code = [
+    "assignment",
+    "attr-defined",
+    "call-arg",
+    "call-overload",
+    "dict-item",
+    "import-not-found",
+    "import-untyped",
+    "index",
+    "list-item",
+    "misc",
+    "name-defined",
+    "operator",
+    "str-bytes-safe",
+    "syntax",
+    "union-attr",
+    "var-annotated",
+]

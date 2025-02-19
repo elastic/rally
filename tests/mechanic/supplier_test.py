@@ -38,22 +38,49 @@ class TestRevisionExtractor:
             "elasticsearch": "current",
             "all": "current",
         }
-        assert supplier._extract_revisions("@2015-01-01-01:00:00") == {
-            "elasticsearch": "@2015-01-01-01:00:00",
-            "all": "@2015-01-01-01:00:00",
+        assert supplier._extract_revisions("@2022-12-12T11:12:13Z") == {
+            "elasticsearch": "@2022-12-12T11:12:13Z",
+            "all": "@2022-12-12T11:12:13Z",
+        }
+        assert supplier._extract_revisions("feature/branch@2024-04-20T08:00:00Z") == {
+            "elasticsearch": "feature/branch@2024-04-20T08:00:00Z",
+            "all": "feature/branch@2024-04-20T08:00:00Z",
         }
 
     def test_multiple_revisions(self):
-        assert supplier._extract_revisions("elasticsearch:67c2f42,x-pack:@2015-01-01-01:00:00,some-plugin:current") == {
+        assert supplier._extract_revisions("elasticsearch:67c2f42,one-plugin:@2023-04-04T12:34:56,another-plugin:current") == {
             "elasticsearch": "67c2f42",
-            "x-pack": "@2015-01-01-01:00:00",
-            "some-plugin": "current",
+            "one-plugin": "@2023-04-04T12:34:56",
+            "another-plugin": "current",
         }
 
     def test_invalid_revisions(self):
         with pytest.raises(exceptions.SystemSetupError) as exc:
             supplier._extract_revisions("elasticsearch 67c2f42,x-pack:current")
         assert exc.value.args[0] == "Revision [elasticsearch 67c2f42] does not match expected format [name:revision]."
+
+
+class TestComponentFromRevision:
+    def test_revision_sha(self):
+        assert supplier._component_from_revision("e8d4211de73ad498df865e7df935feb890808eb9") == (
+            "",
+            "e8d4211de73ad498df865e7df935feb890808eb9",
+        )
+
+    def test_revision_ts_only(self):
+        assert supplier._component_from_revision("@2023-04-03T03:04:05Z") == ("", "@2023-04-03T03:04:05Z")
+
+    def test_revision_component_and_sha(self):
+        assert supplier._component_from_revision("elasticsearch:latest") == ("elasticsearch", "latest")
+
+    def test_revision_component_and_ts(self):
+        assert supplier._component_from_revision("elasticsearch:@2023-04-03T03:04:05Z") == ("elasticsearch", "@2023-04-03T03:04:05Z")
+
+    def test_revision_component_branch_and_ts(self):
+        assert supplier._component_from_revision("elasticsearch:feature/branch@2023-04-03T03:04:05Z") == (
+            "elasticsearch",
+            "feature/branch@2023-04-03T03:04:05Z",
+        )
 
 
 class TestSourceRepository:
@@ -117,10 +144,10 @@ class TestSourceRepository:
         mock_head_revision.return_value = "HEAD"
 
         s = supplier.SourceRepository(name="Elasticsearch", remote_url="some-github-url", src_dir="/src", branch="main")
-        s.fetch("@2015-01-01-01:00:00")
+        s.fetch("@2023-04-20T11:09:12Z")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_ts.assert_called_with("/src", "2015-01-01-01:00:00", remote="origin", branch="main")
+        mock_pull_ts.assert_called_with("/src", "2023-04-20T11:09:12Z", remote="origin", branch="main", default_branch="main")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.fetch", autospec=True)
@@ -743,7 +770,6 @@ class TestElasticsearchSourceSupplier:
 
     def test_resolve_build_jdk_major(self, caplog):
         def text(build_java, runtime_java):
-
             # based off of https://github.com/elastic/elasticsearch/blob/main/.ci/java-versions.properties
             text = (
                 "# This file is used with all of the non-matrix tests in Jenkins.\n"

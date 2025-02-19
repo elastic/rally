@@ -6,17 +6,19 @@ Advanced Topics
 Templating Track Files with Jinja2
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Rally uses `Jinja2 <http://jinja.pocoo.org/docs/dev/>`_ as a template language so you can use Jinja2 expressions in track files.
+Rally uses `Jinja2 <https://jinja.palletsprojects.com/en/latest/>`_ as a template language so you can use Jinja2 expressions in track files.
 
 Elasticsearch utilizes Mustache formatting in a few places, notably in `search templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.4/search-template.html>`_ and `Watcher templates <https://www.elastic.co/guide/en/elasticsearch/reference/7.4/actions-email.html>`_. If you are using Mustache in your Rally tracks you must `escape them properly <https://jinja.palletsprojects.com/en/2.10.x/templates/#escaping>`_. See :ref:`put_pipeline` for an example.
+
+.. _advanced_extensions:
 
 Extensions
 """"""""""
 
 Rally also provides a few extensions to Jinja2:
 
-* ``now``: a global variable that represents the current date and time when the template is evaluated by Rally.
-* ``days_ago()``: a `filter <http://jinja.pocoo.org/docs/dev/templates/#filters>`_ that you can use for date calculations.
+* ``now``: a global variable that represents the current date and time in seconds since the epoch (Jan 1, 1970 00:00:00 UTC) when the template is evaluated by Rally.
+* ``days_ago()``: a `filter <https://jinja.palletsprojects.com/en/latest/templates/#filters>`_ that you can use for date calculations.
 
 You can find an example in the ``http_logs`` track::
 
@@ -84,6 +86,48 @@ Assuming we pass ``--track-params="es_snapshot_restore_recovery_max_bytes_per_se
 
 
 The parameter ``default_value`` controls the value to use for the setting if it is undefined. If the setting is undefined and there is no default value, nothing will be added.
+
+* ``build_flavor``: a global variable that holds build flavor reported by Elasticsearch cluster targetted by Rally.
+* ``serverless_operator`` (reserved for Elastic internal use): a global variable that holds ``true`` when Rally targets serverless cluster with operator privileges, and ``false`` otherwise.
+
+Dynamic Date Ranges
+~~~~~~~~~~~~~~~~~~~
+
+* ``get_start_date('%Y-%m-%d', 'timezone.utc')``: pair with the ``now`` global variable to generate a start date in the specified date format and time zone. The default format is ``%Y-%m-%d`` and time zone is ``timezone.utc``.  The filter will use the default values when no parameters are specified.
+* ``get_end_date(1, '%Y-%m-%d', 'timezone.utc')``: pair with the ``now`` global variable to generate an end date with the specified number of days, date format, and time zone. The default number of days is 1, format is ``%Y-%m-%d``, and time zone is ``timezone.utc``. The filter will use the default values when no parameters are specified.
+
+Example 1::
+
+    {
+      ...,
+      "start-date": {{ now | get_start_date | tojson }},
+      "end-date": {{ now | get_end_date | tojson }}
+    }
+
+Results in::
+
+    {
+      ...,
+      "start-date": "2021-01-01",
+      "end-date": "2021-01-02"
+    }
+
+Example 2::
+
+    {
+      ...,
+      "start-date": {{ now | get_start_date('%Y-%m-%d') | tojson }},
+      "end-date": {{ now | get_end_date(3, '%Y-%m-%d') | tojson }}
+    }
+
+Results in::
+
+    {
+      ...,
+      "start-date": "2021-01-01",
+      "end-date": "2021-01-04"
+    }
+
 
 .. _adding_tracks_custom_param_sources:
 

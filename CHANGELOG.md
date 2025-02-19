@@ -1,3 +1,188 @@
+### 2.11.1
+
+#### Highlights
+
+* [#1875](https://github.com/elastic/rally/pull/1875): Switch to JDK 21
+
+#### Enhancements
+
+* [#1884](https://github.com/elastic/rally/pull/1884): Add Jinja filters for creating dynamic date ranges based on now()
+* [#1871](https://github.com/elastic/rally/pull/1871): [ES-8436] feat: Change Dockerfile base images to Wolfi
+* [#1865](https://github.com/elastic/rally/pull/1865): Add an option to filter by challange in list command
+* [#1859](https://github.com/elastic/rally/pull/1859): Modify rally to allow multiple cars with complex configuration
+* [#1858](https://github.com/elastic/rally/pull/1858): Bump urllib3 from 1.26.18 to 1.26.19
+
+#### Bug Fixes
+
+* [#1882](https://github.com/elastic/rally/pull/1882): fixes #1881 - composite operation failing when track_total_hits is false
+* [#1879](https://github.com/elastic/rally/pull/1879): Pull non-default branch commits selectively
+* [#1877](https://github.com/elastic/rally/pull/1877): Docs: fix level of (warmup-)interations
+* [#1876](https://github.com/elastic/rally/pull/1876): Cast batch size as int
+* [#1863](https://github.com/elastic/rally/pull/1863): Avoid logging ES credentials from running Rally processes
+* [#1861](https://github.com/elastic/rally/pull/1861): Restore time measurement on request end
+* [#1848](https://github.com/elastic/rally/pull/1848): Pin `requests` library until we fix `docker-py`
+
+### 2.11.0
+
+#### Highlights
+
+* [#1839](https://github.com/elastic/rally/pull/1839): Add support for Python 3.12
+
+#### Enhancements
+
+* [#1851](https://github.com/elastic/rally/pull/1851): Assume no operator if security not enabled in serverless
+* [#1846](https://github.com/elastic/rally/pull/1846): Update create track
+* [#1845](https://github.com/elastic/rally/pull/1845): Allow rally to run ESQL operations on serverless for benchmarks
+* [#1831](https://github.com/elastic/rally/pull/1831): Add client ID to metrics
+* [#1830](https://github.com/elastic/rally/pull/1830): Add looped mode to bulk operation
+* [#1827](https://github.com/elastic/rally/pull/1827): Track dataset size
+* [#1819](https://github.com/elastic/rally/pull/1819): Override serverless cluster version in telemetry
+* [#1818](https://github.com/elastic/rally/pull/1818): Override serverless cluster version
+* [#1816](https://github.com/elastic/rally/pull/1816): Add FS metrics to node-stats telemetry device
+
+#### Bug Fixes
+
+* [#1835](https://github.com/elastic/rally/pull/1835): Avoid immense term error in metrics metadata fields
+* [#1825](https://github.com/elastic/rally/pull/1825): Make Jit telelmetry compatible with JDK 9+
+* [#1823](https://github.com/elastic/rally/pull/1823): Measure time until last response chunk
+* [#1805](https://github.com/elastic/rally/pull/1805): Handle raw response exceptions
+
+#### Doc Changes
+
+* [#1824](https://github.com/elastic/rally/pull/1824): Fix telemetry docs 
+* [#1811](https://github.com/elastic/rally/pull/1811): Use composable index templates for metric indices
+
+### 2.10.0
+
+#### Highlights
+
+* [#1797](https://github.com/elastic/rally/pull/1797): Document Rally use with Elastic Serverless
+
+#### Enhancements
+
+* [#1791](https://github.com/elastic/rally/pull/1791): Add ESQL operator
+* [#1789](https://github.com/elastic/rally/pull/1789): Add serverless-aware runners
+* [#1787](https://github.com/elastic/rally/pull/1787) (Breaking): Inject serverless_operator in track templates
+* [#1786](https://github.com/elastic/rally/pull/1786): Add support for zstd-compression
+* [#1785](https://github.com/elastic/rally/pull/1785): Fix serverless public use in trivial tracks
+
+#### Bug Fixes
+
+* [#1790](https://github.com/elastic/rally/pull/1790): Retrieve cluster info in serverless public mode
+* [#1784](https://github.com/elastic/rally/pull/1784): Fix crash on too many consecutive errors
+
+#### Miscellaneous Changes
+
+* [#1793](https://github.com/elastic/rally/pull/1793): Bump urllib3 from 1.26.9 to 1.26.18
+
+### 2.9.1
+
+#### Enhancements
+
+* [#1778](https://github.com/elastic/rally/pull/1778): Support API key authentication
+* [#1770](https://github.com/elastic/rally/pull/1770): Exclude telemetry devices based on serverless status
+* [#1768](https://github.com/elastic/rally/pull/1768): Detect serverless operator status automatically
+
+#### Bug Fixes
+
+* [#1772](https://github.com/elastic/rally/pull/1772): Fix "Could not checkout. Do you have uncommitted changes?" error
+
+### 2.9.0
+
+#### Highlights
+
+* [#1760](https://github.com/elastic/rally/pull/1760): Exclude tasks based on serverless status
+* [#1750](https://github.com/elastic/rally/pull/1750) (Breaking): Inject build_flavor in track templates
+
+#### Enhancements
+
+* [#1756](https://github.com/elastic/rally/pull/1756): Retrieve serverless build hash from nodes info API
+* [#1755](https://github.com/elastic/rally/pull/1755): Add blob-store-stats telemetry device and tests
+* [#1743](https://github.com/elastic/rally/pull/1743): Bulk action refresh param
+
+#### Bug Fixes
+
+* [#1763](https://github.com/elastic/rally/pull/1763): Fix running tracks across multiple load driver machines
+* [#1747](https://github.com/elastic/rally/pull/1747): Fix rally-annotations index creation
+
+#### Doc Changes
+
+* [#1748](https://github.com/elastic/rally/pull/1748): Document actor system
+
+#### Miscellaneous Changes
+
+* [#1759](https://github.com/elastic/rally/pull/1759): Ensure serverless.mode/operator are always set
+
+### 2.8.0
+
+#### Highlights
+
+* [#1683](https://github.com/elastic/rally/pull/1683): Upgrade Elasticsearch client to 8.6.1
+* [#1669](https://github.com/elastic/rally/pull/1669): Upgrade ES Client to 8.x
+
+#### Enhancements
+
+* [#1727](https://github.com/elastic/rally/pull/1727): Allow configuring logging to use local time
+* [#1707](https://github.com/elastic/rally/pull/1707): Evenly distribute client connections across hosts
+* [#1706](https://github.com/elastic/rally/pull/1706): Allow specifying branch together with timestamp in revision
+* [#1702](https://github.com/elastic/rally/pull/1702): Include 'refresh' and 'flush' stats by default when using 'node-stats-include-indices'
+* [#1663](https://github.com/elastic/rally/pull/1663): Add operating system cgroup stats to node-stats telemetry
+
+#### Bug Fixes
+
+* [#1722](https://github.com/elastic/rally/pull/1722): Increase 'mapping.total_fields.limit' to '2000'
+* [#1719](https://github.com/elastic/rally/pull/1719): Bump up minimum Python version
+* [#1710](https://github.com/elastic/rally/pull/1710): Actually use client returned from '.options()'
+* [#1705](https://github.com/elastic/rally/pull/1705): Refactor some runners to set transport level options
+* [#1703](https://github.com/elastic/rally/pull/1703): Improve exception handling for metrics store errors
+* [#1698](https://github.com/elastic/rally/pull/1698): Update progress after GCS download finished
+* [#1692](https://github.com/elastic/rally/pull/1692): Allow to delete indices related to index templates
+* [#1691](https://github.com/elastic/rally/pull/1691): Ignore HTTP 404 consistently in runners
+* [#1690](https://github.com/elastic/rally/pull/1690): Use correct params for create component template
+* [#1687](https://github.com/elastic/rally/pull/1687): Propagate request start/end lazily
+
+#### Miscellaneous Changes
+
+* [#1725](https://github.com/elastic/rally/pull/1725): Make async context manager synchronous
+
+### 2.7.1
+
+#### Highlights
+
+* [#1674](https://github.com/elastic/rally/pull/1674): Allow reading metrics password from environment
+* [#1624](https://github.com/elastic/rally/pull/1624): Skip building plugins moved to modules
+
+#### Enhancements
+
+* [#1654](https://github.com/elastic/rally/pull/1654): Add role metadata to node-stats telemetry device
+* [#1649](https://github.com/elastic/rally/pull/1649): Allow specifying --installation-id in esrally install
+* [#1643](https://github.com/elastic/rally/pull/1643): Skip response parsing for raw requests
+* [#1630](https://github.com/elastic/rally/pull/1630): Add delay and duration parameters to jfr telmetry device
+* [#1619](https://github.com/elastic/rally/pull/1619): Add shard data to search operation's detailed-results meta-data
+* [#1618](https://github.com/elastic/rally/pull/1618): Support meta-data for composite tasks
+* [#1610](https://github.com/elastic/rally/pull/1610): Support specifying user tags as json
+
+#### Bug Fixes
+
+* [#1645](https://github.com/elastic/rally/pull/1645): Fix --to-date option for list subcommand
+* [#1640](https://github.com/elastic/rally/pull/1640): Pass plugin-params also for modules
+* [#1638](https://github.com/elastic/rally/pull/1638): Don't use --short when retrieving revisions from git
+
+#### Doc Changes
+
+* [#1666](https://github.com/elastic/rally/pull/1666): Document bulk behavior with multiple clients/documents
+* [#1648](https://github.com/elastic/rally/pull/1648): Fix broken links on the command line reference docs
+* [#1641](https://github.com/elastic/rally/pull/1641): Mention jq is required for development
+* [#1613](https://github.com/elastic/rally/pull/1613): Document Track Processor Interface
+* [#1605](https://github.com/elastic/rally/pull/1605): Update list of available tracks
+
+#### Miscellaneous Changes
+
+* [#1659](https://github.com/elastic/rally/pull/1659): Simplify create_readers
+* [#1615](https://github.com/elastic/rally/pull/1615): Print errors when --quiet is used
+* [#1611](https://github.com/elastic/rally/pull/1611): Use newer ssl parameter in aiohttp client API
+* [#1607](https://github.com/elastic/rally/pull/1607): Cut down on the amount of INFO-level logging
+
 ### 2.7.0
 
 #### Highlights

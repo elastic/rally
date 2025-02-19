@@ -165,6 +165,9 @@ def _download_from_gcs_bucket(bucket_name, bucket_path, local_path, expected_siz
             if progress_indicator and download.bytes_downloaded and download.total_bytes:
                 progress_indicator(download.bytes_downloaded, expected_size_in_bytes)
             download.consume_next_chunk(transport)
+        # show final progress (for large files) or any progress (for files < chunk_size)
+        if progress_indicator and download.bytes_downloaded and expected_size_in_bytes:
+            progress_indicator(download.bytes_downloaded, expected_size_in_bytes)
 
 
 def download_from_bucket(blobstore, url, local_path, expected_size_in_bytes=None, progress_indicator=None):
@@ -187,11 +190,20 @@ HTTP_DOWNLOAD_RETRIES = 10
 
 
 def _download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
-    with _request(
-        "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
-    ) as r, open(local_path, "wb") as out_file:
+    with (
+        _request(
+            "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
+        ) as r,
+        open(local_path, "wb") as out_file,
+    ):
         if r.status > 299:
-            raise urllib.error.HTTPError(url, r.status, "", None, None)
+            raise urllib.error.HTTPError(
+                url,
+                r.status,
+                "",
+                None,  # type: ignore[arg-type]  # TODO remove the below ignore when introducing type hints
+                None,
+            )
         try:
             size_from_content_header = int(r.getheader("Content-Length", ""))
             if expected_size_in_bytes is None:
@@ -215,7 +227,7 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
     for i in range(HTTP_DOWNLOAD_RETRIES + 1):
         try:
             return _download_http(url, local_path, expected_size_in_bytes, progress_indicator)
-        except urllib3.exceptions.ProtocolError as exc:
+        except (urllib3.exceptions.ProtocolError, urllib3.exceptions.ReadTimeoutError) as exc:
             if i == HTTP_DOWNLOAD_RETRIES:
                 raise
             logger.warning("Retrying after %s", exc)
@@ -262,16 +274,16 @@ def download(url, local_path, expected_size_in_bytes=None, progress_indicator=No
         if os.path.isfile(tmp_data_set_path):
             os.remove(tmp_data_set_path)
         raise
-    else:
-        download_size = os.path.getsize(tmp_data_set_path)
-        if expected_size_in_bytes is not None and download_size != expected_size_in_bytes:
-            if os.path.isfile(tmp_data_set_path):
-                os.remove(tmp_data_set_path)
-            raise exceptions.DataError(
-                "Download of [%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected. Please retry."
-                % (local_path, download_size, expected_size_in_bytes)
-            )
-        os.rename(tmp_data_set_path, local_path)
+
+    download_size = os.path.getsize(tmp_data_set_path)
+    if expected_size_in_bytes is not None and download_size != expected_size_in_bytes:
+        if os.path.isfile(tmp_data_set_path):
+            os.remove(tmp_data_set_path)
+        raise exceptions.DataError(
+            "Download of [%s] is corrupt. Downloaded [%d] bytes but [%d] bytes are expected. Please retry."
+            % (local_path, download_size, expected_size_in_bytes)
+        )
+    os.rename(tmp_data_set_path, local_path)
 
 
 def retrieve_content_as_string(url):

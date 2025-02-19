@@ -1,8 +1,52 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.12.0
+-------------------------
+
+Minimum Python version is 3.9.0
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 2.12.0 requires Python 3.9.0 or above. Check the :ref:`updated installation instructions <install_python>` for more details.
+
+Migrating to Rally 2.10.1
+-------------------------
+
+The metrics store now uses composable templates 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Existing legacy index templates are not removed, however, composable templates take precedence (applies to races, results, and metrics).
+* The new templates will be applied when new races, results, and metrics indices are created.
+* The index template for annotations will only be applied if the ``rally-annotations`` index is not present.
+
+Migrating to Rally 2.10.0
+-------------------------
+
+``serverless_operator`` becomes a global variable in track templates
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally now treats ``serverless_operator`` as a :ref:`global variable<advanced_extensions>` in Jinja2 templates. The variable equals ``true`` if Rally targets serverless cluster with operator privileges, and ``false`` otherwise. The ``serverless_operator`` becomes a reserved name so user-supplied track parameters must be named differently. Rename your track parameters before upgrading if needed.
+
+Migrating to Rally 2.9.0
+------------------------
+
+``build_flavor`` becomes a global variable in track templates
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally now treats ``build_flavor`` as a :ref:`global variable<advanced_extensions>` in Jinja2 templates. The value of the variable depends on the build flavor reported by Elasticsearch cluster targetted by Rally.
+The ``build_flavor`` becomes a reserved name so user-supplied track parameters must be named differently. Rename your track parameters before upgrading if needed.
+
+Example error when running with ``--track-params="build_flavor:test"``::
+
+  Some of your track parameter(s) "build_flavor" are defined by Rally and cannot be modified.
+
 Migrating to Rally 2.7.1
 ------------------------
+
+Elasticsearch client logs are now captured by the `elastic_transport <https://github.com/elastic/elastic-transport-python/>`_ logger
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally migrated to the 8.x version of the ``elasticsearch-py`` library which uses a new logger named ``elastic_transport``. Rally will automatically configure this logger to only emit logs of level ``WARNING`` and above, even if a past Rally version configured logging using the ``~./rally/logging.json`` file without that logger.
 
 Snapshot repository plugins are no longer built from source
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

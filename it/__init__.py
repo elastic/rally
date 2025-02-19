@@ -21,8 +21,10 @@ import json
 import os
 import platform
 import random
+import shutil
 import socket
 import subprocess
+import tempfile
 import time
 
 import pytest
@@ -248,7 +250,7 @@ def build_docker_image():
 
     command = (
         f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE "
-        f"-f {ROOT_DIR}/docker/Dockerfiles/Dockerfile-dev {ROOT_DIR}"
+        f"-f {ROOT_DIR}/docker/Dockerfiles/dev/Dockerfile {ROOT_DIR}"
     )
 
     if process.run_subprocess_with_logging(command, env=env_variables) != 0:
@@ -265,3 +267,27 @@ def setup_module():
 def teardown_module():
     ES_METRICS_STORE.stop()
     remove_integration_test_config()
+
+
+# ensures that a fresh log file is available
+@pytest.fixture(scope="function")
+def fresh_log_file():
+    cfg = ConfigFile(config_name=None)
+    log_file = os.path.join(cfg.rally_home, "logs", "rally.log")
+
+    if os.path.exists(log_file):
+        bak = os.path.join(tempfile.mkdtemp(), "rally.log")
+        shutil.move(log_file, bak)
+        yield log_file
+        # append log lines to the original file and move it back to its original
+        with open(log_file) as src:
+            with open(bak, "a") as dst:
+                dst.write(src.read())
+        shutil.move(bak, log_file)
+    else:
+        yield log_file
+
+
+def check_log_line_present(log_file, text):
+    with open(log_file) as f:
+        return any(text in line for line in f)

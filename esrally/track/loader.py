@@ -24,7 +24,8 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
-from typing import Callable, Generator, Tuple
+from collections.abc import Generator
+from typing import Callable, Optional
 
 import jinja2
 import jinja2.exceptions
@@ -32,9 +33,20 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import PROGRAM_NAME, config, exceptions, paths, time, version
+from esrally import PROGRAM_NAME, config, exceptions, paths, time, types, version
 from esrally.track import params, track
-from esrally.utils import collections, console, convert, io, modules, net, opts, repo
+from esrally.track.track import Parallel
+from esrally.utils import (
+    collections,
+    console,
+    convert,
+    io,
+    modules,
+    net,
+    opts,
+    repo,
+    serverless,
+)
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
@@ -61,7 +73,7 @@ class TrackProcessor(abc.ABC):
         """
         return
 
-    def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[Tuple[Callable, dict], None, None]:
+    def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[tuple[Callable, dict], None, None]:
         """
         This method is called by Rally after the "after_load_track" phase. Here, any data that is necessary for
         benchmark execution should be prepared, e.g. by downloading data or generating it. Implementations should
@@ -78,8 +90,8 @@ class TrackProcessor(abc.ABC):
 
 
 class TrackProcessorRegistry:
-    def __init__(self, cfg):
-        self.required_processors = [TaskFilterTrackProcessor(cfg), TestModeTrackProcessor(cfg)]
+    def __init__(self, cfg: types.Config):
+        self.required_processors = [TaskFilterTrackProcessor(cfg), ServerlessFilterTrackProcessor(cfg), TestModeTrackProcessor(cfg)]
         self.track_processors = []
         self.offline = cfg.opts("system", "offline.mode")
         self.test_mode = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
@@ -108,7 +120,7 @@ class TrackProcessorRegistry:
         return [*self.required_processors, *self.track_processors]
 
 
-def tracks(cfg):
+def tracks(cfg: types.Config):
     """
 
     Lists all known tracks. Note that users can specify a distribution version so if different tracks are available for
@@ -121,7 +133,7 @@ def tracks(cfg):
     return [_load_single_track(cfg, repo, track_name) for track_name in repo.track_names]
 
 
-def list_tracks(cfg):
+def list_tracks(cfg: types.Config):
     available_tracks = tracks(cfg)
     only_auto_generated_challenges = all(t.default_challenge.auto_generated for t in available_tracks)
 
@@ -148,7 +160,7 @@ def list_tracks(cfg):
     console.println(tabulate.tabulate(tabular_data=data, headers=headers))
 
 
-def track_info(cfg):
+def track_info(cfg: types.Config):
     def format_task(t, indent="", num="", suffix=""):
         msg = f"{indent}{num}{str(t)}"
         if t.clients > 1:
@@ -192,7 +204,7 @@ def track_info(cfg):
             console.println("")
 
 
-def load_track(cfg, install_dependencies=False):
+def load_track(cfg: types.Config, install_dependencies=False):
     """
 
     Loads a track
@@ -219,7 +231,7 @@ def _install_dependencies(dependencies):
             raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
 
 
-def _load_single_track(cfg, track_repository, track_name, install_dependencies=False):
+def _load_single_track(cfg: types.Config, track_repository, track_name, install_dependencies=False):
     try:
         track_dir = track_repository.track_dir(track_name)
         reader = TrackFileReader(cfg)
@@ -243,7 +255,7 @@ def _load_single_track(cfg, track_repository, track_name, install_dependencies=F
 
 
 def load_track_plugins(
-    cfg,
+    cfg: types.Config,
     track_name,
     register_runner=None,
     register_scheduler=None,
@@ -274,7 +286,7 @@ def load_track_plugins(
         return False
 
 
-def set_absolute_data_path(cfg, t):
+def set_absolute_data_path(cfg: types.Config, t):
     """
     Sets an absolute data path on all document files in this track. Internally we store only relative paths in the track as long as possible
     as the data root directory may be different on each host. In the end we need to have an absolute path though when we want to read the
@@ -301,18 +313,18 @@ def set_absolute_data_path(cfg, t):
                 document_set.document_file = first_existing(data_root, document_set.document_file)
 
 
-def is_simple_track_mode(cfg):
+def is_simple_track_mode(cfg: types.Config):
     return cfg.exists("track", "track.path")
 
 
-def track_path(cfg):
+def track_path(cfg: types.Config):
     repo = track_repo(cfg)
     track_name = repo.track_name
     track_dir = repo.track_dir(track_name)
     return track_dir
 
 
-def track_repo(cfg, fetch=True, update=True):
+def track_repo(cfg: types.Config, fetch=True, update=True):
     if is_simple_track_mode(cfg):
         track_path = cfg.opts("track", "track.path")
         return SimpleTrackRepository(track_path)
@@ -320,7 +332,7 @@ def track_repo(cfg, fetch=True, update=True):
         return GitTrackRepository(cfg, fetch, update)
 
 
-def data_dir(cfg, track_name, corpus_name):
+def data_dir(cfg: types.Config, track_name, corpus_name):
     """
     Determines potential data directories for the provided track and corpus name.
 
@@ -341,14 +353,15 @@ def data_dir(cfg, track_name, corpus_name):
 
 
 class GitTrackRepository:
-    def __init__(self, cfg, fetch, update, repo_class=repo.RallyRepository):
+    def __init__(self, cfg: types.Config, fetch, update, repo_class=repo.RallyRepository):
         # current track name (if any)
         self.track_name = cfg.opts("track", "track.name", mandatory=False)
         distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         repo_name = cfg.opts("track", "repository.name")
         repo_revision = cfg.opts("track", "repository.revision", mandatory=False)
         offline = cfg.opts("system", "offline.mode")
-        remote_url = cfg.opts("tracks", "%s.url" % repo_name, mandatory=False)
+        # TODO remove the below ignore when introducing LiteralString on Python 3.11+
+        remote_url = cfg.opts("tracks", "%s.url" % repo_name, mandatory=False)  # type: ignore[arg-type]
         root = cfg.opts("node", "root.dir")
         track_repositories = cfg.opts("benchmarks", "track.repository.dir")
         tracks_dir = os.path.join(root, track_repositories)
@@ -440,13 +453,13 @@ class DefaultTrackPreparator(TrackProcessor):
     def __init__(self):
         super().__init__()
         # just declare here, will be injected later
-        self.cfg = None
+        self.cfg: Optional[types.Config] = None
         self.downloader = None
         self.decompressor = None
         self.track = None
 
     @staticmethod
-    def prepare_docs(cfg, track, corpus, preparator):
+    def prepare_docs(cfg: types.Config, track, corpus, preparator):
         for document_set in corpus.documents:
             if document_set.is_bulk:
                 data_root = data_dir(cfg, track.name, corpus.name)
@@ -459,7 +472,7 @@ class DefaultTrackPreparator(TrackProcessor):
                 elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
                     preparator.prepare_document_set(document_set, data_root[1])
 
-    def on_prepare_track(self, track, data_root_dir) -> Generator[Tuple[Callable, dict], None, None]:
+    def on_prepare_track(self, track, data_root_dir) -> Generator[tuple[Callable, dict], None, None]:
         prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
         for corpus in used_corpora(track):
             params = {"cfg": self.cfg, "track": track, "corpus": corpus, "preparator": prep}
@@ -732,18 +745,21 @@ class TemplateSource:
         return ",\n".join(source)
 
 
-def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock):
+def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock, build_flavor=None, serverless_operator=None):
     """
     Dict of internal global variables used by our jinja2 renderers
     """
-
     return {
         "globals": {
+            "build_flavor": build_flavor,
+            "serverless_operator": serverless_operator,
             "now": clock.now(),
             "glob": glob_helper,
         },
         "filters": {
             "days_ago": time.days_ago,
+            "get_start_date": time.get_start_date,
+            "get_end_date": time.get_end_date,
         },
     }
 
@@ -806,7 +822,7 @@ def register_all_params_in_track(assembled_source, complete_track_params=None):
         complete_track_params.populate_track_defined_params(j2_variables)
 
 
-def render_template_from_file(template_file_name, template_vars, complete_track_params=None):
+def render_template_from_file(template_file_name, template_vars, complete_track_params=None, build_flavor=None, serverless_operator=None):
     def relative_glob(start, f):
         result = glob.glob(os.path.join(start, f))
         if result:
@@ -823,12 +839,14 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
         loader=jinja2.FileSystemLoader(base_path),
         template_source=template_source.assembled_source,
         template_vars=template_vars,
-        template_internal_vars=default_internal_template_vars(glob_helper=lambda f: relative_glob(base_path, f)),
+        template_internal_vars=default_internal_template_vars(
+            glob_helper=lambda f: relative_glob(base_path, f), build_flavor=build_flavor, serverless_operator=serverless_operator
+        ),
     )
 
 
 class TaskFilterTrackProcessor(TrackProcessor):
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self.logger = logging.getLogger(__name__)
         include_tasks = cfg.opts("track", "include.tasks", mandatory=False)
         exclude_tasks = cfg.opts("track", "exclude.tasks", mandatory=False)
@@ -850,9 +868,11 @@ class TaskFilterTrackProcessor(TrackProcessor):
                     filters.append(track.TaskNameFilter(spec[0]))
                 elif len(spec) == 2:
                     if spec[0] == "type":
-                        filters.append(track.TaskOpTypeFilter(spec[1]))
+                        # TODO remove the below ignore when introducing type hints
+                        filters.append(track.TaskOpTypeFilter(spec[1]))  # type: ignore[arg-type]
                     elif spec[0] == "tag":
-                        filters.append(track.TaskTagFilter(spec[1]))
+                        # TODO remove the below ignore when introducing type hints
+                        filters.append(track.TaskTagFilter(spec[1]))  # type: ignore[arg-type]
                     else:
                         raise exceptions.SystemSetupError(f"Invalid format for filtered tasks: [{t}]. Expected [type] but got [{spec[0]}].")
                 else:
@@ -892,8 +912,54 @@ class TaskFilterTrackProcessor(TrackProcessor):
         return track
 
 
+class ServerlessFilterTrackProcessor(TrackProcessor):
+    def __init__(self, cfg: types.Config):
+        self.logger = logging.getLogger(__name__)
+        self.serverless_mode = convert.to_bool(cfg.opts("driver", "serverless.mode", mandatory=False, default_value=False))
+        self.serverless_operator = convert.to_bool(cfg.opts("driver", "serverless.operator", mandatory=False, default_value=False))
+
+    def _is_filtered_task(self, operation):
+        if operation.run_on_serverless is not None:
+            return not operation.run_on_serverless
+
+        if operation.type == "raw-request":
+            self.logger.info("Treating raw-request operation for operation [%s] as public.", operation.name)
+
+        try:
+            op = track.OperationType.from_hyphenated_string(operation.type)
+            # Comparisons rely on the ordering in serverless.Status which is an IntEnum
+            if self.serverless_operator:
+                return op.serverless_status < serverless.Status.Internal
+            else:
+                return op.serverless_status < serverless.Status.Public
+        except KeyError:
+            self.logger.info("Treating user-provided operation type [%s] for operation [%s] as public.", operation.type, operation.name)
+            return False
+
+    def on_after_load_track(self, track):
+        if not self.serverless_mode:
+            return track
+
+        for challenge in track.challenges:
+            # don't modify the schedule while iterating over it
+            tasks_to_remove = []
+            for task in challenge.schedule:
+                if isinstance(task, Parallel):
+                    challenge.serverless_info.append(f"Treating parallel task in challenge [{challenge}] as public.")
+                elif self._is_filtered_task(task.operation):
+                    tasks_to_remove.append(task)
+            for task in tasks_to_remove:
+                challenge.remove_task(task)
+
+            if tasks_to_remove:
+                task_str = ", ".join(f"[{task}]" for task in tasks_to_remove)
+                challenge.serverless_info.append(f"Excluding {task_str} as challenge [{challenge}] is run on serverless.")
+
+        return track
+
+
 class TestModeTrackProcessor(TrackProcessor):
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self.test_mode_enabled = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
         self.logger = logging.getLogger(__name__)
 
@@ -902,30 +968,44 @@ class TestModeTrackProcessor(TrackProcessor):
             return track
         self.logger.info("Preparing track [%s] for test mode.", str(track))
         for corpus in track.corpora:
-            if self.logger.isEnabledFor(logging.DEBUG):
-                self.logger.debug("Reducing corpus size to 1000 documents for [%s]", corpus.name)
             for document_set in corpus.documents:
                 # TODO #341: Should we allow this for snapshots too?
                 if document_set.is_bulk:
-                    document_set.number_of_documents = 1000
+                    if document_set.number_of_documents > 1000:
+                        if self.logger.isEnabledFor(logging.DEBUG):
+                            self.logger.debug(
+                                "Reducing corpus size to 1000 documents in corpus [%s], uncompressed source file [%s]",
+                                corpus.name,
+                                document_set.document_file,
+                            )
 
-                    if document_set.has_compressed_corpus():
-                        path, ext = io.splitext(document_set.document_archive)
-                        path_2, ext_2 = io.splitext(path)
+                        document_set.number_of_documents = 1000
 
-                        document_set.document_archive = f"{path_2}-1k{ext_2}{ext}"
-                        document_set.document_file = f"{path_2}-1k{ext_2}"
-                    elif document_set.has_uncompressed_corpus():
-                        path, ext = io.splitext(document_set.document_file)
-                        document_set.document_file = f"{path}-1k{ext}"
+                        if document_set.has_compressed_corpus():
+                            path, ext = io.splitext(document_set.document_archive)
+                            path_2, ext_2 = io.splitext(path)
+
+                            document_set.document_archive = f"{path_2}-1k{ext_2}{ext}"
+                            document_set.document_file = f"{path_2}-1k{ext_2}"
+                        elif document_set.has_uncompressed_corpus():
+                            path, ext = io.splitext(document_set.document_file)
+                            document_set.document_file = f"{path}-1k{ext}"
+                        else:
+                            raise exceptions.RallyAssertionError(
+                                f"Document corpus [{corpus.name}] has neither compressed nor uncompressed corpus."
+                            )
+
+                        # we don't want to check sizes
+                        document_set.compressed_size_in_bytes = None
+                        document_set.uncompressed_size_in_bytes = None
                     else:
-                        raise exceptions.RallyAssertionError(
-                            f"Document corpus [{corpus.name}] has neither compressed nor uncompressed corpus."
-                        )
-
-                    # we don't want to check sizes
-                    document_set.compressed_size_in_bytes = None
-                    document_set.uncompressed_size_in_bytes = None
+                        if self.logger.isEnabledFor(logging.DEBUG):
+                            self.logger.debug(
+                                "Maintaining existing size of %d documents in corpus [%s], uncompressed source file [%s]",
+                                document_set.number_of_documents,
+                                corpus.name,
+                                document_set.document_file,
+                            )
 
         for challenge in track.challenges:
             for task in challenge.schedule:
@@ -971,6 +1051,11 @@ class CompleteTrackParams:
         self.track_defined_params = set()
         self.user_specified_track_params = user_specified_track_params if user_specified_track_params else {}
 
+    def internal_user_defined_track_params(self):
+        set_user_params = set(list(self.user_specified_track_params.keys()))
+        set_internal_params = set(default_internal_template_vars()["globals"].keys())
+        return list(set_user_params & set_internal_params)
+
     def populate_track_defined_params(self, list_of_track_params=None):
         self.track_defined_params.update(set(list_of_track_params))
 
@@ -992,16 +1077,20 @@ class TrackFileReader:
     Creates a track from a track file.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         track_schema_file = os.path.join(cfg.opts("node", "rally.root"), "resources", "track-schema.json")
         with open(track_schema_file, encoding="utf-8") as f:
             self.track_schema = json.loads(f.read())
+        self.build_flavor = cfg.opts("mechanic", "distribution.flavor", default_value="default", mandatory=False)
+        self.serverless_operator = cfg.opts("driver", "serverless.operator", default_value=False, mandatory=False)
         self.track_params = cfg.opts("track", "params", mandatory=False)
         self.complete_track_params = CompleteTrackParams(user_specified_track_params=self.track_params)
         self.read_track = TrackSpecificationReader(
             track_params=self.track_params,
             complete_track_params=self.complete_track_params,
             selected_challenge=cfg.opts("track", "challenge.name", mandatory=False),
+            build_flavor=self.build_flavor,
+            serverless_operator=self.serverless_operator,
         )
         self.logger = logging.getLogger(__name__)
 
@@ -1020,11 +1109,22 @@ class TrackFileReader:
         # involving lines numbers and it also does not bloat Rally's log file so much.
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
             try:
-                rendered = render_template_from_file(track_spec_file, self.track_params, complete_track_params=self.complete_track_params)
+                rendered = render_template_from_file(
+                    track_spec_file,
+                    self.track_params,
+                    complete_track_params=self.complete_track_params,
+                    build_flavor=self.build_flavor,
+                    serverless_operator=self.serverless_operator,
+                )
                 with open(tmp.name, "w", encoding="utf-8") as f:
                     f.write(rendered)
                 self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
                 track_spec = json.loads(rendered)
+            except jinja2.exceptions.TemplateSyntaxError as te:
+                self.logger.exception("Could not load [%s] due to Jinja Syntax Exception.", track_spec_file)
+                msg = f"Could not load '{track_spec_file}' due to Jinja Syntax Exception. "
+                msg += f"The track file ({tmp.name}) likely hasn't been written."
+                raise TrackSyntaxError(msg, te)
             except jinja2.exceptions.TemplateNotFound:
                 self.logger.exception("Could not load [%s]", track_spec_file)
                 raise exceptions.SystemSetupError(f"Track {track_name} does not exist")
@@ -1076,6 +1176,16 @@ class TrackFileReader:
 
         current_track = self.read_track(track_name, track_spec, mapping_dir, track_spec_file)
 
+        internal_user_defined_track_params = self.complete_track_params.internal_user_defined_track_params()
+        if len(internal_user_defined_track_params) > 0:
+            params_list = ",".join(opts.double_quoted_list_of(sorted(internal_user_defined_track_params)))
+            err_msg = f"Some of your track parameter(s) {params_list} are defined by Rally and cannot be modified.\n"
+
+            self.logger.critical(err_msg)
+            # also dump the message on the console
+            console.println(err_msg)
+            raise exceptions.TrackConfigError(f"Reserved track parameters {sorted(internal_user_defined_track_params)}.")
+
         unused_user_defined_track_params = self.complete_track_params.unused_user_defined_track_params()
         if len(unused_user_defined_track_params) > 0:
             err_msg = (
@@ -1124,10 +1234,11 @@ class TrackPluginReader:
         # get dependent libraries installed in a prior step. ensure dir exists to make sure loading works correctly.
         os.makedirs(paths.libs(), exist_ok=True)
         sys.path.insert(0, paths.libs())
-        root_module = self.loader.load()
+        root_modules = self.loader.load()
         try:
             # every module needs to have a register() method
-            root_module.register(self)
+            for module in root_modules:
+                module.register(self)
         except BaseException:
             msg = "Could not register track plugin at [%s]" % self.loader.root_path
             logging.getLogger(__name__).exception(msg)
@@ -1161,9 +1272,19 @@ class TrackSpecificationReader:
     Creates a track instances based on its parsed JSON description.
     """
 
-    def __init__(self, track_params=None, complete_track_params=None, selected_challenge=None, source=io.FileSource):
+    def __init__(
+        self,
+        track_params=None,
+        complete_track_params=None,
+        selected_challenge=None,
+        source=io.FileSource,
+        build_flavor=None,
+        serverless_operator=None,
+    ):
         self.name = None
         self.base_path = None
+        self.build_flavor = build_flavor
+        self.serverless_operator = serverless_operator
         self.track_params = track_params if track_params else {}
         self.complete_track_params = complete_track_params
         self.selected_challenge = selected_challenge
@@ -1291,7 +1412,11 @@ class TrackSpecificationReader:
         self.logger.info("Loading template [%s].", description)
         register_all_params_in_track(contents, self.complete_track_params)
         try:
-            rendered = render_template(template_source=contents, template_vars=self.track_params)
+            rendered = render_template(
+                template_source=contents,
+                template_vars=self.track_params,
+                template_internal_vars={"globals": {"build_flavor": self.build_flavor, "serverless_operator": self.serverless_operator}},
+            )
             return json.loads(rendered)
         except Exception as e:
             self.logger.exception("Could not load file template for %s.", description)
@@ -1577,7 +1702,8 @@ class TrackSpecificationReader:
         default_ramp_up_time_period=None,
         completed_by_name=None,
     ):
-
+        if "operation" not in task_spec:
+            raise TrackSyntaxError("Operation missing from task spec %s in challenge '%s'." % (task_spec, challenge_name))
         op_spec = task_spec["operation"]
         if isinstance(op_spec, str) and op_spec in ops:
             op = ops[op_spec]

@@ -88,11 +88,11 @@ def test_fails_without_benchmark_only_pipeline_in_docker(running_in_docker, unit
 
     with pytest.raises(
         exceptions.SystemSetupError,
-        match=re.escape(
-            "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
+        match=(
+            f"Only the {re.escape('[benchmark-only]')} pipeline is supported by the Rally Docker image.\n"
             "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
             "For more details read the docs for the benchmark-only pipeline in "
-            "https://esrally.readthedocs.io/en/latest/pipelines.html#benchmark-only\n"
+            "https://esrally.readthedocs.io/en/.*/pipelines.html#benchmark-only\n"
         ),
     ):
         racecontrol.run(cfg)

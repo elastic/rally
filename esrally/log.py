@@ -20,19 +20,79 @@ import logging
 import logging.config
 import os
 import time
+import typing
+
+import ecs_logging
 
 from esrally import paths
-from esrally.utils import io
+from esrally.utils import collections, io
 
 
 # pylint: disable=unused-argument
-def configure_utc_formatter(*args, **kwargs):
+def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.Formatter:
     """
-    Logging formatter that renders timestamps in UTC to ensure consistent
-    timestamps across all deployments regardless of machine settings.
+    Logging formatter that renders timestamps UTC, or in the local system time zone when the user requests it.
     """
     formatter = logging.Formatter(fmt=kwargs["format"], datefmt=kwargs["datefmt"])
-    formatter.converter = time.gmtime
+    user_tz = kwargs.get("timezone", None)
+    if user_tz == "localtime":
+        formatter.converter = time.localtime
+    else:
+        formatter.converter = time.gmtime
+
+    return formatter
+
+
+MutatorType = typing.Callable[[logging.LogRecord, dict[str, typing.Any]], None]
+
+
+class RallyEcsFormatter(ecs_logging.StdlibFormatter):
+    def __init__(
+        self,
+        *args: typing.Any,
+        mutators: typing.Optional[list[MutatorType]] = None,
+        **kwargs: typing.Any,
+    ):
+        super().__init__(*args, **kwargs)
+        self.mutators = mutators or []
+
+    def format_to_ecs(self, record: logging.LogRecord) -> dict[str, typing.Any]:
+        log_dict = super().format_to_ecs(record)
+        self.apply_mutators(record, log_dict)
+        return log_dict
+
+    def apply_mutators(self, record: logging.LogRecord, log_dict: dict[str, typing.Any]) -> None:
+        for mutator in self.mutators:
+            mutator(record, log_dict)
+
+
+def rename_actor_fields(record: logging.LogRecord, log_dict: dict[str, typing.Any]) -> None:
+    fields = {}
+    if log_dict.get("actorAddress"):
+        fields["address"] = log_dict.pop("actorAddress")
+    if fields:
+        collections.deep_update(log_dict, {"rally": {"thespian": fields}})
+
+
+# Special case for asyncio fields as they are not part of the standard ECS log dict
+def rename_async_fields(record: logging.LogRecord, log_dict: dict[str, typing.Any]) -> None:
+    fields = {}
+    if hasattr(record, "taskName") and record.taskName is not None:
+        fields["task"] = record.taskName
+    if fields:
+        collections.deep_update(log_dict, {"python": {"asyncio": fields}})
+
+
+def configure_ecs_formatter(*args: typing.Any, **kwargs: typing.Any) -> ecs_logging.StdlibFormatter:
+    """
+    ECS Logging formatter
+    """
+    fmt = kwargs.pop("format", None)
+    configurator = logging.config.BaseConfigurator({})
+    mutators = kwargs.pop("mutators", [rename_actor_fields, rename_async_fields])
+    mutators = [fn if callable(fn) else configurator.resolve(fn) for fn in mutators]
+
+    formatter = RallyEcsFormatter(fmt=fmt, mutators=mutators, *args, **kwargs)
     return formatter
 
 
@@ -41,6 +101,40 @@ def log_config_path():
     :return: The absolute path to Rally's log configuration file.
     """
     return os.path.join(paths.rally_confdir(), "logging.json")
+
+
+def add_missing_loggers_to_config():
+    """
+    Ensures that any missing top level loggers in resources/logging.json are
+    appended to an existing log configuration
+    """
+
+    def _missing_loggers(source, target):
+        """
+        Returns any top-level loggers present in 'source', but not in 'target'
+        :return: A dict of all loggers present in 'source', but not in 'target'
+        """
+        missing_loggers = {}
+        for logger in source:
+            if logger in source and logger in target:
+                continue
+            else:
+                missing_loggers[logger] = source[logger]
+        return missing_loggers
+
+    source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
+
+    with open(log_config_path(), encoding="UTF-8") as target:
+        with open(source_path, encoding="UTF-8") as src:
+            template = json.load(src)
+            existing_logging_config = json.load(target)
+            if missing_loggers := _missing_loggers(source=template["loggers"], target=existing_logging_config["loggers"]):
+                existing_logging_config["loggers"].update(missing_loggers)
+                updated_config = json.dumps(existing_logging_config, indent=2)
+
+    if missing_loggers:
+        with open(log_config_path(), "w", encoding="UTF-8") as target:
+            target.write(updated_config)
 
 
 def install_default_log_config():
@@ -57,13 +151,27 @@ def install_default_log_config():
         source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
         with open(log_config, "w", encoding="UTF-8") as target:
             with open(source_path, encoding="UTF-8") as src:
-                # Ensure we have a trailing path separator as after LOG_PATH there will only be the file name
-                log_path = os.path.join(paths.logs(), "")
-                # the logging path might contain backslashes that we need to escape
-                log_path = io.escape_path(log_path)
-                contents = src.read().replace("${LOG_PATH}", log_path)
+                contents = src.read()
                 target.write(contents)
+    add_missing_loggers_to_config()
     io.ensure_dir(paths.logs())
+
+
+# pylint: disable=unused-argument
+def configure_file_handler(*args, **kwargs) -> logging.Handler:
+    """
+    Configures the WatchedFileHandler supporting expansion of `~` and `${LOG_PATH}` to the user's home and the log path respectively.
+    """
+    filename = kwargs.pop("filename").replace("${LOG_PATH}", paths.logs())
+    return logging.handlers.WatchedFileHandler(filename=filename, encoding=kwargs["encoding"], delay=kwargs.get("delay", False))
+
+
+def configure_profile_file_handler(*args, **kwargs) -> logging.Handler:
+    """
+    Configures the FileHandler supporting expansion of `~` and `${LOG_PATH}` to the user's home and the log path respectively.
+    """
+    filename = kwargs.pop("filename").replace("${LOG_PATH}", paths.logs())
+    return logging.FileHandler(filename=filename, encoding=kwargs["encoding"], delay=kwargs.get("delay", False))
 
 
 def load_configuration():

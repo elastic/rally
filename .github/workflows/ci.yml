@@ -1,35 +1,51 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 14 * * *'
+  # Allows triggering the job manually
+  workflow_dispatch:
 
-permissions: "read-all"
+env:
+  DEFAULT_BRANCH: master
+
+permissions:
+  contents: read
 
 jobs:
   lint:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: "Install dependencies"
         run: python -m pip install .[develop]
       - uses: pre-commit/action@v3.0.0
+      - uses: elastic/es-perf-github-status@v2
+        if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
+        with:
+          slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack_channel: ${{ secrets.SLACK_CHANNEL }}
+          status: FAILED
 
   test:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
         os:
-          - macos-latest
+          - macos-13
           - ubuntu-latest
 
     runs-on: ${{ matrix.os }}
-    name: unit ${{ fromJson('{"macos-latest":"macOS","ubuntu-latest":"Ubuntu"}')[matrix.os] }} ${{ matrix.python-version }}
+    name: unit ${{ fromJson('{"macos-13":"macOS","ubuntu-latest":"Ubuntu"}')[matrix.os] }} ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -41,3 +57,71 @@ jobs:
         run: python -m pip install --upgrade nox
       - name: "Run tests"
         run: nox -s test-${{matrix.python-version}}
+      - uses: elastic/es-perf-github-status@v2
+        if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
+        with:
+          slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack_channel: ${{ secrets.SLACK_CHANNEL }}
+          status: FAILED
+
+  rally-tracks-compat:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+      - run: echo "JAVA21_HOME=$JAVA_HOME_21_X64" >> $GITHUB_ENV
+      - run: echo "JAVA11_HOME=$JAVA_HOME_11_X64" >> $GITHUB_ENV
+      - name: "Install dependencies"
+        run: python -m pip install --upgrade nox
+      - name: "Run tests"
+        run: nox -s rally_tracks_compat
+        timeout-minutes: 120
+        env:
+          # elastic/endpoint fetches assets from GitHub, authenticate to avoid
+          # being rate limited
+          ASSETS_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: elastic/es-perf-github-status@v2
+        if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
+        with:
+          slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack_channel: ${{ secrets.SLACK_CHANNEL }}
+          status: FAILED
+      # Artifact will show up under "Artifacts" in the "Summary" page of runs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rally-tracks-compat-logs
+          path: |
+            /home/runner/.rally/logs/
+            /home/runner/.rally/benchmarks/races/**/*.log
+          if-no-files-found: error
+
+  install-with-pyenv:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Install Python with pyenv
+        uses: gabrielfalcao/pyenv-action@v13
+        with:
+          default: "3.10.9"
+          command: python3 -m pip install --user --upgrade pip
+      - name: Check Python version
+        run: python3 --version | grep "Python 3.10.9"
+      - name: Install Rally
+        run: python3 -m pip install --user esrally
+      - run: esrally --version
+      - uses: elastic/es-perf-github-status@v2
+        if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
+        with:
+          slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack_channel: ${{ secrets.SLACK_CHANNEL }}
+          status: FAILED

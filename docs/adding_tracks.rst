@@ -27,11 +27,15 @@ The track generator will create a folder with the track's name in the specified 
 
     > find tracks/acme
     tracks/acme
+    tracks/acme/challenges
+    tracks/acme/challenges/default.json
     tracks/acme/companies-documents.json
     tracks/acme/companies-documents.json.bz2
     tracks/acme/companies-documents-1k.json
     tracks/acme/companies-documents-1k.json.bz2
     tracks/acme/companies.json
+    tracks/acme/operations
+    tracks/acme/operations/default.json
     tracks/acme/products-documents.json
     tracks/acme/products-documents.json.bz2
     tracks/acme/products-documents-1k.json
@@ -39,11 +43,15 @@ The track generator will create a folder with the track's name in the specified 
     tracks/acme/products.json
     tracks/acme/track.json
 
+
 The files are organized as follows:
 
 * ``track.json`` contains the actual Rally track. For details see the :doc:`track reference<track>`.
 * ``companies.json`` and ``products.json`` contain the mapping and settings for the extracted indices.
 * ``*-documents.json(.bz2)`` contains the sources of all the documents from the extracted indices. The files suffixed with ``-1k`` contain a smaller version of the document corpus to support :ref:`test mode <add_track_test_mode>`.
+* ``operations/default.json`` contains a sample operation that can be used when adding search requests to the track.
+* ``challenges/default.json`` contains the initial actions for the default challenge - delete index, create, and bulk-index.
+
 
 Creating a track from scratch
 -----------------------------
@@ -299,12 +307,17 @@ Congratulations, you have created your first track! You can test it with ``esral
 Adding support for test mode
 ----------------------------
 
-You can check your track very quickly for syntax errors when you invoke Rally with ``--test-mode``. Rally postprocesses its internal track representation as follows:
+You can check your track very quickly for syntax errors when you invoke Rally with ``--test-mode``.
+
+In test mode Rally postprocesses its internal track representation as follows:
 
 * Iteration-based tasks run at most one warmup iteration and one measurement iteration.
 * Time-period-based tasks run at most for 10 seconds without warmup.
 
-Rally also postprocesses all data file names. Instead of ``documents.json``, Rally expects ``documents-1k.json`` and assumes the file contains 1.000 documents. You need to prepare these data files though. Pick 1.000 documents for every data file in your track and store them in a file with the suffix ``-1k``. We choose the first 1.000 with ``head -n 1000 documents.json > documents-1k.json``.
+In test mode Rally also post-processes all data file names:
+
+* If ``documents.json`` has 1000 documents or fewer, Rally uses it (no modifications).
+* If ``documents.json`` has more than 1000 documents, Rally assumes an additional ``documents-1k.json`` file is present and uses it. You need to prepare these additional files manually. Pick 1000 documents for every data file in your track and store them in a file with the ``-1k`` suffix. On Linux you can do it as follows: ``head -n 1000 documents.json > documents-1k.json``.
 
 Challenges
 ----------

@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import asyncio
 import collections
 import io
 import threading
@@ -23,6 +22,7 @@ import time
 from datetime import datetime
 from unittest import mock
 
+import elastic_transport
 import elasticsearch
 import pytest
 
@@ -87,6 +87,43 @@ class TestDriver:
         def close(cls):
             TestDriver.StaticClientFactory.PATCHER.stop()
 
+    class StaticServerlessClientFactory:
+        PATCHER = None
+
+        def __init__(self, *args, **kwargs):
+            TestDriver.StaticClientFactory.PATCHER = mock.patch("elasticsearch.Elasticsearch")
+            self.es = TestDriver.StaticClientFactory.PATCHER.start()
+            self.es.info.return_value = {
+                "name": "serverless",
+                "cluster_name": "serverless",
+                "cluster_uuid": "4bbPT0Z6SsuODSz_vG1umA",
+                "version": {
+                    "number": "8.10.0",
+                    "build_flavor": "serverless",
+                    "build_type": "docker",
+                    "build_hash": "00000000",
+                    "build_date": "2023-10-31",
+                    "build_snapshot": False,
+                    "lucene_version": "9.7.0",
+                    "minimum_wire_compatibility_version": "8.10.0",
+                    "minimum_index_compatibility_version": "8.10.0",
+                },
+                "tagline": "You Know, for Search",
+            }
+            self.es.nodes.info.return_value = {
+                "nodes": {
+                    "PNAuTQt3Seum5BpPleo0wA": {"build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80"},
+                    "i9FafotsSSOrOZdDyhA2Ng": {"build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80"},
+                }
+            }
+
+        def create(self):
+            return self.es
+
+        @classmethod
+        def close(cls):
+            TestDriver.StaticClientFactory.PATCHER.stop()
+
     def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
@@ -100,7 +137,12 @@ class TestDriver:
         self.cfg.add(config.Scope.application, "telemetry", "devices", [])
         self.cfg.add(config.Scope.application, "telemetry", "params", {})
         self.cfg.add(config.Scope.application, "mechanic", "car.names", ["default"])
-        self.cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", True)
+        if method == self.test_prepare_serverless_benchmark:  # pylint: disable=comparison-with-callable
+            self.cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", False)
+            self.cfg.add(config.Scope.application, "driver", "serverless.mode", True)
+            self.cfg.add(config.Scope.application, "driver", "serverless.operator", True)
+        else:
+            self.cfg.add(config.Scope.application, "mechanic", "skip.rest.api.check", True)
         self.cfg.add(config.Scope.application, "client", "hosts", self.Holder(all_hosts={"default": ["localhost:9200"]}))
         self.cfg.add(config.Scope.application, "client", "options", self.Holder(all_client_options={"default": {}}))
         self.cfg.add(config.Scope.application, "driver", "load_driver_hosts", ["localhost"])
@@ -117,61 +159,89 @@ class TestDriver:
     def teardown_method(self):
         self.StaticClientFactory.close()
 
-    def create_test_driver_target(self):
+    def create_test_driver_actor(self):
         client = "client_marker"
         attrs = {"create_client.return_value": client}
         return mock.Mock(**attrs)
 
     @mock.patch("esrally.utils.net.resolve")
     def test_start_benchmark_and_prepare_track(self, resolve):
+        worker_id = [0, 1, 2, 3]
         # override load driver host
         self.cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", ["10.5.5.1", "10.5.5.2"])
         resolve.side_effect = ["10.5.5.1", "10.5.5.2"]
 
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
         d.prepare_benchmark(t=self.track)
 
-        target.prepare_track.assert_called_once_with(["10.5.5.1", "10.5.5.2"], self.cfg, self.track)
+        driver_actor.prepare_track.assert_called_once_with(["10.5.5.1", "10.5.5.2"], self.cfg, self.track)
         d.start_benchmark()
 
-        target.create_client.assert_has_calls(
+        driver_actor.create_client.assert_has_calls(
             calls=[
-                mock.call("10.5.5.1", d.config),
-                mock.call("10.5.5.1", d.config),
-                mock.call("10.5.5.2", d.config),
-                mock.call("10.5.5.2", d.config),
+                mock.call("10.5.5.1", d.config, worker_id[0]),
+                mock.call("10.5.5.1", d.config, worker_id[1]),
+                mock.call("10.5.5.2", d.config, worker_id[2]),
+                mock.call("10.5.5.2", d.config, worker_id[3]),
             ]
         )
 
         # Did we start all load generators? There is no specific mock assert for this...
-        assert target.start_worker.call_count == 4
+        assert driver_actor.start_worker.call_count == 4
+
+    # mocking DriverActor.prepare_track() only to complete Driver.prepare_benchmark()
+    @mock.patch.object(driver.DriverActor, "prepare_track")
+    def test_prepare_serverless_benchmark(self, mock_method):
+        driver_actor = driver.DriverActor
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticServerlessClientFactory)
+        d.prepare_benchmark(t=self.track)
+
+        # was build hash and version determined correctly?
+        assert driver_actor.cluster_details == {
+            "name": "serverless",
+            "cluster_name": "serverless",
+            "cluster_uuid": "4bbPT0Z6SsuODSz_vG1umA",
+            "version": {
+                "number": "serverless",  # <--- THIS
+                "build_flavor": "serverless",
+                "build_type": "docker",
+                "build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80",  # <--- THIS
+                "build_date": "2023-10-31",
+                "build_snapshot": False,
+                "lucene_version": "9.7.0",
+                "minimum_wire_compatibility_version": "8.10.0",
+                "minimum_index_compatibility_version": "8.10.0",
+            },
+            "tagline": "You Know, for Search",
+        }
 
     def test_assign_drivers_round_robin(self):
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        worker_id = [0, 1, 2, 3]
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
         d.prepare_benchmark(t=self.track)
 
-        target.prepare_track.assert_called_once_with(["localhost"], self.cfg, self.track)
+        driver_actor.prepare_track.assert_called_once_with(["localhost"], self.cfg, self.track)
 
         d.start_benchmark()
 
-        target.create_client.assert_has_calls(
+        driver_actor.create_client.assert_has_calls(
             calls=[
-                mock.call("localhost", d.config),
-                mock.call("localhost", d.config),
-                mock.call("localhost", d.config),
-                mock.call("localhost", d.config),
+                mock.call("localhost", d.config, worker_id[0]),
+                mock.call("localhost", d.config, worker_id[1]),
+                mock.call("localhost", d.config, worker_id[2]),
+                mock.call("localhost", d.config, worker_id[3]),
             ]
         )
 
         # Did we start all load generators? There is no specific mock assert for this...
-        assert target.start_worker.call_count == 4
+        assert driver_actor.start_worker.call_count == 4
 
     def test_client_reaches_join_point_others_still_executing(self):
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
@@ -184,12 +254,12 @@ class TestDriver:
 
         assert len(d.workers_completed_current_step) == 1
 
-        assert target.on_task_finished.call_count == 0
-        assert target.drive_at.call_count == 0
+        assert driver_actor.on_task_finished.call_count == 0
+        assert driver_actor.drive_at.call_count == 0
 
     def test_client_reaches_join_point_which_completes_parent(self):
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
 
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
@@ -205,7 +275,7 @@ class TestDriver:
         assert d.current_step == -1
         assert len(d.workers_completed_current_step) == 1
         # notified all drivers that they should complete the current task ASAP
-        assert target.complete_current_task.call_count == 4
+        assert driver_actor.complete_current_task.call_count == 4
 
         # awaiting responses of other clients
         d.joinpoint_reached(
@@ -235,10 +305,8 @@ class TestDriver:
         assert d.current_step == 0
         assert len(d.workers_completed_current_step) == 0
 
-        # this requires at least Python 3.6
-        # target.on_task_finished.assert_called_once()
-        assert target.on_task_finished.call_count == 1
-        assert target.drive_at.call_count == 4
+        assert driver_actor.on_task_finished.call_count == 1
+        assert driver_actor.drive_at.call_count == 4
 
     @mock.patch("esrally.driver.driver.delete_api_keys")
     def test_creates_api_keys_on_start_and_deletes_on_end(self, delete):
@@ -246,8 +314,8 @@ class TestDriver:
             "create_api_key_per_client": True,
         }
         self.cfg.add(config.Scope.application, "client", "options", self.Holder(all_client_options={"default": client_opts}))
-        target = self.create_test_driver_target()
-        d = driver.Driver(target, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
         d.prepare_benchmark(t=self.track)
         d.start_benchmark()
 
@@ -263,8 +331,8 @@ class TestDriver:
 
         # Were workers started with the correct client API keys?
         expected_context_kwargs = [ctx for _, ctx in expected_client_contexts.items()]
-        actual_context_kwargs = [kwargs["client_contexts"] for _, kwargs in target.start_worker.call_args_list]
-        assert target.start_worker.call_count == 4
+        actual_context_kwargs = [kwargs["client_contexts"] for _, kwargs in driver_actor.start_worker.call_args_list]
+        assert driver_actor.start_worker.call_count == 4
         assert expected_context_kwargs == actual_context_kwargs
 
         # Set up some state so that one call to joinpoint_reached() will consider the benchmark done
@@ -339,14 +407,14 @@ class TestSamplePostprocessor:
         ]
 
         post_process(samples)
-
+        meta_data = {"client_id": 0}
         calls = [
-            self.latency(38598, 24, 10.0),
-            self.service_time(38598, 24, 7.0),
-            self.processing_time(38598, 24, 9.0),
-            self.latency(38599, 25, 10.0),
-            self.service_time(38599, 25, 7.0),
-            self.processing_time(38599, 25, 9.0),
+            self.latency(38598, 24, 10.0, meta_data),
+            self.service_time(38598, 24, 7.0, meta_data),
+            self.processing_time(38598, 24, 9.0, meta_data),
+            self.latency(38599, 25, 10.0, meta_data),
+            self.service_time(38599, 25, 7.0, meta_data),
+            self.processing_time(38599, 25, 9.0, meta_data),
             self.throughput(38598, 24, 5000),
             self.throughput(38599, 25, 5000),
         ]
@@ -364,12 +432,12 @@ class TestSamplePostprocessor:
         ]
 
         post_process(samples)
-
+        meta_data = {"client_id": 0}
         calls = [
             # only the first out of two request samples is included, throughput metrics are still complete
-            self.latency(38598, 24, 10.0),
-            self.service_time(38598, 24, 7.0),
-            self.processing_time(38598, 24, 9.0),
+            self.latency(38598, 24, 10.0, meta_data),
+            self.service_time(38598, 24, 7.0, meta_data),
+            self.processing_time(38598, 24, 9.0, meta_data),
             self.throughput(38598, 24, 5000),
             self.throughput(38599, 25, 5000),
         ]
@@ -423,14 +491,15 @@ class TestSamplePostprocessor:
         ]
 
         post_process(samples)
-        meta_data = {"meta_key": "meta_value"}
+        meta_data = {"client_id": 0}
+        meta_data_with_key = {"client_id": 0, "meta_key": "meta_value"}
         calls = [
-            self.latency(38598, 24, 10.0),
-            self.service_time(38598, 24, 7.0),
-            self.processing_time(38598, 24, 9.0),
+            self.latency(38598, 24, 10.0, meta_data),
+            self.service_time(38598, 24, 7.0, meta_data),
+            self.processing_time(38598, 24, 9.0, meta_data),
             # dependent timings
-            self.service_time(38601, 25, 50.0, meta_data),
-            self.service_time(38602, 26, 80.0, meta_data),
+            self.service_time(38601, 25, 50.0, meta_data_with_key),
+            self.service_time(38602, 26, 80.0, meta_data_with_key),
             # we don't currently calculate dependent throughput
             self.throughput(38598, 24, 5000),
         ]
@@ -1343,7 +1412,7 @@ class TestAsyncExecutor:
             self.task_start = task_start
             self.current_request_start = self.task_start
 
-        async def __aenter__(self):
+        def __enter__(self):
             # pretend time advances on each request
             self.current_request_start += 5
             return self
@@ -1356,7 +1425,7 @@ class TestAsyncExecutor:
         def request_end(self):
             return self.current_request_start + 0.05
 
-        async def __aexit__(self, exc_type, exc_val, exc_tb):
+        def __exit__(self, exc_type, exc_val, exc_tb):
             return False
 
     class RunnerWithProgress:
@@ -1596,6 +1665,7 @@ class TestAsyncExecutor:
         async def perform_request(*args, **kwargs):
             return None
 
+        es.options.return_value = es
         es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         # as this method is called several times we need to return a fresh instance every time as the previous
         # one has been "consumed".
@@ -1814,30 +1884,86 @@ class TestAsyncExecutor:
     async def test_execute_single_with_connection_error_always_aborts(self, on_error):
         es = None
         params = None
-        # ES client uses pseudo-status "N/A" in this case...
-        runner = mock.AsyncMock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host", None))
+        runner = mock.AsyncMock(side_effect=elasticsearch.ConnectionError(message="Connection error"))
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
             await driver.execute_single(self.context_managed(runner), es, params, on_error=on_error)
-        assert exc.value.args[0] == "Request returned an error. Error type: transport, Description: no route to host"
+        assert exc.value.args[0] == "Request returned an error. Error type: transport, Description: Connection error"
 
     @pytest.mark.asyncio
     async def test_execute_single_with_http_400_aborts_when_specified(self):
         es = None
         params = None
-        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=404,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+        runner = mock.AsyncMock(
+            side_effect=elasticsearch.NotFoundError(message="not found", meta=error_meta, body="the requested document could not be found")
+        )
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
             await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
         assert exc.value.args[0] == (
-            "Request returned an error. Error type: transport, Description: not found (the requested document could not be found)"
+            "Request returned an error. Error type: api, Description: not found (the requested document could not be found),"
+            " HTTP Status: 404"
         )
+
+    @pytest.mark.asyncio
+    async def test_execute_single_with_http_400_with_empty_raw_response_body(self):
+        es = None
+        params = None
+        empty_body = io.BytesIO(b"")
+        str_literal_empty_body = str(empty_body)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=413,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+        runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal_empty_body, meta=error_meta, body=empty_body))
+
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
+        assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: None, HTTP Status: 413")
+
+    @pytest.mark.asyncio
+    async def test_execute_single_with_http_400_with_raw_response_body(self):
+        es = None
+        params = None
+        body = io.BytesIO(b"Huge error")
+        str_literal = str(body)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=499,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+        runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal, meta=error_meta, body=body))
+
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
+        assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: Huge error, HTTP Status: 499")
 
     @pytest.mark.asyncio
     async def test_execute_single_with_http_400(self):
         es = None
         params = None
-        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(404, "not found", "the requested document could not be found"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=404,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+        runner = mock.AsyncMock(
+            side_effect=elasticsearch.NotFoundError(message="not found", meta=error_meta, body="the requested document could not be found")
+        )
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
@@ -1845,7 +1971,7 @@ class TestAsyncExecutor:
         assert unit == "ops"
         assert request_meta_data == {
             "http-status": 404,
-            "error-type": "transport",
+            "error-type": "api",
             "error-description": "not found (the requested document could not be found)",
             "success": False,
         }
@@ -1854,7 +1980,14 @@ class TestAsyncExecutor:
     async def test_execute_single_with_http_413(self):
         es = None
         params = None
-        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(413, b"", b""))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=413,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+        runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(message="", meta=error_meta, body=""))
 
         ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
 
@@ -1862,7 +1995,7 @@ class TestAsyncExecutor:
         assert unit == "ops"
         assert request_meta_data == {
             "http-status": 413,
-            "error-type": "transport",
+            "error-type": "api",
             "error-description": "",
             "success": False,
         }
@@ -1893,15 +2026,13 @@ class TestAsyncExecutor:
 class TestAsyncProfiler:
     @pytest.mark.asyncio
     async def test_profiler_is_a_transparent_wrapper(self):
+        f_called = False
+
         async def f(x):
-            await asyncio.sleep(x)
+            nonlocal f_called
+            f_called = True
             return x * 2
 
         profiler = driver.AsyncProfiler(f)
-        start = time.perf_counter()
-        # this should take roughly 1 second and should return something
-        return_value = await profiler(1)
-        end = time.perf_counter()
-        assert return_value == 2
-        duration = end - start
-        assert 0.9 <= duration <= 1.2, "Should sleep for roughly 1 second but took [%.2f] seconds." % duration
+        assert await profiler(1) == 2
+        assert f_called

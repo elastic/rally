@@ -21,7 +21,7 @@ import subprocess
 
 import psutil
 
-from esrally import exceptions, telemetry, time
+from esrally import exceptions, telemetry, time, types
 from esrally.mechanic import cluster, java_resolver
 from esrally.utils import io, opts, process
 
@@ -30,7 +30,7 @@ class DockerLauncher:
     # May download a Docker image and that can take some time
     PROCESS_WAIT_TIMEOUT_SECONDS = 10 * 60
 
-    def __init__(self, cfg, clock=time.Clock):
+    def __init__(self, cfg: types.Config, clock=time.Clock):
         self.cfg = cfg
         self.clock = clock
         self.logger = logging.getLogger(__name__)
@@ -122,7 +122,7 @@ class ProcessLauncher:
 
     PROCESS_WAIT_TIMEOUT_SECONDS = 90.0
 
-    def __init__(self, cfg, clock=time.Clock):
+    def __init__(self, cfg: types.Config, clock=time.Clock):
         self.cfg = cfg
         self._clock = clock
         self.logger = logging.getLogger(__name__)
@@ -149,7 +149,7 @@ class ProcessLauncher:
         telemetry_params = self.cfg.opts("telemetry", "params")
         node_telemetry = [
             telemetry.FlightRecorder(telemetry_params, node_telemetry_dir, java_major_version),
-            telemetry.JitCompiler(node_telemetry_dir),
+            telemetry.JitCompiler(node_telemetry_dir, java_major_version),
             telemetry.Gc(telemetry_params, node_telemetry_dir, java_major_version),
             telemetry.Heapdump(node_telemetry_dir),
             telemetry.DiskIo(node_count_on_host),
@@ -242,7 +242,7 @@ class ProcessLauncher:
                 stop_watch.start()
                 try:
                     es.terminate()
-                    es.wait(10.0)
+                    es.wait(10)
                     stopped_nodes.append(node)
                 except psutil.NoSuchProcess:
                     self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)

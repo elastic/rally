@@ -24,9 +24,11 @@ import random
 import string
 import tempfile
 import uuid
+from dataclasses import dataclass
 from unittest import mock
 
 import elasticsearch.exceptions
+import elasticsearch.helpers
 import pytest
 
 from esrally import config, exceptions, metrics, paths, track
@@ -83,44 +85,36 @@ class StaticStopWatch:
         return 0
 
 
-class TransportErrors:
-    err_return_codes = {
-        502: "Bad Gateway",
-        503: "Service Unavailable",
-        504: "Gateway Timeout",
-        429: "Too Many Requests",
-    }
-
-    def __init__(self, max_err_responses=10):
-        self.max_err_responses = max_err_responses
-        # allow duplicates in list of error codes
-        self.rnd_err_codes = [random.choice(list(TransportErrors.err_return_codes)) for _ in range(self.max_err_responses)]
-
-    @property
-    def code_list(self):
-        return self.rnd_err_codes
-
-    @property
-    def side_effects(self):
-        side_effect_list = [
-            elasticsearch.exceptions.TransportError(rnd_code, TransportErrors.err_return_codes[rnd_code]) for rnd_code in self.rnd_err_codes
-        ]
-        side_effect_list.append("success")
-
-        return side_effect_list
-
-
 class TestEsClient:
+    class NodeMock:
+        def __init__(self, host, port):
+            self.host = host
+            self.port = port
+
+    class NodePoolMock:
+        def __init__(self, hosts):
+            self.nodes = []
+            for h in hosts:
+                self.nodes.append(TestEsClient.NodeMock(host=h["host"], port=h["port"]))
+
+        def get(self):
+            return self.nodes[0]
+
     class TransportMock:
         def __init__(self, hosts):
-            self.hosts = hosts
+            self.node_pool = TestEsClient.NodePoolMock(hosts)
+
+    @dataclass
+    class ApiResponseMeta:
+        status: int
 
     class ClientMock:
         def __init__(self, hosts):
             self.transport = TestEsClient.TransportMock(hosts)
 
+    @pytest.mark.parametrize("password_configuration", [None, "config", "environment"])
     @mock.patch("esrally.client.EsClientFactory")
-    def test_config_opts_parsing(self, client_esclientfactory):
+    def test_config_opts_parsing(self, client_esclientfactory, password_configuration, monkeypatch):
         cfg = config.Config()
 
         _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
@@ -129,16 +123,34 @@ class TestEsClient:
         _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
         _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
         _datastore_verify_certs = random.choice([True, False])
+        _datastore_probe_version = False
 
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", _datastore_user)
-        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.probe.cluster_version", _datastore_probe_version)
+
+        if password_configuration == "config":
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
+        elif password_configuration == "environment":
+            monkeypatch.setenv("RALLY_REPORTING_DATASTORE_PASSWORD", _datastore_password)
+
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
 
-        metrics.EsClientFactory(cfg)
+        try:
+            metrics.EsClientFactory(cfg)
+        except exceptions.ConfigError as e:
+            if password_configuration is not None:
+                raise
+
+            assert (
+                e.message
+                == "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+            )
+            return
+
         expected_client_options = {
             "use_ssl": True,
             "timeout": 120,
@@ -148,25 +160,175 @@ class TestEsClient:
         }
 
         client_esclientfactory.assert_called_with(
-            hosts=[{"host": _datastore_host, "port": _datastore_port}], client_options=expected_client_options
+            hosts=[{"host": _datastore_host, "port": _datastore_port}],
+            client_options=expected_client_options,
+            distribution_version=None,
+            distribution_flavor=None,
         )
 
-    def test_raises_sytem_setup_error_on_connection_problems(self):
-        def raise_connection_error():
-            raise elasticsearch.exceptions.ConnectionError("unit-test")
+    @mock.patch("random.random")
+    @mock.patch("esrally.time.sleep")
+    def test_retries_on_various_errors(self, mocked_sleep, mocked_random, caplog):
+        class ConnectionError:
+            def logging_statements(self, retries):
+                logging_statements = []
+                for i, v in enumerate(range(retries)):
+                    logging_statements.append(
+                        "Connection error [%s] in attempt [%d/%d]. Sleeping for [%f] seconds."
+                        % (
+                            "unit-test",
+                            i + 1,
+                            max_retry,
+                            sleep_slots[v],
+                        )
+                    )
+                logging_statements.append(
+                    "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [127.0.0.1] at "
+                    f"port [9200] or fix the configuration in [{paths.rally_confdir()}/rally.ini]."
+                )
+                return logging_statements
+
+            def raise_error(self):
+                raise elasticsearch.exceptions.ConnectionError("unit-test")
+
+        class ConnectionTimeout:
+            def logging_statements(self, retries):
+                logging_statements = []
+                for i, v in enumerate(range(retries)):
+                    logging_statements.append(
+                        "Connection timeout [%s] in attempt [%d/%d]. Sleeping for [%f] seconds."
+                        % (
+                            "unit-test",
+                            i + 1,
+                            max_retry,
+                            sleep_slots[v],
+                        )
+                    )
+                logging_statements.append(f"Connection timeout while running [raise_error] (retried {retries} times).")
+                return logging_statements
+
+            def raise_error(self):
+                raise elasticsearch.exceptions.ConnectionTimeout("unit-test")
+
+        class ApiError:
+            def __init__(self, status_code):
+                self.status_code = status_code
+
+            def logging_statements(self, retries):
+                logging_statements = []
+                for i, v in enumerate(range(retries)):
+                    logging_statements.append(
+                        "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds."
+                        % (
+                            "unit-test",
+                            self.status_code,
+                            i + 1,
+                            max_retry,
+                            sleep_slots[v],
+                        )
+                    )
+                logging_statements.append(
+                    "An error [unit-test] occurred while running the operation [raise_error] against your Elasticsearch "
+                    "metrics store on host [127.0.0.1] at port [9200]."
+                )
+                return logging_statements
+
+            def raise_error(self):
+                err = elasticsearch.exceptions.ApiError(
+                    "unit-test",
+                    # TODO remove this ignore when introducing type hints
+                    meta=TestEsClient.ApiResponseMeta(status=self.status_code),  # type: ignore[arg-type]
+                    body={},
+                )
+                raise err
+
+        class BulkIndexError:
+            def __init__(self, errors):
+                self.errors = errors
+                self.error_message = f"{len(self.errors)} document(s) failed to index"
+
+            def logging_statements(self, retries):
+                logging_statements = []
+                for i, v in enumerate(range(retries)):
+                    logging_statements.append(
+                        "Error in sending metrics to remote metrics store [%s] in attempt [%d/%d]. Sleeping for [%f] seconds."
+                        % (
+                            self.error_message,
+                            i + 1,
+                            max_retry,
+                            sleep_slots[v],
+                        )
+                    )
+                logging_statements.append(
+                    f"Failed to send metrics to remote metrics store: [{self.errors}] - Full error(s) [{self.errors}]"
+                )
+                return logging_statements
+
+            def raise_error(self):
+                raise elasticsearch.helpers.BulkIndexError(self.error_message, self.errors)
+
+        bulk_index_errors = [
+            {
+                "index": {
+                    "_index": "rally-metrics-2023-04",
+                    "_id": "dffAc4cBOnIJ2Omtflwg",
+                    "status": 429,
+                    "error": {
+                        "type": "circuit_breaking_exception",
+                        "reason": "[parent] Data too large, data for [<http_request>] would be [123848638/118.1mb], "
+                        "which is larger than the limit of [123273216/117.5mb], real usage: [120182112/114.6mb], "
+                        "new bytes reserved: [3666526/3.4mb]",
+                        "bytes_wanted": 123848638,
+                        "bytes_limit": 123273216,
+                        "durability": "TRANSIENT",
+                    },
+                }
+            },
+        ]
+
+        retryable_errors = [
+            ApiError(429),
+            ApiError(502),
+            ApiError(503),
+            ApiError(504),
+            ConnectionError(),
+            ConnectionTimeout(),
+            BulkIndexError(bulk_index_errors),
+        ]
+
+        max_retry = 10
+
+        # The sec to sleep for 10 transport errors is
+        # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
+        sleep_slots = [float(2**i) for i in range(0, max_retry)]
+
+        # we want deterministic timings to assess logging statements
+        mocked_random.return_value = 0
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9200"}]))
 
-        with pytest.raises(exceptions.SystemSetupError) as ctx:
-            client.guarded(raise_connection_error)
-        assert ctx.value.args[0] == (
-            "Could not connect to your Elasticsearch metrics store. Please check that it is running on host [127.0.0.1] at "
-            f"port [9200] or fix the configuration in [{paths.rally_confdir()}/rally.ini]."
-        )
+        exepcted_logger_calls = []
+        expected_sleep_calls = []
+
+        for e in retryable_errors:
+            exepcted_logger_calls += e.logging_statements(max_retry)
+            expected_sleep_calls += [mock.call(int(sleep_slots[i])) for i in range(0, max_retry)]
+
+            with pytest.raises(exceptions.RallyError):
+                with caplog.at_level(logging.DEBUG):
+                    client.guarded(e.raise_error)
+
+        actual_logger_calls = [r.message for r in caplog.records]
+        actual_sleep_calls = mocked_sleep.call_args_list
+
+        assert actual_sleep_calls == expected_sleep_calls
+        assert actual_logger_calls == exepcted_logger_calls
 
     def test_raises_sytem_setup_error_on_authentication_problems(self):
         def raise_authentication_error():
-            raise elasticsearch.exceptions.AuthenticationException("unit-test")
+            raise elasticsearch.exceptions.AuthenticationException(
+                meta=None, body=None, message="unit-test"  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            )
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
@@ -179,7 +341,9 @@ class TestEsClient:
 
     def test_raises_sytem_setup_error_on_authorization_problems(self):
         def raise_authorization_error():
-            raise elasticsearch.exceptions.AuthorizationException("unit-test")
+            raise elasticsearch.exceptions.AuthorizationException(
+                meta=None, body=None, message="unit-test"  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            )
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
@@ -193,79 +357,71 @@ class TestEsClient:
 
     def test_raises_rally_error_on_unknown_problems(self):
         def raise_unknown_error():
-            raise elasticsearch.exceptions.SerializationError("unit-test")
+            exc = elasticsearch.exceptions.TransportError(message="unit-test")
+            raise exc
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
         with pytest.raises(exceptions.RallyError) as ctx:
             client.guarded(raise_unknown_error)
         assert ctx.value.args[0] == (
-            "An unknown error occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
+            "Transport error(s) [unit-test] occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
             "store on host [127.0.0.1] at port [9243]."
         )
 
-    def test_retries_on_various_transport_errors(self):
-        @mock.patch("random.random")
-        @mock.patch("esrally.time.sleep")
-        def test_transport_error_retries(side_effect, expected_logging_calls, expected_sleep_calls, mocked_sleep, mocked_random):
-            # should return on first success
-            operation = mock.Mock(side_effect=side_effect)
+    def test_raises_rally_error_on_unretryable_bulk_indexing_errors(self):
+        bulk_index_errors = [
+            {
+                "index": {
+                    "_index": "rally-metrics-2023-04",
+                    "_id": "dffAc4cBOnIJ2Omtflwg",
+                    "status": 429,
+                    "error": {
+                        "type": "circuit_breaking_exception",
+                        "reason": "[parent] Data too large, data for [<http_request>] would be [123848638/118.1mb], "
+                        "which is larger than the limit of [123273216/117.5mb], real usage: [120182112/114.6mb], "
+                        "new bytes reserved: [3666526/3.4mb]",
+                        "bytes_wanted": 123848638,
+                        "bytes_limit": 123273216,
+                        "durability": "TRANSIENT",
+                    },
+                }
+            },
+            {
+                "index": {
+                    "_id": "1",
+                    "_index": "rally-metrics-2023-04",
+                    "error": {"type": "version_conflict_engine_exception"},
+                    "status": 409,
+                }
+            },
+            {
+                "index": {
+                    "_index": "rally-metrics-2023-04",
+                    "_id": "dffAc4cBOnIJ2Omtflwg",
+                    "status": 400,
+                    "error": {
+                        "type": "mapper_parsing_exception",
+                        "reason": "failed to parse field [meta.error-description] of type [keyword] in document with id "
+                        "'dffAc4cBOnIJ2Omtflwg'. Preview of field's value: 'HTTP status: 400, message: failed to parse "
+                        "field [@timestamp] of type [date] in document with id '-PXAc4cBOnIJ2OmtX33J'. Preview of "
+                        "field's value: '1998-04-30T15:02:56-05:00'",
+                    },
+                }
+            },
+        ]
 
-            # Disable additional randomization time in exponential backoff calls
-            mocked_random.return_value = 0
-
-            client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
-
-            logger = logging.getLogger("esrally.metrics")
-            with mock.patch.object(logger, "debug") as mocked_debug_logger:
-                test_result = client.guarded(operation)
-                mocked_sleep.assert_has_calls(expected_sleep_calls)
-                mocked_debug_logger.assert_has_calls(expected_logging_calls, any_order=True)
-                assert test_result == "success"
-
-        max_retry = 10
-        all_err_codes = TransportErrors.err_return_codes
-        transport_errors = TransportErrors(max_err_responses=max_retry)
-        rnd_err_codes = transport_errors.code_list
-        rnd_side_effects = transport_errors.side_effects
-        rnd_mocked_logger_calls = []
-
-        # The sec to sleep for 10 transport errors is
-        # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
-        sleep_slots = [float(2**i) for i in range(0, max_retry)]
-        mocked_sleep_calls = [mock.call(sleep_slots[i]) for i in range(0, max_retry)]
-
-        for rnd_err_idx, rnd_err_code in enumerate(rnd_err_codes):
-            # List of logger.debug calls to expect
-            rnd_mocked_logger_calls.append(
-                mock.call(
-                    "%s (code: %d) in attempt [%d/%d]. Sleeping for [%f] seconds.",
-                    all_err_codes[rnd_err_code],
-                    rnd_err_code,
-                    rnd_err_idx + 1,
-                    max_retry + 1,
-                    sleep_slots[rnd_err_idx],
-                )
-            )
-        # pylint: disable=no-value-for-parameter
-        test_transport_error_retries(rnd_side_effects, rnd_mocked_logger_calls, mocked_sleep_calls)
-
-    @mock.patch("esrally.time.sleep")
-    def test_fails_after_too_many_errors(self, mocked_sleep):
-        def random_transport_error(rnd_resp_code):
-            raise elasticsearch.exceptions.TransportError(rnd_resp_code, TransportErrors.err_return_codes[rnd_resp_code])
+        def raise_bulk_index_error():
+            err = elasticsearch.helpers.BulkIndexError(f"{len(bulk_index_errors)} document(s) failed to index", bulk_index_errors)
+            raise err
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
-        rnd_code = random.choice(list(TransportErrors.err_return_codes))
 
-        with pytest.raises(exceptions.RallyError) as ctx:
-            client.guarded(random_transport_error, rnd_code)
-
-        assert ctx.value.args[0] == (
-            "A transport error occurred while running the operation "
-            "[random_transport_error] against your Elasticsearch metrics "
-            "store on host [127.0.0.1] at port [9243]."
-        )
+        with pytest.raises(
+            exceptions.RallyError,
+            match=(r"Unretryable error encountered when sending metrics to remote metrics store: \[version_conflict_engine_exception\]"),
+        ):
+            client.guarded(raise_bulk_index_error)
 
 
 class TestEsMetrics:
@@ -1765,6 +1921,8 @@ class TestFileRaceStore:
         assert len(self.race_store.list()) == 1
         self.cfg.add(config.Scope.application, "system", "list.from_date", "20160131")
         assert len(self.race_store.list()) == 1
+        self.cfg.add(config.Scope.application, "system", "list.challenge", t.default_challenge.name)
+        assert len(self.race_store.list()) == 1
 
     def test_delete_race(self):
         self.cfg.add(config.Scope.application, "system", "delete.id", "0101")
@@ -2460,6 +2618,7 @@ class TestIndexTemplateProvider:
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
         templates = [
+            _index_template_provider.annotations_template(),
             _index_template_provider.metrics_template(),
             _index_template_provider.races_template(),
             _index_template_provider.results_template(),
@@ -2467,8 +2626,8 @@ class TestIndexTemplateProvider:
 
         for template in templates:
             t = json.loads(template)
-            assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
-            assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+            assert t["template"]["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+            assert t["template"]["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
 
     def test_primary_shard_count_specified_index_template_update(self):
         _datastore_type = "elasticsearch"
@@ -2480,6 +2639,7 @@ class TestIndexTemplateProvider:
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
         templates = [
+            _index_template_provider.annotations_template(),
             _index_template_provider.metrics_template(),
             _index_template_provider.races_template(),
             _index_template_provider.results_template(),
@@ -2487,10 +2647,10 @@ class TestIndexTemplateProvider:
 
         for template in templates:
             t = json.loads(template)
-            assert t["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+            assert t["template"]["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
             with pytest.raises(KeyError):
                 # pylint: disable=unused-variable
-                number_of_replicas = t["settings"]["index"]["number_of_replicas"]
+                number_of_replicas = t["template"]["settings"]["index"]["number_of_replicas"]
 
     def test_replica_shard_count_specified_index_template_update(self):
         _datastore_type = "elasticsearch"
@@ -2502,6 +2662,7 @@ class TestIndexTemplateProvider:
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
         templates = [
+            _index_template_provider.annotations_template(),
             _index_template_provider.metrics_template(),
             _index_template_provider.races_template(),
             _index_template_provider.results_template(),
@@ -2509,10 +2670,10 @@ class TestIndexTemplateProvider:
 
         for template in templates:
             t = json.loads(template)
-            assert t["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+            assert t["template"]["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
             with pytest.raises(KeyError):
                 # pylint: disable=unused-variable
-                number_of_shards = t["settings"]["index"]["number_of_shards"]
+                number_of_shards = t["template"]["settings"]["index"]["number_of_shards"]
 
     def test_primary_shard_count_less_than_one(self):
         _datastore_type = "elasticsearch"
@@ -2525,6 +2686,7 @@ class TestIndexTemplateProvider:
         with pytest.raises(exceptions.SystemSetupError) as ctx:
             # pylint: disable=unused-variable
             templates = [
+                _index_template_provider.annotations_template(),
                 _index_template_provider.metrics_template(),
                 _index_template_provider.races_template(),
                 _index_template_provider.results_template(),
@@ -2546,6 +2708,7 @@ class TestIndexTemplateProvider:
         _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
 
         templates = [
+            _index_template_provider.annotations_template(),
             _index_template_provider.metrics_template(),
             _index_template_provider.races_template(),
             _index_template_provider.results_template(),
@@ -2553,5 +2716,5 @@ class TestIndexTemplateProvider:
 
         for template in templates:
             t = json.loads(template)
-            assert t["settings"]["index"]["number_of_shards"] == 200
-            assert t["settings"]["index"]["number_of_replicas"] == 1
+            assert t["template"]["settings"]["index"]["number_of_shards"] == 200
+            assert t["template"]["settings"]["index"]["number_of_replicas"] == 1

@@ -19,6 +19,7 @@ import collections
 import logging
 import os
 import sys
+from typing import Optional
 
 import tabulate
 import thespian.actors
@@ -26,6 +27,7 @@ import thespian.actors
 from esrally import (
     PROGRAM_NAME,
     actor,
+    client,
     config,
     doc_link,
     driver,
@@ -34,6 +36,7 @@ from esrally import (
     metrics,
     reporter,
     track,
+    types,
     version,
 )
 from esrally.utils import console, opts, versions
@@ -59,7 +62,7 @@ class Pipeline:
         :param name: A short name of the pipeline. This name will be used to reference it from the command line.
         :param description: A human-readable description what the pipeline does.
         :param target: A function that implements this pipeline
-        :param stable True iff the pipeline is considered production quality.
+        :param stable True if the pipeline is considered production quality.
         """
         self.name = name
         self.description = description
@@ -67,12 +70,12 @@ class Pipeline:
         self.stable = stable
         pipelines[name] = self
 
-    def __call__(self, cfg):
+    def __call__(self, cfg: types.Config):
         self.target(cfg)
 
 
 class Setup:
-    def __init__(self, cfg, sources=False, distribution=False, external=False, docker=False):
+    def __init__(self, cfg: types.Config, sources=False, distribution=False, external=False, docker=False):
         self.cfg = cfg
         self.sources = sources
         self.distribution = distribution
@@ -87,7 +90,7 @@ class Success:
 class BenchmarkActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
-        self.cfg = None
+        self.cfg: Optional[types.Config] = None
         self.start_sender = None
         self.mechanic = None
         self.main_driver = None
@@ -106,6 +109,7 @@ class BenchmarkActor(actor.RallyActor):
     def receiveMsg_Setup(self, msg, sender):
         self.start_sender = sender
         self.cfg = msg.cfg
+        assert self.cfg is not None
         self.coordinator = BenchmarkCoordinator(msg.cfg)
         self.coordinator.setup(sources=msg.sources)
         self.logger.info("Asking mechanic to start the engine.")
@@ -113,12 +117,18 @@ class BenchmarkActor(actor.RallyActor):
         self.send(
             self.mechanic,
             mechanic.StartEngine(
-                self.cfg, self.coordinator.metrics_store.open_context, msg.sources, msg.distribution, msg.external, msg.docker
+                self.cfg,
+                self.coordinator.metrics_store.open_context,
+                msg.sources,
+                msg.distribution,
+                msg.external,
+                msg.docker,
             ),
         )
 
     @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
     def receiveMsg_EngineStarted(self, msg, sender):
+        assert self.cfg is not None
         self.logger.info("Mechanic has started engine successfully.")
         self.coordinator.race.team_revision = msg.team_revision
         self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
@@ -166,7 +176,7 @@ class BenchmarkActor(actor.RallyActor):
 
 
 class BenchmarkCoordinator:
-    def __init__(self, cfg):
+    def __init__(self, cfg: types.Config):
         self.logger = logging.getLogger(__name__)
         self.cfg = cfg
         self.race = None
@@ -183,13 +193,37 @@ class BenchmarkCoordinator:
         # but there are rare cases (external pipeline and user did not specify the distribution version) where we need
         # to derive it ourselves. For source builds we always assume "main"
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
-            distribution_version = mechanic.cluster_distribution_version(self.cfg)
-            self.logger.info("Automatically derived distribution version [%s]", distribution_version)
+            hosts = self.cfg.opts("client", "hosts").default
+            client_options = self.cfg.opts("client", "options").default
+            (
+                distribution_flavor,
+                distribution_version,
+                distribution_build_hash,
+                serverless_operator,
+            ) = client.factory.cluster_distribution_version(hosts, client_options)
+
+            self.logger.info(
+                "Automatically derived distribution flavor [%s], version [%s], and build hash [%s]",
+                distribution_flavor,
+                distribution_version,
+                distribution_build_hash,
+            )
             self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
-            min_es_version = versions.Version.from_string(version.minimum_es_version())
-            specified_version = versions.Version.from_string(distribution_version)
-            if specified_version < min_es_version:
-                raise exceptions.SystemSetupError(f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]")
+            self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.flavor", distribution_flavor)
+            if versions.is_serverless(distribution_flavor):
+                if not self.cfg.exists("driver", "serverless.mode"):
+                    self.cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+
+                if not self.cfg.exists("driver", "serverless.operator"):
+                    self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", serverless_operator)
+                console.info(f"Detected Elasticsearch Serverless mode with operator=[{serverless_operator}].")
+            else:
+                min_es_version = versions.Version.from_string(version.minimum_es_version())
+                specified_version = versions.Version.from_string(distribution_version)
+                if specified_version < min_es_version:
+                    raise exceptions.SystemSetupError(
+                        f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]"
+                    )
 
         self.current_track = track.load_track(self.cfg, install_dependencies=True)
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)
@@ -203,6 +237,8 @@ class BenchmarkCoordinator:
             )
         if self.current_challenge.user_info:
             console.info(self.current_challenge.user_info)
+        for message in self.current_challenge.serverless_info:
+            console.info(message)
         self.race = metrics.create_race(self.cfg, self.current_track, self.current_challenge, self.track_revision)
 
         self.metrics_store = metrics.metrics_store(
@@ -249,7 +285,7 @@ class BenchmarkCoordinator:
         self.metrics_store.close()
 
 
-def race(cfg, sources=False, distribution=False, external=False, docker=False):
+def race(cfg: types.Config, sources=False, distribution=False, external=False, docker=False):
     logger = logging.getLogger(__name__)
     # at this point an actor system has to run and we should only join
     actor_system = actor.bootstrap_actor_system(try_join=True)
@@ -277,7 +313,7 @@ def race(cfg, sources=False, distribution=False, external=False, docker=False):
         actor_system.tell(benchmark_actor, thespian.actors.ActorExitRequest())
 
 
-def set_default_hosts(cfg, host="127.0.0.1", port=9200):
+def set_default_hosts(cfg: types.Config, host="127.0.0.1", port=9200):
     logger = logging.getLogger(__name__)
     configured_hosts = cfg.opts("client", "hosts")
     if len(configured_hosts.default) != 0:
@@ -289,26 +325,26 @@ def set_default_hosts(cfg, host="127.0.0.1", port=9200):
 
 
 # Poor man's curry
-def from_sources(cfg):
+def from_sources(cfg: types.Config):
     port = cfg.opts("provisioning", "node.http.port")
     set_default_hosts(cfg, port=port)
     return race(cfg, sources=True)
 
 
-def from_distribution(cfg):
+def from_distribution(cfg: types.Config):
     port = cfg.opts("provisioning", "node.http.port")
     set_default_hosts(cfg, port=port)
     return race(cfg, distribution=True)
 
 
-def benchmark_only(cfg):
+def benchmark_only(cfg: types.Config):
     set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
     return race(cfg, external=True)
 
 
-def docker(cfg):
+def docker(cfg: types.Config):
     set_default_hosts(cfg)
     return race(cfg, docker=True)
 
@@ -334,7 +370,7 @@ def list_pipelines():
     console.println(tabulate.tabulate(available_pipelines(), headers=["Name", "Description"]))
 
 
-def run(cfg):
+def run(cfg: types.Config):
     logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
     race_id = cfg.opts("system", "race.id")

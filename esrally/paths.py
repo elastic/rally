@@ -16,6 +16,8 @@
 # under the License.
 import os
 
+from esrally import types
+
 
 def rally_confdir():
     default_home = os.path.expanduser("~")
@@ -26,17 +28,17 @@ def rally_root():
     return os.path.dirname(os.path.realpath(__file__))
 
 
-def races_root(cfg):
+def races_root(cfg: types.Config):
     return os.path.join(cfg.opts("node", "root.dir"), "races")
 
 
-def race_root(cfg, race_id=None):
+def race_root(cfg: types.Config, race_id=None):
     if not race_id:
         race_id = cfg.opts("system", "race.id")
     return os.path.join(races_root(cfg), race_id)
 
 
-def install_root(cfg=None):
+def install_root(cfg: types.Config):
     install_id = cfg.opts("system", "install.id")
     return os.path.join(races_root(cfg), install_id)
 

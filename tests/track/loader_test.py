@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import copy
 import os
 import random
 import re
@@ -510,7 +511,11 @@ class TestTrackPreparation:
         is_file.return_value = False
 
         download.side_effect = urllib.error.HTTPError(
-            "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json", 404, "", None, None
+            "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/unit-test/docs-1k.json",
+            404,
+            "",
+            None,  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            None,
         )
 
         p = loader.DocumentSetPreparator(
@@ -544,7 +549,11 @@ class TestTrackPreparation:
         is_file.return_value = False
 
         download.side_effect = urllib.error.HTTPError(
-            "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", 500, "Internal Server Error", None, None
+            "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json",
+            500,
+            "Internal Server Error",
+            None,  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            None,
         )
 
         p = loader.DocumentSetPreparator(
@@ -896,9 +905,8 @@ class TestTemplateSource:
         base_path = "~/.rally/benchmarks/tracks/default/geonames"
         template_file_name = "track.json"
         tmpl_src = loader.TemplateSource(base_path, template_file_name)
-        # pylint: disable=trailing-whitespace
         expected_response = textwrap.dedent(
-            """                                
+            """
             {% import "rally.helpers" as rally with context %}
             {
               "version": 2,
@@ -956,13 +964,19 @@ def assert_equal_ignore_whitespace(expected, actual):
 
 
 class TestTemplateRender:
-    unittest_template_internal_vars = loader.default_internal_template_vars(clock=StaticClock)
+    unittest_template_internal_vars = loader.default_internal_template_vars(
+        clock=StaticClock, build_flavor="test", serverless_operator=False
+    )
 
     def test_render_simple_template(self):
         template = """
         {
             "key": {{'01-01-2000' | days_ago(now)}},
-            "key2": "static value"
+            "key2": "static value",
+            "key3": "{{build_flavor}}",
+            "key4": {{serverless_operator}},
+            "key5": {{now | get_start_date('%Y-%m-%d') | tojson}},
+            "key6": {{now | get_end_date(1, '%Y-%m-%d') | tojson}}
         }
         """
 
@@ -971,7 +985,11 @@ class TestTemplateRender:
         expected = """
         {
             "key": 5864,
-            "key2": "static value"
+            "key2": "static value",
+            "key3": "test",
+            "key4": False,
+            "key5": "2016-01-21",
+            "key6": "2016-01-22"
         }
         """
         assert rendered == expected
@@ -1064,6 +1082,31 @@ class TestTemplateRender:
         """
         assert_equal_ignore_whitespace(expected, rendered)
 
+    def test_render_template_with_conditions(self):
+        template = """
+        {
+            {%- if build_flavor != "test" %}
+            "key1": "build_flavor"
+            {%- elif serverless_operator %}
+            "key1": "serverless_operator"
+            {%- elif lifecycle == "ilm" %}
+            "key1": "ilm"
+            {%- else %}
+            "key1": "else"
+            {%- endif %}
+        }
+        """
+        rendered = loader.render_template(
+            template, template_vars={"lifecycle": "ilm"}, template_internal_vars=self.unittest_template_internal_vars
+        )
+
+        expected = """
+        {
+            "key1": "ilm"
+        }
+        """
+        assert_equal_ignore_whitespace(expected, rendered)
+
 
 class TestCompleteTrackParams:
     assembled_source = textwrap.dedent(
@@ -1072,6 +1115,7 @@ class TestCompleteTrackParams:
         "key2": {{ value2 | default(3) }},
         "key3": {{ value3 | default("default_value3") }}
         "key4": {{ value2 | default(3) }}
+        "key5": {{ build_flavor }}
     """
     )
 
@@ -1086,6 +1130,13 @@ class TestCompleteTrackParams:
         loader.register_all_params_in_track("{}", complete_track_params)
 
         assert complete_track_params.sorted_track_defined_params == []
+
+    def test_internal_user_defined_track_params(self):
+        # track params that deliberatly collide with internal variables
+        track_params = {"now": "test", "build_flavor": "test"}
+        complete_track_params = loader.CompleteTrackParams(user_specified_track_params=track_params)
+
+        assert sorted(complete_track_params.internal_user_defined_track_params()) == ["build_flavor", "now"]
 
     def test_unused_user_defined_track_params(self):
         track_params = {"number_of_repliacs": 1, "enable_source": True, "number_of_shards": 5}  # deliberate typo  # unknown parameter
@@ -1212,7 +1263,18 @@ class TestTrackPostProcessing:
             ],
             "corpora": [
                 {
-                    "name": "unittest",
+                    "name": "unittest-reduce-to-1k-documents",
+                    "documents": [
+                        {
+                            "source-file": "documents.json.bz2",
+                            "document-count": 1001,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                        }
+                    ],
+                },
+                {
+                    "name": "unittest-keep-less-than-1k-documents",
                     "documents": [
                         {
                             "source-file": "documents.json.bz2",
@@ -1221,7 +1283,7 @@ class TestTrackPostProcessing:
                             "uncompressed-bytes": 10000,
                         }
                     ],
-                }
+                },
             ],
             "operations": [
                 {
@@ -1288,9 +1350,20 @@ class TestTrackPostProcessing:
             ],
             "corpora": [
                 {
-                    "name": "unittest",
+                    "name": "unittest-reduce-to-1k-documents",
                     "documents": [
                         {"source-file": "documents-1k.json.bz2", "document-count": 1000},
+                    ],
+                },
+                {
+                    "name": "unittest-keep-less-than-1k-documents",
+                    "documents": [
+                        {
+                            "source-file": "documents.json.bz2",
+                            "document-count": 10,
+                            "compressed-bytes": 100,
+                            "uncompressed-bytes": 10000,
+                        },
                     ],
                 },
             ],
@@ -1420,7 +1493,7 @@ class TestTrackPath:
 
 
 class TestTrackFilter:
-    def filter(self, track_specification, include_tasks=None, exclude_tasks=None):
+    def filter(self, track_specification, *, include_tasks=None, exclude_tasks=None):
         cfg = config.Config()
         cfg.add(config.Scope.application, "track", "include.tasks", include_tasks)
         cfg.add(config.Scope.application, "track", "exclude.tasks", exclude_tasks)
@@ -1506,6 +1579,7 @@ class TestTrackFilter:
                             "operation": "match-all",
                         },
                         {
+                            "name": "cluster-stats",
                             "operation": "cluster-stats",
                         },
                         {
@@ -1541,7 +1615,7 @@ class TestTrackFilter:
         full_track = reader("unittest", track_specification, "/mappings")
         assert len(full_track.challenges[0].schedule) == 7
 
-        filtered = self.filter(
+        filtered_track = self.filter(
             full_track,
             include_tasks=[
                 "index-3",
@@ -1552,7 +1626,7 @@ class TestTrackFilter:
             ],
         )
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert len(schedule) == 5
         assert [t.name for t in schedule[0].tasks] == ["index-3", "match-all-parallel"]
         assert schedule[1].name == "match-all-serial"
@@ -1643,9 +1717,9 @@ class TestTrackFilter:
         full_track = reader("unittest", track_specification, "/mappings")
         assert len(full_track.challenges[0].schedule) == 5
 
-        filtered = self.filter(full_track, exclude_tasks=["index-3", "type:search", "create-index"])
+        filtered_track = self.filter(full_track, exclude_tasks=["index-3", "type:search", "create-index"])
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert len(schedule) == 3
         assert [t.name for t in schedule[0].tasks] == ["index-1", "index-2"]
         assert schedule[1].name == "node-stats"
@@ -1717,9 +1791,9 @@ class TestTrackFilter:
         assert len(full_track.challenges[0].schedule) == 5
 
         expected_schedule = full_track.challenges[0].schedule.copy()
-        filtered = self.filter(full_track, exclude_tasks=["nothing"])
+        filtered_track = self.filter(full_track, exclude_tasks=["nothing"])
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert schedule == expected_schedule
 
     def test_unmatched_include_runs_nothing(self):
@@ -1788,10 +1862,154 @@ class TestTrackFilter:
         assert len(full_track.challenges[0].schedule) == 5
 
         expected_schedule = []
-        filtered = self.filter(full_track, include_tasks=["nothing"])
+        filtered_track = self.filter(full_track, include_tasks=["nothing"])
 
-        schedule = filtered.challenges[0].schedule
+        schedule = filtered_track.challenges[0].schedule
         assert schedule == expected_schedule
+
+
+class TestServerlessTrackFilter:
+    TRACK_SPECIFICATION = {
+        "description": "description for unit test",
+        "indices": [{"name": "test-index", "auto-managed": False}],
+        "operations": [
+            {
+                "name": "create-index",
+                "operation-type": "create-index",
+            },
+            {
+                "name": "bulk-index",
+                "operation-type": "bulk",
+            },
+            {
+                "name": "node-stats",
+                "operation-type": "node-stats",
+            },
+            {
+                "name": "cluster-stats",
+                "operation-type": "custom-operation-type",
+            },
+            {
+                "name": "load-posts",
+                "operation-type": "composite",
+                "requests": [],
+            },
+        ],
+        "challenges": [
+            {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "create-index",
+                    },
+                    {
+                        "operation": {
+                            "operation-type": "bulk-index",
+                            "run-on-serverless": False,
+                        }
+                    },
+                    {
+                        "parallel": {
+                            "tasks": [
+                                {
+                                    "name": "index-1",
+                                    "operation": "bulk-index",
+                                },
+                                {
+                                    "name": "match-all-parallel",
+                                    "operation": "match-all",
+                                },
+                            ]
+                        }
+                    },
+                    {
+                        "operation": "shrink-index",
+                    },
+                    {
+                        "operation": {
+                            "operation-type": "create-index-template",
+                            "run-on-serverless": True,
+                        }
+                    },
+                    {
+                        "operation": "node-stats",
+                    },
+                    {
+                        "operation": "cluster-stats",
+                    },
+                    {
+                        "name": "load-posts",
+                        "operation": "load-posts",
+                    },
+                ],
+            }
+        ],
+    }
+
+    def filter(self, track_specification, *, serverless_mode, serverless_operator):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "driver", "serverless.mode", serverless_mode)
+        cfg.add(config.Scope.application, "driver", "serverless.operator", serverless_operator)
+
+        processor = loader.ServerlessFilterTrackProcessor(cfg)
+        return processor.on_after_load_track(track_specification)
+
+    def test_noop_if_not_serverless(self):
+        filtered_track = self.filter(track_specification={"foo": "bar"}, serverless_mode=False, serverless_operator=False)
+        assert filtered_track == {"foo": "bar"}
+
+    def test_no_message_if_no_filter(self):
+        track_specification = {
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [],
+                }
+            ]
+        }
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", copy.deepcopy(track_specification), "/mappings")
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=True)
+        assert filtered_track.challenges[0].serverless_info == []
+
+    def test_filters_tasks_operator_false(self):
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
+        assert len(full_track.challenges[0].schedule) == 8
+
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=False)
+        assert filtered_track.challenges[0].serverless_info == [
+            "Treating parallel task in challenge [default-challenge] as public.",
+            "Excluding [bulk-index], [shrink-index], [node-stats] as challenge [default-challenge] is run on serverless.",
+        ]
+
+        schedule = filtered_track.challenges[0].schedule
+        assert len(schedule) == 5
+        assert schedule[0].name == "create-index"
+        assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
+        assert schedule[2].name == "create-index-template"
+        assert schedule[3].name == "cluster-stats"
+        assert schedule[4].name == "load-posts"
+
+    def test_filters_tasks_operator_true(self):
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", copy.deepcopy(self.TRACK_SPECIFICATION), "/mappings")
+        assert len(full_track.challenges[0].schedule) == 8
+
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=True)
+        assert filtered_track.challenges[0].serverless_info == [
+            "Treating parallel task in challenge [default-challenge] as public.",
+            "Excluding [bulk-index], [shrink-index] as challenge [default-challenge] is run on serverless.",
+        ]
+
+        schedule = filtered_track.challenges[0].schedule
+        assert len(schedule) == 6
+        assert schedule[0].name == "create-index"
+        assert [t.name for t in schedule[1].tasks] == ["index-1", "match-all-parallel"]
+        assert schedule[2].name == "create-index-template"
+        assert schedule[3].name == "node-stats"
+        assert schedule[4].name == "cluster-stats"
+        assert schedule[5].name == "load-posts"
 
 
 # pylint: disable=too-many-public-methods
@@ -2544,7 +2762,7 @@ class TestTrackSpecificationReader:
             "indices": [
                 {
                     "name": "index-historical",
-                    "body": "body.json"
+                    "body": "body.json",
                     # no type information here
                 }
             ],
@@ -2961,7 +3179,11 @@ class TestTrackSpecificationReader:
                         {
                             "template": {
                                 "settings": {
+                                  {%- if build_flavor == "test" %}
                                   "index.number_of_replicas": {{ number_of_replicas }}
+                                  {%- else %}
+                                  "index.number_of_replicas": 99
+                                  {%- endif %}
                                 },
                                 "mappings": {
                                   "properties": {
@@ -2976,6 +3198,7 @@ class TestTrackSpecificationReader:
                     ],
                 }
             ),
+            build_flavor="test",
         )
         resulting_track = reader("unittest", track_specification, "/mappings")
         assert ["index_pattern", "number_of_replicas", "number_of_shards"] == complete_track_params.sorted_track_defined_params
@@ -4051,25 +4274,41 @@ class TestTrackProcessorRegistry:
     def test_default_track_processors(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "offline.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.operator", False)
         tpr = loader.TrackProcessorRegistry(cfg)
-        expected_defaults = [loader.TaskFilterTrackProcessor, loader.TestModeTrackProcessor, loader.DefaultTrackPreparator]
+        expected_defaults = [
+            loader.TaskFilterTrackProcessor,
+            loader.ServerlessFilterTrackProcessor,
+            loader.TestModeTrackProcessor,
+            loader.DefaultTrackPreparator,
+        ]
         actual_defaults = [proc.__class__ for proc in tpr.processors]
         assert len(expected_defaults) == len(actual_defaults)
 
     def test_override_default_preparator(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "offline.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.operator", False)
         tpr = loader.TrackProcessorRegistry(cfg)
         # call this once beforehand to make sure we don't "harden" the default in case calls are made out of order
         tpr.processors  # pylint: disable=pointless-statement
         tpr.register_track_processor(MyMockTrackProcessor())
-        expected_processors = [loader.TaskFilterTrackProcessor, loader.TestModeTrackProcessor, MyMockTrackProcessor]
+        expected_processors = [
+            loader.TaskFilterTrackProcessor,
+            loader.ServerlessFilterTrackProcessor,
+            loader.TestModeTrackProcessor,
+            MyMockTrackProcessor,
+        ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         assert len(expected_processors) == len(actual_processors)
 
     def test_allow_to_specify_default_preparator(self):
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "offline.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.mode", False)
+        cfg.add(config.Scope.application, "driver", "serverless.operator", False)
         tpr = loader.TrackProcessorRegistry(cfg)
         tpr.register_track_processor(MyMockTrackProcessor())
         # should be idempotent now that we have a custom config
@@ -4077,6 +4316,7 @@ class TestTrackProcessorRegistry:
         tpr.register_track_processor(loader.DefaultTrackPreparator())
         expected_processors = [
             loader.TaskFilterTrackProcessor,
+            loader.ServerlessFilterTrackProcessor,
             loader.TestModeTrackProcessor,
             MyMockTrackProcessor,
             loader.DefaultTrackPreparator,

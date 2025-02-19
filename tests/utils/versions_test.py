@@ -18,7 +18,7 @@
 import random
 import re
 
-import pytest  # type: ignore
+import pytest
 
 from esrally import exceptions
 from esrally.utils import versions
@@ -26,6 +26,7 @@ from esrally.utils import versions
 
 class TestsVersions:
     def test_is_version_identifier(self):
+        assert versions.is_version_identifier("serverless") is False
         assert versions.is_version_identifier(None) is False
         assert versions.is_version_identifier("") is False
         assert versions.is_version_identifier("     \t ") is False
@@ -43,6 +44,18 @@ class TestsVersions:
         assert versions.is_version_identifier("5", strict=False)
         assert versions.is_version_identifier("23", strict=False)
         assert versions.is_version_identifier("20.3.7-SNAPSHOT", strict=False)
+
+    def test_is_serverless(self):
+        assert versions.is_serverless("serverless")
+        assert versions.is_serverless("default") is False
+        assert versions.is_serverless(None) is False
+        assert versions.is_serverless("") is False
+        assert versions.is_serverless("     \t ") is False
+        assert versions.is_serverless("8-ab-c") is False
+        assert versions.is_serverless("8.9.0") is False
+        assert versions.is_serverless("8.1") is False
+        assert versions.is_serverless("8") is False
+        assert versions.is_serverless("20.3.7-SNAPSHOT") is False
 
     def test_finds_components_for_valid_version(self):
         assert versions.components("5.0.3") == (5, 0, 3, None)

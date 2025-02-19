@@ -23,7 +23,7 @@ from functools import partial
 
 import tabulate
 
-from esrally import exceptions, metrics
+from esrally import exceptions, metrics, types
 from esrally.utils import console, convert
 from esrally.utils import io as rio
 
@@ -38,11 +38,11 @@ FINAL_SCORE = r"""
             """
 
 
-def summarize(results, cfg):
+def summarize(results, cfg: types.Config):
     SummaryReporter(results, cfg).report()
 
 
-def compare(cfg, baseline_id, contender_id):
+def compare(cfg: types.Config, baseline_id, contender_id):
     if not baseline_id or not contender_id:
         raise exceptions.SystemSetupError("compare needs baseline and a contender")
     race_store = metrics.race_store(cfg)
@@ -115,7 +115,7 @@ def total_disk_usage_per_field(stats):
 
 
 class SummaryReporter:
-    def __init__(self, results, config):
+    def __init__(self, results, config: types.Config):
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
@@ -292,6 +292,7 @@ class SummaryReporter:
 
     def _report_disk_usage(self, stats):
         return self._join(
+            self._line("Dataset size", "", stats.dataset_size, "GB", convert.bytes_to_gb),
             self._line("Store size", "", stats.store_size, "GB", convert.bytes_to_gb),
             self._line("Translog size", "", stats.translog_size, "GB", convert.bytes_to_gb),
         )
@@ -359,7 +360,7 @@ class SummaryReporter:
 
 
 class ComparisonReporter:
-    def __init__(self, config):
+    def __init__(self, config: types.Config):
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
         self.numbers_align = config.opts("reporting", "numbers.align", mandatory=False, default_value="decimal")
@@ -668,9 +669,12 @@ class ComparisonReporter:
         lines = []
         for index, _total, field in totals:
             for stat in disk_usage_fields(baseline_stats):
-                baseline_value = collated_baseline[index].get(field, {}).get(stat, 0)
-                contender_value = collated_contender[index].get(field, {}).get(stat, 0)
-                if baseline_value == 0 and contender_value == 0:
+                if index in collated_baseline and index in collated_contender:
+                    baseline_value = collated_baseline[index].get(field, {}).get(stat, 0)
+                    contender_value = collated_contender[index].get(field, {}).get(stat, 0)
+                    if baseline_value == 0 and contender_value == 0:
+                        continue
+                else:
                     continue
                 unit = convert.bytes_to_human_unit(min(baseline_value, contender_value))
                 lines.append(
@@ -883,6 +887,15 @@ class ComparisonReporter:
 
     def _report_disk_usage(self, baseline_stats, contender_stats):
         return self._join(
+            self._line(
+                "Dataset size",
+                baseline_stats.dataset_size,
+                contender_stats.dataset_size,
+                "",
+                "GB",
+                treat_increase_as_improvement=False,
+                formatter=convert.bytes_to_gb,
+            ),
             self._line(
                 "Store size",
                 baseline_stats.store_size,

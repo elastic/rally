@@ -72,7 +72,7 @@ class MockClient:
 
     def info(self):
         if self.client_options.get("raise-error-on-info", False):
-            raise elasticsearch.TransportError(401, "Unauthorized")
+            raise elasticsearch.TransportError(message="Unauthorized")
         return self._info
 
     def search(self, *args, **kwargs):

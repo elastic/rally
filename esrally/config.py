@@ -22,7 +22,7 @@ import shutil
 from enum import Enum
 from string import Template
 
-from esrally import PROGRAM_NAME, exceptions, paths
+from esrally import PROGRAM_NAME, exceptions, paths, types
 from esrally.utils import io
 
 
@@ -50,9 +50,12 @@ class ConfigFile:
         """
         return os.path.isfile(self.location)
 
-    def load(self):
+    def load(self) -> configparser.ConfigParser:
         config = configparser.ConfigParser()
-        config.read(self.location, encoding="utf-8")
+        with open(self.location, encoding="utf-8") as src:
+            contents = src.read()
+        contents = Template(contents).substitute(CONFIG_DIR=self.config_dir)
+        config.read_string(contents, source=self.location)
         return config
 
     def store_default_config(self, template_path=None):
@@ -64,9 +67,9 @@ class ConfigFile:
         with open(self.location, "w", encoding="utf-8") as target:
             with open(source_path, encoding="utf-8") as src:
                 contents = src.read()
-                target.write(Template(contents).substitute(CONFIG_DIR=self.config_dir))
+                target.write(contents)
 
-    def store(self, config):
+    def store(self, config: configparser.ConfigParser):
         io.ensure_dir(self.config_dir)
         with open(self.location, "w", encoding="utf-8") as configfile:
             config.write(configfile)
@@ -89,7 +92,7 @@ class ConfigFile:
         return os.path.join(self.config_dir, f"rally{config_name_suffix}.ini")
 
 
-def auto_load_local_config(base_config, additional_sections=None, config_file_class=ConfigFile, **kwargs):
+def auto_load_local_config(base_config, additional_sections=None, config_file_class=ConfigFile, **kwargs) -> types.Config:
     """
     Loads a node-local configuration based on a ``base_config``. If an appropriate node-local configuration file is present, it will be
     used (and potentially upgraded to the newest config version). Otherwise, a new one will be created and as many settings as possible
@@ -138,7 +141,7 @@ class Config:
         self._opts = {}
         self._clear_config()
 
-    def add(self, scope, section, key, value):
+    def add(self, scope, section: types.Section, key: types.Key, value):
         """
         Adds or overrides a new configuration property.
 
@@ -149,7 +152,7 @@ class Config:
         """
         self._opts[self._k(scope, section, key)] = value
 
-    def add_all(self, source, section):
+    def add_all(self, source, section: types.Section):
         """
         Adds all config items within the given `section` from the `source` config object.
 
@@ -162,7 +165,7 @@ class Config:
             if source_section == section:
                 self.add(scope, source_section, key, v)
 
-    def opts(self, section, key, default_value=None, mandatory=True):
+    def opts(self, section: types.Section, key: types.Key, default_value=None, mandatory=True):
         """
         Resolves a configuration property.
 
@@ -182,7 +185,7 @@ class Config:
             else:
                 raise exceptions.ConfigError(f"No value for mandatory configuration: section='{section}', key='{key}'")
 
-    def all_opts(self, section):
+    def all_opts(self, section: types.Section):
         """
         Finds all options in a section and returns them in a dict.
 
@@ -200,7 +203,7 @@ class Config:
                     scopes_per_key[key] = scope
         return opts_in_section
 
-    def exists(self, section, key):
+    def exists(self, section: types.Section, key: types.Key):
         """
         :param section: The configuration section.
         :param key: The configuration key.
@@ -261,7 +264,7 @@ class Config:
         return int(self.opts("meta", "config.version", default_value=0, mandatory=False))
 
     # recursively find the most narrow scope for a key
-    def _resolve_scope(self, section, key, start_from=Scope.invocation):
+    def _resolve_scope(self, section: types.Section, key: types.Key, start_from=Scope.invocation):
         if self._k(start_from, section, key) in self._opts:
             return start_from
         elif start_from == Scope.application:
@@ -270,7 +273,7 @@ class Config:
             # continue search in the enclosing scope
             return self._resolve_scope(section, key, Scope(start_from.value - 1))
 
-    def _k(self, scope, section, key):
+    def _k(self, scope, section: types.Section, key: types.Key):
         if scope is None or scope == Scope.application:
             return Scope.application, section, key
         else:

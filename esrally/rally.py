@@ -45,6 +45,7 @@ from esrally import (
     reporter,
     telemetry,
     track,
+    types,
     version,
 )
 from esrally.mechanic import mechanic, team
@@ -98,6 +99,9 @@ def create_arg_parser():
                 raise argparse.ArgumentTypeError(f"must be at least {min_es_version} but was {v}")
         return v
 
+    def revision(v):
+        return v.strip()
+
     def add_track_source(subparser):
         track_source_group = subparser.add_mutually_exclusive_group()
         track_source_group.add_argument(
@@ -114,6 +118,7 @@ def create_arg_parser():
             "--track-revision",
             help="Define a specific revision in the track repository that Rally should use.",
             default=None,
+            type=revision,
         )
 
     # try to preload configurable defaults, but this does not work together with `--configuration-name` (which is undocumented anyway)
@@ -175,6 +180,11 @@ def create_arg_parser():
         type=valid_date,
         default=None,
     )
+    list_parser.add_argument(
+        "--challenge",
+        help="Show only records from this challenge",
+        default=None,
+    )
     add_track_source(list_parser)
 
     delete_parser = subparsers.add_parser("delete", help="Delete records")
@@ -194,7 +204,7 @@ def create_arg_parser():
     add_track_source(info_parser)
     info_parser.add_argument(
         "--track",
-        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`."
+        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`.",
         # we set the default value later on because we need to determine whether the user has provided this value.
         # default="geonames"
     )
@@ -223,6 +233,11 @@ def create_arg_parser():
         "--track",
         required=True,
         help="Name of the generated track",
+    )
+    create_track_parser.add_argument(
+        "--batch-size",
+        default=1000,
+        help="Number of documents to collect per call to Elasticsearch.",
     )
     indices_or_data_streams_group = create_track_parser.add_mutually_exclusive_group(required=True)
     indices_or_data_streams_group.add_argument(
@@ -292,8 +307,10 @@ def create_arg_parser():
         help="Define the source code revision for building the benchmark candidate. 'current' uses the source tree as is,"
         " 'latest' fetches the latest version on the main branch. It is also possible to specify a commit id or a timestamp."
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
-        'e.g. "@2013-07-27T10:37:00Z" (default: current).',
+        'e.g. "@2013-07-27T10:37:00Z" (default: current). A combination of branch and timestamp is also possible,'
+        'e.g. "feature-branch@2023-04-06T14:52:31Z".',
         default="current",
+        type=revision,
     )  # optimized for local usage, don't fetch sources
     build_parser.add_argument(
         "--target-os",
@@ -312,6 +329,7 @@ def create_arg_parser():
         "--team-revision",
         help="Define a specific revision in the team repository that Rally should use.",
         default=None,
+        type=revision,
     )
     build_parser.add_argument(
         "--team-path",
@@ -354,6 +372,7 @@ def create_arg_parser():
         "--team-revision",
         help="Define a specific revision in the team repository that Rally should use.",
         default=None,
+        type=revision,
     )
     download_parser.add_argument(
         "--team-path",
@@ -398,6 +417,7 @@ def create_arg_parser():
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current).',
         default="current",
+        type=revision,
     )  # optimized for local usage, don't fetch sources
     # Intentionally undocumented as we do not consider Docker a fully supported option.
     install_parser.add_argument(
@@ -415,6 +435,7 @@ def create_arg_parser():
         "--team-revision",
         help="Define a specific revision in the team repository that Rally should use.",
         default=None,
+        type=revision,
     )
     install_parser.add_argument(
         "--team-path",
@@ -570,6 +591,7 @@ def create_arg_parser():
             "--team-revision",
             help="Define a specific revision in the team repository that Rally should use.",
             default=None,
+            type=revision,
         )
 
     race_parser.add_argument(
@@ -590,6 +612,7 @@ def create_arg_parser():
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current).',
         default="current",
+        type=revision,
     )  # optimized for local usage, don't fetch sources
     add_track_source(race_parser)
     race_parser.add_argument(
@@ -838,7 +861,7 @@ def create_arg_parser():
     return parser
 
 
-def dispatch_list(cfg):
+def dispatch_list(cfg: types.Config):
     what = cfg.opts("system", "list.config.option")
     if what == "telemetry":
         telemetry.list_telemetry()
@@ -858,7 +881,7 @@ def dispatch_list(cfg):
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
 
-def dispatch_add(cfg):
+def dispatch_add(cfg: types.Config):
     what = cfg.opts("system", "add.config.option")
     if what == "annotation":
         metrics.add_annotation(cfg)
@@ -866,7 +889,7 @@ def dispatch_add(cfg):
         raise exceptions.SystemSetupError("Cannot list unknown configuration option [%s]" % what)
 
 
-def dispatch_delete(cfg):
+def dispatch_delete(cfg: types.Config):
     what = cfg.opts("system", "delete.config.option")
     if what == "race":
         metrics.delete_race(cfg)
@@ -889,7 +912,7 @@ def print_help_on_errors():
     )
 
 
-def race(cfg, kill_running_processes=False):
+def race(cfg: types.Config, kill_running_processes=False):
     logger = logging.getLogger(__name__)
 
     if kill_running_processes:
@@ -919,7 +942,7 @@ def race(cfg, kill_running_processes=False):
     with_actor_system(racecontrol.run, cfg)
 
 
-def with_actor_system(runnable, cfg):
+def with_actor_system(runnable, cfg: types.Config):
     logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()
     logger.info("Actor system already running locally? [%s]", str(already_running))
@@ -993,12 +1016,12 @@ def with_actor_system(runnable, cfg):
                 )
 
 
-def configure_telemetry_params(args, cfg):
+def configure_telemetry_params(args, cfg: types.Config):
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", opts.csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "telemetry", "params", opts.to_dict(args.telemetry_params))
 
 
-def configure_track_params(arg_parser, args, cfg, command_requires_track=True):
+def configure_track_params(arg_parser, args, cfg: types.Config, command_requires_track=True):
     cfg.add(config.Scope.applicationOverride, "track", "repository.revision", args.track_revision)
     # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to
     # its default value)
@@ -1025,7 +1048,7 @@ def configure_track_params(arg_parser, args, cfg, command_requires_track=True):
         cfg.add(config.Scope.applicationOverride, "track", "exclude.tasks", opts.csv_to_list(args.exclude_tasks))
 
 
-def configure_mechanic_params(args, cfg, command_requires_car=True):
+def configure_mechanic_params(args, cfg: types.Config, command_requires_car=True):
     if args.team_path:
         cfg.add(config.Scope.applicationOverride, "mechanic", "team.path", os.path.abspath(io.normalize_path(args.team_path)))
         cfg.add(config.Scope.applicationOverride, "mechanic", "repository.name", None)
@@ -1045,7 +1068,7 @@ def configure_mechanic_params(args, cfg, command_requires_car=True):
         cfg.add(config.Scope.applicationOverride, "mechanic", "car.params", opts.to_dict(args.car_params))
 
 
-def configure_connection_params(arg_parser, args, cfg):
+def configure_connection_params(arg_parser, args, cfg: types.Config):
     # Also needed by mechanic (-> telemetry) - duplicate by module?
     target_hosts = opts.TargetHosts(args.target_hosts)
     cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
@@ -1055,14 +1078,14 @@ def configure_connection_params(arg_parser, args, cfg):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
 
 
-def configure_reporting_params(args, cfg):
+def configure_reporting_params(args, cfg: types.Config):
     cfg.add(config.Scope.applicationOverride, "reporting", "format", args.report_format)
     cfg.add(config.Scope.applicationOverride, "reporting", "values", args.show_in_report)
     cfg.add(config.Scope.applicationOverride, "reporting", "output.path", args.report_file)
     cfg.add(config.Scope.applicationOverride, "reporting", "numbers.align", args.report_numbers_align)
 
 
-def dispatch_sub_command(arg_parser, args, cfg):
+def dispatch_sub_command(arg_parser, args, cfg: types.Config):
     sub_command = args.subcommand
 
     cfg.add(config.Scope.application, "system", "quiet.mode", args.quiet)
@@ -1080,6 +1103,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
             cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
             cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.challenge", args.challenge)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
@@ -1175,11 +1199,13 @@ def dispatch_sub_command(arg_parser, args, cfg):
                 cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+                cfg.add(config.Scope.applicationOverride, "generator", "batch_size", args.batch_size)
             elif args.indices is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
                 cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+                cfg.add(config.Scope.applicationOverride, "generator", "batch_size", args.batch_size)
             configure_connection_params(arg_parser, args, cfg)
 
             tracker.create_track(cfg)
@@ -1243,6 +1269,13 @@ def main():
     # Configure networking
     net.init()
 
+    def _trap_exc(function, path, exc_info):
+        if isinstance(exc_info, FileNotFoundError):
+            # couldn't delete because it was already clean
+            return
+        logging.exception("Failed to clean up [%s] with [%s]", path, function, exc_info=True)
+        raise exceptions.SystemSetupError(f"Unable to clean [{paths.libs()}]. See Rally log for more information.")
+
     def _trap(function, path, exc_info):
         if exc_info[0] == FileNotFoundError:
             # couldn't delete because it was already clean
@@ -1252,7 +1285,11 @@ def main():
 
     # fully destructive is fine, we only allow one Rally to run at a time and we will rely on the pip cache for download caching
     logger.info("Cleaning track dependency directory [%s]...", paths.libs())
-    shutil.rmtree(paths.libs(), onerror=_trap)
+
+    if sys.version_info.major == 3 and sys.version_info.minor <= 11:
+        shutil.rmtree(paths.libs(), onerror=_trap)  # pylint: disable=deprecated-argument, disable=useless-suppression
+    else:
+        shutil.rmtree(paths.libs(), onexc=_trap_exc)  # pylint: disable=unexpected-keyword-arg, disable=useless-suppression
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 

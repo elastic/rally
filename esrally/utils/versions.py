@@ -33,6 +33,10 @@ def is_version_identifier(text, strict=True):
     return text is not None and _versions_pattern(strict).match(text) is not None
 
 
+def is_serverless(text):
+    return text == "serverless"
+
+
 def major_version(version):
     """
     Determines the major version of a given version string.
@@ -180,6 +184,8 @@ def best_match(available_alternatives, distribution_version):
         major, _, _, _ = components(distribution_version)
         if major > _latest_major(available_alternatives):
             return "master"
+    elif is_serverless(distribution_version):
+        return "master"
     elif not distribution_version:
         return "master"
     return None

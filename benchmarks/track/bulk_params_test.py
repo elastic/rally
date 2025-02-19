@@ -36,7 +36,7 @@ class StaticSource:
         pass
 
     def read(self):
-        return "\n".join(self.contents)
+        return "\n".join(self.contents)  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
 
     def readline(self):
         return self.contents
