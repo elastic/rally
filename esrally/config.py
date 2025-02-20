@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import configparser
 import logging
@@ -24,6 +25,9 @@ from string import Template
 
 from esrally import PROGRAM_NAME, exceptions, paths, types
 from esrally.utils import io
+
+# Copied from configparser for back compatibility
+BOOLEAN_STATES: dict[str, bool] = {"1": True, "yes": True, "true": True, "on": True, "0": False, "no": False, "false": False, "off": False}
 
 
 class Scope(Enum):
@@ -184,6 +188,25 @@ class Config:
                 return default_value
             else:
                 raise exceptions.ConfigError(f"No value for mandatory configuration: section='{section}', key='{key}'")
+
+    def boolean(self, section: types.Section, key: types.Key, default: bool | None = None) -> bool:
+        """It reads a boolean value from the configuration.
+
+        :param section: section represents the section name in the configuration.
+        :param key: section represents the option name in the configuration.
+        :param default: default specifies a value to be returned when any is found in the configuration. If it is None
+            and any is found in the configuration then ConfigError is raised.
+        :return: the boolean value if found in the configuration or the default value otherwise if not None.
+        """
+        default_value: str | None = None
+        if default is not None:
+            default_value = str(default).lower()
+        value = self.opts(section=section, key=key, default_value=default_value, mandatory=default_value is None)
+        if isinstance(value, str):
+            value = BOOLEAN_STATES.get(value)
+        if value is None:
+            raise exceptions.ConfigError(f"Invalid value for boolean option: section='{section}', key='{key}', value='{value}'")
+        return bool(value)
 
     def all_opts(self, section: types.Section):
         """
