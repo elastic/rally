@@ -33,6 +33,7 @@ repos:
           "--config",
           "pyproject.toml"
         ]
+        require_serial: true
 
   - repo: local
     hooks:

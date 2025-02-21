@@ -18,24 +18,21 @@ from __future__ import annotations
 
 import difflib
 import json
-import typing
 from collections import abc
+from typing import Union
 
-O = typing.Union[abc.Mapping, abc.Sequence, str, int, float, bool, None]
-
-
-_diff_methods = []
+O = Union[abc.Mapping, abc.Sequence, str, int, float, bool, None]
 
 
-def diff(old, new: O, flat_dict=False) -> str:
+def diff(old: O, new: O, flat_dict: bool = False) -> str:
     return "\n".join(difflib.ndiff(_dump(old, flat_dict=flat_dict), _dump(new, flat_dict=flat_dict)))
 
 
-def dump(o: O, flat_dict=False):
+def dump(o: O, flat_dict: bool = False) -> str:
     return "\n".join(_dump(o, flat_dict=flat_dict))
 
 
-def _dump(o: O, flat_dict=False) -> abc.Sequence[str]:
+def _dump(o: O, flat_dict: bool = False) -> abc.Sequence[str]:
     if flat_dict:
         o = _flat_dict(o)
     return json.dumps(o, indent=2, sort_keys=True).splitlines()

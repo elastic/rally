@@ -25,7 +25,7 @@ from typing import Any, Callable, Optional, Union
 
 import tabulate
 
-from esrally import PROGRAM_NAME, config, exceptions, types
+from esrally import PROGRAM_NAME, config, exceptions
 from esrally.utils import console, io, modules, repo
 
 TEAM_FORMAT_VERSION = 1
@@ -38,7 +38,7 @@ def _path_for(team_root_path: str, team_member_type: str) -> str:
     return root_path
 
 
-def list_cars(cfg: types.Config) -> None:
+def list_cars(cfg: config.Config) -> None:
     loader = CarLoader(team_path(cfg))
     cars = []
     for name in loader.car_names():
@@ -85,7 +85,7 @@ def load_car(repo: str, name: Collection[str], car_params: Optional[Mapping] = N
     return Car(name, root_paths, all_config_paths, variables)
 
 
-def list_plugins(cfg: types.Config) -> None:
+def list_plugins(cfg: config.Config) -> None:
     plugins = PluginLoader(team_path(cfg)).plugins()
     if plugins:
         console.println("Available Elasticsearch plugins:\n")
@@ -120,7 +120,7 @@ def load_plugins(
     return plugins
 
 
-def team_path(cfg: types.Config) -> str:
+def team_path(cfg: config.Config) -> str:
     root_path = cfg.opts("mechanic", "team.path", mandatory=False)
     if root_path:
         return root_path
