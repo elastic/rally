@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import collections
 import datetime
@@ -32,8 +33,8 @@ from enum import Enum, IntEnum
 
 import tabulate
 
-from esrally import client, config, exceptions, paths, time, types, version
-from esrally.utils import console, convert, io, versions
+from esrally import client, config, exceptions, paths, time, version
+from esrally.utils import console, convert, io, pretty, versions
 
 
 class EsClient:
@@ -46,6 +47,9 @@ class EsClient:
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
         self.retryable_status_codes = [502, 503, 504, 429]
+
+    def get_template(self, name):
+        return self.guarded(self._client.indices.get_index_template, name=name)
 
     def put_template(self, name, template):
         tmpl = json.loads(template)
@@ -223,7 +227,7 @@ class EsClientFactory:
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
 
-    def __init__(self, cfg: types.Config):
+    def __init__(self, cfg: config.Config):
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
@@ -283,7 +287,7 @@ class IndexTemplateProvider:
     Abstracts how the Rally index template is retrieved. Intended for testing.
     """
 
-    def __init__(self, cfg: types.Config):
+    def __init__(self, cfg: config.Config):
         self._config = cfg
         self._number_of_shards = self._config.opts("reporting", "datastore.number_of_shards", default_value=None, mandatory=False)
         self._number_of_replicas = self._config.opts("reporting", "datastore.number_of_replicas", default_value=None, mandatory=False)
@@ -342,7 +346,7 @@ def calculate_system_results(store, node_name):
     return calc()
 
 
-def metrics_store(cfg: types.Config, read_only=True, track=None, challenge=None, car=None, meta_info=None):
+def metrics_store(cfg: config.Config, read_only=True, track=None, challenge=None, car=None, meta_info=None):
     """
     Creates a proper metrics store based on the current configuration.
 
@@ -362,7 +366,7 @@ def metrics_store(cfg: types.Config, read_only=True, track=None, challenge=None,
     return store
 
 
-def metrics_store_class(cfg: types.Config):
+def metrics_store_class(cfg: config.Config):
     if cfg.opts("reporting", "datastore.type") == "elasticsearch":
         return EsMetricsStore
     else:
@@ -379,7 +383,7 @@ class MetricsStore:
     Abstract metrics store
     """
 
-    def __init__(self, cfg: types.Config, clock=time.Clock, meta_info=None):
+    def __init__(self, cfg: config.Config, clock=time.Clock, meta_info=None):
         """
         Creates a new metrics store.
 
@@ -871,7 +875,7 @@ class EsMetricsStore(MetricsStore):
 
     def __init__(
         self,
-        cfg: types.Config,
+        cfg: config.Config,
         client_factory_class=EsClientFactory,
         index_template_provider_class=IndexTemplateProvider,
         clock=time.Clock,
@@ -898,8 +902,31 @@ class EsMetricsStore(MetricsStore):
         self._index = self.index_name()
         # reduce a bit of noise in the metrics cluster log
         if create:
-            # always update the mapping to the latest version
-            self._client.put_template("rally-metrics", self._get_template())
+            template = None
+            if self._client.template_exists("rally-metrics"):
+                for t in self._client.get_template("rally-metrics").body.get("index_templates", []):
+                    template = t.get("index_template", {}).get("template", {})
+                    break
+
+            new_template: str = self._get_template()
+            if template is None or self._config.boolean(section="reporting", key="datastore.overwrite_existing_templates", default=False):
+                if template is None:
+                    self.logger.info(
+                        "Create index template:\n%s",
+                        pretty.diff(old={}, new=json.loads(new_template).get("template", {}), flat_dict=True),
+                    )
+                else:
+                    self.logger.warning(
+                        "Overwrite existing index template (datastore.overwrite_existing_templates = true):\n%s",
+                        pretty.diff(old=template, new=json.loads(new_template).get("template", {}), flat_dict=True),
+                    )
+                self._client.put_template("rally-metrics", new_template)
+            else:
+                self.logger.debug(
+                    "Keep existing template (datastore.overwrite_existing_templates = false):\n%s",
+                    pretty.diff(old=template, new=json.loads(new_template).get("template", {}), flat_dict=True),
+                )
+
             if not self._client.exists(index=self._index):
                 self._client.create_index(index=self._index)
             else:
@@ -1128,7 +1155,7 @@ class EsMetricsStore(MetricsStore):
 
 
 class InMemoryMetricsStore(MetricsStore):
-    def __init__(self, cfg: types.Config, clock=time.Clock, meta_info=None):
+    def __init__(self, cfg: config.Config, clock=time.Clock, meta_info=None):
         """
 
         Creates a new metrics store.
@@ -1260,7 +1287,7 @@ class InMemoryMetricsStore(MetricsStore):
         return "in-memory metrics store"
 
 
-def race_store(cfg: types.Config):
+def race_store(cfg: config.Config):
     """
     Creates a proper race store based on the current configuration.
     :param cfg: Config object. Mandatory.
@@ -1275,7 +1302,7 @@ def race_store(cfg: types.Config):
         return FileRaceStore(cfg)
 
 
-def results_store(cfg: types.Config):
+def results_store(cfg: config.Config):
     """
     Creates a proper race store based on the current configuration.
     :param cfg: Config object. Mandatory.
@@ -1290,23 +1317,23 @@ def results_store(cfg: types.Config):
         return NoopResultsStore()
 
 
-def delete_race(cfg: types.Config):
+def delete_race(cfg: config.Config):
     race_store(cfg).delete_race()
 
 
-def delete_annotation(cfg: types.Config):
+def delete_annotation(cfg: config.Config):
     race_store(cfg).delete_annotation()
 
 
-def list_annotations(cfg: types.Config):
+def list_annotations(cfg: config.Config):
     race_store(cfg).list_annotations()
 
 
-def add_annotation(cfg: types.Config):
+def add_annotation(cfg: config.Config):
     race_store(cfg).add_annotation()
 
 
-def list_races(cfg: types.Config):
+def list_races(cfg: config.Config):
     def format_dict(d):
         if d:
             items = sorted(d.items())
@@ -1357,7 +1384,7 @@ def list_races(cfg: types.Config):
         console.println("No recent races found.")
 
 
-def create_race(cfg: types.Config, track, challenge, track_revision=None):
+def create_race(cfg: config.Config, track, challenge, track_revision=None):
     car = cfg.opts("mechanic", "car.names")
     environment = cfg.opts("system", "env.name")
     race_id = cfg.opts("system", "race.id")
@@ -1565,7 +1592,7 @@ class Race:
 
 
 class RaceStore:
-    def __init__(self, cfg: types.Config):
+    def __init__(self, cfg: config.Config):
         self.cfg = cfg
         self.environment_name = cfg.opts("system", "env.name")
 
@@ -1730,7 +1757,7 @@ class FileRaceStore(RaceStore):
 class EsRaceStore(RaceStore):
     INDEX_PREFIX = "rally-races-"
 
-    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg: config.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
         Creates a new metrics store.
 
@@ -1962,7 +1989,7 @@ class EsResultsStore:
 
     INDEX_PREFIX = "rally-results-"
 
-    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg: config.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
         Creates a new results store.
 

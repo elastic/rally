@@ -34,7 +34,7 @@ from typing import Optional
 
 import ijson
 
-from esrally import exceptions, track, types
+from esrally import config, exceptions, track
 from esrally.utils import convert
 from esrally.utils.versions import Version
 
@@ -43,7 +43,7 @@ from esrally.utils.versions import Version
 __RUNNERS = {}
 
 
-def register_default_runners(config: Optional[types.Config] = None):
+def register_default_runners(config: Optional[config.Config] = None):
     register_runner(track.OperationType.Bulk, BulkIndex(), async_runner=True)
     register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
