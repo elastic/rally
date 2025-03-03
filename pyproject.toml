@@ -203,6 +203,7 @@ module = [
     "esrally.utils.cases",
     "esrally.utils.modules",
     "esrally.utils.io",
+    "esrally.utils.pretty",
     "esrally.utils.process",
 ]
 disallow_incomplete_defs = true
