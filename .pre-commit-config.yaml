@@ -33,6 +33,8 @@ repos:
           "--config",
           "pyproject.toml"
         ]
+        # Suppress a flaky internal mypy error appearing randomly when executing make lint.
+        require_serial: true
 
   - repo: local
     hooks:
