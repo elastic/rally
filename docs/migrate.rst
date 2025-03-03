@@ -9,6 +9,12 @@ Minimum Python version is 3.9.0
 
 Rally 2.12.0 requires Python 3.9.0 or above. Check the :ref:`updated installation instructions <install_python>` for more details.
 
+The metrics store keeps existing index templates
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Existing Rally index templates are replaced only when option ``datastore.overwrite_existing_templates`` in section ``reporting`` is ``true``.
+
+
 Migrating to Rally 2.10.1
 -------------------------
 

@@ -80,6 +80,8 @@ The following settings are applicable only if ``datastore.type`` is set to "elas
 * ``datastore.probe.cluster_version`` (default: true): Enables automatic detection of the metric store's version.
 * ``datastore.number_of_shards`` (default: `Elasticsearch default value <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#_static_index_settings>`_): The number of primary shards that the ``rally-*`` indices should have. Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices.
 * ``datastore.number_of_replicas`` (default: `Elasticsearch default value <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#_static_index_settings>`_): The number of replicas each primary shard has. Defaults to . Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices.
+* ``datastore.overwrite_existing_templates`` (default: ``false``): Existing Rally index templates are replaced only when this option is ``true``.
+
 
 **Examples**
 

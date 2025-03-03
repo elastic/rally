@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=protected-access
+from __future__ import annotations
 
 import datetime
 import json
@@ -27,6 +28,7 @@ import uuid
 from dataclasses import dataclass
 from unittest import mock
 
+import elastic_transport
 import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
@@ -34,10 +36,47 @@ import pytest
 from esrally import config, exceptions, metrics, paths, track
 from esrally.metrics import GlobalStatsCalculator
 from esrally.track import Challenge, Operation, Task, Track
-from esrally.utils import opts
+from esrally.utils import cases, opts
+
+
+def rally_metric_template():
+    return {
+        "mappings": {
+            "_source": {"enabled": True},
+            "date_detection": False,
+            "dynamic_templates": [
+                {"strings": {"mapping": {"ignore_above": 8191, "type": "keyword"}, "match": "*", "match_mapping_type": "string"}}
+            ],
+            "properties": {
+                "@timestamp": {"format": "epoch_millis", "type": "date"},
+                "car": {"type": "keyword"},
+                "challenge": {"type": "keyword"},
+                "environment": {"type": "keyword"},
+                "job": {"type": "keyword"},
+                "max": {"type": "float"},
+                "mean": {"type": "float"},
+                "median": {"type": "float"},
+                "meta": {"properties": {"error-description": {"type": "wildcard"}}},
+                "min": {"type": "float"},
+                "name": {"type": "keyword"},
+                "operation": {"type": "keyword"},
+                "operation-type": {"type": "keyword"},
+                "race-id": {"type": "keyword"},
+                "race-timestamp": {"fields": {"raw": {"type": "keyword"}}, "format": "basic_date_time_no_millis", "type": "date"},
+                "relative-time": {"type": "float"},
+                "sample-type": {"type": "keyword"},
+                "task": {"type": "keyword"},
+                "track": {"type": "keyword"},
+                "unit": {"type": "keyword"},
+                "value": {"type": "float"},
+            },
+        },
+        "settings": {"index": {"mapping": {"total_fields": {"limit": "2000"}}, "number_of_replicas": "3", "number_of_shards": "3"}},
+    }
 
 
 class MockClientFactory:
+
     def __init__(self, cfg):
         self._es = mock.create_autospec(metrics.EsClient)
 
@@ -49,8 +88,10 @@ class DummyIndexTemplateProvider:
     def __init__(self, cfg):
         pass
 
-    def metrics_template(self):
-        return "metrics-test-template"
+    def metrics_template(self) -> str:
+        template = rally_metric_template()
+        template["settings"]["index"] = {"mapping.total_fields.limit": 2000, "number_of_shards": 1, "number_of_replicas": 1}
+        return json.dumps({"index_patterns": ["rally-metrics-*"], "template": template})
 
     def races_template(self):
         return "races-test-template"
@@ -438,6 +479,43 @@ class TestEsMetrics:
         # get hold of the mocked client...
         self.es_mock = self.metrics_store._client
         self.es_mock.exists.return_value = False
+        self.es_mock.template_exists.return_value = False
+        self.es_mock.get_template.return_value = mock.create_autospec(elastic_transport.ObjectApiResponse, body={"index_templates": []})
+
+    @dataclass
+    class OpenCase:
+        create: bool = True
+        template: dict | None = None
+        overwrite_templates: str | None = None
+        want_put_template: bool = False
+
+    @cases.cases(
+        create_false=OpenCase(create=False),
+        default=OpenCase(want_put_template=True),
+        template_exists=OpenCase(template=rally_metric_template()),
+        overwrite_templates_true=OpenCase(
+            template=rally_metric_template(),
+            overwrite_templates="true",
+            want_put_template=True,
+        ),
+        overwrite_templates_false=OpenCase(
+            template=rally_metric_template(),
+            overwrite_templates="false",
+        ),
+    )
+    def test_open(self, case: OpenCase):
+        if case.template is not None:
+            self.metrics_store._client.template_exists.return_value = True
+            self.metrics_store._client.get_template.return_value.body["index_templates"] = [{"index_template": {"template": case.template}}]
+        if case.overwrite_templates is not None:
+            self.cfg.add(
+                scope=config.Scope.application,
+                section="reporting",
+                key="datastore.overwrite_existing_templates",
+                value=case.overwrite_templates,
+            )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=case.create)
+        assert case.want_put_template == self.metrics_store._client.put_template.called
 
     def test_put_value_without_meta_info(self):
         throughput = 5000
