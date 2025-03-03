@@ -66,6 +66,7 @@ Key = Literal[
     "datastore.host",
     "datastore.number_of_replicas",
     "datastore.number_of_shards",
+    "datastore.overwrite_existing_templates",
     "datastore.password",
     "datastore.port",
     "datastore.probe.cluster_version",

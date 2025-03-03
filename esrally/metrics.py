@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import collections
 import datetime
@@ -33,7 +34,7 @@ from enum import Enum, IntEnum
 import tabulate
 
 from esrally import client, config, exceptions, paths, time, types, version
-from esrally.utils import console, convert, io, versions
+from esrally.utils import console, convert, io, pretty, versions
 
 
 class EsClient:
@@ -46,6 +47,9 @@ class EsClient:
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
         self.retryable_status_codes = [502, 503, 504, 429]
+
+    def get_template(self, name):
+        return self.guarded(self._client.indices.get_index_template, name=name)
 
     def put_template(self, name, template):
         tmpl = json.loads(template)
@@ -898,8 +902,7 @@ class EsMetricsStore(MetricsStore):
         self._index = self.index_name()
         # reduce a bit of noise in the metrics cluster log
         if create:
-            # always update the mapping to the latest version
-            self._client.put_template("rally-metrics", self._get_template())
+            self._ensure_index_template()
             if not self._client.exists(index=self._index):
                 self._client.create_index(index=self._index)
             else:
@@ -912,6 +915,34 @@ class EsMetricsStore(MetricsStore):
 
         # ensure we can search immediately after opening
         self._client.refresh(index=self._index)
+
+    def _ensure_index_template(self):
+        new_template: str = self._get_template()
+
+        old_template: dict | None = None
+        if self._client.template_exists("rally-metrics"):
+            for t in self._client.get_template("rally-metrics").body.get("index_templates", []):
+                old_template = t.get("index_template", {}).get("template", {})
+                break
+
+        if old_template is None:
+            self.logger.info(
+                "Create index template:\n%s",
+                pretty.dump(json.loads(new_template).get("template", {}), pretty.Flag.FLAT_DICT),
+            )
+        else:
+            diff = pretty.diff(old_template, json.loads(new_template).get("template", {}), pretty.Flag.FLAT_DICT)
+            if diff == "":
+                self.logger.debug("Keep existing template (it is identical)")
+                return
+            if not convert.to_bool(
+                self._config.opts(section="reporting", key="datastore.overwrite_existing_templates", default_value=False, mandatory=False)
+            ):
+                self.logger.debug("Keep existing template (datastore.overwrite_existing_templates = false):\n%s", diff)
+                return
+            self.logger.warning("Overwrite existing index template (datastore.overwrite_existing_templates = true):\n%s", diff)
+
+        self._client.put_template("rally-metrics", new_template)
 
     def index_name(self):
         ts = time.from_iso8601(self._race_timestamp)

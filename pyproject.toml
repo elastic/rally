@@ -120,7 +120,7 @@ develop = [
     "black==24.10.0",
     # mypy
     "boto3-stubs==1.26.125",
-    "mypy==1.10.1",
+    "mypy==1.15.0",
     "types-psutil==5.9.4",
     "types-tabulate==0.8.9",
     "types-urllib3==1.26.19",
