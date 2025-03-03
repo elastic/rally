@@ -36,7 +36,6 @@ from esrally import (
     metrics,
     reporter,
     track,
-    types,
     version,
 )
 from esrally.utils import console, opts, versions
@@ -70,12 +69,12 @@ class Pipeline:
         self.stable = stable
         pipelines[name] = self
 
-    def __call__(self, cfg: types.Config):
+    def __call__(self, cfg: config.Config):
         self.target(cfg)
 
 
 class Setup:
-    def __init__(self, cfg: types.Config, sources=False, distribution=False, external=False, docker=False):
+    def __init__(self, cfg: config.Config, sources=False, distribution=False, external=False, docker=False):
         self.cfg = cfg
         self.sources = sources
         self.distribution = distribution
@@ -90,7 +89,7 @@ class Success:
 class BenchmarkActor(actor.RallyActor):
     def __init__(self):
         super().__init__()
-        self.cfg: Optional[types.Config] = None
+        self.cfg: Optional[config.Config] = None
         self.start_sender = None
         self.mechanic = None
         self.main_driver = None
@@ -176,7 +175,7 @@ class BenchmarkActor(actor.RallyActor):
 
 
 class BenchmarkCoordinator:
-    def __init__(self, cfg: types.Config):
+    def __init__(self, cfg: config.Config):
         self.logger = logging.getLogger(__name__)
         self.cfg = cfg
         self.race = None
@@ -285,7 +284,7 @@ class BenchmarkCoordinator:
         self.metrics_store.close()
 
 
-def race(cfg: types.Config, sources=False, distribution=False, external=False, docker=False):
+def race(cfg: config.Config, sources=False, distribution=False, external=False, docker=False):
     logger = logging.getLogger(__name__)
     # at this point an actor system has to run and we should only join
     actor_system = actor.bootstrap_actor_system(try_join=True)
@@ -313,7 +312,7 @@ def race(cfg: types.Config, sources=False, distribution=False, external=False, d
         actor_system.tell(benchmark_actor, thespian.actors.ActorExitRequest())
 
 
-def set_default_hosts(cfg: types.Config, host="127.0.0.1", port=9200):
+def set_default_hosts(cfg: config.Config, host="127.0.0.1", port=9200):
     logger = logging.getLogger(__name__)
     configured_hosts = cfg.opts("client", "hosts")
     if len(configured_hosts.default) != 0:
@@ -325,26 +324,26 @@ def set_default_hosts(cfg: types.Config, host="127.0.0.1", port=9200):
 
 
 # Poor man's curry
-def from_sources(cfg: types.Config):
+def from_sources(cfg: config.Config):
     port = cfg.opts("provisioning", "node.http.port")
     set_default_hosts(cfg, port=port)
     return race(cfg, sources=True)
 
 
-def from_distribution(cfg: types.Config):
+def from_distribution(cfg: config.Config):
     port = cfg.opts("provisioning", "node.http.port")
     set_default_hosts(cfg, port=port)
     return race(cfg, distribution=True)
 
 
-def benchmark_only(cfg: types.Config):
+def benchmark_only(cfg: config.Config):
     set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
     return race(cfg, external=True)
 
 
-def docker(cfg: types.Config):
+def docker(cfg: config.Config):
     set_default_hosts(cfg)
     return race(cfg, docker=True)
 
@@ -370,7 +369,7 @@ def list_pipelines():
     console.println(tabulate.tabulate(available_pipelines(), headers=["Name", "Description"]))
 
 
-def run(cfg: types.Config):
+def run(cfg: config.Config):
     logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
     race_id = cfg.opts("system", "race.id")
