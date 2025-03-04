@@ -831,7 +831,7 @@ class NodeStatsRecorder:
                 # we don't validate the allowable metrics as they may change across ES versions
                 raise exceptions.SystemSetupError(
                     "The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string"
-                    "or a list but was {}".format(type(self.include_indices_metrics))
+                    " or a list but was {}".format(type(self.include_indices_metrics))
                 )
         else:
             self.include_indices_metrics_list = [
