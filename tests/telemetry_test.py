@@ -3034,7 +3034,8 @@ class TestNodeStatsRecorder:
         telemetry_params = {"node-stats-include-indices-metrics": {"bad": "input"}}
         with pytest.raises(
             exceptions.SystemSetupError,
-            match="The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string or a list but was <class 'dict'>",
+            match="The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string"
+            " or a list but was <class 'dict'>",
         ):
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
 
