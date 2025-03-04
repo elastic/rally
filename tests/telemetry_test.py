@@ -3025,7 +3025,7 @@ class TestNodeStatsRecorder:
             meta_data=metrics_store_meta_data,
         )
 
-    def test_exception_when_include_indices_metrics_not_valid(self):
+    def test_exception_when_included_indices_metrics_not_valid(self):
         node_stats_response = {}
 
         client = Client(nodes=SubClient(stats=node_stats_response))
@@ -3037,6 +3037,28 @@ class TestNodeStatsRecorder:
             match="The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string or a list but was <class 'dict'>",
         ):
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+
+    def test_comma_seperated_string_of_included_indices_is_accepted(self):
+        logger = logging.getLogger("esrally.telemetry")
+        node_stats_response = {}
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"node-stats-include-indices-metrics": "my-index-one,my-index-two"}
+        with mock.patch.object(logger, "debug") as mocked_debug:
+            telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+            mocked_debug.assert_called_once_with("Including indices metrics: %s", ["my-index-one", "my-index-two"])
+
+    def test_list_of_includes_indices_is_accepted(self):
+        logger = logging.getLogger("esrally.telemetry")
+        node_stats_response = {}
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"node-stats-include-indices-metrics": ["my-index-one", "my-index-two"]}
+        with mock.patch.object(logger, "debug") as mocked_debug:
+            telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+            mocked_debug.assert_called_once_with("Including indices metrics: %s", ["my-index-one", "my-index-two"])
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_logs_debug_on_missing_cgroup_stats(self, metrics_store_put_doc):

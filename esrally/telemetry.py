@@ -833,6 +833,7 @@ class NodeStatsRecorder:
                     "The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string"
                     " or a list but was {}".format(type(self.include_indices_metrics))
                 )
+            self.logger.debug("Including indices metrics: %s", self.include_indices_metrics_list)
         else:
             self.include_indices_metrics_list = [
                 "docs",
