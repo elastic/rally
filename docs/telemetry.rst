@@ -127,7 +127,7 @@ Supported telemetry parameters:
 
 * ``node-stats-sample-interval`` (default: 1): A positive number greater than zero denoting the sampling interval in seconds.
 * ``node-stats-include-indices`` (default: ``false``): A boolean indicating whether index stats should be included.
-* ``node-stats-include-indices-metrics`` (default: ``docs,store,indexing,search,merges,query_cache,fielddata,segments,translog,request_cache``): A comma-separated string, or a list specifying the Index stats metrics to include. This is useful, for example, to restrict the collected Index stats metrics. Specifying this parameter implicitly enables collection of Index stats, so you don't also need to specify ``node-stats-include-indices: true``.
+* ``node-stats-include-indices-metrics`` (default: ``docs,store,indexing,search,merges,query_cache,fielddata,segments,translog,request_cache``): A comma-separated string or a list specifying the Index stats metrics to include. This is useful, for example, to restrict the collected Index stats metrics. Specifying this parameter implicitly enables collection of Index stats, so you don't also need to specify ``node-stats-include-indices: true``.
 
   Example: ``--telemetry-params="node-stats-include-indices-metrics:'docs'"`` will **only** collect the ``docs`` metrics from Index stats. If you want to use multiple fields, pass a JSON file to ``telemetry-params`` (see the :ref:`command line reference <clr_telemetry_params>` for details).
 * ``node-stats-include-thread-pools`` (default: ``true``): A boolean indicating whether thread pool stats should be included.
@@ -300,7 +300,7 @@ The disk-usage-stats telemetry device runs the `_disk_usage <https://www.elastic
 
 Supported telemetry parameters:
 
-* ``disk-usage-stats-indices`` (default all indices in the track): Comma separated list of indices who's disk usage to fetch.
+* ``disk-usage-stats-indices`` (default all indices in the track): Comma separated string or a list of indices who's disk usage to fetch.
 
 Example::
 
