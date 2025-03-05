@@ -14,29 +14,53 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
+import dataclasses
+from typing import Any
 
 import pytest
 
-from esrally.utils import convert
+from esrally.utils import cases, convert
 
 
-class TestToBool:
-    def test_convert_to_true(self):
-        values = ["True", "true", "Yes", "yes", "t", "y", "1", True]
-        for value in values:
-            assert convert.to_bool(value) is True
+@dataclasses.dataclass
+class ToBoolCase:
+    value: Any
+    want: bool | None = None
+    want_error: str | None = None
 
-    def test_convert_to_false(self):
-        values = ["False", "false", "No", "no", "f", "n", "0", False]
-        for value in values:
-            assert convert.to_bool(value) is False
 
-    def test_cannot_convert_invalid_value(self):
-        values = ["Invalid", None, []]
-        for value in values:
-            with pytest.raises(ValueError) as exc:
-                convert.to_bool(value)
-            assert exc.value.args[0] == f"Cannot convert [{value}] to bool."
+@cases.cases(
+    true=ToBoolCase(value=True, want=True),
+    true_str=ToBoolCase(value="true", want=True),
+    True_str=ToBoolCase(value="True", want=True),
+    yes_str=ToBoolCase(value="yes", want=True),
+    Yes_str=ToBoolCase(value="Yes", want=True),
+    t_str=ToBoolCase(value="t", want=True),
+    y_str=ToBoolCase(value="y", want=True),
+    one_str=ToBoolCase(value="1", want=True),
+    false=ToBoolCase(value=False, want=False),
+    false_str=ToBoolCase(value="false", want=False),
+    False_str=ToBoolCase(value="False", want=False),
+    no_str=ToBoolCase(value="no", want=False),
+    No_str=ToBoolCase(value="No", want=False),
+    f_str=ToBoolCase(value="f", want=False),
+    n_str=ToBoolCase(value="n", want=False),
+    zero_str=ToBoolCase(value="0", want=False),
+    none=ToBoolCase(value=None, want_error="Cannot convert [None] to bool."),
+    list=ToBoolCase(value=[], want_error="Cannot convert [[]] to bool."),
+    invalid_str=ToBoolCase(value="Invalid", want_error="Cannot convert [Invalid] to bool."),
+)
+def test_to_bool(case: ToBoolCase):
+    try:
+        got = convert.to_bool(case.value)
+    except ValueError as ex:
+        assert None is case.want
+        assert str(ex) == case.want_error
+    else:
+        assert got == case.want
+        assert None is case.want_error
 
 
 class TestBytesToHuman:

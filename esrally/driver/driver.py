@@ -44,7 +44,6 @@ from esrally import (
     paths,
     telemetry,
     track,
-    types,
 )
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
@@ -62,7 +61,7 @@ class PrepareBenchmark:
     Initiates preparation steps for a benchmark. The benchmark should only be started after StartBenchmark is sent.
     """
 
-    def __init__(self, config: types.Config, track):
+    def __init__(self, config: config.Config, track):
         """
         :param config: Rally internal configuration object.
         :param track: The track to use.
@@ -80,7 +79,7 @@ class Bootstrap:
     Prompts loading of track code on new actors
     """
 
-    def __init__(self, cfg: types.Config, worker_id=None):
+    def __init__(self, cfg: config.Config, worker_id=None):
         self.config = cfg
         self.worker_id = worker_id
 
@@ -103,13 +102,13 @@ class TrackPrepared:
 
 
 class StartTaskLoop:
-    def __init__(self, track_name, cfg: types.Config):
+    def __init__(self, track_name, cfg: config.Config):
         self.track_name = track_name
         self.cfg = cfg
 
 
 class DoTask:
-    def __init__(self, task, cfg: types.Config):
+    def __init__(self, task, cfg: config.Config):
         self.task = task
         self.cfg = cfg
 
@@ -144,7 +143,7 @@ class StartWorker:
     Starts a worker.
     """
 
-    def __init__(self, worker_id, config: types.Config, track, client_allocations, client_contexts):
+    def __init__(self, worker_id, config: config.Config, track, client_allocations, client_contexts):
         """
         :param worker_id: Unique (numeric) id of the worker.
         :param config: Rally internal configuration object.
@@ -307,12 +306,12 @@ class DriverActor(actor.RallyActor):
             self.driver.update_progress_message()
             self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
 
-    def create_client(self, host, cfg: types.Config, worker_id):
+    def create_client(self, host, cfg: config.Config, worker_id):
         worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
         self.send(worker, Bootstrap(cfg, worker_id))
         return worker
 
-    def start_worker(self, driver, worker_id, cfg: types.Config, track, allocations, client_contexts=None):
+    def start_worker(self, driver, worker_id, cfg: config.Config, track, allocations, client_contexts=None):
         self.send(driver, StartWorker(worker_id, cfg, track, allocations, client_contexts))
 
     def drive_at(self, driver, client_start_timestamp):
@@ -334,7 +333,7 @@ class DriverActor(actor.RallyActor):
         else:
             return {"ip": host}
 
-    def prepare_track(self, hosts, cfg: types.Config, track):
+    def prepare_track(self, hosts, cfg: config.Config, track):
         self.track = track
         self.logger.info("Starting prepare track process on hosts [%s]", hosts)
         self.children = [self._create_track_preparator(h) for h in hosts]
@@ -374,7 +373,7 @@ class DriverActor(actor.RallyActor):
         self.send(self.benchmark_actor, BenchmarkComplete(metrics))
 
 
-def load_local_config(coordinator_config) -> types.Config:
+def load_local_config(coordinator_config) -> config.Config:
     cfg = config.auto_load_local_config(
         coordinator_config,
         additional_sections=[
@@ -405,7 +404,7 @@ class TaskExecutionActor(actor.RallyActor):
         self.task_preparation_actor = None
         self.logger = logging.getLogger(__name__)
         self.track_name = None
-        self.cfg: Optional[types.Config] = None
+        self.cfg: Optional[config.Config] = None
 
     @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartTaskLoop(self, msg, sender):
@@ -472,7 +471,7 @@ class TrackPreparationActor(actor.RallyActor):
         self.status = self.Status.INITIALIZING
         self.children = []
         self.tasks = []
-        self.cfg: Optional[types.Config] = None
+        self.cfg: Optional[config.Config] = None
         self.data_root_dir = None
         self.track = None
 
@@ -553,7 +552,7 @@ class TrackPreparationActor(actor.RallyActor):
         self.transition_when_all_children_responded(sender, msg, self.Status.PROCESSOR_RUNNING, self.Status.PROCESSOR_COMPLETE, self.resume)
 
 
-def num_cores(cfg: types.Config):
+def num_cores(cfg: config.Config):
     return int(cfg.opts("system", "available.cores", mandatory=False, default_value=multiprocessing.cpu_count()))
 
 
@@ -568,7 +567,7 @@ class ClientContext:
 
 
 class Driver:
-    def __init__(self, driver_actor, config: types.Config, es_client_factory_class=client.EsClientFactory):
+    def __init__(self, driver_actor, config: config.Config, es_client_factory_class=client.EsClientFactory):
         """
         Coordinates all workers. It is technology-agnostic, i.e. it does not know anything about actors. To allow us to hook in an actor,
         we provide a ``target`` parameter which will be called whenever some event has occurred. The ``target`` can use this to send
@@ -1220,7 +1219,7 @@ class Worker(actor.RallyActor):
         super().__init__()
         self.driver_actor = None
         self.worker_id = None
-        self.config: Optional[types.Config] = None
+        self.config: Optional[config.Config] = None
         self.track = None
         self.client_allocations = None
         self.client_contexts = None
@@ -1581,7 +1580,7 @@ class Sample:
         return result
 
 
-def select_challenge(config: types.Config, t):
+def select_challenge(config: config.Config, t):
     challenge_name = config.opts("track", "challenge.name")
     selected_challenge = t.find_challenge_or_default(challenge_name)
 
@@ -1755,7 +1754,7 @@ class ThroughputCalculator:
 
 
 class AsyncIoAdapter:
-    def __init__(self, cfg: types.Config, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts, worker_id):
+    def __init__(self, cfg: config.Config, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts, worker_id):
         self.cfg = cfg
         self.track = track
         self.task_allocations = task_allocations

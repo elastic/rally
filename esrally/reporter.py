@@ -23,7 +23,7 @@ from functools import partial
 
 import tabulate
 
-from esrally import exceptions, metrics, types
+from esrally import config, exceptions, metrics
 from esrally.utils import console, convert
 from esrally.utils import io as rio
 
@@ -38,11 +38,11 @@ FINAL_SCORE = r"""
             """
 
 
-def summarize(results, cfg: types.Config):
+def summarize(results, cfg: config.Config):
     SummaryReporter(results, cfg).report()
 
 
-def compare(cfg: types.Config, baseline_id, contender_id):
+def compare(cfg: config.Config, baseline_id, contender_id):
     if not baseline_id or not contender_id:
         raise exceptions.SystemSetupError("compare needs baseline and a contender")
     race_store = metrics.race_store(cfg)
@@ -115,7 +115,7 @@ def total_disk_usage_per_field(stats):
 
 
 class SummaryReporter:
-    def __init__(self, results, config: types.Config):
+    def __init__(self, results, config: config.Config):
         self.results = results
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
@@ -360,7 +360,7 @@ class SummaryReporter:
 
 
 class ComparisonReporter:
-    def __init__(self, config: types.Config):
+    def __init__(self, config: config.Config):
         self.report_file = config.opts("reporting", "output.path")
         self.report_format = config.opts("reporting", "format")
         self.numbers_align = config.opts("reporting", "numbers.align", mandatory=False, default_value="decimal")

@@ -340,7 +340,7 @@ class TestIndexDataReader:
             type_name="test_type",
         )
 
-        expected_bulk_sizes = [(len(data) - 3)]
+        expected_bulk_sizes = [len(data) - 3]
         # lines should include meta-data
         expected_line_sizes = [(len(data) - 3) * 2]
         self.assert_bulks_sized(reader, expected_bulk_sizes, expected_line_sizes)

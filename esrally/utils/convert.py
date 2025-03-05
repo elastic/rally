@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from __future__ import annotations
+
 
 def bytes_to_kb(b):
     return b / 1024.0 if b else b
@@ -113,10 +115,26 @@ def factor(n):
     return lambda v: v * n
 
 
-def to_bool(value):
-    if value in ["True", "true", "Yes", "yes", "t", "y", "1", True]:
-        return True
-    elif value in ["False", "false", "No", "no", "f", "n", "0", False]:
-        return False
-    else:
-        raise ValueError("Cannot convert [%s] to bool." % value)
+_TO_BOOL: dict[str, bool] = {
+    "true": True,
+    "yes": True,
+    "t": True,
+    "y": True,
+    "1": True,
+    "false": False,
+    "no": False,
+    "f": False,
+    "n": False,
+    "0": False,
+}
+
+
+def to_bool(value: str | bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        try:
+            return _TO_BOOL[value.lower()]
+        except KeyError:
+            pass
+    raise ValueError(f"Cannot convert [{value}] to bool.")
