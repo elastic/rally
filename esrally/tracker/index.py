@@ -73,7 +73,7 @@ def extract_index_mapping_and_settings(client, index_pattern):
         valid, reason = is_valid(index, index_pattern)
         if valid:
             mappings = details["mappings"]
-            index_settings = filter_ephemeral_index_settings(details["settings"]["index"])
+            index_settings = filter_ephemeral_index_settings(details.get("settings", {}).get("index", {}))
             update_index_setting_parameters(index_settings)
             results[index] = {"mappings": mappings, "settings": {"index": index_settings}}
         else:
