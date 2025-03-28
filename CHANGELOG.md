@@ -1,3 +1,36 @@
+### 2.12.0
+
+#### Highlights
+
+* [#1917](https://github.com/elastic/rally/pull/1917): Upgrade thespian to 4.0.1
+* [#1912](https://github.com/elastic/rally/pull/1912): Preserve pre-existing `rally-metrics` index templates by default
+* [#1893](https://github.com/elastic/rally/pull/1893) (Breaking): feat: Drop support for Python 3.8 [ES-8947]
+
+#### Enhancements
+
+* [#1932](https://github.com/elastic/rally/pull/1932): issue #1931: `create-track` command supports serverless.
+* [#1924](https://github.com/elastic/rally/pull/1924): Introduce tools for pretty printing JSON like objects and their differences.
+* [#1909](https://github.com/elastic/rally/pull/1909): Add check if headers is not None before treating it like a dict
+* [#1908](https://github.com/elastic/rally/pull/1908): Improve error messages regarding track syntax errors
+* [#1892](https://github.com/elastic/rally/pull/1892): feat: Add a parallel JSON log by default
+* [#1885](https://github.com/elastic/rally/pull/1885): feat: Add ability to run esrallyd inside docker [ES-9146]
+
+#### Bug Fixes
+
+* [#1919](https://github.com/elastic/rally/pull/1919): Suppress a flaky internal mypy error appearing randomly when executing `make lint`.
+* [#1913](https://github.com/elastic/rally/pull/1913): Add ability to provide a list as input for disk-usage-stats
+* [#1904](https://github.com/elastic/rally/pull/1904): Reduce log volume forwarded through Thespian framework
+* [#1896](https://github.com/elastic/rally/pull/1896): Add read timeout for retry
+* [#1891](https://github.com/elastic/rally/pull/1891): fix: Use named parameter for `_to_datetime` to pass default_tz
+* [#1888](https://github.com/elastic/rally/pull/1888): fix: Release docker script fix - use `echo` not `git`
+
+#### Miscellaneous Changes
+
+* [#1929](https://github.com/elastic/rally/pull/1929): Upgrade google-auth to 2.38.0
+* [#1922](https://github.com/elastic/rally/pull/1922): Implements a decorator to facilitate creating table-driven unit tests.
+* [#1911](https://github.com/elastic/rally/pull/1911): Replace deprecate use of resources.read_text() function.
+* [#1899](https://github.com/elastic/rally/pull/1899): Bump jinja2 from 3.1.4 to 3.1.5
+
 ### 2.11.1
 
 #### Highlights
