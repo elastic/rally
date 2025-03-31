@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import logging
+import os
 import warnings
 from collections.abc import Iterable, Mapping
 from typing import Any, Optional
@@ -123,9 +125,17 @@ class _ProductChecker:
 
 class RallySyncElasticsearch(Elasticsearch):
     def __init__(self, *args, **kwargs):
+        self.logging = logging.getLogger(__name__)
         distribution_version = kwargs.pop("distribution_version", None)
         distribution_flavor = kwargs.pop("distribution_flavor", None)
-        super().__init__(*args, **kwargs)
+        proxy_env_vars = ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]
+        if any(x in os.environ for x in proxy_env_vars):
+            # If we have proxy env vars, we need to use the requests transport
+            # to ensure that we use the correct proxy settings.
+            self.logging.warning("Proxy settings detected. Using requests transport.")
+            super().__init__(*args, node_class="requests", **kwargs)
+        else:
+            super().__init__(*args, **kwargs)
         self._verified_elasticsearch = None
         self.distribution_version = distribution_version
         self.distribution_flavor = distribution_flavor
