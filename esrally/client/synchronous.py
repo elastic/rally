@@ -27,6 +27,7 @@ from elastic_transport import (
     HeadApiResponse,
     ListApiResponse,
     ObjectApiResponse,
+    RequestsHttpNode,
     TextApiResponse,
 )
 from elastic_transport.client_utils import DEFAULT
@@ -133,7 +134,7 @@ class RallySyncElasticsearch(Elasticsearch):
             # If we have proxy env vars, we need to use the requests transport
             # to ensure that we use the correct proxy settings.
             self.logging.warning("Proxy settings detected. Using requests transport.")
-            super().__init__(*args, node_class="requests", **kwargs)
+            super().__init__(*args, node_class=RequestsHttpNode, **kwargs)
         else:
             super().__init__(*args, **kwargs)
         self._verified_elasticsearch = None
