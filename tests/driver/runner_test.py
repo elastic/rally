@@ -4902,25 +4902,28 @@ class TestRestoreSnapshot:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_restore_snapshot_with_wait(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
 
         params = {
             "repository": "backups",
             "snapshot": "snapshot-001",
             "wait-for-completion": True,
-            "request-params": {"request_timeout": 7200},
+            "request-timeout": 600.0,
         }
 
         r = runner.RestoreSnapshot()
         await r(es, params)
 
+        es.options.assert_called_once_with(request_timeout=600.0)
         es.perform_request.assert_awaited_once_with(
-            method="POST", path="/_snapshot/backups/snapshot-001/_restore", params={"request_timeout": 7200, "wait_for_completion": True}
+            method="POST", path="/_snapshot/backups/snapshot-001/_restore", headers={}, body={}, params={"wait_for_completion": True}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_restore_snapshot_with_body(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         params = {
             "repository": "backups",
@@ -4933,7 +4936,6 @@ class TestRestoreSnapshot:
                 },
             },
             "wait-for-completion": True,
-            "request-params": {"request_timeout": 7200},
         }
 
         r = runner.RestoreSnapshot()
@@ -4942,6 +4944,7 @@ class TestRestoreSnapshot:
         es.perform_request.assert_awaited_once_with(
             method="POST",
             path="/_snapshot/backups/snapshot-001/_restore",
+            headers={},
             body={
                 "indices": "index1,index2",
                 "include_global_state": False,
@@ -4949,7 +4952,7 @@ class TestRestoreSnapshot:
                     "index.number_of_replicas": 0,
                 },
             },
-            params={"request_timeout": 7200, "wait_for_completion": True},
+            params={"wait_for_completion": True},
         )
 
 
