@@ -122,7 +122,7 @@ class MmapSource:
         self.mm: Optional[mmap.mmap] = None
 
     def open(self) -> Self:
-        self.f = open(self.file_name, mode="r+b")
+        self.f = open(self.file_name, mode="rb")
         self.mm = mmap.mmap(self.f.fileno(), 0, access=mmap.ACCESS_READ)
         self.mm.madvise(mmap.MADV_SEQUENTIAL)
 
