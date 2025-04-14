@@ -2184,15 +2184,24 @@ class RestoreSnapshot(Runner):
     """
 
     async def __call__(self, es, params):
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
+
         wait_for_completion = params.get("wait-for-completion", False)
-        params.get("request-params", {}).update({"wait_for_completion": wait_for_completion})
-        api_kwargs = self._default_kw_params(params)
+        request_params.update({"wait_for_completion": wait_for_completion})
+
         repo = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
 
         # TODO: Replace 'perform_request' with 'SnapshotClient.restore()' when https://github.com/elastic/elasticsearch-py/issues/2168
         # is fixed
-        await es.perform_request(method="POST", path=f"/_snapshot/{repo}/{snapshot}/_restore", **api_kwargs)
+        await es.perform_request(
+            method="POST",
+            path=f"/_snapshot/{repo}/{snapshot}/_restore",
+            headers=headers,
+            body=params.get("body", {}),
+            params=request_params,
+        )
 
     def __repr__(self, *args, **kwargs):
         return "restore-snapshot"
