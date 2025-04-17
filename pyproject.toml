@@ -85,6 +85,10 @@ dependencies = [
     "python-json-logger==2.0.7",
     # License: Apache 2.0
     "ecs-logging==2.2.0",
+    # License: MIT
+    "pyyaml==6.0.2",
+    # License: MIT
+    "types-PyYAML==6.0.2"
 ]
 
 [project.optional-dependencies]
@@ -204,6 +208,8 @@ module = [
     "esrally.utils.io",
     "esrally.utils.pretty",
     "esrally.utils.process",
+    "esrally.utils.threads",
+    "esrally.storage.*",
 ]
 disallow_incomplete_defs = true
 # this should be a copy of disabled_error_code from above
