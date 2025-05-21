@@ -750,7 +750,7 @@ class SourceRepository:
                 branch,
                 self.name,
             )
-            git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch=branch)
+            git.pull_ts(self.src_dir, git_ts_revision, remote="origin", branch=branch, default_branch=DEFAULT_ELASTICSEARCH_BRANCH)
         elif self.has_remote():  # we can have either a commit hash, branch name, or tag
             git.fetch(self.src_dir, remote="origin")
             if git.is_branch(self.src_dir, identifier=revision):

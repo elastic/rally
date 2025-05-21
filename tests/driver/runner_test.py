@@ -4902,25 +4902,28 @@ class TestRestoreSnapshot:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_restore_snapshot_with_wait(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
 
         params = {
             "repository": "backups",
             "snapshot": "snapshot-001",
             "wait-for-completion": True,
-            "request-params": {"request_timeout": 7200},
+            "request-timeout": 600.0,
         }
 
         r = runner.RestoreSnapshot()
         await r(es, params)
 
+        es.options.assert_called_once_with(request_timeout=600.0)
         es.perform_request.assert_awaited_once_with(
-            method="POST", path="/_snapshot/backups/snapshot-001/_restore", params={"request_timeout": 7200, "wait_for_completion": True}
+            method="POST", path="/_snapshot/backups/snapshot-001/_restore", headers={}, body={}, params={"wait_for_completion": True}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_restore_snapshot_with_body(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         params = {
             "repository": "backups",
@@ -4933,7 +4936,6 @@ class TestRestoreSnapshot:
                 },
             },
             "wait-for-completion": True,
-            "request-params": {"request_timeout": 7200},
         }
 
         r = runner.RestoreSnapshot()
@@ -4942,6 +4944,7 @@ class TestRestoreSnapshot:
         es.perform_request.assert_awaited_once_with(
             method="POST",
             path="/_snapshot/backups/snapshot-001/_restore",
+            headers={},
             body={
                 "indices": "index1,index2",
                 "include_global_state": False,
@@ -4949,7 +4952,7 @@ class TestRestoreSnapshot:
                     "index.number_of_replicas": 0,
                 },
             },
-            params={"request_timeout": 7200, "wait_for_completion": True},
+            params={"wait_for_completion": True},
         )
 
 
@@ -6119,7 +6122,9 @@ class TestSubmitAsyncSearch:
             # search id is registered in context
             assert runner.CompositeContext.get("search-1") == "12345"
 
-        es.async_search.submit.assert_awaited_once_with(body={"query": {"match_all": {}}}, index="_all", params={})
+        es.async_search.submit.assert_awaited_once_with(
+            body={"query": {"match_all": {}}}, index="_all", params={"wait_for_completion_timeout": 0}
+        )
 
 
 class TestGetAsyncSearch:
@@ -7672,13 +7677,13 @@ class TestRetry:
 
 class TestRemovePrefix:
     def test_remove_matching_prefix(self):
-        suffix = runner.remove_prefix("index-20201117", "index")
+        suffix = "index-20201117".removeprefix("index")
 
         assert suffix == "-20201117"
 
     def test_prefix_doesnt_exit(self):
         index_name = "index-20201117"
-        suffix = runner.remove_prefix(index_name, "unrelatedprefix")
+        suffix = index_name.removeprefix("unrelatedprefix")
 
         assert index_name == suffix
 

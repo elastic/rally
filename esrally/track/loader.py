@@ -24,7 +24,8 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
-from typing import Callable, Generator, Optional, Tuple
+from collections.abc import Generator
+from typing import Callable, Optional
 
 import jinja2
 import jinja2.exceptions
@@ -72,7 +73,7 @@ class TrackProcessor(abc.ABC):
         """
         return
 
-    def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[Tuple[Callable, dict], None, None]:
+    def on_prepare_track(self, track: track.Track, data_root_dir: str) -> Generator[tuple[Callable, dict], None, None]:
         """
         This method is called by Rally after the "after_load_track" phase. Here, any data that is necessary for
         benchmark execution should be prepared, e.g. by downloading data or generating it. Implementations should
@@ -471,7 +472,7 @@ class DefaultTrackPreparator(TrackProcessor):
                 elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
                     preparator.prepare_document_set(document_set, data_root[1])
 
-    def on_prepare_track(self, track, data_root_dir) -> Generator[Tuple[Callable, dict], None, None]:
+    def on_prepare_track(self, track, data_root_dir) -> Generator[tuple[Callable, dict], None, None]:
         prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
         for corpus in used_corpora(track):
             params = {"cfg": self.cfg, "track": track, "corpus": corpus, "preparator": prep}
@@ -757,6 +758,8 @@ def default_internal_template_vars(glob_helper=lambda f: [], clock=time.Clock, b
         },
         "filters": {
             "days_ago": time.days_ago,
+            "get_start_date": time.get_start_date,
+            "get_end_date": time.get_end_date,
         },
     }
 
@@ -1117,6 +1120,11 @@ class TrackFileReader:
                     f.write(rendered)
                 self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
                 track_spec = json.loads(rendered)
+            except jinja2.exceptions.TemplateSyntaxError as te:
+                self.logger.exception("Could not load [%s] due to Jinja Syntax Exception.", track_spec_file)
+                msg = f"Could not load '{track_spec_file}' due to Jinja Syntax Exception. "
+                msg += f"The track file ({tmp.name}) likely hasn't been written."
+                raise TrackSyntaxError(msg, te)
             except jinja2.exceptions.TemplateNotFound:
                 self.logger.exception("Could not load [%s]", track_spec_file)
                 raise exceptions.SystemSetupError(f"Track {track_name} does not exist")
@@ -1694,6 +1702,8 @@ class TrackSpecificationReader:
         default_ramp_up_time_period=None,
         completed_by_name=None,
     ):
+        if "operation" not in task_spec:
+            raise TrackSyntaxError("Operation missing from task spec %s in challenge '%s'." % (task_spec, challenge_name))
         op_spec = task_spec["operation"]
         if isinstance(op_spec, str) and op_spec in ops:
             op = ops[op_spec]

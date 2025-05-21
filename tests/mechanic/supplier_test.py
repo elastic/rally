@@ -147,7 +147,7 @@ class TestSourceRepository:
         s.fetch("@2023-04-20T11:09:12Z")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_ts.assert_called_with("/src", "2023-04-20T11:09:12Z", remote="origin", branch="main")
+        mock_pull_ts.assert_called_with("/src", "2023-04-20T11:09:12Z", remote="origin", branch="main", default_branch="main")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.fetch", autospec=True)

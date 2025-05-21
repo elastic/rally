@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=protected-access
+from __future__ import annotations
 
 import datetime
 import json
@@ -27,6 +28,7 @@ import uuid
 from dataclasses import dataclass
 from unittest import mock
 
+import elastic_transport
 import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
@@ -34,10 +36,47 @@ import pytest
 from esrally import config, exceptions, metrics, paths, track
 from esrally.metrics import GlobalStatsCalculator
 from esrally.track import Challenge, Operation, Task, Track
-from esrally.utils import opts
+from esrally.utils import cases, opts, pretty
+
+
+def rally_metric_template():
+    return {
+        "mappings": {
+            "_source": {"enabled": True},
+            "date_detection": False,
+            "dynamic_templates": [
+                {"strings": {"mapping": {"ignore_above": 8191, "type": "keyword"}, "match": "*", "match_mapping_type": "string"}}
+            ],
+            "properties": {
+                "@timestamp": {"format": "epoch_millis", "type": "date"},
+                "car": {"type": "keyword"},
+                "challenge": {"type": "keyword"},
+                "environment": {"type": "keyword"},
+                "job": {"type": "keyword"},
+                "max": {"type": "float"},
+                "mean": {"type": "float"},
+                "median": {"type": "float"},
+                "meta": {"properties": {"error-description": {"type": "wildcard"}}},
+                "min": {"type": "float"},
+                "name": {"type": "keyword"},
+                "operation": {"type": "keyword"},
+                "operation-type": {"type": "keyword"},
+                "race-id": {"type": "keyword"},
+                "race-timestamp": {"fields": {"raw": {"type": "keyword"}}, "format": "basic_date_time_no_millis", "type": "date"},
+                "relative-time": {"type": "float"},
+                "sample-type": {"type": "keyword"},
+                "task": {"type": "keyword"},
+                "track": {"type": "keyword"},
+                "unit": {"type": "keyword"},
+                "value": {"type": "float"},
+            },
+        },
+        "settings": {"index": {"mapping": {"total_fields": {"limit": "2000"}}, "number_of_replicas": "3", "number_of_shards": "3"}},
+    }
 
 
 class MockClientFactory:
+
     def __init__(self, cfg):
         self._es = mock.create_autospec(metrics.EsClient)
 
@@ -49,14 +88,20 @@ class DummyIndexTemplateProvider:
     def __init__(self, cfg):
         pass
 
-    def metrics_template(self):
-        return "metrics-test-template"
+    def metrics_template(self) -> str:
+        return json.dumps({"index_patterns": ["rally-metrics-*"], "template": provided_metrics_template()})
 
     def races_template(self):
         return "races-test-template"
 
     def results_template(self):
         return "results-test-template"
+
+
+def provided_metrics_template() -> dict:
+    template = rally_metric_template()
+    template["settings"]["index"] = {"mapping.total_fields.limit": 2000, "number_of_shards": 1, "number_of_replicas": 1}
+    return template
 
 
 class StaticClock:
@@ -438,6 +483,67 @@ class TestEsMetrics:
         # get hold of the mocked client...
         self.es_mock = self.metrics_store._client
         self.es_mock.exists.return_value = False
+        self.es_mock.template_exists.return_value = False
+        self.es_mock.get_template.return_value = mock.create_autospec(elastic_transport.ObjectApiResponse, body={"index_templates": []})
+        self.metrics_store.logger = mock.create_autospec(logging.Logger)
+
+    @dataclass
+    class OpenCase:
+        create: bool = True
+        template: dict | None = None
+        overwrite_templates: str | None = None
+        want_put_template: bool = False
+        want_logger_call: mock._Call | None = None
+
+    @cases.cases(
+        create_false=OpenCase(create=False),
+        default=OpenCase(
+            want_put_template=True,
+            want_logger_call=mock.call.info("Create index template:\n%s", pretty.dump(provided_metrics_template(), pretty.Flag.FLAT_DICT)),
+        ),
+        template_exists=OpenCase(
+            template=rally_metric_template(),
+            want_logger_call=mock.call.debug(
+                "Keep existing template (datastore.overwrite_existing_templates = false):\n%s",
+                pretty.diff(rally_metric_template(), provided_metrics_template(), pretty.Flag.FLAT_DICT),
+            ),
+        ),
+        keep_identical_template=OpenCase(
+            template=provided_metrics_template(), want_logger_call=mock.call.debug("Keep existing template (it is identical)")
+        ),
+        overwrite_templates_true=OpenCase(
+            template=rally_metric_template(),
+            overwrite_templates="true",
+            want_put_template=True,
+            want_logger_call=mock.call.warning(
+                "Overwrite existing index template (datastore.overwrite_existing_templates = true):\n%s",
+                pretty.diff(rally_metric_template(), provided_metrics_template(), pretty.Flag.FLAT_DICT),
+            ),
+        ),
+        overwrite_templates_false=OpenCase(
+            template=rally_metric_template(),
+            overwrite_templates="false",
+            want_logger_call=mock.call.debug(
+                "Keep existing template (datastore.overwrite_existing_templates = false):\n%s",
+                pretty.diff(rally_metric_template(), provided_metrics_template(), pretty.Flag.FLAT_DICT),
+            ),
+        ),
+    )
+    def test_open(self, case: OpenCase):
+        if case.template is not None:
+            self.metrics_store._client.template_exists.return_value = True
+            self.metrics_store._client.get_template.return_value.body["index_templates"] = [{"index_template": {"template": case.template}}]
+        if case.overwrite_templates is not None:
+            self.cfg.add(
+                scope=config.Scope.application,
+                section="reporting",
+                key="datastore.overwrite_existing_templates",
+                value=case.overwrite_templates,
+            )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=case.create)
+        assert case.want_put_template == self.metrics_store._client.put_template.called
+        if case.want_logger_call is not None:
+            assert self.metrics_store.logger.method_calls[-1:] == [case.want_logger_call]
 
     def test_put_value_without_meta_info(self):
         throughput = 5000

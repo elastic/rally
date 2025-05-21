@@ -2295,11 +2295,11 @@ In the following example we show how Rally can be used to benchmark a hypothetic
             "body": {
               "include-metrics": ["system", "jvm"],
               "exclude-metrics": ["hardware"]
-            },
-            "warmup-iterations": 100,
-            "iterations": 100,
-            "target-throughput": 10
-          }
+            }
+          },
+          "warmup-iterations": 100,
+          "iterations": 100,
+          "target-throughput": 10
         }
       ]
     }
@@ -2461,9 +2461,7 @@ Properties
 .. note::
     In order to ensure that the track execution only continues after a snapshot has been restored, set ``wait-for-completion`` to ``true`` **and** increase the request timeout. In the example below we set it to 7200 seconds (or 2 hours)::
 
-        "request-params": {
-            "request_timeout": 7200
-        }
+        "request-timeout": 7200
 
     However, this might not work if a proxy is in between the client and Elasticsearch and the proxy has a shorter request timeout configured than the client. In this case, keep the default value for ``wait-for-completion`` and instead add a ``wait-for-recovery`` runner in the next step.
 

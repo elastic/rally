@@ -6,6 +6,10 @@ Rally Configuration
 
 Rally stores its configuration in the file ``~/.rally/rally.ini`` which is automatically created the first time Rally is executed. It comprises the following sections.
 
+.. note:: 
+    The configuration file can use `${CONFIG_DIR}` to refer to the directory where Rally stores its configuration files. This is useful for configuring Rally in a portable way.
+    This defaults to `~/.rally`, but can be overridden by setting the `RALLY_HOME` environment variable in your shell.
+
 meta
 ~~~~
 
@@ -76,6 +80,8 @@ The following settings are applicable only if ``datastore.type`` is set to "elas
 * ``datastore.probe.cluster_version`` (default: true): Enables automatic detection of the metric store's version.
 * ``datastore.number_of_shards`` (default: `Elasticsearch default value <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#_static_index_settings>`_): The number of primary shards that the ``rally-*`` indices should have. Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices.
 * ``datastore.number_of_replicas`` (default: `Elasticsearch default value <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#_static_index_settings>`_): The number of replicas each primary shard has. Defaults to . Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices.
+* ``datastore.overwrite_existing_templates`` (default: ``false``): Existing Rally index templates are replaced only when this option is ``true``.
+
 
 **Examples**
 
@@ -179,7 +185,13 @@ Logging in Rally is configured in ``~/.rally/logging.json``. For more informatio
 * The Python reference documentation on the `logging configuration schema <https://docs.python.org/3/library/logging.config.html#logging-config-dictschema>`_ explains the file format.
 * The `logging handler documentation <https://docs.python.org/3/library/logging.handlers.html>`_ describes how to customize where log output is written to.
 
-By default, Rally will log all output to ``~/.rally/logs/rally.log``. The default timestamp is UTC, but users can opt for the local time by setting ``"timezone": "localtime"`` in the logging configuration file.
+By default, Rally will log all output to ``~/.rally/logs/rally.log`` in plain text format and ``~/.rally/logs/rally.json`` in ECS JSON format.
+The default timestamp for ``rally.log`` is UTC, but users can opt for the local time by setting ``"timezone": "localtime"`` in the logging configuration file. 
+The ``rally.json`` file is formatted to the ECS format for ease of ingestion with filebeat. See the `ECS Reference <https://www.elastic.co/guide/en/ecs/current/ecs-using-ecs.html>`_ for more information.
+
+There are a number of default options for the ``json`` logger that can be overridden in ``~/.rally/logging.json``. 
+First, ``exclude_fields`` will exclude ``log.original`` from the ECS defaults, since it can be quite noisy and superfluous. 
+And ``mutators`` is by default set to ``["esrally.log.rename_actor_fields", "esrally.log.rename_async_fields"]`` which will rename ``actorAddress`` and ``taskName`` to ``rally.thespian.actorAddress`` and ``python.asyncio.task`` respectively.
 
 The log file will not be rotated automatically as this is problematic due to Rally's multi-process architecture. Setup an external tool like `logrotate <https://linux.die.net/man/8/logrotate>`_ to achieve that. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
 
@@ -203,7 +215,7 @@ The log file will not be rotated automatically as this is problematic due to Ral
 Example
 ~~~~~~~
 
-With the following configuration Rally will log all output to standard error::
+With the following configuration Rally will log all output to standard error, and format the timestamps in the local timezone::
 
     {
       "version": 1,
@@ -239,3 +251,102 @@ With the following configuration Rally will log all output to standard error::
         }
       }
     }
+
+Portability
+~~~~~~~~~~~
+
+You can also use ``${LOG_PATH}`` in the ``"filename"`` value of the handler you are configuring to make the log configuration more portable.
+Rally will substitute ``${LOG_PATH}`` with the path to the directory where Rally stores its log files. By default, this is ``~/.rally/logs``. 
+But this can be overridden by setting the ``RALLY_HOME`` environment variable in your shell, and logs will be stored in ``${RALLY_HOME}/logs``.
+
+NOTE:: This is only supported with the ``esrally.log.configure_file_handler`` and ``esrally.log.configure_profile_file_handler`` handlers.
+
+Here is an example of a logging configuration that uses ``${LOG_PATH}``::
+
+    {
+      "version": 1,
+      "formatters": {
+        "normal": {
+          "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
+          "datefmt": "%Y-%m-%d %H:%M:%S",
+          "()": "esrally.log.configure_utc_formatter"
+        }
+      },
+      "handlers": {
+        "rally_log_handler": {
+          "()": "esrally.log.configure_file_handler", # <-- use configure_file_handler or configure_profile_file_handler
+          "filename": "${LOG_PATH}/rally.log", # <-- use ${LOG_PATH} here
+          "encoding": "UTF-8",
+          "formatter": "normal"
+        }
+      },
+      "root": {
+        "handlers": ["rally_log_handler"],
+        "level": "INFO"
+      },
+      "loggers": {
+        "elasticsearch": {
+          "handlers": ["rally_log_handler"],
+          "level": "WARNING",
+          "propagate": false
+        }
+      }
+    }
+
+
+Example
+~~~~~~~
+
+With the following configuration Rally will log to ``~/.rally/logs/rally.log`` and ``~/.rally/logs/rally.json``, the 
+latter being a JSON file. 
+
+The ``mutators`` property is optional and defaults to ``["esrally.log.rename_actor_fields", "esrally.log.rename_async_fields"]``.
+Similarly, the ``exclude_fields`` property is optional and defaults to ``["log.original"]``::
+
+    {
+      "version": 1,
+      "formatters": {
+        "normal": {
+          "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
+          "datefmt": "%Y-%m-%d %H:%M:%S",
+          "()": "esrally.log.configure_utc_formatter"
+        },
+        "json": {
+          "format": "%(message)s",
+          "exclude_fields": [
+            "log.original"
+          ],
+          "mutators": [
+            "esrally.log.rename_actor_fields",
+            "esrally.log.rename_async_fields"
+          ],
+          "()": "esrally.log.configure_ecs_formatter"
+        }
+      },
+      "handlers": {
+        "rally_log_handler": {
+          "()": "esrally.log.configure_file_handler",
+          "filename": "${LOG_PATH}/rally.log",
+          "encoding": "UTF-8",
+          "formatter": "normal"
+        },
+        "rally_json_handler": {
+          "()": "esrally.log.configure_file_handler",
+          "filename": "${LOG_PATH}/rally.json",
+          "encoding": "UTF-8",
+          "formatter": "json"
+        }
+      },
+      "root": {
+        "handlers": ["rally_log_handler", "rally_json_handler"],
+        "level": "INFO"
+      },
+      "loggers": {
+        "elasticsearch": {
+          "handlers": ["rally_log_handler", "rally_json_handler"],
+          "level": "WARNING",
+          "propagate": false
+        }
+      }
+    }
+

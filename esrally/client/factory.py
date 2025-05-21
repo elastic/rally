@@ -79,7 +79,7 @@ class EsClientFactory:
                 self.ssl_context.verify_mode = ssl.CERT_NONE
                 self.client_options["ssl_show_warn"] = False
 
-                self.logger.warning(
+                self.logger.debug(
                     "User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark."
                 )
             else:

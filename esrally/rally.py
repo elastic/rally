@@ -308,7 +308,7 @@ def create_arg_parser():
         " 'latest' fetches the latest version on the main branch. It is also possible to specify a commit id or a timestamp."
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current). A combination of branch and timestamp is also possible,'
-        'e.g. "@feature-branch@2023-04-06T14:52:31Z".',
+        'e.g. "feature-branch@2023-04-06T14:52:31Z".',
         default="current",
         type=revision,
     )  # optimized for local usage, don't fetch sources
@@ -1287,10 +1287,9 @@ def main():
     logger.info("Cleaning track dependency directory [%s]...", paths.libs())
 
     if sys.version_info.major == 3 and sys.version_info.minor <= 11:
-        # pylint: disable=deprecated-argument
-        shutil.rmtree(paths.libs(), onerror=_trap)
+        shutil.rmtree(paths.libs(), onerror=_trap)  # pylint: disable=deprecated-argument, disable=useless-suppression
     else:
-        shutil.rmtree(paths.libs(), onexc=_trap_exc)
+        shutil.rmtree(paths.libs(), onexc=_trap_exc)  # pylint: disable=unexpected-keyword-arg, disable=useless-suppression
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 

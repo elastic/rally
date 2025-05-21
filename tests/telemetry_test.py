@@ -3025,7 +3025,7 @@ class TestNodeStatsRecorder:
             meta_data=metrics_store_meta_data,
         )
 
-    def test_exception_when_include_indices_metrics_not_valid(self):
+    def test_exception_when_included_indices_metrics_not_valid(self):
         node_stats_response = {}
 
         client = Client(nodes=SubClient(stats=node_stats_response))
@@ -3034,9 +3034,32 @@ class TestNodeStatsRecorder:
         telemetry_params = {"node-stats-include-indices-metrics": {"bad": "input"}}
         with pytest.raises(
             exceptions.SystemSetupError,
-            match="The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string but was <class 'dict'>",
+            match="The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string"
+            " or a list but was <class 'dict'>",
         ):
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+
+    def test_comma_seperated_string_of_included_indices_is_accepted(self):
+        logger = logging.getLogger("esrally.telemetry")
+        node_stats_response = {}
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"node-stats-include-indices-metrics": "my-index-one,my-index-two"}
+        with mock.patch.object(logger, "debug") as mocked_debug:
+            telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+            mocked_debug.assert_called_once_with("Including indices metrics: %s", ["my-index-one", "my-index-two"])
+
+    def test_list_of_includes_indices_is_accepted(self):
+        logger = logging.getLogger("esrally.telemetry")
+        node_stats_response = {}
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"node-stats-include-indices-metrics": ["my-index-one", "my-index-two"]}
+        with mock.patch.object(logger, "debug") as mocked_debug:
+            telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+            mocked_debug.assert_called_once_with("Including indices metrics: %s", ["my-index-one", "my-index-two"])
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_logs_debug_on_missing_cgroup_stats(self, metrics_store_put_doc):
@@ -4876,12 +4899,30 @@ class TestDiskUsageStats:
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_uses_indices_param_if_specified_instead_of_data_stream_names(self, es):
+    def test_uses_indices_param_as_csv_if_specified_instead_of_data_stream_names(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats(
             {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=[], data_stream_names=["baz"]
+        )
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        es.indices.disk_usage.assert_has_calls(
+            [
+                call(index="foo", run_expensive_tasks=True),
+                call(index="bar", run_expensive_tasks=True),
+            ]
+        )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_indices_param_as_list_if_specified_instead_of_data_stream_names(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
+        device = telemetry.DiskUsageStats(
+            {"disk-usage-stats-indices": ["foo", "bar"]}, es, metrics_store, index_names=[], data_stream_names=["baz"]
         )
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()

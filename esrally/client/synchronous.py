@@ -16,7 +16,8 @@
 # under the License.
 
 import warnings
-from typing import Any, Iterable, Mapping, Optional
+from collections.abc import Iterable, Mapping
+from typing import Any, Optional
 
 from elastic_transport import (
     ApiResponse,

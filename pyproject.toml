@@ -5,7 +5,6 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 path = "esrally/_version.py"
 
-
 [project]
 name = "esrally"
 dynamic = ["version"]
@@ -15,7 +14,7 @@ authors = [
 description = "Macrobenchmarking framework for Elasticsearch"
 readme = "README.md"
 license = { text = "Apache License 2.0" }
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
     "Topic :: System :: Benchmark",
     "Development Status :: 5 - Production/Stable",
@@ -25,7 +24,6 @@ classifiers = [
     "Operating System :: POSIX",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -41,13 +39,12 @@ classifiers = [
 ################################################################################################
 dependencies = [
     # License: Apache 2.0
-    # transitive dependencies:
-    #   urllib3: MIT
-    #   aiohttp: Apache 2.0
-
     "elasticsearch[async]==8.6.1",
     "elastic-transport==8.4.1",
+    # License: MIT
     "urllib3==1.26.19",
+    # License: Apache 2.0
+    "aiohttp==3.10.11",
     "docker==6.0.0",
     # avoid specific requests version to fix bug in docker-py
     "requests<2.32.0",
@@ -61,10 +58,10 @@ dependencies = [
     "jsonschema==3.1.1",
     # License: BSD
     # transitive dependency Markupsafe: BSD
-    "Jinja2==3.1.4",
+    "Jinja2==3.1.6",
     "markupsafe==2.0.1",
     # License: MIT
-    "thespian==3.10.1",
+    "thespian==4.0.1",
     # recommended library for thespian to identify actors more easily with `ps`
     # "setproctitle==1.1.10",
     # always use the latest version, these are certificate files...
@@ -79,11 +76,15 @@ dependencies = [
     #   google-crc32c: Apache 2.0
     "google-resumable-media[requests]==1.1.0",
     # License: Apache 2.0
-    "google-auth==1.22.1",
+    "google-auth==2.38.0",
     # License: BSD
     "zstandard==0.21.0",
     # License: Python Software Foundation License
     "typing-extensions==4.12.2",
+    # License:  BSD-2-Clause license 
+    "python-json-logger==2.0.7",
+    # License: Apache 2.0
+    "ecs-logging==2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -114,9 +115,11 @@ develop = [
     "pylint==3.1.0",
     "trustme==0.9.0",
     "GitPython==3.1.30",
+    # formatting
+    "black==24.10.0",
     # mypy
     "boto3-stubs==1.26.125",
-    "mypy==1.10.1",
+    "mypy==1.15.0",
     "types-psutil==5.9.4",
     "types-tabulate==0.8.9",
     "types-urllib3==1.26.19",
@@ -137,7 +140,7 @@ esrallyd = "esrally.rallyd:main"
 
 [tool.black]
 line-length = 140
-target-version = ['py38']
+target-version = ['py39', 'py310', 'py311', 'py312']
 
 [tool.isort]
 profile = 'black'
@@ -163,7 +166,7 @@ xfail_strict = true
 # is to keep "arg-type" error code, while disabling other error codes.
 # Ref: https://github.com/elastic/rally/pull/1798
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.12"
 # subset of "strict", kept at global config level as some of the options are
 # supported only at this level
 # https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
@@ -196,8 +199,10 @@ files = ["esrally/", "it/", "tests/"]
 [[tool.mypy.overrides]]
 module = [
     "esrally.mechanic.team",
+    "esrally.utils.cases",
     "esrally.utils.modules",
     "esrally.utils.io",
+    "esrally.utils.pretty",
     "esrally.utils.process",
 ]
 disallow_incomplete_defs = true
