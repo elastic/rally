@@ -857,7 +857,9 @@ In the example, above Rally will generate load from the hosts ``10.17.20.5`` and
 ``target-hosts``
 ~~~~~~~~~~~~~~~~
 
-If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally to :doc:`benchmark a remote cluster </recipes>`, then you can specify a comma-delimited list of hosts:port pairs to which Rally should connect. The default value is ``127.0.0.1:9200``.
+If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally to :doc:`benchmark a remote cluster </recipes>`, then you can specify a comma-delimited list of ``host:port`` pairs to which Rally should connect. The default value is ``127.0.0.1:9200``.
+
+If multiple Elasticsearch nodes are hidden behind a proxy, it is possible to add an optional URL prefix with ``host:port/path`` notation, e.g. ``1.2.3.4:9200/path``.
 
 **Example**
 
@@ -1028,20 +1030,20 @@ Advanced topics
 Rally can also create client connections for multiple Elasticsearch clusters.
 This is only useful if you want to create :ref:`custom runners <adding_tracks_custom_runners>` that execute operations against multiple clusters, for example for `cross cluster search <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-cross-cluster-search.html>`_ or cross cluster replication.
 
-To define the host:port pairs for additional clusters with ``target-hosts`` you can specify either a JSON filename (ending in ``.json``) or an inline JSON string. The JSON object should be a collection of name:value pairs. ``name`` is string for the cluster name and there **must be** one ``default``.
+To define the ``host:port`` or ``host:port/path`` pairs for additional clusters with ``target-hosts`` you can specify either a JSON filename (ending in ``.json``) or an inline JSON string. The JSON object should be a collection of ``name:value`` pairs. The ``name`` is string for the cluster name and there **must be** one ``default``. The ``value`` is either a list of strings, or a list of dictionaries. The dictionary keys are ``host``, ``port`` and ``url_prefix``.
 
 Examples:
 
 * json file: ``--target-hosts="target_hosts1.json"``::
 
-    { "default": ["127.0.0.1:9200","10.127.0.3:19200"] }
+    { "default": ["127.0.0.1:9200","10.127.0.3:19200/path"] }
 
 * json file defining two clusters: ``--target-hosts="target_hosts2.json"``::
 
     {
       "default": [
         {"host": "127.0.0.1", "port": 9200},
-        {"host": "127.0.0.1", "port": 19200}
+        {"host": "127.0.0.3", "port": 19200, "url_prefix": "/path"}
       ],
       "remote":[
         {"host": "10.127.0.3", "port": 9200},
