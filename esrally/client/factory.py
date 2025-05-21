@@ -36,7 +36,8 @@ class EsClientFactory:
         def host_string(host):
             # protocol can be set at either host or client opts level
             protocol = "https" if client_options.get("use_ssl") or host.get("use_ssl") else "http"
-            return f"{protocol}://{host['host']}:{host['port']}"
+            path = host.get("url_prefix", "")
+            return f"{protocol}://{host['host']}:{host['port']}{path}"
 
         self.hosts = [host_string(h) for h in hosts]
         self.client_options = dict(client_options)

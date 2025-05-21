@@ -174,35 +174,38 @@ class TestTargetHosts:
         assert opts.TargetHosts("").all_hosts == {"default": []}
 
     def test_csv_hosts_parses(self):
-        target_hosts = "127.0.0.1:9200,10.17.0.5:19200"
+        target_hosts = "127.0.0.1:9200,10.17.0.5:19200/path"
 
         assert opts.TargetHosts(target_hosts).all_hosts == {
-            "default": [{"host": "127.0.0.1", "port": 9200}, {"host": "10.17.0.5", "port": 19200}]
+            "default": [{"host": "127.0.0.1", "port": 9200}, {"host": "10.17.0.5", "port": 19200, "url_prefix": "/path"}]
         }
 
-        assert opts.TargetHosts(target_hosts).default == [{"host": "127.0.0.1", "port": 9200}, {"host": "10.17.0.5", "port": 19200}]
+        assert opts.TargetHosts(target_hosts).default == [
+            {"host": "127.0.0.1", "port": 9200},
+            {"host": "10.17.0.5", "port": 19200, "url_prefix": "/path"},
+        ]
 
     def test_jsonstring_parses_as_dict_of_clusters(self):
         target_hosts = (
             '{"default": ["127.0.0.1:9200","10.17.0.5:19200"],'
             ' "remote_1": ["88.33.22.15:19200"],'
-            ' "remote_2": ["10.18.0.6:19200","10.18.0.7:19201"]}'
+            ' "remote_2": ["10.18.0.6:19200","10.18.0.7:19201/path"]}'
         )
 
         assert opts.TargetHosts(target_hosts).all_hosts == {
             "default": [{"host": "127.0.0.1", "port": 9200}, {"host": "10.17.0.5", "port": 19200}],
             "remote_1": [{"host": "88.33.22.15", "port": 19200}],
-            "remote_2": [{"host": "10.18.0.6", "port": 19200}, {"host": "10.18.0.7", "port": 19201}],
+            "remote_2": [{"host": "10.18.0.6", "port": 19200}, {"host": "10.18.0.7", "port": 19201, "url_prefix": "/path"}],
         }
 
     def test_json_file_parameter_parses(self):
         assert opts.TargetHosts(os.path.join(os.path.dirname(__file__), "resources", "target_hosts_1.json")).all_hosts == {
-            "default": [{"host": "127.0.0.1", "port": 9200, "use_ssl": True}, {"host": "10.127.0.3", "port": 19200}]
+            "default": [{"host": "127.0.0.1", "port": 9200, "use_ssl": True}, {"host": "10.127.0.3", "port": 19200, "url_prefix": "/path"}]
         }
 
         assert opts.TargetHosts(os.path.join(os.path.dirname(__file__), "resources", "target_hosts_2.json")).all_hosts == {
             "default": [{"host": "127.0.0.1", "port": 9200}, {"host": "127.0.0.1", "port": 19200}],
-            "remote_1": [{"host": "10.127.0.3", "port": 9200}, {"host": "10.127.0.8", "port": 9201}],
+            "remote_1": [{"host": "10.127.0.3", "port": 9200}, {"host": "10.127.0.8", "port": 9201, "url_prefix": "/path"}],
             "remote_2": [{"host": "88.33.27.15", "port": 39200}],
         }
 
