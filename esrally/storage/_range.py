@@ -11,7 +11,6 @@
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
@@ -23,6 +22,7 @@ from collections.abc import Hashable, Iterable, Iterator, Sequence, Set
 from itertools import chain, islice
 from typing import Any, overload
 
+# MAX_LENGTH represents the maximum supported file size
 MAX_LENGTH = sys.maxsize
 
 
@@ -31,7 +31,7 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
 
     A range set is an immutable sequence of disjoint ranges sorted by its start value. It implements some mixin methods
     so that the implementation of a range sets is going to be lighter. It implements either the behaviour of a set
-    and of a sequence.
+    and of a sequence of ranges.
     """
 
     @property
@@ -52,55 +52,63 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
 
     @abstractmethod
     def split(self, max_size: int = MAX_LENGTH) -> tuple[Range | EmptyRange, RangeSet]:
+        """It returns a Range of max size on the left and the rest of the range set on the right.
+        :param max_size: if given, returned range is cut after `max_size` bytes, and is excluded part is appended to
+        the rangeset remaining part.
+        :return: A range of up to max_size bytes on the left and the rest of the range set on the right.
+        """
         raise NotImplementedError
 
     def __str__(self) -> str:
+        """It returns a string representation of the set of ranges."""
         return ",".join(str(r) for r in self)
 
     def __repr__(self) -> str:
         return f"rangeset('{str(self)}')"
 
-    @abstractmethod
-    def __or__(self, other: Iterable[Range]) -> RangeSet:  # type: ignore
-        raise NotImplementedError
-        # if not isinstance(other, Iterable):
-        #     raise TypeError(f"{other} is not iterable")
-        # return _union(self, other)
+    def __or__(self, others: Iterable[Range]) -> RangeSet:  # type: ignore
+        return _rangeset(self._combine(others))
+
+    def _combine(self, others: Iterable[Range]) -> Iterable[Range]:
+        return _combine(chain(self, others))
+
+    def __and__(self, others: Iterable[Range]) -> RangeSet:
+        """It returns the intersection between two sets of ranges."""
+        return _rangeset(self._intersect(others))
 
     @abstractmethod
-    def __and__(self, other: Iterable[Range]) -> RangeSet:
+    def _intersect(self, others: Iterable[Range]) -> Iterable[Range]:
         raise NotImplementedError
 
+    def __sub__(self, others: Iterable[Range]) -> RangeSet:
+        """It returns subtract the other range sets from this one."""
+        return _rangeset(self._remove(others))
+
     @abstractmethod
-    def __sub__(self, other: Iterable[Range]) -> RangeSet:
+    def _remove(self, others: Iterable[Range]) -> Iterable[Range]:
         raise NotImplementedError
 
     @overload
-    def __getitem__(self, key: int) -> Range:
-        pass
+    def __getitem__(self, i: int) -> Range:
+        """It returns the renge at the ith position."""
 
     @overload
-    def __getitem__(self, key: slice) -> RangeSet:
-        pass
+    def __getitem__(self, i: slice) -> RangeSet:
+        """It returns a set of ranges selected using a slice."""
 
-    def __getitem__(self, key: int | slice) -> RangeSet:
-        if isinstance(key, int):
-            if key < 0:
-                raise IndexError(f"index key can't be negative: {key} < 0")
+    def __getitem__(self, i: int | slice) -> RangeSet:
+        if isinstance(i, int):
+            if i < 0:
+                raise IndexError(f"index key can't be negative: {i} < 0")
             try:
-                return next(islice(self, key, key + 1))
+                return next(islice(self, i, i + 1))
             except StopIteration:
-                raise IndexError(f"index key is too big: {key} >= {len(self)}") from None
-        if isinstance(key, slice):
-            if key.step not in [None, 1]:
-                raise ValueError(f"invalid slice step value: {key.step} is not 1 | None")
-            start = 0 if key.start is None else 0
-            end = 0 if key.stop is None else key.stop
-            step = 1 if key.step is None else key.step
-            return _rangeset(islice(self, start, end, step))
-        elif isinstance(key, RangeSet):
-            return self & key
-        raise TypeError(f"invalid key type: {key} is not int | slice | RangeSet")
+                raise IndexError(f"index key is too big: {i} >= {len(self)}") from None
+        if isinstance(i, slice):
+            if i.step not in [None, 1]:
+                raise ValueError(f"invalid slice step value: {i.step} is not 1 | None")
+            return _rangeset(islice(self, i.start, i.stop, i.step))
+        raise TypeError(f"invalid key type: {i} is not int | slice")
 
     @abstractmethod
     def __eq__(self, other: Any) -> bool:
@@ -112,6 +120,7 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
 
 
 class EmptyRange(RangeSet):
+    """EmptyRange represents an empty set of ranges."""
 
     def __contains__(self, item: Any) -> bool:
         return False
@@ -125,13 +134,13 @@ class EmptyRange(RangeSet):
     def __bool__(self) -> bool:
         return False
 
-    def __or__(self, other: Iterable[Range]) -> RangeSet:  # type: ignore
-        return _rangeset(other)
+    def _combine(self, others: Iterable[Range]) -> Iterable[Range]:
+        return _combine(others)
 
-    def __and__(self, other: Iterable[Range]) -> EmptyRange:
+    def _intersect(self, others: Iterable[Range]) -> Iterable[Range]:
         return NO_RANGE
 
-    def __sub__(self, other: Iterable[Range]) -> EmptyRange:
+    def _remove(self, others: Iterable[Range]) -> Iterable[Range]:
         return NO_RANGE
 
     def split(self, max_size: int = MAX_LENGTH) -> tuple[Range | EmptyRange, RangeSet]:
@@ -181,39 +190,30 @@ class Range(RangeSet):
     def size(self):
         return self._end - self._start
 
-    def __or__(self, other: Iterable[Range]) -> RangeSet:  # type: ignore
-        return _union(self, other)
-
-    def __and__(self, other: Iterable[Range]) -> RangeSet:
-        ranges = []
-        if not isinstance(other, RangeSet):
-            other = _rangeset(other)
-        for r in other:
-            if r.end <= self._start:
+    def _intersect(self, others: Iterable[Range]) -> Iterator[Range]:
+        # pylint: disable=protected-access
+        for r in _combine(others):
+            if r.end <= self.start:
                 continue
-            if r.start >= self._end:
+            if r.start >= self.end:
                 break
-            ranges.append(Range(max(r._start, self._start), min(r._end, self._end)))
-        return _rangeset(ranges)
+            yield Range(max(r._start, self._start), min(r._end, self._end))
 
-    def __sub__(self, other: Iterable[Range]) -> RangeSet:
-        if not isinstance(other, RangeSet):
-            other = _rangeset(other)
-
-        ranges = []
+    def _remove(self, others: Iterable[Range]) -> Iterator[Range]:
+        # pylint: disable=protected-access
         position = self._start
-        for o in other:
+        for o in _combine(others):
             if o._start > position:
-                ranges.append(Range(position, min(self._end, o._start)))
+                yield Range(position, min(self._end, o._start))
 
             position = max(position, o._end)
             if position >= self._end:
                 break
-        if position < self._start:
-            return self
+        if position <= self._start:
+            yield self
+            return
         if position < self._end:
-            ranges.append(Range(position, self._end))
-        return _rangeset(ranges)
+            yield Range(position, self._end)
 
     def __str__(self) -> str:
         if self._end == self._start + 1:
@@ -278,22 +278,13 @@ class RangeTree(RangeSet):
     def size(self) -> int:
         return self._left.size + self._right.size
 
-    def __or__(self, other: Iterable[Range]):  # type: ignore
-        return _union(self, other)
+    def _intersect(self, others: Iterable[Range]) -> Iterable[Range]:
+        # pylint: disable=protected-access
+        return chain(self._left._intersect(others), self._right._intersect(others))
 
-    def __and__(self, other: Iterable[Range]) -> RangeSet:
-        if not isinstance(other, RangeSet):
-            other = _rangeset(other)
-        if len(other) < len(self):
-            return other & self
-        return _rangeset(chain(self._left & other, self._right & other))
-
-    def __sub__(self, other: Iterable[Range]) -> RangeSet:
-        if not isinstance(other, RangeSet):
-            other = _rangeset(other)
-        if len(other) < len(self):
-            return other & self
-        return _rangeset(chain(self._left - other, self._right - other))
+    def _remove(self, others: Iterable[Range]) -> Iterable[Range]:
+        # pylint: disable=protected-access
+        return chain(self._left._remove(others), self._right._remove(others))
 
     def split(self, max_size: int = MAX_LENGTH) -> tuple[Range | EmptyRange, RangeSet]:
         left: Range | EmptyRange
@@ -346,43 +337,51 @@ class EmptyRangeError(RangeError):
     pass
 
 
-def _union(*items: Iterable[Range]) -> RangeSet:
-    """It returns a sorted set of ranges given some unordered set of ranges.
+def _combine(ranges: Iterable[Range]) -> Iterable[Range]:
+    """_combine It sorts and combines ranges so to have the minimal and simpler sequence or ranges.
 
-    :param items: input sequences of ranges.
-    :return: a sorted set of disjoint ranges.
+    :param ranges: The ranges to combine.
+    :return: Combined ranges sequence.
     """
+    if isinstance(ranges, RangeSet):
+        yield from ranges
+        return
+
     # It sorts ranges by start value.
-    it: Iterator[Range] = iter(sorted((r for r in chain(*items) if r), key=lambda r: r.start))
+    it = iter(sorted((r for r in ranges if r), key=lambda r: r.start))
     try:
         left = next(it)
     except StopIteration:
-        return NO_RANGE
+        return
 
-    disjoint: list[Range] = []
     for right in it:
         if right.start <= left.end and left.start <= right.end:
             # It merges touching ranges to a single one.
             left = Range(min(left.start, right.start), max(right.end, left.end))
             continue
-        # It appends disjoint range.
-        disjoint.append(left)
+        # It yields disjoint ranges.
+        yield left
         left = right
-    disjoint.append(left)
-    return _rangeset(disjoint)
+
+    yield left
 
 
-def _rangeset(items: Iterable[Range]) -> RangeSet:
-    if isinstance(items, RangeSet):
-        return items
-    if not isinstance(items, Sequence):
-        items = list(items)
-    if len(items) == 0:
+def _rangeset(ranges: Iterable[Range]) -> RangeSet:
+    """It obtains a rangeset instance from a sorted sequence of disjoint ranges.
+
+    :param ranges: it represents the input sequence of disjoint ranges
+    :return: the resulting rangeset.
+    """
+    if isinstance(ranges, RangeSet):
+        return ranges
+    if not isinstance(ranges, Sequence):
+        ranges = list(ranges)
+    if len(ranges) == 0:
         return NO_RANGE
-    if len(items) == 1:
-        return items[0]
-    lefts = items[: len(items) // 2]
-    rights = items[len(lefts) :]
+    if len(ranges) == 1:
+        return ranges[0]
+    lefts = ranges[: len(ranges) // 2]
+    rights = ranges[len(lefts) :]
     return RangeTree(_rangeset(lefts), _rangeset(rights))
 
 
@@ -392,14 +391,32 @@ def _pretty_end(end: int) -> str:
     return f"{end - 1}"
 
 
-def rangeset(text: str) -> RangeSet:
-    ranges = []
+def rangeset(ranges: str | Iterable[Range]) -> RangeSet:
+    """rangeset obtains a RangeSet from a string or from a sequence of ranges.
+
+    The following should always be True:
+    ```
+    rangeset(my_rangeset) == my_rangeset
+    rangeset(str(my_rangeset)) == my_rangeset
+    rangeset(list(my_rangeset)) == my_rangeset
+    ```
+
+    :param ranges: it could represent a string to be parsed or a sequence of ranges.
+    :return: A RangeSet obtained from the given text.
+    """
+    if not isinstance(ranges, str):
+        return _rangeset(_combine(ranges))
+    return _rangeset(_combine(_parse(ranges)))
+
+
+def _parse(text: str) -> Iterator[Range]:
+    """_parse loads a sequence of ranges from a string."""
     for value in text.replace(" ", "").split(","):
         if not value:
             continue
 
         if "-" not in value:
-            ranges.append(Range(int(value), int(value) + 1))
+            yield Range(int(value), int(value) + 1)
             continue
 
         start_text, end_text = value.split("-", 1)
@@ -410,6 +427,4 @@ def rangeset(text: str) -> RangeSet:
         end = MAX_LENGTH
         if end_text and end_text != "*":
             end = int(end_text) + 1
-        ranges.append(Range(start, end))
-
-    return _union(*ranges)
+        yield Range(start, end)
