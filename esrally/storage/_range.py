@@ -11,7 +11,6 @@
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
@@ -23,6 +22,7 @@ from collections.abc import Hashable, Iterable, Iterator, Sequence, Set
 from itertools import chain, islice
 from typing import Any, overload
 
+# MAX_LENGTH represents the maximum supported file size
 MAX_LENGTH = sys.maxsize
 
 
@@ -31,7 +31,7 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
 
     A range set is an immutable sequence of disjoint ranges sorted by its start value. It implements some mixin methods
     so that the implementation of a range sets is going to be lighter. It implements either the behaviour of a set
-    and of a sequence.
+    and of a sequence of ranges.
     """
 
     @property
@@ -52,9 +52,15 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
 
     @abstractmethod
     def split(self, max_size: int = MAX_LENGTH) -> tuple[Range | EmptyRange, RangeSet]:
+        """It returns a Range of max size on the left and the rest of the range set on the right.
+        :param max_size: if given, returned range is cut after `max_size` bytes, and is excluded part is appended to
+        the rangeset remaining part.
+        :return: A range of up to max_size bytes on the left and the rest of the range set on the right.
+        """
         raise NotImplementedError
 
     def __str__(self) -> str:
+        """It returns a string representation of the set of ranges."""
         return ",".join(str(r) for r in self)
 
     def __repr__(self) -> str:
@@ -62,45 +68,40 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
 
     @abstractmethod
     def __or__(self, other: Iterable[Range]) -> RangeSet:  # type: ignore
+        """It returns the union of two sets of ranges."""
         raise NotImplementedError
-        # if not isinstance(other, Iterable):
-        #     raise TypeError(f"{other} is not iterable")
-        # return _union(self, other)
 
     @abstractmethod
     def __and__(self, other: Iterable[Range]) -> RangeSet:
+        """It returns the intersection between two sets of ranges."""
         raise NotImplementedError
 
     @abstractmethod
     def __sub__(self, other: Iterable[Range]) -> RangeSet:
+        """It returns subtract the other range sets from this one."""
         raise NotImplementedError
 
     @overload
-    def __getitem__(self, key: int) -> Range:
-        pass
+    def __getitem__(self, i: int) -> Range:
+        """It returns the renge at the ith position."""
 
     @overload
-    def __getitem__(self, key: slice) -> RangeSet:
-        pass
+    def __getitem__(self, i: slice) -> RangeSet:
+        """It returns a set of ranges selected using a slice."""
 
-    def __getitem__(self, key: int | slice) -> RangeSet:
-        if isinstance(key, int):
-            if key < 0:
-                raise IndexError(f"index key can't be negative: {key} < 0")
+    def __getitem__(self, i: int | slice) -> RangeSet:
+        if isinstance(i, int):
+            if i < 0:
+                raise IndexError(f"index key can't be negative: {i} < 0")
             try:
-                return next(islice(self, key, key + 1))
+                return next(islice(self, i, i + 1))
             except StopIteration:
-                raise IndexError(f"index key is too big: {key} >= {len(self)}") from None
-        if isinstance(key, slice):
-            if key.step not in [None, 1]:
-                raise ValueError(f"invalid slice step value: {key.step} is not 1 | None")
-            start = 0 if key.start is None else 0
-            end = 0 if key.stop is None else key.stop
-            step = 1 if key.step is None else key.step
-            return _rangeset(islice(self, start, end, step))
-        elif isinstance(key, RangeSet):
-            return self & key
-        raise TypeError(f"invalid key type: {key} is not int | slice | RangeSet")
+                raise IndexError(f"index key is too big: {i} >= {len(self)}") from None
+        if isinstance(i, slice):
+            if i.step not in [None, 1]:
+                raise ValueError(f"invalid slice step value: {i.step} is not 1 | None")
+            return _rangeset(islice(self, i.start, i.stop, i.step))
+        raise TypeError(f"invalid key type: {i} is not int | slice")
 
     @abstractmethod
     def __eq__(self, other: Any) -> bool:
@@ -112,6 +113,7 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
 
 
 class EmptyRange(RangeSet):
+    """EmptyRange represents an empty set of ranges."""
 
     def __contains__(self, item: Any) -> bool:
         return False
@@ -292,7 +294,7 @@ class RangeTree(RangeSet):
         if not isinstance(other, RangeSet):
             other = _rangeset(other)
         if len(other) < len(self):
-            return other & self
+            return other - self
         return _rangeset(chain(self._left - other, self._right - other))
 
     def split(self, max_size: int = MAX_LENGTH) -> tuple[Range | EmptyRange, RangeSet]:
