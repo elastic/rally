@@ -200,10 +200,11 @@ files = ["esrally/", "it/", "tests/"]
 module = [
     "esrally.mechanic.team",
     "esrally.utils.cases",
-    "esrally.utils.modules",
     "esrally.utils.io",
+    "esrally.utils.modules",
     "esrally.utils.pretty",
     "esrally.utils.process",
+    "esrally.utils.threads"
 ]
 disallow_incomplete_defs = true
 # this should be a copy of disabled_error_code from above
