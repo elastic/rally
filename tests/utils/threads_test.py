@@ -31,10 +31,10 @@ from esrally.utils.threads import (
 
 def test_continuous_timer():
     calls = Queue()
-    start_time = time.monotonic()
+    start_time = time.monotonic_ns()
 
     def func():
-        calls.put(time.monotonic() - start_time)
+        calls.put(time.monotonic_ns() - start_time)
 
     interval = 0.05
     count = 3
@@ -45,7 +45,7 @@ def test_continuous_timer():
     times = []
     for _ in range(count):
         times.append(calls.get(timeout=5.0))
-    duration = time.monotonic() - start_time
+    duration = time.monotonic_ns() - start_time
 
     timer.cancel()
 
@@ -79,9 +79,9 @@ def test_timed_event(event: TimedEvent):
         assert waiter.is_alive()
         assert not notified.is_set()
 
-        start_time = time.monotonic()
+        start_time = time.monotonic_ns()
         assert event.set()
-        stop_time = time.monotonic()
+        stop_time = time.monotonic_ns()
         assert event.time is not None
         assert start_time <= event.time <= stop_time
         assert event
