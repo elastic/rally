@@ -20,7 +20,7 @@ import sys
 from abc import abstractmethod
 from collections.abc import Hashable, Iterable, Iterator, Sequence, Set
 from itertools import chain, islice
-from typing import Any, overload
+from typing import Any, Final, overload
 
 # MAX_LENGTH represents the maximum supported file size
 MAX_LENGTH = sys.maxsize
@@ -44,7 +44,6 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
     def end(self) -> int:
         raise NotImplementedError
 
-    @property
     @property
     @abstractmethod
     def size(self) -> int:
@@ -90,7 +89,7 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
 
     @overload
     def __getitem__(self, i: int) -> Range:
-        """It returns the renge at the ith position."""
+        """It returns the range at the ith position."""
 
     @overload
     def __getitem__(self, i: slice) -> RangeSet:
@@ -165,7 +164,7 @@ class EmptyRange(RangeSet):
         return 0
 
 
-NO_RANGE = EmptyRange()
+NO_RANGE: Final[EmptyRange] = EmptyRange()
 
 
 class Range(RangeSet):
@@ -261,8 +260,9 @@ class Range(RangeSet):
 class RangeTree(RangeSet):
 
     def __init__(self, left: RangeSet, right: RangeSet):
-        assert isinstance(left, (Range, RangeTree))
-        assert isinstance(right, (Range, RangeTree))
+        assert left.end < right.start, "left and right ranges sets aren't sorted"
+        assert isinstance(left, (Range, RangeTree)), "left must be an instance of Range | RangeTree"
+        assert isinstance(right, (Range, RangeTree)), "right must be an instance of Range | RangeTree"
         self._left = left
         self._right = right
 
