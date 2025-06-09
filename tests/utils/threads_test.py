@@ -20,6 +20,7 @@ from queue import Queue
 
 import pytest
 
+from esrally.utils.cases import cases
 from esrally.utils.threads import (
     ContinuousTimer,
     TimedEvent,
@@ -55,12 +56,8 @@ def test_continuous_timer():
     assert duration >= times[-1], f"finished early: {times[-1]}"
 
 
-def test_timed_event():
-    _test_timed_event(event=TimedEvent())
-    _test_timed_event(event=WaitGroup())
-
-
-def _test_timed_event(event):
+@cases("event", timed_event=TimedEvent(), wait_group=WaitGroup())
+def test_timed_event(event: TimedEvent):
     assert event.time is None
     assert not event
 
