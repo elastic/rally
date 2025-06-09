@@ -158,11 +158,12 @@ class WaitGroup(TimedEvent):
     """
 
     MAX_COUNT = sys.maxsize
+    _count = 0
 
     def __init__(self, count: int = 0, max_count: int = MAX_COUNT):
         super().__init__()
-        self._count = count
-        self._max_count = max(1, max_count)
+        self.max_count = max_count
+        self.add(count)
 
     def clear(self):
         self._count = 0
@@ -178,9 +179,15 @@ class WaitGroup(TimedEvent):
 
     @max_count.setter
     def max_count(self, value: int) -> None:
-        self._max_count = max(1, value)
+        if value < 1:
+            raise ValueError("max_count must be greater than or equal to 1")
+        self._max_count = value
 
     def add(self, value: int) -> bool:
+        """It increments `count` of `value` times. `value` can be negative to reduce the `count`.
+        :raises: ValueError if `count` + `value` is negative.
+        :raises: WaitGroupLimitError in case the sum `count` + `value` is greater than `max_count`.
+        """
         with self._cond:
             new_value = self._count + value
             if new_value < 0:
@@ -191,4 +198,5 @@ class WaitGroup(TimedEvent):
         return new_value == 0 and self.set()
 
     def done(self) -> bool:
+        """It subtracts 1 from `count`."""
         return self.add(-1)
