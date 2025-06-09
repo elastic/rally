@@ -136,6 +136,7 @@ class WaitGroupLimitError(Exception):
     """Raised when a wait group reach max workers limit."""
 
     def __init__(self, msg: str, max_count: int):
+        super().__init__(msg)
         self.max_count = max_count
 
 
