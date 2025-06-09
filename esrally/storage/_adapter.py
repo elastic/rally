@@ -46,9 +46,9 @@ class Readable(Protocol):
 
 class Head(NamedTuple):
     url: str
-    content_length: int | None
-    accept_ranges: bool
-    ranges: RangeSet
+    content_length: int | None = None
+    accept_ranges: bool = False
+    ranges: RangeSet = NO_RANGE
 
     @classmethod
     def create(cls, url: str, content_length: int | None = None, accept_ranges: bool | None = None, ranges: RangeSet = NO_RANGE) -> Head:
