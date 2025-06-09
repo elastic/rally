@@ -135,6 +135,9 @@ class TimedEvent:
 class WaitGroupLimitError(Exception):
     """Raised when a wait group reach max workers limit."""
 
+    def __init__(self, msg: str, max_count: int):
+        self.max_count = max_count
+
 
 class WaitGroup(TimedEvent):
     """It implements a go-lang style wait group on top of a timed event.
@@ -179,9 +182,11 @@ class WaitGroup(TimedEvent):
 
     def add(self, value: int) -> bool:
         with self._cond:
-            new_value = max(0, self._count + value)
+            new_value = self._count + value
+            if new_value < 0:
+                raise ValueError("wait group count cannot be negative")
             if new_value > self._max_count:
-                raise WaitGroupLimitError(f"count limit reach: {new_value} > {self._max_count}")
+                raise WaitGroupLimitError(f"count limit reach: {new_value} > {self._max_count}", self._max_count)
             self._count = new_value
         return new_value == 0 and self.set()
 
