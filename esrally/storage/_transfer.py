@@ -189,7 +189,8 @@ class Transfer:
             "content_length": self.content_length,
             "transferred": str(self.transferred),
         }
-        with open(self.path + ".status", "w") as fd:
+        os.makedirs(os.path.dirname(self._path), exist_ok=True)
+        with open(self._path + ".status", "w") as fd:
             yaml.safe_dump(document, fd)
 
     def _run(self):
