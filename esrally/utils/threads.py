@@ -164,7 +164,8 @@ class WaitGroup(TimedEvent):
     def __init__(self, count: int = 0, max_count: int = MAX_COUNT):
         super().__init__()
         self.max_count = max_count
-        self.add(count)
+        if count != 0:
+            self.add(count)
 
     def clear(self):
         self._count = 0
@@ -189,10 +190,12 @@ class WaitGroup(TimedEvent):
         :raises: ValueError if `count` + `value` is negative.
         :raises: WaitGroupLimitError in case the sum `count` + `value` is greater than `max_count`.
         """
+        if value == 0:
+            raise ValueError("increment value can't be zero")
         with self._cond:
             new_value = self._count + value
             if new_value < 0:
-                raise ValueError("wait group count cannot be negative")
+                raise ValueError("count can't be negative")
             if new_value > self._max_count:
                 raise WaitGroupLimitError(f"count limit reach: {new_value} > {self._max_count}", self._max_count)
             self._count = new_value
