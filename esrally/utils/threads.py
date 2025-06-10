@@ -23,7 +23,7 @@ from collections.abc import Callable
 
 
 class ContinuousTimer(threading.Thread):
-    """It calls a function every a specified number of seconds:
+    """It calls a function every specified number of seconds:
 
         t = ContinuousTimer(30.0, f, args=None, kwargs=None)
         t.start()
@@ -64,7 +64,7 @@ class TimedEvent:
 
     On top of the threading.Event functionalities:
         - the set() method returns True in case the flag was False at the time it has been called;
-        - its time() method returns the value of monotonic.time() at the time set has been called first.
+        - its time property returns the value of time.monotonic_ns() at the time set has been called first.
     """
 
     # After threading.Event class (with time() method)
@@ -89,7 +89,7 @@ class TimedEvent:
             if self._flag:
                 return False
             self._flag = True
-            self._time = time.monotonic()
+            self._time = time.monotonic_ns()
             self._cond.notify_all()
             return True
 
@@ -126,14 +126,18 @@ class TimedEvent:
 
     @property
     def time(self) -> float | None:
-        """It gets the result of time.monotonic() at the moment the event has been set.
-        :return: the monotonic time float value if set, or None otherwise.
+        """It gets the result of time.monotonic_ns() at the moment the event has been set.
+        :return: the monotonic_ns time float value if set, or None otherwise.
         """
         return self._time
 
 
 class WaitGroupLimitError(Exception):
     """Raised when a wait group reach max workers limit."""
+
+    def __init__(self, msg: str, max_count: int):
+        super().__init__(msg)
+        self.max_count = max_count
 
 
 class WaitGroup(TimedEvent):
@@ -155,11 +159,13 @@ class WaitGroup(TimedEvent):
     """
 
     MAX_COUNT = sys.maxsize
+    _count = 0
 
     def __init__(self, count: int = 0, max_count: int = MAX_COUNT):
         super().__init__()
-        self._count = count
-        self._max_count = max(1, max_count)
+        self.max_count = max_count
+        if count != 0:
+            self.add(count)
 
     def clear(self):
         self._count = 0
@@ -175,15 +181,26 @@ class WaitGroup(TimedEvent):
 
     @max_count.setter
     def max_count(self, value: int) -> None:
-        self._max_count = max(1, value)
+        if value < 1:
+            raise ValueError("max_count must be greater than or equal to 1")
+        self._max_count = value
 
     def add(self, value: int) -> bool:
+        """It increments `count` of `value` times. `value` can be negative to reduce the `count`.
+        :raises: ValueError if `count` + `value` is negative.
+        :raises: WaitGroupLimitError in case the sum `count` + `value` is greater than `max_count`.
+        """
+        if value == 0:
+            raise ValueError("increment value can't be zero")
         with self._cond:
-            new_value = max(0, self._count + value)
+            new_value = self._count + value
+            if new_value < 0:
+                raise ValueError("count can't be negative")
             if new_value > self._max_count:
-                raise WaitGroupLimitError(f"count limit reach: {new_value} > {self._max_count}")
+                raise WaitGroupLimitError(f"count limit reach: {new_value} > {self._max_count}", self._max_count)
             self._count = new_value
         return new_value == 0 and self.set()
 
     def done(self) -> bool:
+        """It subtracts 1 from `count`."""
         return self.add(-1)
