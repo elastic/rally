@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import NamedTuple, Protocol, runtime_checkable
 
 from esrally.storage._range import NO_RANGE, RangeSet
@@ -45,9 +46,9 @@ class Readable(Protocol):
 
 class Head(NamedTuple):
     url: str
-    content_length: int | None
-    accept_ranges: bool
-    ranges: RangeSet
+    content_length: int | None = None
+    accept_ranges: bool = False
+    ranges: RangeSet = NO_RANGE
 
     @classmethod
     def create(cls, url: str, content_length: int | None = None, accept_ranges: bool | None = None, ranges: RangeSet = NO_RANGE) -> Head:
@@ -79,3 +80,31 @@ class Adapter(ABC):
         :param ranges: it represents the portion of the file to transfer (it must be empty or a continuous range).
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
+
+
+_ADAPTER_CLASSES = dict[str, type[Adapter]]()
+
+
+def register_adapter_class(*prefixes: str) -> Callable[[type[Adapter]], type[Adapter]]:
+    """This class decorator registers an implementation of the Client protocol.
+    :param prefixes: list of prefixes names the adapter class has to be registered for
+    :return: a type decorator
+    """
+
+    def decorator(cls: type[Adapter]) -> type[Adapter]:
+        for prefix in prefixes:
+            # Adapter types are sorted in descending order by prefix length.
+            _ADAPTER_CLASSES[prefix] = cls
+            keys_to_move = [k for k in _ADAPTER_CLASSES if len(k) < len(prefix)]
+            for key in keys_to_move:
+                _ADAPTER_CLASSES[key] = _ADAPTER_CLASSES.pop(key)
+        return cls
+
+    return decorator
+
+
+def adapter_class(url: str) -> type[Adapter]:
+    for prefix, cls in _ADAPTER_CLASSES.items():
+        if url.startswith(prefix):
+            return cls
+    raise NotImplementedError(f"unsupported url: {url}")

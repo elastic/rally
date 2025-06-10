@@ -260,9 +260,9 @@ class Range(RangeSet):
 class RangeTree(RangeSet):
 
     def __init__(self, left: RangeSet, right: RangeSet):
-        assert left.end < right.start, "left and right ranges sets aren't sorted"
         assert isinstance(left, (Range, RangeTree)), "left must be an instance of Range | RangeTree"
         assert isinstance(right, (Range, RangeTree)), "right must be an instance of Range | RangeTree"
+        assert left.start < left.end < right.start < right.end, "left and right ranges sets aren't sorted and disjoint"
         self._left = left
         self._right = right
 

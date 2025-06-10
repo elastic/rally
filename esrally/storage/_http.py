@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from typing import Final
 from urllib.error import HTTPError
 
 import requests
@@ -30,8 +31,8 @@ from esrally.storage._adapter import (
     Readable,
     ServiceUnavailableError,
     Writable,
+    register_adapter_class,
 )
-from esrally.storage._client import register_adapter_class
 from esrally.storage._range import MAX_LENGTH, NO_RANGE, Range, RangeSet
 
 LOG = logging.getLogger(__name__)
@@ -40,23 +41,27 @@ LOG = logging.getLogger(__name__)
 # Size of the buffers used for file transfer content.
 CHUNK_SIZE = 1 * 1024 * 1024
 
-# It limits the maximum number of connection retries.
-MAX_RETRIES = 10
-
 
 class Retry(urllib3.Retry):
     DEFAULT_BACKOFF_MAX = 20
+
+
+# It limits the maximum number of connection retries.
+MAX_RETRIES_NUMBER = 10
+MAX_RETRIES_BACKOFF_FACTOR = 1
+MAX_RETRIES: Final[urllib3.Retry] = Retry(MAX_RETRIES_NUMBER, backoff_factor=MAX_RETRIES_BACKOFF_FACTOR)
 
 
 @register_adapter_class("http:", "https:")
 class HTTPAdapter(Adapter):
     """It implements the adapter interface for http(s) protocols using the requests library."""
 
-    def __init__(self):
-        retry = Retry(total=MAX_RETRIES, backoff_factor=1)
-        self._session = requests.session()
-        self._session.mount("http://", requests.adapters.HTTPAdapter(max_retries=retry))
-        self._session.mount("https://", requests.adapters.HTTPAdapter(max_retries=retry))
+    def __init__(self, session: requests.Session | None = None, max_retries: urllib3.Retry = MAX_RETRIES):
+        if session is None:
+            session = requests.session()
+        self._session = session
+        self._session.mount("http://", requests.adapters.HTTPAdapter(max_retries=max_retries))
+        self._session.mount("https://", requests.adapters.HTTPAdapter(max_retries=max_retries))
 
     def head(self, url: str) -> Head:
         with self._session.head(url, allow_redirects=True) as r:
