@@ -16,26 +16,18 @@
 # under the License.
 from __future__ import annotations
 
-from collections.abc import Iterable
-from dataclasses import dataclass
+import pytest
 
-from esrally import config
-from esrally.storage import Adapter, Client, Head
-from esrally.utils import cases
+from esrally.config import Config
+from esrally.storage import Client, Head
 
 
-def test_init():
-    client = Client()
-    assert isinstance(client, Client)
+@pytest.fixture
+def client() -> Client:
+    return Client.from_config(Config())
 
 
-def test_from_config():
-    client = Client.from_config(config.Config())
-    assert isinstance(client, Client)
-
-
-def test_head():
-    client = Client()
+def test_head(client: Client) -> None:
     got = client.head("https://example.com", ttl=10)
     assert isinstance(got, Head)
     assert got is client.head("https://example.com", ttl=10)
