@@ -16,6 +16,6 @@
 # under the License.
 
 # It imports http client implementation modules to register their adapter class.
-from esrally.storage._adapter import Adapter, Head, Writable, adapter_class
+from esrally.storage._adapter import Adapter, Head, Writable
 from esrally.storage._client import Client
 from esrally.storage._range import NO_RANGE, Range, RangeSet, rangeset

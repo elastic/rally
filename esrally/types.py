@@ -149,7 +149,7 @@ Key = Literal[
     "source.build.method",
     "source.revision",
     "src.root.dir",
-    "storage.adapter_names",
+    "storage.adapters",
     "storage.max_connections",
     "storage.mirrors_files",
     "target.arch",

@@ -31,7 +31,6 @@ from esrally.storage._adapter import (
     Readable,
     ServiceUnavailableError,
     Writable,
-    register_adapter_class,
 )
 from esrally.storage._range import MAX_LENGTH, NO_RANGE, Range, RangeSet
 
@@ -52,9 +51,10 @@ MAX_RETRIES_BACKOFF_FACTOR = 1
 MAX_RETRIES: Final[urllib3.Retry] = Retry(MAX_RETRIES_NUMBER, backoff_factor=MAX_RETRIES_BACKOFF_FACTOR)
 
 
-@register_adapter_class("http:", "https:")
 class HTTPAdapter(Adapter):
     """It implements the adapter interface for http(s) protocols using the requests library."""
+
+    __adapter_prefixes__ = ("http:", "https:")
 
     def __init__(self, session: requests.Session | None = None, max_retries: urllib3.Retry = MAX_RETRIES):
         if session is None:

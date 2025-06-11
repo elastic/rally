@@ -29,11 +29,10 @@ from typing import NamedTuple
 from esrally import config
 from esrally.storage._adapter import (
     Adapter,
+    AdapterRegistry,
     Head,
     ServiceUnavailableError,
     Writable,
-    adapter_class,
-    adapter_classes,
 )
 from esrally.storage._mirror import Mirror
 from esrally.storage._range import NO_RANGE, RangeSet
@@ -50,15 +49,14 @@ class Client(Adapter):
 
     def __init__(
         self,
-        adapter_classes: dict[str, type[Adapter]] | None = None,
+        adapters: AdapterRegistry,
         mirrors: Iterable[Mirror] = tuple(),
         random: Random | None = None,
         max_connections: int = MAX_CONNECTIONS,
     ):
         if random is None:
             random = Random(time.time())
-        self._adapters: dict[str, Adapter] = {}
-        self._adapter_classes: dict[str, type[Adapter]] | None = adapter_classes
+        self._adapters: AdapterRegistry = adapters
         self._cached_heads: dict[str, tuple[Head | Exception, float]] = {}
         self._connections: dict[str, WaitGroup] = defaultdict(lambda: WaitGroup(max_count=max_connections))
         self._lock = threading.Lock()
@@ -68,7 +66,6 @@ class Client(Adapter):
 
     @classmethod
     def from_config(cls, cfg: config.Config) -> Client:
-        adapter_names = cfg.opts(section="storage", key="storage.adapter_names", default_value="", mandatory=False)
         max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
         mirrors = []
         for filename in cfg.opts(section="storage", key="storage.mirrors_files", default_value=MIRRORS_FILES, mandatory=False).split(","):
@@ -77,7 +74,8 @@ class Client(Adapter):
                 filename = os.path.expanduser(filename)
                 if os.path.isfile(filename):
                     mirrors.append(Mirror.from_file(filename))
-        return cls(adapter_classes=adapter_classes(names=adapter_names), mirrors=mirrors, max_connections=max_connections)
+        adapters = AdapterRegistry.from_config(cfg)
+        return cls(mirrors=mirrors, max_connections=max_connections, adapters=adapters)
 
     def head(self, url: str, ttl: float | None = None) -> Head:
         """It gets remote file headers."""
@@ -94,8 +92,9 @@ class Client(Adapter):
                     # cached value or error is enough recent to be used.
                     return _head_or_raise(value)
 
+        adapter = self._adapters.get(url)
         try:
-            value = self._adapter(url).head(url)
+            value = adapter.head(url)
         except Exception as ex:
             value = ex
         end_time = time.monotonic_ns()
@@ -167,8 +166,9 @@ class Client(Adapter):
                 connections.add(1)
             except WaitGroupLimitError:
                 continue
+            adapter = self._adapters.get(head.url)
             try:
-                return self._adapter(head.url).get(head.url, stream, ranges)
+                return adapter.get(head.url, stream, ranges)
             except ServiceUnavailableError:
                 with self._lock:
                     connections.max_count = max(1, connections.count - 1)
@@ -196,25 +196,6 @@ class Client(Adapter):
         if not stats:
             return 0.0
         return sum(s.latency for s in stats) / len(stats)
-
-    def _adapter(self, url: str) -> Adapter:
-        """It obtains an adapter instance for given protocol.
-
-        It will return the same client instance when re-called with the same protocol id from the same thread. Returned
-        client is intended to be used only from the calling thread.
-
-        :param url: the target url the client is being created for.
-        :return: a client instance for given protocol.
-        """
-        with self._lock:
-            adapter = self._adapters.get(url)
-            if adapter is None:
-                # It uses registered classes mapping to create a client instance for each required protocol.
-
-                # Given the same prefix it will return the same instance later when re-called from the same thread.
-                cls = adapter_class(url=url, classes=self._adapter_classes)
-                self._adapters[url] = adapter = cls.from_url(url)
-        return adapter
 
     def monitor(self):
         for url, connections in self._connections.items():
