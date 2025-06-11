@@ -25,15 +25,9 @@ import pytest
 from requests import Response, Session
 from requests.structures import CaseInsensitiveDict
 
-from esrally.storage import Head, Writable, adapter_class, rangeset
+from esrally.storage import Head, Writable, rangeset
 from esrally.storage._http import HTTPAdapter
 from esrally.utils.cases import cases
-
-
-@cases("url", http="http://www.example.com", https="https://www.example.com")
-def test_http_adapter_class(url: str):
-    cls = adapter_class("http://www.example.com")
-    assert cls is HTTPAdapter
 
 
 @pytest.fixture()

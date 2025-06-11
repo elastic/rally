@@ -17,8 +17,9 @@
 from __future__ import annotations
 
 import logging
+import threading
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import NamedTuple, Protocol, runtime_checkable
 
 from esrally.storage._range import NO_RANGE, RangeSet
@@ -82,29 +83,45 @@ class Adapter(ABC):
         """
 
 
-_ADAPTER_CLASSES = dict[str, type[Adapter]]()
+class AdapterClassRegistry:
+    """AdapterClassRegistry allows to register classes of adapters to be selected according to the target URL."""
+
+    def __init__(self) -> None:
+        self._classes: dict[str, type[Adapter]] = {}
+        self._lock = threading.Lock()
+
+    def register(self, cls: type[Adapter], prefixes: Iterable[str]) -> type[Adapter]:
+        with self._lock:
+            keys_to_move: set[str] = set()
+            for p in prefixes:
+                self._classes[p] = cls
+                # Adapter types are sorted in descending order by prefix length.
+                keys_to_move.update(k for k in self._classes if len(k) < len(p))
+            for k in keys_to_move:
+                self._classes[k] = self._classes.pop(k)
+        return cls
+
+    def select(self, url: str) -> list[type[Adapter]]:
+        return [cls for prefix, cls in self._classes.items() if url.startswith(prefix)]
 
 
-def register_adapter_class(*prefixes: str) -> Callable[[type[Adapter]], type[Adapter]]:
+DEFAULT_CLASS_REGISTRY = AdapterClassRegistry()
+
+
+def register_adapter_class(
+    *prefixes: str, registry: AdapterClassRegistry = DEFAULT_CLASS_REGISTRY
+) -> Callable[[type[Adapter]], type[Adapter]]:
     """This class decorator registers an implementation of the Client protocol.
     :param prefixes: list of prefixes names the adapter class has to be registered for
     :return: a type decorator
     """
 
     def decorator(cls: type[Adapter]) -> type[Adapter]:
-        for prefix in prefixes:
-            # Adapter types are sorted in descending order by prefix length.
-            _ADAPTER_CLASSES[prefix] = cls
-            keys_to_move = [k for k in _ADAPTER_CLASSES if len(k) < len(prefix)]
-            for key in keys_to_move:
-                _ADAPTER_CLASSES[key] = _ADAPTER_CLASSES.pop(key)
+        registry.register(cls, prefixes)
         return cls
 
     return decorator
 
 
-def adapter_class(url: str) -> type[Adapter]:
-    for prefix, cls in _ADAPTER_CLASSES.items():
-        if url.startswith(prefix):
-            return cls
-    raise NotImplementedError(f"unsupported url: {url}")
+def adapter_classes(url: str, registry: AdapterClassRegistry = DEFAULT_CLASS_REGISTRY) -> list[type[Adapter]]:
+    return registry.select(url)
