@@ -16,12 +16,14 @@
 # under the License.
 from __future__ import annotations
 
+import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from typing import NamedTuple, Protocol, runtime_checkable
 
+from esrally.config import Config
 from esrally.storage._range import NO_RANGE, RangeSet
 
 LOG = logging.getLogger(__name__)
@@ -61,8 +63,10 @@ class Head(NamedTuple):
 class Adapter(ABC):
     """Base class for storage class client implementation"""
 
+    __adapter_prefixes__: tuple[str, ...] = tuple()
+
     @classmethod
-    def from_url(cls, url: str) -> Adapter:
+    def from_url(cls, url: str, cfg: Config) -> Adapter:
         return cls()
 
     @abstractmethod
@@ -83,14 +87,44 @@ class Adapter(ABC):
         """
 
 
-class AdapterClassRegistry:
+ADAPTER_CLASS_NAMES = ",".join(
+    [
+        "esrally.storage._http:HTTPAdapter",
+    ]
+)
+
+
+class AdapterRegistry:
     """AdapterClassRegistry allows to register classes of adapters to be selected according to the target URL."""
 
-    def __init__(self) -> None:
+    def __init__(self, cfg: Config) -> None:
         self._classes: dict[str, type[Adapter]] = {}
+        self._adapters: dict[tuple[str, Config], Adapter] = {}
         self._lock = threading.Lock()
+        self._cfg = cfg
 
-    def register(self, cls: type[Adapter], prefixes: Iterable[str]) -> type[Adapter]:
+    @classmethod
+    def from_config(cls, cfg: Config) -> AdapterRegistry:
+        registry = cls(cfg)
+        adapters_specs = (
+            cfg.opts(section="storage", key="storage.adapters", default_value=ADAPTER_CLASS_NAMES, mandatory=False)
+            .replace(" ", "")
+            .split(",")
+        )
+        for spec in adapters_specs:
+            module_name, class_name = spec.split(":")
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError:
+                LOG.exception("Failed to import module '%s'", module_name)
+                continue
+            obj = getattr(module, class_name)
+            if not isinstance(obj, type) or not issubclass(obj, Adapter):
+                raise TypeError(f"'{obj}' is not a valid subclass of Adapter")
+            registry.register_class(obj, obj.__adapter_prefixes__)
+        return registry
+
+    def register_class(self, cls: type[Adapter], prefixes: Iterable[str]) -> type[Adapter]:
         with self._lock:
             keys_to_move: set[str] = set()
             for p in prefixes:
@@ -101,27 +135,18 @@ class AdapterClassRegistry:
                 self._classes[k] = self._classes.pop(k)
         return cls
 
-    def select(self, url: str) -> list[type[Adapter]]:
-        return [cls for prefix, cls in self._classes.items() if url.startswith(prefix)]
-
-
-DEFAULT_CLASS_REGISTRY = AdapterClassRegistry()
-
-
-def register_adapter_class(
-    *prefixes: str, registry: AdapterClassRegistry = DEFAULT_CLASS_REGISTRY
-) -> Callable[[type[Adapter]], type[Adapter]]:
-    """This class decorator registers an implementation of the Client protocol.
-    :param prefixes: list of prefixes names the adapter class has to be registered for
-    :return: a type decorator
-    """
-
-    def decorator(cls: type[Adapter]) -> type[Adapter]:
-        registry.register(cls, prefixes)
-        return cls
-
-    return decorator
-
-
-def adapter_classes(url: str, registry: AdapterClassRegistry = DEFAULT_CLASS_REGISTRY) -> list[type[Adapter]]:
-    return registry.select(url)
+    def get(self, url: str) -> Adapter:
+        with self._lock:
+            for prefix, cls in self._classes.items():
+                if url.startswith(prefix):
+                    key = (url, self._cfg)
+                    adapter = self._adapters.get(key)
+                    if adapter is None:
+                        try:
+                            adapter = cls.from_url(url, self._cfg)
+                        except ValueError as ex:
+                            LOG.error("Failed to configure adapter for URL '%s': %s", url, ex)
+                            continue
+                    self._adapters[key] = adapter
+                    return adapter
+        raise ValueError(f"No adapter found for url '{url}'")
