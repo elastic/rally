@@ -14,8 +14,28 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-# It imports http client implementation modules to register their adapter class.
-from esrally.storage._adapter import Adapter, Head, Writable, adapter_class
-from esrally.storage._client import Client
-from esrally.storage._range import NO_RANGE, Range, RangeSet, rangeset
+from collections.abc import Iterable
+from dataclasses import dataclass
+
+from esrally import config
+from esrally.storage import Adapter, Client, Head
+from esrally.utils import cases
+
+
+def test_init():
+    client = Client()
+    assert isinstance(client, Client)
+
+
+def test_from_config():
+    client = Client.from_config(config.Config())
+    assert isinstance(client, Client)
+
+
+def test_head():
+    client = Client()
+    got = client.head("https://example.com", ttl=10)
+    assert isinstance(got, Head)
+    assert got is client.head("https://example.com", ttl=10)

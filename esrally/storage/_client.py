@@ -22,12 +22,19 @@ import threading
 import time
 import urllib.parse
 from collections import defaultdict, deque
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Iterable, Iterator
 from random import Random
 from typing import NamedTuple
 
 from esrally import config
-from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
+from esrally.storage._adapter import (
+    Adapter,
+    Head,
+    ServiceUnavailableError,
+    Writable,
+    adapter_class,
+    adapter_classes,
+)
 from esrally.storage._mirror import Mirror
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.utils.threads import WaitGroup, WaitGroupLimitError
@@ -36,33 +43,6 @@ LOG = logging.getLogger(__name__)
 
 MIRRORS_FILES = "~/.rally/storage/mirrors.yml"
 MAX_CONNECTIONS = 4
-
-_ADAPTER_CLASSES = dict[str, type[Adapter]]()
-
-
-def register_adapter_class(*prefixes: str) -> Callable[[type[Adapter]], type[Adapter]]:
-    """This class decorator registers an implementation of the Client protocol.
-    :param prefixes: list of prefixes names the adapter class has to be registered for
-    :return: a type decorator
-    """
-
-    def decorator(cls: type[Adapter]) -> type[Adapter]:
-        for prefix in prefixes:
-            # Adapter types are sorted in descending order by prefix length.
-            _ADAPTER_CLASSES[prefix] = cls
-            keys_to_move = [k for k in _ADAPTER_CLASSES if len(k) < len(prefix)]
-            for key in keys_to_move:
-                _ADAPTER_CLASSES[key] = _ADAPTER_CLASSES.pop(key)
-        return cls
-
-    return decorator
-
-
-def adapter_class(url: str) -> type[Adapter]:
-    for prefix, cls in _ADAPTER_CLASSES.items():
-        if url.startswith(prefix):
-            return cls
-    raise NotImplementedError(f"unsupported url: {url}")
 
 
 class Client(Adapter):
@@ -75,12 +55,10 @@ class Client(Adapter):
         random: Random | None = None,
         max_connections: int = MAX_CONNECTIONS,
     ):
-        if adapter_classes is None:
-            adapter_classes = _ADAPTER_CLASSES
         if random is None:
             random = Random(time.time())
         self._adapters: dict[str, Adapter] = {}
-        self._adapter_classes: dict[str, type[Adapter]] = dict(adapter_classes)
+        self._adapter_classes: dict[str, type[Adapter]] | None = adapter_classes
         self._cached_heads: dict[str, tuple[Head | Exception, float]] = {}
         self._connections: dict[str, WaitGroup] = defaultdict(lambda: WaitGroup(max_count=max_connections))
         self._lock = threading.Lock()
@@ -90,16 +68,7 @@ class Client(Adapter):
 
     @classmethod
     def from_config(cls, cfg: config.Config) -> Client:
-        adapter_classes = _ADAPTER_CLASSES
-        adapter_names = cfg.opts(section="storage", key="storage.adapter_names", default_value=None, mandatory=False)
-        if adapter_names is not None:
-            adapter_classes = {}
-            for prefix, adapter_cls in _ADAPTER_CLASSES.items():
-                for selector in adapter_names.replace(" ", "").split(","):
-                    if prefix.startswith(selector):
-                        adapter_classes[prefix] = adapter_cls
-            if not adapter_classes:
-                raise ValueError(f"invalid storage adapter name(s): {adapter_names} not in {list(_ADAPTER_CLASSES)}")
+        adapter_names = cfg.opts(section="storage", key="storage.adapter_names", default_value="", mandatory=False)
         max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
         mirrors = []
         for filename in cfg.opts(section="storage", key="storage.mirrors_files", default_value=MIRRORS_FILES, mandatory=False).split(","):
@@ -108,12 +77,12 @@ class Client(Adapter):
                 filename = os.path.expanduser(filename)
                 if os.path.isfile(filename):
                     mirrors.append(Mirror.from_file(filename))
-        return cls(adapter_classes=adapter_classes, mirrors=mirrors, max_connections=max_connections)
+        return cls(adapter_classes=adapter_classes(names=adapter_names), mirrors=mirrors, max_connections=max_connections)
 
     def head(self, url: str, ttl: float | None = None) -> Head:
         """It gets remote file headers."""
 
-        start_time = time.monotonic()
+        start_time = time.monotonic_ns()
         if ttl is not None:
             # when time-to-leave is given, it looks up for pre-cached head first
             try:
@@ -129,7 +98,7 @@ class Client(Adapter):
             value = self._adapter(url).head(url)
         except Exception as ex:
             value = ex
-        end_time = time.monotonic()
+        end_time = time.monotonic_ns()
 
         with self._lock:
             # It records per-server time statistics.
@@ -217,7 +186,7 @@ class Client(Adapter):
             stats = self._stats[_server_key(url)]
             if ttl is not None:
                 # it removes expired latencies
-                deadline = time.monotonic() - ttl
+                deadline = time.monotonic_ns() - ttl
                 while stats and stats[0].end < deadline:
                     stats.popleft()
         return stats
@@ -243,7 +212,7 @@ class Client(Adapter):
                 # It uses registered classes mapping to create a client instance for each required protocol.
 
                 # Given the same prefix it will return the same instance later when re-called from the same thread.
-                cls = adapter_class(url)
+                cls = adapter_class(url=url, classes=self._adapter_classes)
                 self._adapters[url] = adapter = cls.from_url(url)
         return adapter
 

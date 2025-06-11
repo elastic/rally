@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import NamedTuple, Protocol, runtime_checkable
+from typing import Final, NamedTuple, Protocol, runtime_checkable
 
 from esrally.storage._range import NO_RANGE, RangeSet
 
@@ -82,7 +82,7 @@ class Adapter(ABC):
         """
 
 
-_ADAPTER_CLASSES = dict[str, type[Adapter]]()
+_ADAPTER_CLASSES: Final[dict[str, type[Adapter]]] = {}
 
 
 def register_adapter_class(*prefixes: str) -> Callable[[type[Adapter]], type[Adapter]]:
@@ -103,8 +103,27 @@ def register_adapter_class(*prefixes: str) -> Callable[[type[Adapter]], type[Ada
     return decorator
 
 
-def adapter_class(url: str) -> type[Adapter]:
-    for prefix, cls in _ADAPTER_CLASSES.items():
+def adapter_class(url: str, classes: dict[str, type[Adapter]] | None = None) -> type[Adapter]:
+    if classes is None:
+        classes = _ADAPTER_CLASSES
+    for prefix, cls in classes.items():
         if url.startswith(prefix):
             return cls
     raise NotImplementedError(f"unsupported url: {url}")
+
+
+def adapter_classes(names: str = "", classes: dict[str, type[Adapter]] | None = None) -> dict[str, type[Adapter]] | None:
+    if classes is None:
+        classes = _ADAPTER_CLASSES
+    names = names.replace(" ", "")
+    if not names:
+        return dict(classes)
+
+    ret: dict[str, type[Adapter]] = {}
+    for prefix, adapter_cls in classes.items():
+        for selector in names.replace(" ", "").split(","):
+            if prefix.startswith(selector):
+                ret[prefix] = adapter_cls
+            else:
+                ValueError(f"invalid storage adapter name(s): {selector} not in {list(names)}")
+    return ret
