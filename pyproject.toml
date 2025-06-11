@@ -199,6 +199,7 @@ files = ["esrally/", "it/", "tests/"]
 [[tool.mypy.overrides]]
 module = [
     "esrally.mechanic.team",
+    "esrally.storage.*",
     "esrally.utils.cases",
     "esrally.utils.modules",
     "esrally.utils.io",
