@@ -17,23 +17,17 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
 from urllib.error import HTTPError
 
 import requests
 import requests.adapters
 import urllib3
 import yaml
+from requests.structures import CaseInsensitiveDict
 
 from esrally.config import Config
-from esrally.storage._adapter import (
-    Adapter,
-    Head,
-    Readable,
-    ServiceUnavailableError,
-    Writable,
-)
-from esrally.storage._range import MAX_LENGTH, NO_RANGE, Range, RangeSet
+from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
+from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 
 LOG = logging.getLogger(__name__)
 
@@ -91,8 +85,7 @@ class HTTPAdapter(Adapter):
             return head_from_headers(url, r.headers)
 
     def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
-        headers: dict[str, str] = {}
-        ranges_to_headers(headers, ranges)
+        headers = ranges_to_headers(ranges)
         with self._session.get(url, stream=True, allow_redirects=True, headers=headers) as r:
             if r.status_code == 503:
                 raise ServiceUnavailableError()
@@ -107,82 +100,58 @@ class HTTPAdapter(Adapter):
                     stream.write(chunk)
         return head
 
-    def put(self, url: str, stream: Readable, ranges: RangeSet = NO_RANGE) -> Head:
-        headers: dict[str, str] = {}
-        ranges_to_headers(headers, ranges)
-        with self._session.put(url, allow_redirects=True, headers=headers, data=stream) as r:
-            if r.status_code == 503:
-                raise ServiceUnavailableError()
-            r.raise_for_status()
-            head = head_from_headers(url, r.headers)
-            if head.ranges != ranges:
-                raise ValueError(f"unexpected content range in server response: got {head.ranges}, want: {ranges}")
 
-        return head
-
-
-def ranges_to_headers(headers: dict[str, str], ranges: RangeSet = NO_RANGE) -> None:
+def ranges_to_headers(ranges: RangeSet, headers: CaseInsensitiveDict | None = None) -> CaseInsensitiveDict:
+    if headers is None:
+        headers = CaseInsensitiveDict()
+    if not ranges:
+        return headers
     if len(ranges) > 1:
-        raise NotImplementedError(f"unsupported multi range requests: range is {ranges}")
-    for r in ranges:
-        headers["range"] = f"bytes={r.start}-"
-        if r.end != MAX_LENGTH:
-            headers["range"] += f"{r.end - 1}"
+        raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
+    headers["range"] = f"bytes={ranges[0]}"
+    return headers
 
 
-def content_length_from_headers(headers: Mapping[str, str]) -> int | None:
-    try:
-        return int(headers.get("content-length", "*").strip())
-    except ValueError:
+def content_length_from_headers(headers: CaseInsensitiveDict) -> int | None:
+    value = headers.get("content-length", "*").strip()
+    if value == "*":
         return None
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError(f"invalid content-length value: {value}") from None
 
 
-def accept_ranges_from_headers(headers: Mapping[str, str]) -> bool:
-    return headers.get("accept-ranges", "").strip() == "bytes"
+def accept_ranges_from_headers(headers: CaseInsensitiveDict) -> bool | None:
+    got = headers.get("accept-ranges", "").strip()
+    if not got:
+        return None
+    return got == "bytes"
 
 
-def range_from_headers(headers: Mapping[str, str]) -> tuple[RangeSet, int | None]:
-    content_range = headers.get("content-range", "").strip()
-    if not content_range:
+def content_range_from_headers(headers: CaseInsensitiveDict) -> tuple[RangeSet, int | None]:
+    content_range_text = headers.get("content-range", "").strip()
+    if not content_range_text:
         return NO_RANGE, None
 
-    if not content_range.startswith("bytes "):
-        raise ValueError(f"unsupported content range: {content_range}")
+    if not content_range_text.startswith("bytes "):
+        raise ValueError(f"invalid content range: {content_range_text}")
 
-    if "," in content_range:
+    if "," in content_range_text:
         raise ValueError("multi range value is not unsupported")
 
     try:
-        value = content_range[len("bytes ") :].strip().replace(" ", "")
-        value, content_length_text = value.split("/", 1)
-        value = value.strip()
-        try:
+        value, content_length_text = content_range_text[len("bytes ") :].strip().replace(" ", "").split("/", 1)
+        content_length: int | None = None
+        if content_length_text != "*":
             content_length = int(content_length_text)
-        except ValueError:
-            if content_length_text == "*":
-                raise
-            content_length = None
-
-        start_text, end_text = value.split("-", 1)
-        try:
-            start = int(start_text)
-        except ValueError:
-            if start_text == "":
-                raise
-            start = 0
-        try:
-            end = int(end_text) + 1
-        except ValueError:
-            if end_text != "*":
-                raise
-            end = MAX_LENGTH
-        return Range(start, end), content_length
-    except ValueError as ex:
-        raise ValueError(f"invalid content range in {content_range}: {ex}")
+        return rangeset(value), content_length
+    except ValueError:
+        raise ValueError(f"invalid content range in '{content_range_text}'")
 
 
-def head_from_headers(url: str, headers: Mapping[str, str]) -> Head:
-    ranges, content_length = range_from_headers(headers)
+def head_from_headers(url: str, headers: CaseInsensitiveDict) -> Head:
+    ranges, content_length = content_range_from_headers(headers)
     content_length = content_length_from_headers(headers) or content_length
     accept_ranges = accept_ranges_from_headers(headers)
     return Head.create(url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges)
