@@ -143,8 +143,8 @@ class WaitGroupLimitError(Exception):
 class WaitGroup(TimedEvent):
     """It implements a go-lang style wait group on top of a timed event.
 
-    After N-times the done method is called, the event will be set. This can be used for waiting for waiting for
-    multiple works to terminate.
+    After N-times the done method is called, the event will be set. This can be used for waiting for multiple works
+    to terminate.
 
     Example of use:
         wg = WaitGroup()

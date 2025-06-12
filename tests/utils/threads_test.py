@@ -137,7 +137,7 @@ def test_wait_group():
     except WaitGroupLimitError:
         pass
     else:
-        pytest.fail("didn't raised exception")
+        pytest.fail("didn't raise WaitGroupLimitError exception")
 
     for i in range(max_count - 1):
         assert wg.count == max_count - i
