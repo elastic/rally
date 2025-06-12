@@ -148,7 +148,7 @@ def list_tracks(cfg: types.Config):
         ]
         if not only_auto_generated_challenges:
             line.append(t.default_challenge)
-            line.append(",".join(map(str, t.challenges)))
+            line.append(",".join(sorted(map(str, t.challenges))))
         data.append(line)
 
     headers = ["Name", "Description", "Documents", "Compressed Size", "Uncompressed Size"]
@@ -156,6 +156,7 @@ def list_tracks(cfg: types.Config):
         headers.append("Default Challenge")
         headers.append("All Challenges")
 
+    data.sort(key=lambda x: x[0])
     console.println("Available tracks:\n")
     console.println(tabulate.tabulate(tabular_data=data, headers=headers))
 
