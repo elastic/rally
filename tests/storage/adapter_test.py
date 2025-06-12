@@ -30,7 +30,7 @@ from esrally.utils.cases import cases
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_url(cls, url: str, cfg: Config | None = None) -> Adapter:
+    def from_config(cls, cfg: Config) -> Adapter:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 

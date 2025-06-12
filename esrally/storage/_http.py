@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from typing import Final
 from urllib.error import HTTPError
 
 import requests
 import requests.adapters
 import urllib3
+import yaml
 
+from esrally.config import Config
 from esrally.storage._adapter import (
     Adapter,
     Head,
@@ -40,15 +41,29 @@ LOG = logging.getLogger(__name__)
 # Size of the buffers used for file transfer content.
 CHUNK_SIZE = 1 * 1024 * 1024
 
-
-class Retry(urllib3.Retry):
-    DEFAULT_BACKOFF_MAX = 20
-
-
 # It limits the maximum number of connection retries.
-MAX_RETRIES_NUMBER = 10
-MAX_RETRIES_BACKOFF_FACTOR = 1
-MAX_RETRIES: Final[urllib3.Retry] = Retry(MAX_RETRIES_NUMBER, backoff_factor=MAX_RETRIES_BACKOFF_FACTOR)
+MAX_RETRIES = 10
+
+
+class Session(requests.Session):
+
+    @classmethod
+    def from_config(cls, cfg: Config) -> Session:
+        max_retries: urllib3.Retry | int | None = 0
+        max_retries_text = cfg.opts("storage", "storage.http.max_retries", MAX_RETRIES).strip()
+        if max_retries_text:
+            try:
+                max_retries = int(max_retries_text)
+            except ValueError:
+                max_retries = urllib3.Retry(**yaml.safe_load(max_retries_text))
+        return cls(max_retries=max_retries)
+
+    def __init__(self, max_retries: urllib3.Retry | int | None = 0) -> None:
+        super().__init__()
+        if max_retries:
+            adapter = requests.adapters.HTTPAdapter(max_retries=max_retries)
+            self.mount("http://", adapter)
+            self.mount("https://", adapter)
 
 
 class HTTPAdapter(Adapter):
@@ -56,19 +71,23 @@ class HTTPAdapter(Adapter):
 
     __adapter_prefixes__ = ("http:", "https:")
 
-    def __init__(self, session: requests.Session | None = None, max_retries: urllib3.Retry = MAX_RETRIES):
+    @classmethod
+    def from_config(cls, cfg: Config) -> Adapter:
+        chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
+        return HTTPAdapter(session=Session.from_config(cfg), chunk_size=chunk_size)
+
+    def __init__(self, session: requests.Session | None = None, chunk_size: int = CHUNK_SIZE):
         if session is None:
             session = requests.session()
+        self._chunk_size = chunk_size
         self._session = session
-        self._session.mount("http://", requests.adapters.HTTPAdapter(max_retries=max_retries))
-        self._session.mount("https://", requests.adapters.HTTPAdapter(max_retries=max_retries))
 
     def head(self, url: str) -> Head:
         with self._session.head(url, allow_redirects=True) as r:
             try:
                 r.raise_for_status()
-            except HTTPError:
-                raise FileNotFoundError(f"can't get file head: {url}")
+            except HTTPError as ex:
+                raise FileNotFoundError(f"can't get file head: {url}") from ex
             return head_from_headers(url, r.headers)
 
     def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:

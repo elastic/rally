@@ -25,8 +25,9 @@ import pytest
 from requests import Response, Session
 from requests.structures import CaseInsensitiveDict
 
-from esrally.storage import Head, Writable, rangeset
+from esrally.storage._adapter import Head, Writable
 from esrally.storage._http import HTTPAdapter
+from esrally.storage._range import rangeset
 from esrally.utils.cases import cases
 
 

@@ -14,8 +14,3 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
-# It imports http client implementation modules to register their adapter class.
-import esrally.storage._http  # noqa
-from esrally.storage._adapter import Adapter, Head, Writable
-from esrally.storage._range import NO_RANGE, Range, RangeSet, rangeset
