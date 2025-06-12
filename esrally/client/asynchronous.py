@@ -366,7 +366,7 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
             headers=request_headers,
             body=body,
             request_timeout=self._request_timeout,
-            max_retries=self._max_retries,
+            max_retries=10,
             retry_on_status=self._retry_on_status,
             retry_on_timeout=self._retry_on_timeout,
             client_meta=self._client_meta,

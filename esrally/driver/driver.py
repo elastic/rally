@@ -2046,7 +2046,14 @@ async def execute_single(runner, es, params, on_error):
         # we *specifically* want to distinguish connection refused (a node died?) from connection timeouts
         # pylint: disable=unidiomatic-typecheck
         if type(e) is elasticsearch.ConnectionError:
-            fatal_error = True
+            # fatal_error = True temporarily disabled
+            logging.getLogger(__name__).warning(
+                "Connection error while executing runner [%s]. Full exception: "
+                "[%s]"
+                "Please check the logs of the node for more details.",
+                str(runner),
+                str(e),
+            )
 
         total_ops = 0
         total_ops_unit = "ops"
