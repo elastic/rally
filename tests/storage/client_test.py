@@ -16,18 +16,84 @@
 # under the License.
 from __future__ import annotations
 
+from dataclasses import dataclass
+from unittest.mock import create_autospec
+
 import pytest
 
-from esrally.config import Config
-from esrally.storage import Client, Head
+from esrally.config import Config, Scope
+from esrally.storage._adapter import Adapter, Head, Writable
+from esrally.storage._client import Client
+from esrally.storage._range import NO_RANGE, RangeSet, rangeset
+from esrally.utils.cases import cases
+
+URL = "https://example.com"
+HEAD = Head(url=URL, content_length=20, accept_ranges=True)
+DATA = b"<!doctype html>\n<html>\n<head>\n"
+
+
+class HTTPSAdapter(Adapter):
+
+    __adapter_prefixes__ = ("https:",)
+
+    def __init__(self):
+        super().__init__()
+        self._head = HEAD
+        self._data = DATA
+
+    def head(self, url: str) -> Head:
+        return self._head
+
+    def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
+        if ranges:
+            stream.write(self._data)
+            return Head(url, content_length=len(self._data), accept_ranges=True, ranges=ranges)
+        else:
+            return Head(url, content_length=648, accept_ranges=True)
 
 
 @pytest.fixture
-def client() -> Client:
-    return Client.from_config(Config())
+def cfg() -> Config:
+    cfg = Config()
+    cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:HTTPSAdapter")
+    return cfg
 
 
-def test_head(client: Client) -> None:
-    got = client.head("https://example.com", ttl=10)
-    assert isinstance(got, Head)
-    assert got is client.head("https://example.com", ttl=10)
+@pytest.fixture
+def client(cfg: Config) -> Client:
+    return Client.from_config(cfg)
+
+
+@dataclass()
+class HeadCase:
+    url: str
+    want: Head
+    ttl: float | None = None
+
+
+@cases(default=HeadCase(URL, HEAD), ttl=HeadCase(URL, HEAD, ttl=300.0))
+def test_head(case: HeadCase, client: Client) -> None:
+    got = client.head(url=case.url, ttl=case.ttl)
+    assert got == case.want
+    if case.ttl is not None:
+        assert got is client.head(url=case.url, ttl=case.ttl)
+
+
+@dataclass()
+class GetCase:
+    url: str
+    want: Head
+    ranges: RangeSet = NO_RANGE
+    want_data: bytes | None = None
+
+
+@cases(
+    regular=GetCase(url=URL, want=Head(URL, 648, True)),
+    range=GetCase(URL, ranges=rangeset("0-29"), want=Head(URL, 30, True, rangeset("0-29")), want_data=DATA),
+)
+def test_get(case: GetCase, client: Client) -> None:
+    stream = create_autospec(Writable, spec_set=True, instance=True)
+    got = client.get(case.url, stream, case.ranges)
+    assert got == case.want
+    if case.want_data is not None:
+        stream.write.assert_called_once_with(case.want_data)

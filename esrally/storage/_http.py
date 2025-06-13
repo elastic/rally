@@ -17,22 +17,17 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
-from typing import Final
 from urllib.error import HTTPError
 
 import requests
 import requests.adapters
 import urllib3
+import yaml
+from requests.structures import CaseInsensitiveDict
 
-from esrally.storage._adapter import (
-    Adapter,
-    Head,
-    Readable,
-    ServiceUnavailableError,
-    Writable,
-)
-from esrally.storage._range import MAX_LENGTH, NO_RANGE, Range, RangeSet
+from esrally.config import Config
+from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
+from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 
 LOG = logging.getLogger(__name__)
 
@@ -40,15 +35,29 @@ LOG = logging.getLogger(__name__)
 # Size of the buffers used for file transfer content.
 CHUNK_SIZE = 1 * 1024 * 1024
 
-
-class Retry(urllib3.Retry):
-    DEFAULT_BACKOFF_MAX = 20
-
-
 # It limits the maximum number of connection retries.
-MAX_RETRIES_NUMBER = 10
-MAX_RETRIES_BACKOFF_FACTOR = 1
-MAX_RETRIES: Final[urllib3.Retry] = Retry(MAX_RETRIES_NUMBER, backoff_factor=MAX_RETRIES_BACKOFF_FACTOR)
+MAX_RETRIES = 10
+
+
+class Session(requests.Session):
+
+    @classmethod
+    def from_config(cls, cfg: Config) -> Session:
+        max_retries: urllib3.Retry | int | None = 0
+        max_retries_text = cfg.opts("storage", "storage.http.max_retries", MAX_RETRIES, mandatory=False)
+        if max_retries_text:
+            try:
+                max_retries = int(max_retries_text)
+            except ValueError:
+                max_retries = urllib3.Retry(**yaml.safe_load(max_retries_text))
+        return cls(max_retries=max_retries)
+
+    def __init__(self, max_retries: urllib3.Retry | int | None = 0) -> None:
+        super().__init__()
+        if max_retries:
+            adapter = requests.adapters.HTTPAdapter(max_retries=max_retries)
+            self.mount("http://", adapter)
+            self.mount("https://", adapter)
 
 
 class HTTPAdapter(Adapter):
@@ -56,114 +65,93 @@ class HTTPAdapter(Adapter):
 
     __adapter_prefixes__ = ("http:", "https:")
 
-    def __init__(self, session: requests.Session | None = None, max_retries: urllib3.Retry = MAX_RETRIES):
+    @classmethod
+    def from_config(cls, cfg: Config) -> Adapter:
+        chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
+        return HTTPAdapter(session=Session.from_config(cfg), chunk_size=chunk_size)
+
+    def __init__(self, session: requests.Session | None = None, chunk_size: int = CHUNK_SIZE):
         if session is None:
             session = requests.session()
+        self._chunk_size = chunk_size
         self._session = session
-        self._session.mount("http://", requests.adapters.HTTPAdapter(max_retries=max_retries))
-        self._session.mount("https://", requests.adapters.HTTPAdapter(max_retries=max_retries))
 
     def head(self, url: str) -> Head:
-        with self._session.head(url, allow_redirects=True) as r:
+        with self._session.head(url, allow_redirects=True) as res:
             try:
-                r.raise_for_status()
-            except HTTPError:
-                raise FileNotFoundError(f"can't get file head: {url}")
-            return head_from_headers(url, r.headers)
+                res.raise_for_status()
+            except HTTPError as ex:
+                raise FileNotFoundError(f"can't get file head: {url}") from ex
+            return head_from_headers(url, res.headers)
 
     def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
-        headers: dict[str, str] = {}
-        ranges_to_headers(headers, ranges)
-        with self._session.get(url, stream=True, allow_redirects=True, headers=headers) as r:
-            if r.status_code == 503:
+        headers = ranges_to_headers(ranges)
+        with self._session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
+            if res.status_code == 503:
                 raise ServiceUnavailableError()
-            r.raise_for_status()
+            res.raise_for_status()
 
-            head = head_from_headers(url, r.headers)
+            head = head_from_headers(url, res.headers)
             if head.ranges != ranges:
                 raise ValueError(f"unexpected content range in server response: got {head.ranges}, want: {ranges}")
 
-            for chunk in r.iter_content(CHUNK_SIZE):
+            for chunk in res.iter_content(self._chunk_size):
                 if chunk:
                     stream.write(chunk)
         return head
 
-    def put(self, url: str, stream: Readable, ranges: RangeSet = NO_RANGE) -> Head:
-        headers: dict[str, str] = {}
-        ranges_to_headers(headers, ranges)
-        with self._session.put(url, allow_redirects=True, headers=headers, data=stream) as r:
-            if r.status_code == 503:
-                raise ServiceUnavailableError()
-            r.raise_for_status()
-            head = head_from_headers(url, r.headers)
-            if head.ranges != ranges:
-                raise ValueError(f"unexpected content range in server response: got {head.ranges}, want: {ranges}")
 
-        return head
-
-
-def ranges_to_headers(headers: dict[str, str], ranges: RangeSet = NO_RANGE) -> None:
+def ranges_to_headers(ranges: RangeSet, headers: CaseInsensitiveDict | None = None) -> CaseInsensitiveDict:
+    if headers is None:
+        headers = CaseInsensitiveDict()
+    if not ranges:
+        return headers
     if len(ranges) > 1:
-        raise NotImplementedError(f"unsupported multi range requests: range is {ranges}")
-    for r in ranges:
-        headers["range"] = f"bytes={r.start}-"
-        if r.end != MAX_LENGTH:
-            headers["range"] += f"{r.end - 1}"
+        raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
+    headers["range"] = f"bytes={ranges[0]}"
+    return headers
 
 
-def content_length_from_headers(headers: Mapping[str, str]) -> int | None:
-    try:
-        return int(headers.get("content-length", "*").strip())
-    except ValueError:
+def content_length_from_headers(headers: CaseInsensitiveDict) -> int | None:
+    value = headers.get("content-length", "*").strip()
+    if value == "*":
         return None
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError(f"invalid content-length value: {value}") from None
 
 
-def accept_ranges_from_headers(headers: Mapping[str, str]) -> bool:
-    return headers.get("accept-ranges", "").strip() == "bytes"
+def accept_ranges_from_headers(headers: CaseInsensitiveDict) -> bool | None:
+    got = headers.get("accept-ranges", "").strip()
+    if not got:
+        return None
+    return got == "bytes"
 
 
-def range_from_headers(headers: Mapping[str, str]) -> tuple[RangeSet, int | None]:
-    content_range = headers.get("content-range", "").strip()
-    if not content_range:
+def content_range_from_headers(headers: CaseInsensitiveDict) -> tuple[RangeSet, int | None]:
+    content_range_text = headers.get("content-range", "").strip()
+    if not content_range_text:
         return NO_RANGE, None
 
-    if not content_range.startswith("bytes "):
-        raise ValueError(f"unsupported content range: {content_range}")
+    if not content_range_text.startswith("bytes "):
+        raise ValueError(f"invalid content range: {content_range_text}")
 
-    if "," in content_range:
+    if "," in content_range_text:
         raise ValueError("multi range value is not unsupported")
 
     try:
-        value = content_range[len("bytes ") :].strip().replace(" ", "")
-        value, content_length_text = value.split("/", 1)
-        value = value.strip()
-        try:
+        value, content_length_text = content_range_text[len("bytes ") :].strip().replace(" ", "").split("/", 1)
+        content_length: int | None = None
+        if content_length_text != "*":
             content_length = int(content_length_text)
-        except ValueError:
-            if content_length_text == "*":
-                raise
-            content_length = None
-
-        start_text, end_text = value.split("-", 1)
-        try:
-            start = int(start_text)
-        except ValueError:
-            if start_text == "":
-                raise
-            start = 0
-        try:
-            end = int(end_text) + 1
-        except ValueError:
-            if end_text != "*":
-                raise
-            end = MAX_LENGTH
-        return Range(start, end), content_length
-    except ValueError as ex:
-        raise ValueError(f"invalid content range in {content_range}: {ex}")
+        return rangeset(value), content_length
+    except ValueError:
+        raise ValueError(f"invalid content range in '{content_range_text}'")
 
 
-def head_from_headers(url: str, headers: Mapping[str, str]) -> Head:
-    ranges, content_length = range_from_headers(headers)
-    content_length = content_length_from_headers(headers) or content_length
+def head_from_headers(url: str, headers: CaseInsensitiveDict) -> Head:
+    ranges, _ = content_range_from_headers(headers)
+    content_length = content_length_from_headers(headers)
     accept_ranges = accept_ranges_from_headers(headers)
     return Head.create(url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges)

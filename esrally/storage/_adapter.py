@@ -66,7 +66,7 @@ class Adapter(ABC):
     __adapter_prefixes__: tuple[str, ...] = tuple()
 
     @classmethod
-    def from_url(cls, url: str, cfg: Config) -> Adapter:
+    def from_config(cls, cfg: Config) -> Adapter:
         return cls()
 
     @abstractmethod
@@ -99,7 +99,7 @@ class AdapterRegistry:
 
     def __init__(self, cfg: Config) -> None:
         self._classes: dict[str, type[Adapter]] = {}
-        self._adapters: dict[tuple[str, Config], Adapter] = {}
+        self._adapters: dict[type[Adapter], Adapter] = {}
         self._lock = threading.Lock()
         self._cfg = cfg
 
@@ -113,11 +113,7 @@ class AdapterRegistry:
         )
         for spec in adapters_specs:
             module_name, class_name = spec.split(":")
-            try:
-                module = importlib.import_module(module_name)
-            except ImportError:
-                LOG.exception("Failed to import module '%s'", module_name)
-                continue
+            module = importlib.import_module(module_name)
             obj = getattr(module, class_name)
             if not isinstance(obj, type) or not issubclass(obj, Adapter):
                 raise TypeError(f"'{obj}' is not a valid subclass of Adapter")
@@ -139,14 +135,13 @@ class AdapterRegistry:
         with self._lock:
             for prefix, cls in self._classes.items():
                 if url.startswith(prefix):
-                    key = (url, self._cfg)
-                    adapter = self._adapters.get(key)
+                    adapter = self._adapters.get(cls)
                     if adapter is None:
                         try:
-                            adapter = cls.from_url(url, self._cfg)
+                            adapter = cls.from_config(self._cfg)
                         except ValueError as ex:
                             LOG.error("Failed to configure adapter for URL '%s': %s", url, ex)
                             continue
-                    self._adapters[key] = adapter
+                    self._adapters[cls] = adapter
                     return adapter
         raise ValueError(f"No adapter found for url '{url}'")

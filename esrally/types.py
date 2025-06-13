@@ -150,6 +150,8 @@ Key = Literal[
     "source.revision",
     "src.root.dir",
     "storage.adapters",
+    "storage.http.chunk_size",
+    "storage.http.max_retries",
     "storage.max_connections",
     "storage.mirrors_files",
     "target.arch",

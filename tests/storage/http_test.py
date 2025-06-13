@@ -25,9 +25,12 @@ import pytest
 from requests import Response, Session
 from requests.structures import CaseInsensitiveDict
 
-from esrally.storage import Head, Writable, rangeset
-from esrally.storage._http import HTTPAdapter
+from esrally.storage._adapter import Head, Writable
+from esrally.storage._http import HTTPAdapter, head_from_headers, ranges_to_headers
+from esrally.storage._range import rangeset
 from esrally.utils.cases import cases
+
+URL = "https://example.com"
 
 
 @pytest.fixture()
@@ -60,13 +63,9 @@ def response(
 
 @cases(
     "case",
-    simple=HeadCase("https://www.example.com", response(), Head(url="https://www.example.com")),
-    accept_ranges=HeadCase(
-        "https://www.example.com", response(accept_ranges=True), Head(url="https://www.example.com", accept_ranges=True)
-    ),
-    content_length=HeadCase(
-        "https://www.example.com", response(content_length=512), Head(url="https://www.example.com", content_length=512)
-    ),
+    simple=HeadCase(URL, response(), Head(url=URL)),
+    accept_ranges=HeadCase(URL, response(accept_ranges=True), Head(url=URL, accept_ranges=True)),
+    content_length=HeadCase(URL, response(content_length=512), Head(URL, content_length=512)),
 )
 def test_head(case: HeadCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
@@ -90,16 +89,14 @@ class GetCase:
 
 @cases(
     "case",
-    simple=GetCase("https://www.example.com", response(), Head(url="https://www.example.com")),
-    accept_ranges=GetCase("https://www.example.com", response(accept_ranges=True), Head(url="https://www.example.com", accept_ranges=True)),
-    content_length=GetCase(
-        "https://www.example.com", response(content_length=512), Head(url="https://www.example.com", content_length=512)
-    ),
-    read_data=GetCase("https://www.example.com", response(data="some_data"), Head(url="https://www.example.com"), want_data="some_data"),
+    simple=GetCase(URL, response(), Head(url=URL)),
+    accept_ranges=GetCase(URL, response(accept_ranges=True), Head(url=URL, accept_ranges=True)),
+    content_length=GetCase(URL, response(content_length=512), Head(url=URL, content_length=512)),
+    read_data=GetCase(URL, response(data="some_data"), Head(url=URL), want_data="some_data"),
     ranges=GetCase(
-        "https://www.example.com",
+        URL,
         response(content_range="bytes 10-20/30"),
-        Head(url="https://www.example.com", content_length=30, ranges=rangeset("10-20")),
+        Head(url=URL, content_length=30, ranges=rangeset("10-20"), accept_ranges=True),
         ranges="10-20",
         want_request_range="bytes=10-20",
     ),
@@ -118,3 +115,53 @@ def test_get(case: GetCase, session: Session) -> None:
     if case.want_request_range:
         want_request_headers["range"] = case.want_request_range
     session.get.assert_called_once_with(case.url, stream=True, allow_redirects=True, headers=want_request_headers)
+
+
+@dataclass()
+class RangesToHeadersCase:
+    ranges: str
+    want: dict[str, str] | type[Exception]
+
+
+@cases(
+    no_ranges=RangesToHeadersCase("", {}),
+    range=RangesToHeadersCase("10-20", {"Range": "bytes=10-20"}),
+    open_left=RangesToHeadersCase("-20", {"Range": "bytes=0-20"}),
+    open_right=RangesToHeadersCase("10-", {"Range": "bytes=10-"}),
+    multipart=RangesToHeadersCase("1-5,7-10", NotImplementedError),
+)
+def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
+    try:
+        got = ranges_to_headers(rangeset(case.ranges))
+    except Exception as ex:
+        got = ex
+    if isinstance(case.want, type):
+        assert isinstance(got, case.want)
+    else:
+        assert got == CaseInsensitiveDict(case.want)
+
+
+@dataclass()
+class HeadFromHeadersCase:
+    url: str
+    headers: dict[str, str]
+    want: Head | Exception
+
+
+@cases(
+    empty=HeadFromHeadersCase(URL, {}, Head(URL)),
+    content_length=HeadFromHeadersCase(URL, {"Content-Length": "10"}, Head(URL, content_length=10)),
+    accept_ranges=HeadFromHeadersCase(URL, {"Accept-Ranges": "bytes"}, Head(URL, accept_ranges=True)),
+    ranges=HeadFromHeadersCase(
+        URL, {"Content-Range": "bytes 512-1023/146515"}, Head(URL, ranges=rangeset("512-1023"), accept_ranges=True, content_length=146515)
+    ),
+)
+def test_head_from_headers(case: HeadFromHeadersCase):
+    try:
+        got = head_from_headers(url=case.url, headers=CaseInsensitiveDict(case.headers))
+    except Exception as ex:
+        got = ex
+    if isinstance(case.want, type):
+        assert isinstance(got, case.want)
+    else:
+        assert got == case.want

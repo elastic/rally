@@ -80,7 +80,7 @@ class Client(Adapter):
     def head(self, url: str, ttl: float | None = None) -> Head:
         """It gets remote file headers."""
 
-        start_time = time.monotonic_ns()
+        start_time = time.monotonic()
         if ttl is not None:
             # when time-to-leave is given, it looks up for pre-cached head first
             try:
@@ -97,7 +97,7 @@ class Client(Adapter):
             value = adapter.head(url)
         except Exception as ex:
             value = ex
-        end_time = time.monotonic_ns()
+        end_time = time.monotonic()
 
         with self._lock:
             # It records per-server time statistics.
@@ -186,7 +186,7 @@ class Client(Adapter):
             stats = self._stats[_server_key(url)]
             if ttl is not None:
                 # it removes expired latencies
-                deadline = time.monotonic_ns() - ttl
+                deadline = time.monotonic() - ttl
                 while stats and stats[0].end < deadline:
                     stats.popleft()
         return stats
