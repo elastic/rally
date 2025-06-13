@@ -96,7 +96,7 @@ class GetCase:
     ranges=GetCase(
         URL,
         response(content_range="bytes 10-20/30"),
-        Head(url=URL, content_length=30, ranges=rangeset("10-20"), accept_ranges=True),
+        Head(url=URL, ranges=rangeset("10-20"), accept_ranges=True),
         ranges="10-20",
         want_request_range="bytes=10-20",
     ),
@@ -152,9 +152,7 @@ class HeadFromHeadersCase:
     empty=HeadFromHeadersCase(URL, {}, Head(URL)),
     content_length=HeadFromHeadersCase(URL, {"Content-Length": "10"}, Head(URL, content_length=10)),
     accept_ranges=HeadFromHeadersCase(URL, {"Accept-Ranges": "bytes"}, Head(URL, accept_ranges=True)),
-    ranges=HeadFromHeadersCase(
-        URL, {"Content-Range": "bytes 512-1023/146515"}, Head(URL, ranges=rangeset("512-1023"), accept_ranges=True, content_length=146515)
-    ),
+    ranges=HeadFromHeadersCase(URL, {"Content-Range": "bytes 512-1023/146515"}, Head(URL, ranges=rangeset("512-1023"), accept_ranges=True)),
 )
 def test_head_from_headers(case: HeadFromHeadersCase):
     try:
