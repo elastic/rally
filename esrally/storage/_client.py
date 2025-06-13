@@ -17,12 +17,11 @@
 from __future__ import annotations
 
 import logging
-import os.path
 import threading
 import time
 import urllib.parse
 from collections import defaultdict, deque
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from random import Random
 from typing import NamedTuple
 
@@ -34,7 +33,7 @@ from esrally.storage._adapter import (
     ServiceUnavailableError,
     Writable,
 )
-from esrally.storage._mirror import Mirror
+from esrally.storage._mirror import MirrorList
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.utils.threads import WaitGroup, WaitGroupLimitError
 
@@ -50,20 +49,12 @@ class Client(Adapter):
     @classmethod
     def from_config(cls, cfg: config.Config) -> Client:
         max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
-        mirrors = []
-        for filename in cfg.opts(section="storage", key="storage.mirrors_files", default_value=MIRRORS_FILES, mandatory=False).split(","):
-            filename = filename.strip()
-            if filename:
-                filename = os.path.expanduser(filename)
-                if os.path.isfile(filename):
-                    mirrors.append(Mirror.from_file(filename))
-        adapters = AdapterRegistry.from_config(cfg)
-        return cls(mirrors=mirrors, max_connections=max_connections, adapters=adapters)
+        return cls(max_connections=max_connections, mirrors=MirrorList.from_config(cfg), adapters=AdapterRegistry.from_config(cfg))
 
     def __init__(
         self,
         adapters: AdapterRegistry,
-        mirrors: Iterable[Mirror] = tuple(),
+        mirrors: MirrorList,
         random: Random | None = None,
         max_connections: int = MAX_CONNECTIONS,
     ):
@@ -73,7 +64,7 @@ class Client(Adapter):
         self._cached_heads: dict[str, tuple[Head | Exception, float]] = {}
         self._connections: dict[str, WaitGroup] = defaultdict(lambda: WaitGroup(max_count=max_connections))
         self._lock = threading.Lock()
-        self._mirrors: list[Mirror] = list(mirrors)
+        self._mirrors: MirrorList = mirrors
         self._random: Random = random
         self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
 
@@ -117,8 +108,8 @@ class Client(Adapter):
         :return: iterator over mirror URLs
         """
 
-        mirror_urls = list({u for m in self._mirrors for u in m.urls(url)})
-        if len(mirror_urls) == 0:
+        mirror_urls = list(self._mirrors.urls(url))
+        if not mirror_urls:
             yield self.head(url, ttl=ttl)
             return
 
