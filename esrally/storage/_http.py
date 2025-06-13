@@ -44,7 +44,7 @@ class Session(requests.Session):
     @classmethod
     def from_config(cls, cfg: Config) -> Session:
         max_retries: urllib3.Retry | int | None = 0
-        max_retries_text = cfg.opts("storage", "storage.http.max_retries", MAX_RETRIES).strip()
+        max_retries_text = cfg.opts("storage", "storage.http.max_retries", MAX_RETRIES, mandatory=False)
         if max_retries_text:
             try:
                 max_retries = int(max_retries_text)
@@ -77,25 +77,25 @@ class HTTPAdapter(Adapter):
         self._session = session
 
     def head(self, url: str) -> Head:
-        with self._session.head(url, allow_redirects=True) as r:
+        with self._session.head(url, allow_redirects=True) as res:
             try:
-                r.raise_for_status()
+                res.raise_for_status()
             except HTTPError as ex:
                 raise FileNotFoundError(f"can't get file head: {url}") from ex
-            return head_from_headers(url, r.headers)
+            return head_from_headers(url, res.headers)
 
     def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
         headers = ranges_to_headers(ranges)
-        with self._session.get(url, stream=True, allow_redirects=True, headers=headers) as r:
-            if r.status_code == 503:
+        with self._session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
+            if res.status_code == 503:
                 raise ServiceUnavailableError()
-            r.raise_for_status()
+            res.raise_for_status()
 
-            head = head_from_headers(url, r.headers)
+            head = head_from_headers(url, res.headers)
             if head.ranges != ranges:
                 raise ValueError(f"unexpected content range in server response: got {head.ranges}, want: {ranges}")
 
-            for chunk in r.iter_content(CHUNK_SIZE):
+            for chunk in res.iter_content(self._chunk_size):
                 if chunk:
                     stream.write(chunk)
         return head
@@ -151,7 +151,7 @@ def content_range_from_headers(headers: CaseInsensitiveDict) -> tuple[RangeSet, 
 
 
 def head_from_headers(url: str, headers: CaseInsensitiveDict) -> Head:
-    ranges, content_length = content_range_from_headers(headers)
-    content_length = content_length_from_headers(headers) or content_length
+    ranges, _ = content_range_from_headers(headers)
+    content_length = content_length_from_headers(headers)
     accept_ranges = accept_ranges_from_headers(headers)
     return Head.create(url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges)

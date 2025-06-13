@@ -113,11 +113,7 @@ class AdapterRegistry:
         )
         for spec in adapters_specs:
             module_name, class_name = spec.split(":")
-            try:
-                module = importlib.import_module(module_name)
-            except ImportError:
-                LOG.exception("Failed to import module '%s'", module_name)
-                continue
+            module = importlib.import_module(module_name)
             obj = getattr(module, class_name)
             if not isinstance(obj, type) or not issubclass(obj, Adapter):
                 raise TypeError(f"'{obj}' is not a valid subclass of Adapter")
