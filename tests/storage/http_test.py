@@ -25,9 +25,17 @@ import pytest
 from requests import Response, Session
 from requests.structures import CaseInsensitiveDict
 
+from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
-from esrally.storage._http import HTTPAdapter, head_from_headers, ranges_to_headers
+from esrally.storage._http import (
+    CHUNK_SIZE,
+    MAX_RETRIES,
+    HTTPAdapter,
+    head_from_headers,
+    ranges_to_headers,
+)
 from esrally.storage._range import rangeset
+from esrally.types import Key
 from esrally.utils.cases import cases
 
 URL = "https://example.com"
@@ -163,3 +171,26 @@ def test_head_from_headers(case: HeadFromHeadersCase):
         assert isinstance(got, case.want)
     else:
         assert got == case.want
+
+
+@dataclass()
+class FromConfigCase:
+    opts: dict[Key, str]
+    want_chunk_size: int = CHUNK_SIZE
+    want_max_retries: int = MAX_RETRIES
+
+
+@cases(
+    default=FromConfigCase({}),
+    chunk_size=FromConfigCase({"storage.http.chunk_size": "10"}, want_chunk_size=10),
+    max_retries=FromConfigCase({"storage.http.max_retries": "3"}, want_max_retries=3),
+    max_retries_yml=FromConfigCase({"storage.http.max_retries": '{"total":5}'}, want_max_retries=5),
+)
+def test_from_config(case: FromConfigCase) -> None:
+    cfg = Config()
+    for k, v in case.opts.items():
+        cfg.add(Scope.application, "storage", k, v)
+    adapter = HTTPAdapter.from_config(cfg)
+    assert isinstance(adapter, HTTPAdapter)
+    assert adapter.chunk_size == case.want_chunk_size
+    assert adapter.session.adapters["https://"].max_retries.total == case.want_max_retries

@@ -63,7 +63,7 @@ class Session(requests.Session):
 class HTTPAdapter(Adapter):
     """It implements the adapter interface for http(s) protocols using the requests library."""
 
-    __adapter_prefixes__ = ("http:", "https:")
+    __adapter_prefixes__ = ("http://", "https://")
 
     @classmethod
     def from_config(cls, cfg: Config) -> Adapter:
@@ -73,11 +73,11 @@ class HTTPAdapter(Adapter):
     def __init__(self, session: requests.Session | None = None, chunk_size: int = CHUNK_SIZE):
         if session is None:
             session = requests.session()
-        self._chunk_size = chunk_size
-        self._session = session
+        self.chunk_size = chunk_size
+        self.session = session
 
     def head(self, url: str) -> Head:
-        with self._session.head(url, allow_redirects=True) as res:
+        with self.session.head(url, allow_redirects=True) as res:
             try:
                 res.raise_for_status()
             except HTTPError as ex:
@@ -86,7 +86,7 @@ class HTTPAdapter(Adapter):
 
     def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
         headers = ranges_to_headers(ranges)
-        with self._session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
+        with self.session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
             if res.status_code == 503:
                 raise ServiceUnavailableError()
             res.raise_for_status()
@@ -95,7 +95,7 @@ class HTTPAdapter(Adapter):
             if head.ranges != ranges:
                 raise ValueError(f"unexpected content range in server response: got {head.ranges}, want: {ranges}")
 
-            for chunk in res.iter_content(self._chunk_size):
+            for chunk in res.iter_content(self.chunk_size):
                 if chunk:
                     stream.write(chunk)
         return head
