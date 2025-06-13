@@ -47,6 +47,19 @@ MAX_CONNECTIONS = 4
 class Client(Adapter):
     """It handles client instances allocation allowing reusing pre-allocated instances from the same thread."""
 
+    @classmethod
+    def from_config(cls, cfg: config.Config) -> Client:
+        max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
+        mirrors = []
+        for filename in cfg.opts(section="storage", key="storage.mirrors_files", default_value=MIRRORS_FILES, mandatory=False).split(","):
+            filename = filename.strip()
+            if filename:
+                filename = os.path.expanduser(filename)
+                if os.path.isfile(filename):
+                    mirrors.append(Mirror.from_file(filename))
+        adapters = AdapterRegistry.from_config(cfg)
+        return cls(mirrors=mirrors, max_connections=max_connections, adapters=adapters)
+
     def __init__(
         self,
         adapters: AdapterRegistry,
@@ -63,19 +76,6 @@ class Client(Adapter):
         self._mirrors: list[Mirror] = list(mirrors)
         self._random: Random = random
         self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
-
-    @classmethod
-    def from_config(cls, cfg: config.Config) -> Client:
-        max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
-        mirrors = []
-        for filename in cfg.opts(section="storage", key="storage.mirrors_files", default_value=MIRRORS_FILES, mandatory=False).split(","):
-            filename = filename.strip()
-            if filename:
-                filename = os.path.expanduser(filename)
-                if os.path.isfile(filename):
-                    mirrors.append(Mirror.from_file(filename))
-        adapters = AdapterRegistry.from_config(cfg)
-        return cls(mirrors=mirrors, max_connections=max_connections, adapters=adapters)
 
     def head(self, url: str, ttl: float | None = None) -> Head:
         """It gets remote file headers."""

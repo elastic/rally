@@ -23,8 +23,9 @@ import pytest
 
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Adapter, Head, Writable
-from esrally.storage._client import Client
+from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
+from esrally.types import Key
 from esrally.utils.cases import cases
 
 URL = "https://example.com"
@@ -97,3 +98,22 @@ def test_get(case: GetCase, client: Client) -> None:
     assert got == case.want
     if case.want_data is not None:
         stream.write.assert_called_once_with(case.want_data)
+
+
+@dataclass()
+class FromConfigCase:
+    opts: dict[Key, str]
+    want_max_connections: int = MAX_CONNECTIONS
+
+
+@cases(
+    default=FromConfigCase({}),
+    max_connections=FromConfigCase({"storage.max_connections": "2"}, want_max_connections=2),
+)
+def test_from_config(case: FromConfigCase) -> None:
+    cfg = Config()
+    for k, v in case.opts.items():
+        cfg.add(Scope.application, "storage", k, v)
+    client = Client.from_config(cfg)
+    assert isinstance(client, Client)
+    assert client._connections["some"].max_count == case.want_max_connections  # pylint: disable=protected-access
