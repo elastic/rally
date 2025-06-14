@@ -178,13 +178,16 @@ class FromConfigCase:
     opts: dict[Key, str]
     want_chunk_size: int = CHUNK_SIZE
     want_max_retries: int = MAX_RETRIES
+    want_backoff_factor: int = 0
 
 
 @cases(
     default=FromConfigCase({}),
     chunk_size=FromConfigCase({"storage.http.chunk_size": "10"}, want_chunk_size=10),
     max_retries=FromConfigCase({"storage.http.max_retries": "3"}, want_max_retries=3),
-    max_retries_yml=FromConfigCase({"storage.http.max_retries": '{"total":5}'}, want_max_retries=5),
+    max_retries_yml=FromConfigCase(
+        {"storage.http.max_retries": '{"total": 5, "backoff_factor": 5}'}, want_max_retries=5, want_backoff_factor=5
+    ),
 )
 def test_from_config(case: FromConfigCase) -> None:
     cfg = Config()
@@ -193,4 +196,6 @@ def test_from_config(case: FromConfigCase) -> None:
     adapter = HTTPAdapter.from_config(cfg)
     assert isinstance(adapter, HTTPAdapter)
     assert adapter.chunk_size == case.want_chunk_size
-    assert adapter.session.adapters["https://"].max_retries.total == case.want_max_retries
+    retry = adapter.session.adapters["https://"].max_retries
+    assert retry.total == case.want_max_retries
+    assert retry.backoff_factor == case.want_backoff_factor
