@@ -60,9 +60,7 @@ class MirrorList:
         for base_url, mirror_urls in self._urls.items():
             if not url.startswith(base_url):
                 continue
-            path = url[len(base_url) :]
-            if not path:
-                continue
+            path = url[len(base_url) :].lstrip("/")
             for u in mirror_urls:
                 ret.add(u + path)
         return ret
