@@ -16,13 +16,13 @@
 # under the License.
 from __future__ import annotations
 
+import json
 import logging
 from urllib.error import HTTPError
 
 import requests
 import requests.adapters
 import urllib3
-import yaml
 from requests.structures import CaseInsensitiveDict
 
 from esrally.config import Config
@@ -49,7 +49,7 @@ class Session(requests.Session):
             try:
                 max_retries = int(max_retries_text)
             except ValueError:
-                max_retries = urllib3.Retry(**yaml.safe_load(max_retries_text))
+                max_retries = urllib3.Retry(**json.loads(max_retries_text))
         return cls(max_retries=max_retries)
 
     def __init__(self, max_retries: urllib3.Retry | int | None = 0) -> None:
