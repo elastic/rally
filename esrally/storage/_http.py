@@ -16,13 +16,13 @@
 # under the License.
 from __future__ import annotations
 
+import json
 import logging
 from urllib.error import HTTPError
 
 import requests
 import requests.adapters
 import urllib3
-import yaml
 from requests.structures import CaseInsensitiveDict
 
 from esrally.config import Config
@@ -49,7 +49,7 @@ class Session(requests.Session):
             try:
                 max_retries = int(max_retries_text)
             except ValueError:
-                max_retries = urllib3.Retry(**yaml.safe_load(max_retries_text))
+                max_retries = urllib3.Retry(**json.loads(max_retries_text))
         return cls(max_retries=max_retries)
 
     def __init__(self, max_retries: urllib3.Retry | int | None = 0) -> None:
@@ -61,9 +61,10 @@ class Session(requests.Session):
 
 
 class HTTPAdapter(Adapter):
-    """It implements the adapter interface for http(s) protocols using the requests library."""
+    """It implements the `Adapter` interface for http(s) protocols using the requests library."""
 
-    __adapter_prefixes__ = ("http://", "https://")
+    # It associates any URL with "http" or "https" scheme to `HTTPAdapter` class.
+    __adapter_URL_prefixes__ = ("http://", "https://")
 
     @classmethod
     def from_config(cls, cfg: Config) -> Adapter:
@@ -113,8 +114,8 @@ def ranges_to_headers(ranges: RangeSet, headers: CaseInsensitiveDict | None = No
 
 
 def content_length_from_headers(headers: CaseInsensitiveDict) -> int | None:
-    value = headers.get("content-length", "*").strip()
-    if value == "*":
+    value = headers.get("content-length", "").strip()
+    if not value:
         return None
     try:
         return int(value)

@@ -36,12 +36,12 @@ class MockAdapter(Adapter, ABC):
 
 class HTTPAdapter(MockAdapter, ABC):
 
-    __adapter_prefixes__ = ("http://",)
+    __adapter_URL_prefixes__ = ("http://",)
 
 
 class HTTPSAdapter(MockAdapter, ABC):
 
-    __adapter_prefixes__ = ("https://",)
+    __adapter_URL_prefixes__ = ("https://",)
 
 
 @pytest.fixture()

@@ -122,7 +122,7 @@ storage
 This section defines how client is configured to transfer big files (I.E. track files) from
 remote servers. Available options are:
 
-* ``storage.adapters`` is a command separated list of storage adapters implementations specified using the following
+* ``storage.adapters`` is a comma-separated list of storage adapter implementations specified using the following
   format:
 
   ``<python module name>:<adapter class name>``
@@ -131,6 +131,10 @@ remote servers. Available options are:
 
     [storage]
     storage.adapters = esrally.storage._http:HTTPAdapter
+
+
+HTTP Adapter
+************
 
 * ``storage.http.chunk_size`` is used to specify the size of the buffer is being used for transferring chunk of files.
 
