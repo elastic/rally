@@ -132,6 +132,10 @@ remote servers. Available options are:
     [storage]
     storage.adapters = esrally.storage._http:HTTPAdapter
 
+
+HTTP Adapter
+************
+
 * ``storage.http.chunk_size`` is used to specify the size of the buffer is being used for transferring chunk of files.
 
 * ``storage.http.max_retries`` is used to configure the maximum number of retries for making HTTP adapter requests.
