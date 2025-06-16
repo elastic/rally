@@ -114,8 +114,8 @@ def ranges_to_headers(ranges: RangeSet, headers: CaseInsensitiveDict | None = No
 
 
 def content_length_from_headers(headers: CaseInsensitiveDict) -> int | None:
-    value = headers.get("content-length", "*").strip()
-    if value == "*":
+    value = headers.get("content-length", "").strip()
+    if not value:
         return None
     try:
         return int(value)
