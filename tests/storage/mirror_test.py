@@ -33,7 +33,7 @@ MIRROR2_URL = "https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com"
 MIRRORS = {
     BASE_URL: {MIRROR1_URL, MIRROR2_URL},
 }
-MIRROR_FILES = os.path.join(os.path.dirname(__file__), "mirrors.yml")
+MIRROR_FILES = os.path.join(os.path.dirname(__file__), "mirrors.json")
 
 
 @pytest.fixture

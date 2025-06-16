@@ -1,9 +1,0 @@
----
-
-mirrors:
-  - sources:
-    - "https://rally-tracks.elastic.co/"
-
-    destinations:
-    - "https://rally-tracks-eu-central-1.s3.eu-central-1.amazonaws.com/"
-    - "https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/"
