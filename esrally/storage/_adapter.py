@@ -63,7 +63,15 @@ class Head(NamedTuple):
 class Adapter(ABC):
     """Base class for storage class client implementation"""
 
-    __adapter_prefixes__: tuple[str, ...] = tuple()
+    # Collection of URL prefixes used to be associate an adapter implementation to a remote file URL.
+    # This value will be overridden by `Adapter` subclasses to be consumed by `AdapterRegistry` class.
+    # Example:
+    #   ```
+    #   class HTTPAdapter(Adapter):
+    #       # The value will serve to associate any URL with "https" scheme to `HTTPAdapter` subclass.
+    #       __adapter_URL_prefixes__ = ("http://",)
+    #   ```
+    __adapter_URL_prefixes__: tuple[str, ...] = tuple()
 
     @classmethod
     def from_config(cls, cfg: Config) -> Adapter:
@@ -117,7 +125,7 @@ class AdapterRegistry:
             obj = getattr(module, class_name)
             if not isinstance(obj, type) or not issubclass(obj, Adapter):
                 raise TypeError(f"'{obj}' is not a valid subclass of Adapter")
-            registry.register_class(obj, obj.__adapter_prefixes__)
+            registry.register_class(obj, obj.__adapter_URL_prefixes__)
         return registry
 
     def register_class(self, cls: type[Adapter], prefixes: Iterable[str]) -> type[Adapter]:
