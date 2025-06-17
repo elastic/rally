@@ -63,7 +63,7 @@ class Head(NamedTuple):
 class Adapter(ABC):
     """Base class for storage class client implementation"""
 
-    # Collection of URL prefixes used to be associate an adapter implementation to a remote file URL.
+    # Collection of URL prefixes used to associate an adapter implementation to a remote file URL.
     # This value will be overridden by `Adapter` subclasses to be consumed by `AdapterRegistry` class.
     # Example:
     #   ```
