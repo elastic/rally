@@ -102,11 +102,16 @@ ADAPTER_CLASS_NAMES = ",".join(
 )
 
 
+class AdapterClassEntry(NamedTuple):
+    url_prefix: str
+    cls: type[Adapter]
+
+
 class AdapterRegistry:
     """AdapterClassRegistry allows to register classes of adapters to be selected according to the target URL."""
 
     def __init__(self, cfg: Config) -> None:
-        self._classes: dict[str, type[Adapter]] = {}
+        self._classes: list[AdapterClassEntry] = []
         self._adapters: dict[type[Adapter], Adapter] = {}
         self._lock = threading.Lock()
         self._cfg = cfg
@@ -130,26 +135,20 @@ class AdapterRegistry:
 
     def register_class(self, cls: type[Adapter], prefixes: Iterable[str]) -> type[Adapter]:
         with self._lock:
-            keys_to_move: set[str] = set()
             for p in prefixes:
-                self._classes[p] = cls
-                # Adapter types are sorted in descending order by prefix length.
-                keys_to_move.update(k for k in self._classes if len(k) < len(p))
-            for k in keys_to_move:
-                self._classes[k] = self._classes.pop(k)
+                self._classes.append(AdapterClassEntry(p, cls))
+            # The list of adapter classes is kept sorted from the longest prefix to the shorter to ensure that matching
+            # a shorter URL prefix will never hide matching a longer one.
+            self._classes.sort(key=lambda e: len(e.url_prefix), reverse=True)
         return cls
 
     def get(self, url: str) -> Adapter:
         with self._lock:
-            for prefix, cls in self._classes.items():
-                if url.startswith(prefix):
-                    adapter = self._adapters.get(cls)
+            for e in self._classes:
+                if url.startswith(e.url_prefix):
+                    adapter = self._adapters.get(e.cls)
                     if adapter is None:
-                        try:
-                            adapter = cls.from_config(self._cfg)
-                        except ValueError as ex:
-                            LOG.error("Failed to configure adapter for URL '%s': %s", url, ex)
-                            continue
-                    self._adapters[cls] = adapter
+                        adapter = e.cls.from_config(self._cfg)
+                    self._adapters[e.cls] = adapter
                     return adapter
         raise ValueError(f"No adapter found for url '{url}'")

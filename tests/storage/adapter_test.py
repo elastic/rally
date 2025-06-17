@@ -44,10 +44,24 @@ class HTTPSAdapter(MockAdapter, ABC):
     __adapter_URL_prefixes__ = ("https://",)
 
 
+class ExampleAdapter(MockAdapter, ABC):
+    __adapter_URL_prefixes__ = ("https://example.com/",)
+
+
+class ExampleAdapterWithPath(MockAdapter, ABC):
+
+    __adapter_URL_prefixes__ = ("https://example.com/some/path/",)
+
+
 @pytest.fixture()
 def cfg() -> Config:
     cfg = Config()
-    cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:HTTPAdapter,{__name__}:HTTPSAdapter")
+    cfg.add(
+        Scope.application,
+        "storage",
+        "storage.adapters",
+        f"{__name__}:HTTPSAdapter,{__name__}:HTTPAdapter,{__name__}:ExampleAdapter,{__name__}:ExampleAdapterWithPath",
+    )
     return cfg
 
 
@@ -67,6 +81,8 @@ class RegistryCase:
     ftp=RegistryCase("ftp://example.com", ValueError),
     http=RegistryCase("http://example.com", HTTPAdapter),
     https=RegistryCase("https://example.com", HTTPSAdapter),
+    example=RegistryCase("https://example.com/", ExampleAdapter),
+    example_with_path=RegistryCase("https://example.com/some/path/", ExampleAdapterWithPath),
 )
 def test_adapter_registry_get(case: RegistryCase, registry: AdapterRegistry) -> None:
     try:
@@ -76,3 +92,13 @@ def test_adapter_registry_get(case: RegistryCase, registry: AdapterRegistry) -> 
     assert isinstance(got, case.want)
     if isinstance(case.want, Adapter):
         assert got is registry.get(case.url)
+
+
+def test_adapter_registry_order(registry: AdapterRegistry) -> None:
+    registered_prefixes = [c.url_prefix for c in registry._classes]  # pylint: disable=protected-access
+    assert registered_prefixes == [
+        "https://example.com/some/path/",
+        "https://example.com/",
+        "https://",
+        "http://",
+    ], "prefixes are not sorted from the longest to the shortest"
