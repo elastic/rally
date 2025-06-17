@@ -49,7 +49,13 @@ class Client(Adapter):
     @classmethod
     def from_config(cls, cfg: config.Config) -> Client:
         max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
-        return cls(max_connections=max_connections, mirrors=MirrorList.from_config(cfg), adapters=AdapterRegistry.from_config(cfg))
+        random_seed = cfg.opts(section="storage", key="storage.random_seed", default_value=None, mandatory=False)
+        random = None
+        if random_seed is not None:
+            random = Random(random_seed)
+        return cls(
+            max_connections=max_connections, mirrors=MirrorList.from_config(cfg), adapters=AdapterRegistry.from_config(cfg), random=random
+        )
 
     def __init__(
         self,
@@ -113,11 +119,7 @@ class Client(Adapter):
             yield self.head(url, ttl=ttl)
             return
 
-        if len(mirror_urls) == 1:
-            yield self.head(mirror_urls[0], ttl=ttl)
-            return
-
-        # It makes sure workers will not pick the same URLs as first mirror option.
+        # It shuffles mirror URLs in the hope two threads will try different mirrors for the same URL.
         self._random.shuffle(mirror_urls)
 
         # It uses measured latencies and the number of connections to affect the order of the mirrors.

@@ -16,6 +16,8 @@
 # under the License.
 from __future__ import annotations
 
+import os
+import random
 from dataclasses import dataclass
 from unittest.mock import create_autospec
 
@@ -29,8 +31,14 @@ from esrally.types import Key
 from esrally.utils.cases import cases
 
 URL = "https://example.com"
-HEAD = Head(url=URL, content_length=20, accept_ranges=True)
 DATA = b"<!doctype html>\n<html>\n<head>\n"
+HEAD = Head(url=URL, content_length=len(DATA), accept_ranges=True)
+
+MIRROR_FILES = os.path.join(os.path.dirname(__file__), "mirrors.json")
+MIRRORING_URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
+MIRRORED_URL = "https://rally-tracks-eu-central-1.s3.eu-central-1.amazonaws.com/apm/span.json.bz2"
+NOT_FOUND_URL = "https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/apm/span.json.bz2"
+NO_RANGES_URL = f"{MIRRORING_URL}/no/ranges.json.bz2"
 
 
 class HTTPSAdapter(Adapter):
@@ -43,7 +51,13 @@ class HTTPSAdapter(Adapter):
         self._data = DATA
 
     def head(self, url: str) -> Head:
-        return self._head
+        if url.startswith("https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/"):
+            # This simulates the case which a mirror server answers with 404 status
+            raise FileNotFoundError
+        accept_ranges = True
+        if url.endswith("/no/ranges.json.bz2"):
+            accept_ranges = False
+        return Head(url=url, content_length=len(self._data), accept_ranges=accept_ranges)
 
     def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
         if ranges:
@@ -56,11 +70,13 @@ class HTTPSAdapter(Adapter):
 @pytest.fixture
 def cfg() -> Config:
     cfg = Config()
+    cfg.add(Scope.application, "storage", "storage.mirrors_files", MIRROR_FILES)
     cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:HTTPSAdapter")
+    cfg.add(Scope.application, "storage", "storage.random_seed", 42)
     return cfg
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def client(cfg: Config) -> Client:
     return Client.from_config(cfg)
 
@@ -70,6 +86,30 @@ class HeadCase:
     url: str
     want: Head
     ttl: float | None = None
+
+
+@dataclass()
+class FromConfigCase:
+    opts: dict[Key, str]
+    want_max_connections: int = MAX_CONNECTIONS
+    want_random: random.Random | None = None
+
+
+@cases(
+    default=FromConfigCase({}),
+    max_connections=FromConfigCase({"storage.max_connections": "2"}, want_max_connections=2),
+    random_seed=FromConfigCase({"storage.random_seed": "42"}, want_random=random.Random("42")),
+)
+def test_from_config(case: FromConfigCase) -> None:
+    # pylint: disable=protected-access
+    cfg = Config()
+    for k, v in case.opts.items():
+        cfg.add(Scope.application, "storage", k, v)
+    client = Client.from_config(cfg)
+    assert isinstance(client, Client)
+    assert client._connections["some"].max_count == case.want_max_connections
+    if case.want_random is not None:
+        assert client._random.random() == case.want_random.random()
 
 
 @cases(default=HeadCase(URL, HEAD), ttl=HeadCase(URL, HEAD, ttl=300.0))
@@ -91,6 +131,7 @@ class GetCase:
 @cases(
     regular=GetCase(url=URL, want=Head(URL, 648, True)),
     range=GetCase(URL, ranges=rangeset("0-29"), want=Head(URL, 30, True, rangeset("0-29")), want_data=DATA),
+    mirrors=GetCase(MIRRORING_URL, want=Head(MIRRORED_URL, 648, True)),
 )
 def test_get(case: GetCase, client: Client) -> None:
     stream = create_autospec(Writable, spec_set=True, instance=True)
@@ -101,19 +142,28 @@ def test_get(case: GetCase, client: Client) -> None:
 
 
 @dataclass()
-class FromConfigCase:
-    opts: dict[Key, str]
-    want_max_connections: int = MAX_CONNECTIONS
+class ResolveCase:
+    url: str
+    want: set[Head]
+    content_length: int | None = None
+    accept_ranges: bool = False
+    ttl: float = 60.0
 
 
 @cases(
-    default=FromConfigCase({}),
-    max_connections=FromConfigCase({"storage.max_connections": "2"}, want_max_connections=2),
+    unmirrored=ResolveCase(url=URL, want={Head(URL, 30, True)}),
+    mirrored=ResolveCase(url=MIRRORING_URL, want={Head(MIRRORED_URL, 30, True)}),
+    content_length=ResolveCase(url=MIRRORING_URL, content_length=30, want={Head(MIRRORED_URL, 30, True)}),
+    mismatching_content_length=ResolveCase(url=MIRRORING_URL, content_length=10, want=set()),
+    accept_ranges=ResolveCase(url=MIRRORING_URL, accept_ranges=True, want={Head(MIRRORED_URL, 30, True)}),
+    reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=set()),
+    zero_ttl=ResolveCase(url=URL, ttl=0.0, want={Head(URL, 30, True)}),
 )
-def test_from_config(case: FromConfigCase) -> None:
-    cfg = Config()
-    for k, v in case.opts.items():
-        cfg.add(Scope.application, "storage", k, v)
-    client = Client.from_config(cfg)
-    assert isinstance(client, Client)
-    assert client._connections["some"].max_count == case.want_max_connections  # pylint: disable=protected-access
+def test_resolve(case: ResolveCase, client: Client) -> None:
+    got = set(client.resolve(case.url, content_length=case.content_length, accept_ranges=case.accept_ranges, ttl=case.ttl))
+    assert got == case.want, "unexpected resolve result"
+    for g in got:
+        if case.ttl > 0.0:
+            assert g is client.head(url=g.url, ttl=case.ttl), "obtained head wasn't cached"
+        else:
+            assert g is not client.head(url=g.url, ttl=case.ttl), "obtained head was cached"

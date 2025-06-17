@@ -154,6 +154,7 @@ Key = Literal[
     "storage.http.max_retries",
     "storage.max_connections",
     "storage.mirrors_files",
+    "storage.random_seed",
     "target.arch",
     "target.os",
     "team.path",
