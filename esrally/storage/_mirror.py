@@ -53,14 +53,14 @@ class MirrorList:
 
     def _update(self, urls: Mapping[str, Iterable[str]]) -> None:
         for src, dsts in urls.items():
-            self._urls[_normalize_url(src)].update(_normalize_url(dst) for dst in dsts)
+            self._urls[_normalize_base_url(src)].update(_normalize_base_url(dst) for dst in dsts)
 
-    def urls(self, url: str) -> Collection[str]:
+    def resolve(self, url: str) -> Collection[str]:
         ret: set[str] = set()
         for base_url, mirror_urls in self._urls.items():
             if not url.startswith(base_url):
                 continue
-            path = url[len(base_url) :].lstrip("/")
+            path = _normalize_path(url[len(base_url) :])
             for u in mirror_urls:
                 ret.add(u + path)
         return ret
@@ -84,5 +84,9 @@ def _load_file(path: str) -> Mapping[str, Iterable[str]]:
     return ret
 
 
-def _normalize_url(url: str) -> str:
+def _normalize_base_url(url: str) -> str:
     return url.rstrip("/") + "/"
+
+
+def _normalize_path(path: str) -> str:
+    return path.lstrip("/")

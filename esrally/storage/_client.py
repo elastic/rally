@@ -108,7 +108,7 @@ class Client(Adapter):
         :return: iterator over mirror URLs
         """
 
-        mirror_urls = list(self._mirrors.urls(url))
+        mirror_urls = list(self._mirrors.resolve(url))
         if not mirror_urls:
             yield self.head(url, ttl=ttl)
             return

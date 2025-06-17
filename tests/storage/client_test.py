@@ -35,7 +35,7 @@ DATA = b"<!doctype html>\n<html>\n<head>\n"
 
 class HTTPSAdapter(Adapter):
 
-    __adapter_prefixes__ = ("https:",)
+    __adapter_URL_prefixes__ = ("https:",)
 
     def __init__(self):
         super().__init__()

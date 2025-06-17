@@ -52,5 +52,5 @@ class FromConfigCase:
 @cases(empty=FromConfigCase("", want=set()), simple=FromConfigCase(URL, want={f"{MIRROR1_URL}/{SOME_PATH}", f"{MIRROR2_URL}/{SOME_PATH}"}))
 def test_from_config(case: FromConfigCase, cfg: Config):
     mirrors = MirrorList.from_config(cfg)
-    got = mirrors.urls(case.url)
+    got = mirrors.resolve(case.url)
     assert got == case.want
