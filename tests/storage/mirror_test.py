@@ -49,7 +49,11 @@ class FromConfigCase:
     want: set[str]
 
 
-@cases(empty=FromConfigCase("", want=set()), simple=FromConfigCase(URL, want={f"{MIRROR1_URL}/{SOME_PATH}", f"{MIRROR2_URL}/{SOME_PATH}"}))
+@cases(
+    empty=FromConfigCase("", want=set()),
+    simple=FromConfigCase(URL, want={f"{MIRROR1_URL}/{SOME_PATH}", f"{MIRROR2_URL}/{SOME_PATH}"}),
+    normalized=FromConfigCase("https://rally-tracks.elastic.co/", want={f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"}),
+)
 def test_from_config(case: FromConfigCase, cfg: Config):
     mirrors = MirrorList.from_config(cfg)
     got = mirrors.resolve(case.url)
