@@ -75,6 +75,14 @@ class Adapter(ABC):
 
     @classmethod
     def from_config(cls, cfg: Config) -> Adapter:
+        """Default `Adapter` objects factory method used to create adapters from `esrally` client.
+
+        Default implementation will ignore `cfg` parameter. It can be overridden from `Adapter` implementations that
+        accept customized parameters from the configuration file.
+
+        :param cfg: the configuration object from which to get configuration values.
+        :return: an adapter object.
+        """
         return cls()
 
     @abstractmethod
