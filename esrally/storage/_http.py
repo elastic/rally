@@ -64,7 +64,7 @@ class HTTPAdapter(Adapter):
     """It implements the `Adapter` interface for http(s) protocols using the requests library."""
 
     # It associates any URL with "http" or "https" scheme to `HTTPAdapter` class.
-    __adapter_URL_prefixes__ = ("http://", "https://")
+    __adapter_URL_prefixes__ = "http://, https://"
 
     @classmethod
     def from_config(cls, cfg: Config) -> Adapter:

@@ -63,15 +63,15 @@ class Head(NamedTuple):
 class Adapter(ABC):
     """Base class for storage class client implementation"""
 
-    # Collection of URL prefixes used to associate an adapter implementation to a remote file URL.
+    # A commas separated list of URL prefixes used to associate an adapter implementation to a remote file URL.
     # This value will be overridden by `Adapter` subclasses to be consumed by `AdapterRegistry` class.
     # Example:
     #   ```
     #   class HTTPAdapter(Adapter):
     #       # The value will serve to associate any URL with "https" scheme to `HTTPAdapter` subclass.
-    #       __adapter_URL_prefixes__ = ("http://",)
+    #       __adapter_URL_prefixes__ = "http://, https://"
     #   ```
-    __adapter_URL_prefixes__: tuple[str, ...] = tuple()
+    __adapter_URL_prefixes__: str = ""
 
     @classmethod
     def from_config(cls, cfg: Config) -> Adapter:
@@ -130,13 +130,13 @@ class AdapterRegistry:
             obj = getattr(module, class_name)
             if not isinstance(obj, type) or not issubclass(obj, Adapter):
                 raise TypeError(f"'{obj}' is not a valid subclass of Adapter")
-            registry.register_class(obj, obj.__adapter_URL_prefixes__)
+            registry.register_class(obj, obj.__adapter_URL_prefixes__.split(","))
         return registry
 
     def register_class(self, cls: type[Adapter], prefixes: Iterable[str]) -> type[Adapter]:
         with self._lock:
             for p in prefixes:
-                self._classes.append(AdapterClassEntry(p, cls))
+                self._classes.append(AdapterClassEntry(p.strip(), cls))
             # The list of adapter classes is kept sorted from the longest prefix to the shorter to ensure that matching
             # a shorter URL prefix will never hide matching a longer one.
             self._classes.sort(key=lambda e: len(e.url_prefix), reverse=True)

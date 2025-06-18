@@ -43,7 +43,7 @@ NO_RANGES_URL = f"{MIRRORING_URL}/no/ranges.json.bz2"
 
 class HTTPSAdapter(Adapter):
 
-    __adapter_URL_prefixes__ = ("https:",)
+    __adapter_URL_prefixes__ = "https://"
 
     def __init__(self):
         super().__init__()
