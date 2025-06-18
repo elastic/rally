@@ -133,6 +133,10 @@ remote servers. Available options are:
     storage.adapters = esrally.storage._http:HTTPAdapter
 
 
+  At this point in time `esrally.storage._http:HTTPAdapter` is the only existing `Adapter` implementations intended
+  for public use and that is already the default one. So it is required to edit this option for special customizations.
+
+
 HTTP Adapter
 ************
 
