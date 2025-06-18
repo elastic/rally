@@ -23,8 +23,8 @@ from collections.abc import Iterable, Mapping
 
 from esrally.config import Config
 
-MAX_CONNECTIONS = 4
-MIRRORS_FILES = ""
+MAX_CONNECTIONS = 8
+MIRRORS_FILES = "~/.rally/storage-mirrors.json"
 
 
 class MirrorList:

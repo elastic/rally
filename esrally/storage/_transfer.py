@@ -241,7 +241,7 @@ class Transfer:
     def close(self):
         """It cancels all transfer tasks and closes all open streams."""
         self._finished.set()
-        self._workers.max_count = 0
+        self._workers.max_count = 1
         with self._lock:
             fds, self._fds = self._fds, []
         for fd in fds:
