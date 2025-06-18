@@ -17,98 +17,62 @@
 from __future__ import annotations
 
 import logging
-import os.path
 import threading
 import time
 import urllib.parse
 from collections import defaultdict, deque
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Iterator
 from random import Random
 from typing import NamedTuple
 
 from esrally import config
-from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
-from esrally.storage._mirror import Mirror
+from esrally.storage._adapter import (
+    Adapter,
+    AdapterRegistry,
+    Head,
+    ServiceUnavailableError,
+    Writable,
+)
+from esrally.storage._mirror import MirrorList
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.utils.threads import WaitGroup, WaitGroupLimitError
 
 LOG = logging.getLogger(__name__)
 
-MIRRORS_FILES = "~/.rally/storage/mirrors.yml"
-MAX_CONNECTIONS = 4
-
-_ADAPTER_CLASSES = dict[str, type[Adapter]]()
-
-
-def register_adapter_class(*prefixes: str) -> Callable[[type[Adapter]], type[Adapter]]:
-    """This class decorator registers an implementation of the Client protocol.
-    :param prefixes: list of prefixes names the adapter class has to be registered for
-    :return: a type decorator
-    """
-
-    def decorator(cls: type[Adapter]) -> type[Adapter]:
-        for prefix in prefixes:
-            # Adapter types are sorted in descending order by prefix length.
-            _ADAPTER_CLASSES[prefix] = cls
-            keys_to_move = [k for k in _ADAPTER_CLASSES if len(k) < len(prefix)]
-            for key in keys_to_move:
-                _ADAPTER_CLASSES[key] = _ADAPTER_CLASSES.pop(key)
-        return cls
-
-    return decorator
-
-
-def adapter_class(url: str) -> type[Adapter]:
-    for prefix, cls in _ADAPTER_CLASSES.items():
-        if url.startswith(prefix):
-            return cls
-    raise NotImplementedError(f"unsupported url: {url}")
+MIRRORS_FILES = "~/.rally/storage-mirrors.json"
+MAX_CONNECTIONS = 8
 
 
 class Client(Adapter):
     """It handles client instances allocation allowing reusing pre-allocated instances from the same thread."""
 
+    @classmethod
+    def from_config(cls, cfg: config.Config) -> Client:
+        max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
+        random_seed = cfg.opts(section="storage", key="storage.random_seed", default_value=None, mandatory=False)
+        random = None
+        if random_seed is not None:
+            random = Random(random_seed)
+        return cls(
+            max_connections=max_connections, mirrors=MirrorList.from_config(cfg), adapters=AdapterRegistry.from_config(cfg), random=random
+        )
+
     def __init__(
         self,
-        adapter_classes: dict[str, type[Adapter]] | None = None,
-        mirrors: Iterable[Mirror] = tuple(),
+        adapters: AdapterRegistry,
+        mirrors: MirrorList,
         random: Random | None = None,
         max_connections: int = MAX_CONNECTIONS,
     ):
-        if adapter_classes is None:
-            adapter_classes = _ADAPTER_CLASSES
         if random is None:
             random = Random(time.time())
-        self._adapters: dict[str, Adapter] = {}
-        self._adapter_classes: dict[str, type[Adapter]] = dict(adapter_classes)
+        self._adapters: AdapterRegistry = adapters
         self._cached_heads: dict[str, tuple[Head | Exception, float]] = {}
         self._connections: dict[str, WaitGroup] = defaultdict(lambda: WaitGroup(max_count=max_connections))
         self._lock = threading.Lock()
-        self._mirrors: list[Mirror] = list(mirrors)
+        self._mirrors: MirrorList = mirrors
         self._random: Random = random
         self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
-
-    @classmethod
-    def from_config(cls, cfg: config.Config) -> Client:
-        adapter_classes = _ADAPTER_CLASSES
-        adapter_names = cfg.opts(section="storage", key="storage.adapter_names", default_value=None, mandatory=False)
-        if adapter_names is not None:
-            adapter_classes = {}
-            for prefix, adapter_cls in _ADAPTER_CLASSES.items():
-                for selector in adapter_names.replace(" ", "").split(","):
-                    if prefix.startswith(selector):
-                        adapter_classes[prefix] = adapter_cls
-            if not adapter_classes:
-                raise ValueError(f"invalid storage adapter name(s): {adapter_names} not in {list(_ADAPTER_CLASSES)}")
-        max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
-        mirrors = []
-        for filename in cfg.opts(section="storage", key="storage.mirrors_files", default_value=MIRRORS_FILES, mandatory=False).split(","):
-            filename = filename.strip()
-            if filename:
-                filename = os.path.expanduser(filename)
-                if os.path.isfile(filename):
-                    mirrors.append(Mirror.from_file(filename))
-        return cls(adapter_classes=adapter_classes, mirrors=mirrors, max_connections=max_connections)
 
     def head(self, url: str, ttl: float | None = None) -> Head:
         """It gets remote file headers."""
@@ -125,8 +89,9 @@ class Client(Adapter):
                     # cached value or error is enough recent to be used.
                     return _head_or_raise(value)
 
+        adapter = self._adapters.get(url)
         try:
-            value = self._adapter(url).head(url)
+            value = adapter.head(url)
         except Exception as ex:
             value = ex
         end_time = time.monotonic()
@@ -142,39 +107,43 @@ class Client(Adapter):
 
     def resolve(self, url: str, content_length: int | None = None, accept_ranges: bool = False, ttl: float = 60.0) -> Iterator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
-        :param url:
+        :param url: the remote file URL at its mirrored source location.
         :param content_length: if not none it will filter out mirrors with a wrong content length.
         :param accept_ranges: if True it will filter out mirrors that are not supporting ranges.
         :param ttl: the time to live value (in seconds) to use for cached heads retrieval.
         :return: iterator over mirror URLs
         """
 
-        mirror_urls = list({u for m in self._mirrors for u in m.urls(url)})
-        if len(mirror_urls) == 0:
-            yield self.head(url, ttl=ttl)
-            return
+        try:
+            urls = self._mirrors.resolve(url)
+        except ValueError:
+            urls = [url]
+        else:
+            if len(urls) > 1:
+                # It shuffles mirror URLs in the hope two threads will try different mirrors for the same URL.
+                self._random.shuffle(urls)
 
-        if len(mirror_urls) == 1:
-            yield self.head(mirror_urls[0], ttl=ttl)
-            return
+                # It uses measured latencies and the number of connections to affect the order of the mirrors.
+                weights = {u: self._average_latency(u) * self._random.uniform(1.0, self._server_connections(url).count) for u in urls}
+                LOG.debug("resolve '%s': mirror weights: %s", url, weights)
+                urls.sort(key=lambda u: weights[u])
+                LOG.debug("resolve '%s': mirror urls: %s", url, urls)
 
-        # It makes sure workers will not pick the same URLs as first mirror option.
-        self._random.shuffle(mirror_urls)
+            if url not in urls:
+                # It ensures source URL is in the list so that it will be used as fall back when any mirror works.
+                urls.append(url)
 
-        # It uses measured latencies and the number of connections to affect the order of the mirrors.
-        weights = {u: self._average_latency(u) * self._random.uniform(1.0, self._server_connections(url).count) for u in mirror_urls}
-        # LOG.debug("weights: %s", weights)
-        mirror_urls.sort(key=lambda u: weights[u])
-        # LOG.debug("mirror_urls: %s", mirror_urls)
+        if len(urls) > 1:
+            LOG.debug("resolved mirror URLs for URL '%s': %s", url, urls)
 
-        for u in mirror_urls:
+        for u in urls:
             try:
                 head = self.head(u, ttl=ttl)
             except FileNotFoundError:
                 LOG.debug("file not found: %r", url)
                 continue
             except Exception as ex:
-                LOG.debug("error getting file head: %r, %s", url, ex)
+                LOG.warning("error getting file head: %r, %s", url, ex)
                 continue
             if content_length is not None and content_length != head.content_length:
                 LOG.debug("unexpected content length: %r, got %d, want %d", url, content_length, head.content_length)
@@ -197,16 +166,20 @@ class Client(Adapter):
             try:
                 connections.add(1)
             except WaitGroupLimitError:
+                LOG.debug("connection limit exceeded: url='%s'", url)
                 continue
+            adapter = self._adapters.get(head.url)
             try:
-                return self._adapter(head.url).get(head.url, stream, ranges)
-            except ServiceUnavailableError:
+                return adapter.get(head.url, stream, ranges)
+            except ServiceUnavailableError as ex:
+                LOG.debug("service unavailable error received: url='%s' %s", url, ex)
                 with self._lock:
-                    connections.max_count = max(1, connections.count - 1)
+                    # It corrects the maximum number of connections for this server.
+                    connections.max_count = max(1, connections.count)
             finally:
                 connections.done()
 
-        raise ServiceUnavailableError(f"any service available for getting {url}")
+        raise ServiceUnavailableError(f"no service available for getting URL '{url}'")
 
     def _server_connections(self, url: str) -> WaitGroup:
         with self._lock:
@@ -228,30 +201,12 @@ class Client(Adapter):
             return 0.0
         return sum(s.latency for s in stats) / len(stats)
 
-    def _adapter(self, url: str) -> Adapter:
-        """It obtains an adapter instance for given protocol.
-
-        It will return the same client instance when re-called with the same protocol id from the same thread. Returned
-        client is intended to be used only from the calling thread.
-
-        :param url: the target url the client is being created for.
-        :return: a client instance for given protocol.
-        """
-        with self._lock:
-            adapter = self._adapters.get(url)
-            if adapter is None:
-                # It uses registered classes mapping to create a client instance for each required protocol.
-
-                # Given the same prefix it will return the same instance later when re-called from the same thread.
-                cls = adapter_class(url)
-                self._adapters[url] = adapter = cls.from_url(url)
-        return adapter
-
     def monitor(self):
-        for url, connections in self._connections.items():
-            if connections.count > 0:
-                latency = self._average_latency(url)
-                LOG.info("active client connection(s) %s: count=%d, latency=%f", url, connections.count, latency)
+        with self._lock:
+            items = [(u, c) for u, c in self._connections.items() if c.count > 0]
+        for url, connections in items:
+            latency = self._average_latency(url)
+            LOG.info("active client connection(s) %s: count=%d, latency=%f", url, connections.count, latency)
 
 
 class ServerStats(NamedTuple):

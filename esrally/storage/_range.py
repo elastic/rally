@@ -260,9 +260,9 @@ class Range(RangeSet):
 class RangeTree(RangeSet):
 
     def __init__(self, left: RangeSet, right: RangeSet):
-        assert left.end < right.start, "left and right ranges sets aren't sorted"
         assert isinstance(left, (Range, RangeTree)), "left must be an instance of Range | RangeTree"
         assert isinstance(right, (Range, RangeTree)), "right must be an instance of Range | RangeTree"
+        assert left.start < left.end < right.start < right.end, "left and right ranges sets aren't sorted and disjoint"
         self._left = left
         self._right = right
 
@@ -387,7 +387,7 @@ def _rangeset(ranges: Iterable[Range]) -> RangeSet:
 
 def _pretty_end(end: int) -> str:
     if end == MAX_LENGTH:
-        return "*"
+        return ""
     return f"{end - 1}"
 
 
@@ -404,12 +404,12 @@ def rangeset(ranges: str | Iterable[Range]) -> RangeSet:
     :param ranges: it could represent a string to be parsed or a sequence of ranges.
     :return: A RangeSet obtained from the given text.
     """
-    if not isinstance(ranges, str):
-        return _rangeset(_combine(ranges))
-    return _rangeset(_combine(_parse(ranges)))
+    if isinstance(ranges, str):
+        ranges = _parse(ranges)
+    return _rangeset(_combine(ranges))
 
 
-def _parse(text: str) -> Iterator[Range]:
+def _parse(text: str) -> Iterable[Range]:
     """_parse loads a sequence of ranges from a string."""
     for value in text.replace(" ", "").split(","):
         if not value:

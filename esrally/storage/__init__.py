@@ -14,16 +14,3 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
-# It imports client implementation modules to register their classes.
-import esrally.storage._http  # noqa
-from esrally.storage._manager import Manager
-from esrally.storage._range import NO_RANGE, RangeError
-
-try:
-    import esrally.storage._s3  # noqa
-except ImportError:
-    from esrally.utils import console
-
-    console.error("S3 support is optional. Install it with `python -m pip install esrally[s3]`")

@@ -116,6 +116,77 @@ Define a secure connection to an Elastic Cloud cluster::
     datastore.user = rally
     datastore.password = the-password-to-your-cluster
 
+storage
+~~~~~~~
+
+This section defines how client is configured to transfer big files (I.E. track files) from
+remote servers. Available options are:
+
+* ``storage.adapters`` is a comma-separated list of storage adapter implementations specified using the following
+  format:
+
+  ``<python module name>:<adapter class name>``
+
+  Here is an example of valid value for http(s) adapter::
+
+    [storage]
+    storage.adapters = esrally.storage._http:HTTPAdapter
+
+
+  At this point in time `esrally.storage._http:HTTPAdapter` is the only existing `Adapter` implementations intended
+  for public use and that is already the default one. So it is required to edit this option for special customizations.
+
+* ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
+bucket. The default value is 8.
+
+* ``storage.mirror_files`` is used to provide a json file that specify the mapping for mirrors URLs resolution.
+  Example::
+      [storage]
+      storage.mirror_files = ~/.rally/storage-mirrors.json
+
+  Example of a mirror JSON file used to mirror rally tracks files to a couple of AWS S3 buckets::
+      {
+        "mirrors": [
+          {
+            "sources": [
+              "https://rally-tracks.elastic.co/"
+            ],
+            "destinations": [
+              "https://rally-tracks-eu-central-1.s3.eu-central-1.amazonaws.com/",
+              "https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/"
+            ]
+          }
+        ]
+      }
+
+  The mirroring of the files on mirrors servers has to be provided by the infrastructure. The esrally client will look
+  for the files on the destination mirror endpoints URLs or use the original source endpoint URL in case the files
+  are not mirrored or they have a different size from the source one. The client will prefer endpoints with the lower
+  latency fetching the head of the file.
+
+* ``storage.random_seed`` a string used to initialize the client random number generator. This could be used to make
+problems easier to reproduce in continuous integration. In most of the cases it should be left empty.
+
+
+HTTP Adapter
+************
+
+* ``storage.http.chunk_size`` is used to specify the size of the buffer is being used for transferring chunk of files.
+
+* ``storage.http.max_retries`` is used to configure the maximum number of retries for making HTTP adapter requests.
+  it accept a numeric value to simply specify total number of retries. Examples::
+
+    [storage]
+    storage.http.max_retries = 3
+
+  For a more complex uses it accepts a dictionary of parameters (defined in yaml/json format) to be passed to the
+  `urllib3.Retry`_ class constructor. Example::
+
+    [storage]
+    storage.http.max_retries = {"total": 5, "backoff_factor": 5}
+
+  .. _urllib3.Retry: https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html
+
 
 tracks
 ~~~~~~
