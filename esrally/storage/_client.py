@@ -107,7 +107,7 @@ class Client(Adapter):
 
     def resolve(self, url: str, content_length: int | None = None, accept_ranges: bool = False, ttl: float = 60.0) -> Iterator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
-        :param url:
+        :param url: the remote file URL at its mirrored source location.
         :param content_length: if not none it will filter out mirrors with a wrong content length.
         :param accept_ranges: if True it will filter out mirrors that are not supporting ranges.
         :param ttl: the time to live value (in seconds) to use for cached heads retrieval.
@@ -115,18 +115,17 @@ class Client(Adapter):
         """
 
         mirror_urls = list(self._mirrors.resolve(url))
-        if not mirror_urls:
-            yield self.head(url, ttl=ttl)
-            return
+        if url not in mirror_urls:
+            mirror_urls.append(url)
+        if len(mirror_urls) > 1:
+            # It shuffles mirror URLs in the hope two threads will try different mirrors for the same URL.
+            self._random.shuffle(mirror_urls)
 
-        # It shuffles mirror URLs in the hope two threads will try different mirrors for the same URL.
-        self._random.shuffle(mirror_urls)
-
-        # It uses measured latencies and the number of connections to affect the order of the mirrors.
-        weights = {u: self._average_latency(u) * self._random.uniform(1.0, self._server_connections(url).count) for u in mirror_urls}
-        # LOG.debug("weights: %s", weights)
-        mirror_urls.sort(key=lambda u: weights[u])
-        # LOG.debug("mirror_urls: %s", mirror_urls)
+            # It uses measured latencies and the number of connections to affect the order of the mirrors.
+            weights = {u: self._average_latency(u) * self._random.uniform(1.0, self._server_connections(url).count) for u in mirror_urls}
+            LOG.debug("resolve '%s': mirror weights: %s", url, weights)
+            mirror_urls.sort(key=lambda u: weights[u])
+            LOG.debug("resolve '%s': mirror urls: %s", url, mirror_urls)
 
         for u in mirror_urls:
             try:
@@ -135,7 +134,7 @@ class Client(Adapter):
                 LOG.debug("file not found: %r", url)
                 continue
             except Exception as ex:
-                LOG.debug("error getting file head: %r, %s", url, ex)
+                LOG.warning("error getting file head: %r, %s", url, ex)
                 continue
             if content_length is not None and content_length != head.content_length:
                 LOG.debug("unexpected content length: %r, got %d, want %d", url, content_length, head.content_length)
@@ -158,17 +157,20 @@ class Client(Adapter):
             try:
                 connections.add(1)
             except WaitGroupLimitError:
+                LOG.debug("connection limit exceeded: url='%s'", url)
                 continue
             adapter = self._adapters.get(head.url)
             try:
                 return adapter.get(head.url, stream, ranges)
-            except ServiceUnavailableError:
+            except ServiceUnavailableError as ex:
+                LOG.debug("service unavailable error received: url='%s' %s", url, ex)
                 with self._lock:
-                    connections.max_count = max(1, connections.count - 1)
+                    # It corrects the maximum number of connections for this server.
+                    connections.max_count = max(1, connections.count)
             finally:
                 connections.done()
 
-        raise ServiceUnavailableError(f"any service available for getting {url}")
+        raise ServiceUnavailableError(f"no service available for getting URL '{url}'")
 
     def _server_connections(self, url: str) -> WaitGroup:
         with self._lock:

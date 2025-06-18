@@ -144,23 +144,23 @@ def test_get(case: GetCase, client: Client) -> None:
 @dataclass()
 class ResolveCase:
     url: str
-    want: set[Head]
+    want: list[Head]
     content_length: int | None = None
     accept_ranges: bool = False
     ttl: float = 60.0
 
 
 @cases(
-    unmirrored=ResolveCase(url=URL, want={Head(URL, 30, True)}),
-    mirrored=ResolveCase(url=MIRRORING_URL, want={Head(MIRRORED_URL, 30, True)}),
-    content_length=ResolveCase(url=MIRRORING_URL, content_length=30, want={Head(MIRRORED_URL, 30, True)}),
-    mismatching_content_length=ResolveCase(url=MIRRORING_URL, content_length=10, want=set()),
-    accept_ranges=ResolveCase(url=MIRRORING_URL, accept_ranges=True, want={Head(MIRRORED_URL, 30, True)}),
-    reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=set()),
-    zero_ttl=ResolveCase(url=URL, ttl=0.0, want={Head(URL, 30, True)}),
+    unmirrored=ResolveCase(url=URL, want=[Head(URL, 30, True)]),
+    mirrored=ResolveCase(url=MIRRORING_URL, want=[Head(MIRRORED_URL, 30, True), Head(MIRRORING_URL, 30, True)]),
+    content_length=ResolveCase(url=MIRRORING_URL, content_length=30, want=[Head(MIRRORED_URL, 30, True), Head(MIRRORING_URL, 30, True)]),
+    mismatching_content_length=ResolveCase(url=MIRRORING_URL, content_length=10, want=[]),
+    accept_ranges=ResolveCase(url=MIRRORING_URL, accept_ranges=True, want=[Head(MIRRORED_URL, 30, True), Head(MIRRORING_URL, 30, True)]),
+    reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=[]),
+    zero_ttl=ResolveCase(url=URL, ttl=0.0, want=[Head(URL, 30, True)]),
 )
 def test_resolve(case: ResolveCase, client: Client) -> None:
-    got = set(client.resolve(case.url, content_length=case.content_length, accept_ranges=case.accept_ranges, ttl=case.ttl))
+    got = list(client.resolve(case.url, content_length=case.content_length, accept_ranges=case.accept_ranges, ttl=case.ttl))
     assert got == case.want, "unexpected resolve result"
     for g in got:
         if case.ttl > 0.0:

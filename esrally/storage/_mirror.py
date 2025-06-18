@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
-from collections.abc import Collection, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 import yaml
 
@@ -55,7 +55,7 @@ class MirrorList:
         for src, dsts in urls.items():
             self._urls[_normalize_base_url(src)].update(_normalize_base_url(dst) for dst in dsts)
 
-    def resolve(self, url: str) -> Collection[str]:
+    def resolve(self, url: str) -> Iterable[str]:
         ret: set[str] = set()
         for base_url, mirror_urls in self._urls.items():
             if not url.startswith(base_url):
