@@ -193,10 +193,11 @@ class Client(Adapter):
         return sum(s.latency for s in stats) / len(stats)
 
     def monitor(self):
-        for url, connections in self._connections.items():
-            if connections.count > 0:
-                latency = self._average_latency(url)
-                LOG.info("active client connection(s) %s: count=%d, latency=%f", url, connections.count, latency)
+        with self._lock:
+            items = [(u, c) for u, c in self._connections.items() if c.count > 0]
+        for url, connections in items:
+            latency = self._average_latency(url)
+            LOG.info("active client connection(s) %s: count=%d, latency=%f", url, connections.count, latency)
 
 
 class ServerStats(NamedTuple):
