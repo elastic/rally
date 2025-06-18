@@ -116,6 +116,42 @@ Define a secure connection to an Elastic Cloud cluster::
     datastore.user = rally
     datastore.password = the-password-to-your-cluster
 
+storage
+~~~~~~~
+
+This section defines how client is configured to transfer big files (I.E. track files) from
+remote servers. Available options are:
+
+* ``storage.adapters`` is a comma-separated list of storage adapter implementations specified using the following
+  format:
+
+  ``<python module name>:<adapter class name>``
+
+  Here is an example of valid value for http(s) adapter::
+
+    [storage]
+    storage.adapters = esrally.storage._http:HTTPAdapter
+
+
+HTTP Adapter
+************
+
+* ``storage.http.chunk_size`` is used to specify the size of the buffer is being used for transferring chunk of files.
+
+* ``storage.http.max_retries`` is used to configure the maximum number of retries for making HTTP adapter requests.
+  it accept a numeric value to simply specify total number of retries. Examples::
+
+    [storage]
+    storage.http.max_retries = 3
+
+  For a more complex uses it accepts a dictionary of parameters (defined in yaml/json format) to be passed to the
+  `urllib3.Retry`_ class constructor. Example::
+
+    [storage]
+    storage.http.max_retries = {"total": 5, "backoff_factor": 5}
+
+  .. _urllib3.Retry: https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html
+
 
 tracks
 ~~~~~~
