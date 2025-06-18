@@ -26,7 +26,6 @@ import boto3
 import boto3.s3.transfer
 
 from esrally.storage._adapter import Adapter, Head, Readable, Writable
-from esrally.storage._client import register_adapter_class
 from esrally.storage._range import NO_RANGE, RangeSet
 
 
@@ -35,9 +34,10 @@ class S3Address(typing.NamedTuple):
     key: str
 
 
-@register_adapter_class("s3")
 class S3Adapter(Adapter):
     """Adapter class for s3 scheme protocol"""
+
+    __adapter_URL_prefixes__ = "s3://"
 
     _local = threading.local()
 
