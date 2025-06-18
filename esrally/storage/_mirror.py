@@ -55,15 +55,16 @@ class MirrorList:
         for src, dsts in urls.items():
             self._urls[_normalize_base_url(src)].update(_normalize_base_url(dst) for dst in dsts)
 
-    def resolve(self, url: str) -> Iterable[str]:
-        ret: set[str] = set()
+    def resolve(self, url: str) -> list[str]:
+        # There couldn't be URLs duplication in resulting output because there can't be repeated entries.
         for base_url, mirror_urls in self._urls.items():
-            if not url.startswith(base_url):
-                continue
-            path = _normalize_path(url[len(base_url) :])
-            for u in mirror_urls:
-                ret.add(u + path)
-        return ret
+            if url.startswith(base_url):
+                ret = set()
+                path = _normalize_path(url[len(base_url) :])
+                for u in mirror_urls:
+                    ret.add(u + path)
+                return list(ret)
+        raise ValueError(f"No mirror url found for URL '{url}'")
 
 
 def _load_file(path: str) -> Mapping[str, Iterable[str]]:

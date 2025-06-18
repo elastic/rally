@@ -72,15 +72,26 @@ def test_from_config(case: FromConfigCase):
 @dataclass()
 class ResolveCase:
     url: str
-    want: set[str]
+    want: list[str] | None = None
+    want_error: type[Exception] | None = None
 
 
 @cases(
-    empty=ResolveCase("", want=set()),
-    simple=ResolveCase(URL, want={f"{MIRROR1_URL}/{SOME_PATH}", f"{MIRROR2_URL}/{SOME_PATH}"}),
-    normalized=ResolveCase("https://rally-tracks.elastic.co/", want={f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"}),
+    empty=ResolveCase("", want_error=Exception),
+    simple=ResolveCase(URL, want=[f"{MIRROR1_URL}/{SOME_PATH}", f"{MIRROR2_URL}/{SOME_PATH}"]),
+    normalized=ResolveCase("https://rally-tracks.elastic.co/", want=[f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"]),
 )
 def test_resolve(case: ResolveCase):
     mirrors = MirrorList(urls=MIRRORS)
-    got = mirrors.resolve(case.url)
-    assert got == case.want
+    try:
+        got = sorted(mirrors.resolve(case.url))
+        got_error = None
+    except Exception as ex:
+        got = None
+        got_error = ex
+    if case.want is not None:
+        assert got_error is None
+        assert got == case.want
+    if case.want_error is not None:
+        assert got_error is not None
+        assert isinstance(got_error, case.want_error)

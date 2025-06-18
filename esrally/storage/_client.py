@@ -114,20 +114,29 @@ class Client(Adapter):
         :return: iterator over mirror URLs
         """
 
-        mirror_urls = list(self._mirrors.resolve(url))
-        if url not in mirror_urls:
-            mirror_urls.append(url)
-        if len(mirror_urls) > 1:
-            # It shuffles mirror URLs in the hope two threads will try different mirrors for the same URL.
-            self._random.shuffle(mirror_urls)
+        try:
+            urls = self._mirrors.resolve(url)
+        except ValueError:
+            urls = [url]
+        else:
+            if len(urls) > 1:
+                # It shuffles mirror URLs in the hope two threads will try different mirrors for the same URL.
+                self._random.shuffle(urls)
 
-            # It uses measured latencies and the number of connections to affect the order of the mirrors.
-            weights = {u: self._average_latency(u) * self._random.uniform(1.0, self._server_connections(url).count) for u in mirror_urls}
-            LOG.debug("resolve '%s': mirror weights: %s", url, weights)
-            mirror_urls.sort(key=lambda u: weights[u])
-            LOG.debug("resolve '%s': mirror urls: %s", url, mirror_urls)
+                # It uses measured latencies and the number of connections to affect the order of the mirrors.
+                weights = {u: self._average_latency(u) * self._random.uniform(1.0, self._server_connections(url).count) for u in urls}
+                LOG.debug("resolve '%s': mirror weights: %s", url, weights)
+                urls.sort(key=lambda u: weights[u])
+                LOG.debug("resolve '%s': mirror urls: %s", url, urls)
 
-        for u in mirror_urls:
+            if url not in urls:
+                # It ensures source URL is in the list so that it will be used as fall back when any mirror works.
+                urls.append(url)
+
+        if len(urls) > 1:
+            LOG.debug("resolved mirror URLs for URL '%s': %s", url, urls)
+
+        for u in urls:
             try:
                 head = self.head(u, ttl=ttl)
             except FileNotFoundError:
