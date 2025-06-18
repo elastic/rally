@@ -18,14 +18,13 @@ from __future__ import annotations
 
 import contextlib
 import enum
+import json
 import logging
 import os
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
 from typing import Any, BinaryIO, Protocol
-
-import yaml
 
 from esrally.storage._adapter import Head, ServiceUnavailableError, Writable
 from esrally.storage._range import (
@@ -160,7 +159,7 @@ class Transfer:
             return
 
         with open(self.path + ".status") as fd:
-            document = yaml.safe_load(fd)
+            document = json.load(fd)
             if not isinstance(document, Mapping):
                 LOG.error("mismatching status file format: got %s, want dict", type(document))
                 return
@@ -191,7 +190,7 @@ class Transfer:
         }
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
         with open(self._path + ".status", "w") as fd:
-            yaml.safe_dump(document, fd)
+            json.dump(document, fd)
 
     def _run(self):
         if self._finished:
