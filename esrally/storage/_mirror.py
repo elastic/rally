@@ -16,11 +16,10 @@
 # under the License.
 from __future__ import annotations
 
+import json
 import os
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-
-import yaml
 
 from esrally.config import Config
 
@@ -70,7 +69,7 @@ class MirrorList:
 def _load_file(path: str) -> Mapping[str, Iterable[str]]:
     ret: dict[str, set[str]] = defaultdict(set)
     with open(os.path.expanduser(path)) as file:
-        document = yaml.safe_load(file)
+        document = json.load(file)
     for mirror in document.get("mirrors", []):
         if not isinstance(mirror, Mapping):
             raise ValueError(f"invalid mirrors value: got {document.get('mirrors')}, want list of objects")
