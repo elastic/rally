@@ -133,6 +133,44 @@ remote servers. Available options are:
     storage.adapters = esrally.storage._http:HTTPAdapter
 
 
+  At this point in time `esrally.storage._http:HTTPAdapter` is the only existing `Adapter` implementations intended
+  for public use and that is already the default one. So it is required to edit this option for special customizations.
+
+* ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
+  bucket. The default value is 8.
+
+* ``storage.mirror_files`` is used to provide a json file that specify the mapping for mirrors URLs resolution.
+  Example::
+
+      [storage]
+      storage.mirror_files = ~/.rally/storage-mirrors.json
+
+  Example of a JSON file used to specify mirrors servers for downloading rally tracks files to a couple of AWS S3
+  buckets::
+
+      {
+        "mirrors": [
+          {
+            "sources": [
+              "https://rally-tracks.elastic.co/"
+            ],
+            "destinations": [
+              "https://rally-tracks-eu-central-1.s3.eu-central-1.amazonaws.com/",
+              "https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/"
+            ]
+          }
+        ]
+      }
+
+  The mirroring of the files on mirrors servers has to be provided by the infrastructure. The esrally client will look
+  for the files on the destination mirror endpoints URLs or use the original source endpoint URL in case the files
+  are not mirrored or they have a different size from the source one. The client will prefer endpoints with the lower
+  latency fetching the head of the file.
+
+* ``storage.random_seed`` a string used to initialize the client random number generator. This could be used to make
+  problems easier to reproduce in continuous integration. In most of the cases it should be left empty.
+
+
 HTTP Adapter
 ************
 

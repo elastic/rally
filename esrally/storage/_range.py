@@ -405,7 +405,7 @@ def rangeset(ranges: str | Iterable[Range]) -> RangeSet:
     :return: A RangeSet obtained from the given text.
     """
     if isinstance(ranges, str):
-        ranges = list(_parse(ranges))
+        ranges = _parse(ranges)
     return _rangeset(_combine(ranges))
 
 

@@ -36,21 +36,21 @@ class MockAdapter(Adapter, ABC):
 
 class HTTPAdapter(MockAdapter, ABC):
 
-    __adapter_URL_prefixes__ = ("http://",)
+    __adapter_URL_prefixes__ = "http://"
 
 
 class HTTPSAdapter(MockAdapter, ABC):
 
-    __adapter_URL_prefixes__ = ("https://",)
+    __adapter_URL_prefixes__ = "https://"
 
 
 class ExampleAdapter(MockAdapter, ABC):
-    __adapter_URL_prefixes__ = ("https://example.com/",)
+    __adapter_URL_prefixes__ = "https://example.com/"
 
 
 class ExampleAdapterWithPath(MockAdapter, ABC):
 
-    __adapter_URL_prefixes__ = ("https://example.com/some/path/",)
+    __adapter_URL_prefixes__ = "https://example.com/some/path/"
 
 
 @pytest.fixture()
