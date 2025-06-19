@@ -137,14 +137,17 @@ remote servers. Available options are:
   for public use and that is already the default one. So it is required to edit this option for special customizations.
 
 * ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
-bucket. The default value is 8.
+  bucket. The default value is 8.
 
 * ``storage.mirror_files`` is used to provide a json file that specify the mapping for mirrors URLs resolution.
   Example::
+
       [storage]
       storage.mirror_files = ~/.rally/storage-mirrors.json
 
-  Example of a mirror JSON file used to mirror rally tracks files to a couple of AWS S3 buckets::
+  Example of a JSON file used to specify mirrors servers for downloading rally tracks files to a couple of AWS S3
+  buckets::
+
       {
         "mirrors": [
           {
@@ -165,7 +168,7 @@ bucket. The default value is 8.
   latency fetching the head of the file.
 
 * ``storage.random_seed`` a string used to initialize the client random number generator. This could be used to make
-problems easier to reproduce in continuous integration. In most of the cases it should be left empty.
+  problems easier to reproduce in continuous integration. In most of the cases it should be left empty.
 
 
 HTTP Adapter
