@@ -23,10 +23,11 @@ import logging
 import os
 import threading
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any, BinaryIO, Protocol
 
-from esrally.storage._adapter import Head, ServiceUnavailableError, Writable
+from esrally.storage._adapter import Head, ServiceUnavailableError
+from esrally.storage._client import Client
 from esrally.storage._range import (
     MAX_LENGTH,
     NO_RANGE,
@@ -38,19 +39,6 @@ from esrally.storage._range import (
 from esrally.utils import threads
 
 LOG = logging.getLogger(__name__)
-
-
-class TransferCancelled(Exception):
-    """It is raised to communicate that the transfer has been canceled."""
-
-
-class RetryTransfer(Exception):
-    """It is raised to communicate the task should be retried."""
-
-
-class TransferDirection(enum.Enum):
-    DOWN = 1
-    UP = 2
 
 
 class TransferStatus(enum.Enum):
@@ -75,17 +63,14 @@ class Executor(Protocol):
         raise NotImplementedError()
 
 
-GetMethod = Callable[[str, Writable, RangeSet], Head]
-
-
 class Transfer:
 
     def __init__(
         self,
+        client: Client,
         head: Head,
         path: str,
         executor: Executor,
-        get: GetMethod,
         todo: RangeSet = NO_RANGE,
         multipart_size: int = MULTIPART_SIZE,
         max_connections: int = MAX_CONNECTIONS,
@@ -99,13 +84,13 @@ class Transfer:
         if head.content_length is not None:
             todo &= Range(0, head.content_length)
 
+        self._client = client
         self._max_connections = max_connections
         self._path = path
         self._started = threads.TimedEvent()
         self._workers = threads.WaitGroup(max_count=max_connections)
         self._finished = threads.TimedEvent()
         self._multipart_size = multipart_size
-        self._get = get
         self._head = head
         self._todo = todo
         self._fds: list[FileDescriptor] = []
@@ -195,18 +180,18 @@ class Transfer:
         cancelled = False
         try:
             if self._started.set():
-                LOG.info("transfer started: %s, %s", self.method, self.url)
+                LOG.info("transfer started: %s", self.url)
             with self._open() as fd:
                 if fd is None:
-                    LOG.debug("transfer done: %s, %s", self.method, self.url)
+                    LOG.debug("transfer done: %s", self.url)
                     return
                 if self._todo:
                     # It eventually spawns another thread for multipart transfer
                     self.start()
                 assert isinstance(fd, FileWriter)
-                self._get(self._head.url, fd, fd.ranges)
+                self._client.get(self._head.url, fd, fd.ranges)
         except StreamClosedError as ex:
-            LOG.info("task cancelled: %s, %s: %s", self.method, self.url, ex)
+            LOG.info("task cancelled: %s: %s", self.url, ex)
             cancelled = True
         except ServiceUnavailableError as ex:
             with self._lock:
@@ -214,9 +199,9 @@ class Transfer:
                 max_count = max(1, count - 1)
                 self._workers.max_count = max_count
             cancelled = count > 1
-            LOG.info("service unavailable: %s, %s, workers=%d/%d: %s", self.method, self.url, count, max_count, ex)
+            LOG.info("service unavailable: %s, workers=%d/%d: %s", self.url, count, max_count, ex)
         except Exception as ex:
-            LOG.exception("task failed: %s, %s", self.method, self.url)
+            LOG.exception("task failed: %s", self.url)
             with self._lock:
                 self._errors.append(ex)
             self.close()
@@ -225,12 +210,12 @@ class Transfer:
             self.save_status()
             if self._errors:
                 if self._finished.set():
-                    LOG.error("transfer failed: %s, %s:\n - %s", self.method, self.url, "\n - ".join(str(e) for e in self._errors))
+                    LOG.error("transfer failed: %s:\n - %s", self.url, "\n - ".join(str(e) for e in self._errors))
             elif cancelled:
-                LOG.debug("task cancelled: %s, %s", self.method, self.url)
+                LOG.debug("task cancelled: %s", self.url)
             elif not self.todo:
                 if self._finished.set():
-                    LOG.info("transfer completed: %s, %s", self.method, self.url)
+                    LOG.info("transfer completed: %s", self.url)
             else:
                 self.start()
 
@@ -256,16 +241,10 @@ class Transfer:
             yield None
             return
 
-        LOG.debug("transfer started: %s, %s, %s", self.method, self.url, todo)
+        LOG.debug("transfer started: %s, %s", self.url, todo)
         done: RangeSet = NO_RANGE
         try:
-            fd: FileDescriptor
-            if self.direction == TransferDirection.DOWN:
-                fd = FileWriter(self._path, todo)
-            elif self.direction == TransferDirection.UP:
-                fd = FileReader(self._path, todo)
-            else:
-                raise ValueError(f"invalid transfer direction: {self.direction}")
+            fd = FileWriter(self._path, todo)
             with fd:
                 with self._lock:
                     self._fds.append(fd)
@@ -275,11 +254,11 @@ class Transfer:
                     done, todo = todo.split(fd.position)
         finally:
             if todo:
-                LOG.debug("transfer interrupted: %s, %s, %s | %d", self.method, self.url, done, todo)
+                LOG.debug("transfer interrupted: %s, %s | %d", self.url, done, todo)
                 with self._lock:
                     self._todo |= todo
             else:
-                LOG.debug("transfer done: %s, %s, %s | %s", self.method, self.url, done, todo)
+                LOG.debug("transfer done: %s, %s | %s", self.url, done, todo)
 
     @property
     def content_length(self) -> int:
@@ -338,9 +317,8 @@ class Transfer:
             return 0.0
 
     def info(self) -> str:
-        direction = {TransferDirection.DOWN: "<", TransferDirection.UP: ">"}.get(self.direction, "=")
         return (
-            f"{direction} {self.url} {self.progress:.0f}% "
+            f"- {self.url} {self.progress:.0f}% "
             f"{pretty_size(self.transferred.size)}/{pretty_size(self.content_length)} {pretty_time(self.duration)} "
             f"{pretty_size(self.average_speed)}/s {self.status} {self._workers.count} workers"
         )
@@ -369,14 +347,6 @@ class Transfer:
     @property
     def errors(self) -> list[Exception]:
         return list(self._errors)
-
-    @property
-    def method(self) -> str:
-        return pretty_func(self._get)
-
-    @property
-    def direction(self) -> TransferDirection:
-        return TransferDirection.DOWN
 
     @property
     def done(self) -> bool:
@@ -476,34 +446,3 @@ class FileWriter(FileDescriptor):
                 self.position += size
             if len(data) > size:
                 raise RangeError(f"data size exceeds file range: {len(data)} > {size}", self.ranges)
-
-
-class FileReader(FileDescriptor):
-    """InputStream provides an input stream wrapper able to prevent exceeding reading given range."""
-
-    def __init__(self, path: str, ranges: RangeSet = NO_RANGE):
-        fd = open(path, "rb")  # pylint: disable=consider-using-with
-        if ranges:
-            fd.seek(ranges.start)
-        else:
-            ranges = Range(0, os.path.getsize(path))
-        super().__init__(path, fd, ranges)
-
-    def read(self, size: int = -1) -> bytes:
-        with self._lock:
-            if self._fd is None:
-                raise StreamClosedError("stream has been closed")
-
-            if self.ranges:
-                # prevent exceeding file data range
-                if size < 0:
-                    size = self.ranges.end - self.position
-                else:
-                    size = min(size, self.ranges.end - self.position)
-            if size == 0:
-                return b""
-            data = self._fd.read(size)
-            assert isinstance(data, bytes)
-            size = len(data)
-            self.position += size
-            return data
