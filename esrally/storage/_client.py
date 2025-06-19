@@ -93,7 +93,7 @@ class Client(Adapter):
         try:
             value = adapter.head(url)
         except Exception as ex:
-            LOG.error("Failed to fetch remote head for file '%s': %s", url, ex)
+            LOG.error("Failed to fetch remote head for file: %s", ex)
             value = ex
         end_time = time.monotonic()
 
@@ -140,10 +140,8 @@ class Client(Adapter):
         for u in urls:
             try:
                 head = self.head(u, ttl=ttl)
-            except FileNotFoundError:
-                continue
-            except Exception as ex:
-                LOG.warning("error getting file head: %r, %s", url, ex)
+            except Exception:
+                # The exception is already logged by head method before caching it.
                 continue
             if content_length is not None and content_length != head.content_length:
                 LOG.debug("unexpected content length: %r, got %d, want %d", url, content_length, head.content_length)

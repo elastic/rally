@@ -23,7 +23,7 @@ import threading
 
 from esrally import config
 from esrally.storage._adapter import Head
-from esrally.storage._client import Client
+from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.storage._transfer import GetMethod, Transfer
 from esrally.utils.threads import ContinuousTimer
@@ -35,7 +35,6 @@ MONITOR_INTERVAL = 2.0  # Seconds
 THREAD_NAME_PREFIX = "esrally.storage.transfer-worker"
 MULTIPART_SIZE = 8 * 1024 * 1024
 MAX_WORKERS = 32
-MAX_CONNECTIONS = 6
 
 
 class Manager:
@@ -161,3 +160,4 @@ class Manager:
             for tr in transfers:
                 tr.max_connections = max_connections
                 tr.save_status()
+                tr.start()

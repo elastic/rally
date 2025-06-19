@@ -117,10 +117,6 @@ class Transfer:
             self._resume_status()
 
     @property
-    def todo(self) -> RangeSet:
-        return self._todo
-
-    @property
     def path(self) -> str:
         return self._path
 
@@ -146,11 +142,12 @@ class Transfer:
         with self._lock:
             if not self._todo or self._finished:
                 return False
+            if self._workers.count >= self._max_connections:
+                return False
             try:
                 self._workers.add(1)
             except threads.WaitGroupLimitError:
                 return False
-
             self._executor.submit(self._run)
             return True
 
@@ -195,7 +192,7 @@ class Transfer:
     def _run(self):
         if self._finished:
             return
-        respawn = False
+        cancelled = False
         try:
             if self._started.set():
                 LOG.info("transfer started: %s, %s", self.method, self.url)
@@ -210,32 +207,32 @@ class Transfer:
                 self._get(self._head.url, fd, fd.ranges)
         except StreamClosedError as ex:
             LOG.info("task cancelled: %s, %s: %s", self.method, self.url, ex)
+            cancelled = True
         except ServiceUnavailableError as ex:
-            LOG.info("service limit reached: %s, %s, workers=%d: %s", self.method, self.url, self._workers.count, ex)
+            with self._lock:
+                count = self._workers.count
+                max_count = max(1, count - 1)
+                self._workers.max_count = max_count
+            cancelled = count > 1
+            LOG.info("service unavailable: %s, %s, workers=%d/%d: %s", self.method, self.url, count, max_count, ex)
         except Exception as ex:
             LOG.exception("task failed: %s, %s", self.method, self.url)
             with self._lock:
                 self._errors.append(ex)
             self.close()
-        else:
-            with self._lock:
-                respawn = not self._errors and bool(self._todo) and self._workers.count <= self._max_connections
-            if respawn:
-                # It eventually re-spawn himself for multipart transfer
-                self._executor.submit(self._run)
         finally:
-            if not respawn and self._workers.done():
-                self.save_status()
-                self._finished.set()
-                # Only the last worker finishing will handle errors.
-                if self._errors:
+            self._workers.done()
+            self.save_status()
+            if self._errors:
+                if self._finished.set():
                     LOG.error("transfer failed: %s, %s:\n - %s", self.method, self.url, "\n - ".join(str(e) for e in self._errors))
-                if self._todo:
-                    LOG.info("transfer interrupted: %s, %s: todo: %s", self.method, self.url, self._todo)
-                else:
-                    if os.path.isfile(self.path + ".part"):
-                        os.unlink(self.path + ".part")
+            elif cancelled:
+                LOG.debug("task cancelled: %s, %s", self.method, self.url)
+            elif not self.todo:
+                if self._finished.set():
                     LOG.info("transfer completed: %s, %s", self.method, self.url)
+            else:
+                self.start()
 
     def close(self):
         """It cancels all transfer tasks and closes all open streams."""
@@ -259,6 +256,8 @@ class Transfer:
             yield None
             return
 
+        LOG.debug("transfer started: %s, %s, %s", self.method, self.url, todo)
+        done: RangeSet = NO_RANGE
         try:
             fd: FileDescriptor
             if self.direction == TransferDirection.DOWN:
@@ -272,11 +271,15 @@ class Transfer:
                     self._fds.append(fd)
                 try:
                     yield fd
-                    return
                 finally:
-                    _, todo = todo.split(fd.position)
+                    done, todo = todo.split(fd.position)
         finally:
-            self._todo |= todo
+            if todo:
+                LOG.debug("transfer interrupted: %s, %s, %s | %d", self.method, self.url, done, todo)
+                with self._lock:
+                    self._todo |= todo
+            else:
+                LOG.debug("transfer done: %s, %s, %s | %s", self.method, self.url, done, todo)
 
     @property
     def content_length(self) -> int:
@@ -291,8 +294,17 @@ class Transfer:
             todo = self._todo
             for fd in self._fds:
                 if fd.position < fd.ranges.end:
-                    todo |= fd.ranges
+                    todo |= Range(fd.position, fd.ranges.end)
             return Range(0, self.content_length) - todo
+
+    @property
+    def todo(self) -> RangeSet:
+        with self._lock:
+            todo = self._todo
+            for fd in self._fds:
+                if fd.position < fd.ranges.end:
+                    todo |= Range(fd.position, fd.ranges.end)
+        return todo
 
     @property
     def progress(self) -> float:
