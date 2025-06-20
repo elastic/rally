@@ -20,7 +20,6 @@ from queue import Queue
 
 import pytest
 
-from esrally.utils.cases import cases
 from esrally.utils.threads import (
     ContinuousTimer,
     TimedEvent,
@@ -31,10 +30,10 @@ from esrally.utils.threads import (
 
 def test_continuous_timer():
     calls = Queue()
-    start_time = time.monotonic_ns()
+    start_time = time.monotonic()
 
     def func():
-        calls.put(time.monotonic_ns() - start_time)
+        calls.put(time.monotonic() - start_time)
 
     interval = 0.05
     count = 3
@@ -45,7 +44,7 @@ def test_continuous_timer():
     times = []
     for _ in range(count):
         times.append(calls.get(timeout=5.0))
-    duration = time.monotonic_ns() - start_time
+    duration = time.monotonic() - start_time
 
     timer.cancel()
 
@@ -56,8 +55,12 @@ def test_continuous_timer():
     assert duration >= times[-1], f"finished early: {times[-1]}"
 
 
-@cases("event", timed_event=TimedEvent(), wait_group=WaitGroup())
-def test_timed_event(event: TimedEvent):
+def test_timed_event():
+    _test_timed_event(event=TimedEvent())
+    _test_timed_event(event=WaitGroup())
+
+
+def _test_timed_event(event):
     assert event.time is None
     assert not event
 
@@ -79,9 +82,9 @@ def test_timed_event(event: TimedEvent):
         assert waiter.is_alive()
         assert not notified.is_set()
 
-        start_time = time.monotonic_ns()
+        start_time = time.monotonic()
         assert event.set()
-        stop_time = time.monotonic_ns()
+        stop_time = time.monotonic()
         assert event.time is not None
         assert start_time <= event.time <= stop_time
         assert event
