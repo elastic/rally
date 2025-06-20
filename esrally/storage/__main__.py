@@ -6,7 +6,7 @@ from esrally import config
 MIRRORS_FILES = "~/.rally/storage-mirrors.json"
 GET_FILES = [
     "https://rally-tracks.elastic.co/apm/span.json.bz2",
-    "https://rally-tracks.elastic.co/behavioral_analytics/events.json.bz2",
+    # "https://rally-tracks.elastic.co/behavioral_analytics/events.json.bz2",
 ]
 
 
