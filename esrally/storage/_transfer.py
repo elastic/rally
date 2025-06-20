@@ -23,10 +23,11 @@ import logging
 import os
 import threading
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any, BinaryIO, Protocol
 
-from esrally.storage._adapter import Head, ServiceUnavailableError, Writable
+from esrally.storage._adapter import Head, ServiceUnavailableError
+from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._range import (
     MAX_LENGTH,
     NO_RANGE,
@@ -40,19 +41,6 @@ from esrally.utils import threads
 LOG = logging.getLogger(__name__)
 
 
-class TransferCancelled(Exception):
-    """It is raised to communicate that the transfer has been canceled."""
-
-
-class RetryTransfer(Exception):
-    """It is raised to communicate the task should be retried."""
-
-
-class TransferDirection(enum.Enum):
-    DOWN = 1
-    UP = 2
-
-
 class TransferStatus(enum.Enum):
     INITIALIZED = 0
     QUEUED = 1
@@ -63,7 +51,6 @@ class TransferStatus(enum.Enum):
 
 
 MULTIPART_SIZE = 8 * 1024 * 1024
-MAX_CONNECTIONS = 16
 
 
 class Executor(Protocol):
@@ -75,23 +62,21 @@ class Executor(Protocol):
         raise NotImplementedError()
 
 
-GetMethod = Callable[[str, Writable, RangeSet], Head]
-
-
 class Transfer:
 
     def __init__(
         self,
+        client: Client,
         head: Head,
         path: str,
         executor: Executor,
-        get: GetMethod,
         todo: RangeSet = NO_RANGE,
         multipart_size: int = MULTIPART_SIZE,
         max_connections: int = MAX_CONNECTIONS,
         resume: bool = True,
     ):
-        max_connections = max(1, max_connections)
+        if max_connections <= 0:
+            raise ValueError("max_connections must be greater than 0")
         if max_connections == 1 or not head.accept_ranges:
             multipart_size = MAX_LENGTH
         if not todo:
@@ -99,13 +84,13 @@ class Transfer:
         if head.content_length is not None:
             todo &= Range(0, head.content_length)
 
+        self._client = client
         self._max_connections = max_connections
         self._path = path
         self._started = threads.TimedEvent()
         self._workers = threads.WaitGroup(max_count=max_connections)
         self._finished = threads.TimedEvent()
         self._multipart_size = multipart_size
-        self._get = get
         self._head = head
         self._todo = todo
         self._fds: list[FileDescriptor] = []
@@ -113,8 +98,13 @@ class Transfer:
         self._errors = list[Exception]()
         self._lock = threading.Lock()
         self._resumed_size = 0
-        if resume:
-            self._resume_status()
+        if resume and os.path.isfile(self._path + ".status"):
+            try:
+                self._resume_status()
+            except Exception as ex:
+                LOG.error("Failed to resume transfer: %s", ex)
+            else:
+                LOG.info("resumed from existing status: %s", self.info())
 
     @property
     def path(self) -> str:
@@ -152,38 +142,46 @@ class Transfer:
             return True
 
     def _resume_status(self):
-        if not os.path.isfile(self._path) or not os.path.isfile(self._path + ".status"):
-            return
+        if not os.path.isfile(self._path):
+            raise FileNotFoundError(f"target file not found: {self._path}")
+
+        status_filename = self._path + ".status"
+        if not os.path.isfile(status_filename):
+            raise FileNotFoundError(f"status file not found: {status_filename}")
 
         with open(self.path + ".status") as fd:
             document = json.load(fd)
             if not isinstance(document, Mapping):
-                LOG.error("mismatching status file format: got %s, want dict", type(document))
-                return
+                raise ValueError(f"mismatching status file format: got {type(document)}, want dict")
 
-        url = str(document.get("url"))
+        url = document.get("url")
+        if url is None:
+            raise ValueError(f"url field not found in status file: {status_filename}")
         if url != self.url:
-            LOG.warning("mismatching status file url: %s != %s", url, self._head.url)
-            return
+            raise ValueError(f"mismatching url in status file: '{status_filename}', got '{url}', want '{self.url}'")
 
-        content_length = document.get("content_length", MAX_LENGTH)
+        content_length = document.get("content_length")
+        if content_length is None:
+            raise ValueError(f"content_length field not found in status file: {status_filename}")
+
         if self.content_length != content_length:
-            LOG.warning("mismatching content length: %s != %s", content_length, self._head.content_length)
-            return
+            raise ValueError(f"mismatching content length: got: {content_length}, want {self.content_length}")
 
-        transferred = rangeset(document.get("transferred", ""))
-        if transferred:
-            self._todo -= transferred
-            self._resumed_size = transferred.size
-            if not self._todo:
-                self._finished.set()
-            LOG.info("resumed from existing status: %s", self.info())
+        done_text = document.get("done")
+        if done_text is None:
+            raise ValueError(f"done field not found in status file: {status_filename}")
+
+        done = rangeset(done_text)
+        self._todo -= done
+        self._resumed_size = done.size
+        if not self._todo:
+            self._finished.set()
 
     def save_status(self):
         document = {
             "url": self.url,
             "content_length": self.content_length,
-            "transferred": str(self.transferred),
+            "done": str(self.done),
         }
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
         with open(self._path + ".status", "w") as fd:
@@ -195,18 +193,21 @@ class Transfer:
         cancelled = False
         try:
             if self._started.set():
-                LOG.info("transfer started: %s, %s", self.method, self.url)
+                LOG.info("transfer started: %s", self.url)
             with self._open() as fd:
                 if fd is None:
-                    LOG.debug("transfer done: %s, %s", self.method, self.url)
+                    LOG.debug("transfer done: %s", self.url)
                     return
                 if self._todo:
                     # It eventually spawns another thread for multipart transfer
                     self.start()
                 assert isinstance(fd, FileWriter)
-                self._get(self._head.url, fd, fd.ranges)
+                ranges: RangeSet = NO_RANGE
+                if self._head.accept_ranges:
+                    ranges = fd.ranges
+                self._client.get(self._head.url, fd, ranges)
         except StreamClosedError as ex:
-            LOG.info("task cancelled: %s, %s: %s", self.method, self.url, ex)
+            LOG.info("task cancelled: %s: %s", self.url, ex)
             cancelled = True
         except ServiceUnavailableError as ex:
             with self._lock:
@@ -214,9 +215,9 @@ class Transfer:
                 max_count = max(1, count - 1)
                 self._workers.max_count = max_count
             cancelled = count > 1
-            LOG.info("service unavailable: %s, %s, workers=%d/%d: %s", self.method, self.url, count, max_count, ex)
+            LOG.info("service unavailable: %s, workers=%d/%d: %s", self.url, count, max_count, ex)
         except Exception as ex:
-            LOG.exception("task failed: %s, %s", self.method, self.url)
+            LOG.exception("task failed: %s", self.url)
             with self._lock:
                 self._errors.append(ex)
             self.close()
@@ -225,12 +226,12 @@ class Transfer:
             self.save_status()
             if self._errors:
                 if self._finished.set():
-                    LOG.error("transfer failed: %s, %s:\n - %s", self.method, self.url, "\n - ".join(str(e) for e in self._errors))
+                    LOG.error("transfer failed: %s:\n - %s", self.url, "\n - ".join(str(e) for e in self._errors))
             elif cancelled:
-                LOG.debug("task cancelled: %s, %s", self.method, self.url)
+                LOG.debug("task cancelled: %s", self.url)
             elif not self.todo:
                 if self._finished.set():
-                    LOG.info("transfer completed: %s, %s", self.method, self.url)
+                    LOG.info("transfer completed: %s", self.url)
             else:
                 self.start()
 
@@ -256,16 +257,10 @@ class Transfer:
             yield None
             return
 
-        LOG.debug("transfer started: %s, %s, %s", self.method, self.url, todo)
+        LOG.debug("transfer started: %s, %s", self.url, todo)
         done: RangeSet = NO_RANGE
         try:
-            fd: FileDescriptor
-            if self.direction == TransferDirection.DOWN:
-                fd = FileWriter(self._path, todo)
-            elif self.direction == TransferDirection.UP:
-                fd = FileReader(self._path, todo)
-            else:
-                raise ValueError(f"invalid transfer direction: {self.direction}")
+            fd = FileWriter(self._path, todo)
             with fd:
                 with self._lock:
                     self._fds.append(fd)
@@ -275,11 +270,11 @@ class Transfer:
                     done, todo = todo.split(fd.position)
         finally:
             if todo:
-                LOG.debug("transfer interrupted: %s, %s, %s | %d", self.method, self.url, done, todo)
+                LOG.debug("transfer interrupted: %s, %s | %d", self.url, done, todo)
                 with self._lock:
                     self._todo |= todo
             else:
-                LOG.debug("transfer done: %s, %s, %s | %s", self.method, self.url, done, todo)
+                LOG.debug("transfer done: %s, %s | %s", self.url, done, todo)
 
     @property
     def content_length(self) -> int:
@@ -289,7 +284,7 @@ class Transfer:
         return ret
 
     @property
-    def transferred(self) -> RangeSet:
+    def done(self) -> RangeSet:
         with self._lock:
             todo = self._todo
             for fd in self._fds:
@@ -309,7 +304,7 @@ class Transfer:
     @property
     def progress(self) -> float:
         if self.content_length != MAX_LENGTH:
-            return 100.0 * self.transferred.size / self.content_length
+            return 100.0 * self.done.size / self.content_length
         return 0.0
 
     @property
@@ -333,15 +328,14 @@ class Transfer:
         :return: speed in bytes per seconds.
         """
         try:
-            return (self.transferred.size - self._resumed_size) / self.duration
+            return (self.done.size - self._resumed_size) / self.duration
         except ZeroDivisionError:
             return 0.0
 
     def info(self) -> str:
-        direction = {TransferDirection.DOWN: "<", TransferDirection.UP: ">"}.get(self.direction, "=")
         return (
-            f"{direction} {self.url} {self.progress:.0f}% "
-            f"{pretty_size(self.transferred.size)}/{pretty_size(self.content_length)} {pretty_time(self.duration)} "
+            f"- {self.url} {self.progress:.0f}% "
+            f"{pretty_size(self.done.size)}/{pretty_size(self.content_length)} {pretty_time(self.duration)} "
             f"{pretty_size(self.average_speed)}/s {self.status} {self._workers.count} workers"
         )
 
@@ -371,15 +365,7 @@ class Transfer:
         return list(self._errors)
 
     @property
-    def method(self) -> str:
-        return pretty_func(self._get)
-
-    @property
-    def direction(self) -> TransferDirection:
-        return TransferDirection.DOWN
-
-    @property
-    def done(self) -> bool:
+    def finished(self) -> bool:
         return bool(self._finished)
 
 
@@ -454,7 +440,7 @@ class FileWriter(FileDescriptor):
 
     def __init__(self, path: str, ranges: RangeSet = NO_RANGE):
         if os.path.isfile(path):
-            fd = open(path, "r+b")  # pylint: disable=consider-using-with
+            fd = open(path, "r+b")
         else:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             fd = open(path, "w+b")  # pylint: disable=consider-using-with
@@ -476,34 +462,3 @@ class FileWriter(FileDescriptor):
                 self.position += size
             if len(data) > size:
                 raise RangeError(f"data size exceeds file range: {len(data)} > {size}", self.ranges)
-
-
-class FileReader(FileDescriptor):
-    """InputStream provides an input stream wrapper able to prevent exceeding reading given range."""
-
-    def __init__(self, path: str, ranges: RangeSet = NO_RANGE):
-        fd = open(path, "rb")  # pylint: disable=consider-using-with
-        if ranges:
-            fd.seek(ranges.start)
-        else:
-            ranges = Range(0, os.path.getsize(path))
-        super().__init__(path, fd, ranges)
-
-    def read(self, size: int = -1) -> bytes:
-        with self._lock:
-            if self._fd is None:
-                raise StreamClosedError("stream has been closed")
-
-            if self.ranges:
-                # prevent exceeding file data range
-                if size < 0:
-                    size = self.ranges.end - self.position
-                else:
-                    size = min(size, self.ranges.end - self.position)
-            if size == 0:
-                return b""
-            data = self._fd.read(size)
-            assert isinstance(data, bytes)
-            size = len(data)
-            self.position += size
-            return data

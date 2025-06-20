@@ -57,6 +57,8 @@ class Head(NamedTuple):
     def create(cls, url: str, content_length: int | None = None, accept_ranges: bool | None = None, ranges: RangeSet = NO_RANGE) -> Head:
         if accept_ranges is None:
             accept_ranges = bool(ranges)
+        if content_length is None and ranges:
+            content_length = ranges.size
         return cls(url=url, accept_ranges=accept_ranges, content_length=content_length, ranges=ranges)
 
 

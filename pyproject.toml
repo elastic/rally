@@ -85,10 +85,6 @@ dependencies = [
     "python-json-logger==2.0.7",
     # License: Apache 2.0
     "ecs-logging==2.2.0",
-    # License: MIT
-    "pyyaml==6.0.2",
-    # License: MIT
-    "types-PyYAML==6.0.2"
 ]
 
 [project.optional-dependencies]

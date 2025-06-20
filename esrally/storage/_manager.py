@@ -25,7 +25,7 @@ from esrally import config
 from esrally.storage._adapter import Head
 from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._range import NO_RANGE, RangeSet
-from esrally.storage._transfer import GetMethod, Transfer
+from esrally.storage._transfer import Transfer
 from esrally.utils.threads import ContinuousTimer
 
 LOG = logging.getLogger(__name__)
@@ -114,12 +114,11 @@ class Manager:
         :param ranges: the part of the file to download
         :return: started transfer object.
         """
-        return self._transfer(url=url, path=path, ranges=ranges, get=self._client.get)
+        return self._transfer(url=url, path=path, ranges=ranges)
 
     def _transfer(
         self,
         url: str,
-        get: GetMethod,
         path: os.PathLike | str | None = None,
         ranges: RangeSet = NO_RANGE,
     ) -> Transfer:
@@ -129,11 +128,11 @@ class Manager:
         # This also ensures the path is a string
         path = os.path.normpath(os.path.expanduser(path))
         tr = Transfer(
+            client=self._client,
             path=path,
             head=head,
             executor=self._executor,
             todo=ranges,
-            get=get,
             max_connections=self._max_connections,
             multipart_size=self._multipart_size,
         )
@@ -154,7 +153,7 @@ class Manager:
 
     def _update_transfers(self):
         available_workers = max(1, int(self._max_workers * 0.8))
-        self._transfers = transfers = [tr for tr in self._transfers if not tr.done]
+        self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
         if transfers:
             max_connections = min(self._max_connections, max(1, available_workers // len(transfers)))
             for tr in transfers:
