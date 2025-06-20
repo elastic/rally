@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import logging
-from urllib.error import HTTPError
 
 import requests
 import requests.adapters
@@ -79,10 +78,9 @@ class HTTPAdapter(Adapter):
 
     def head(self, url: str) -> Head:
         with self.session.head(url, allow_redirects=True) as res:
-            try:
-                res.raise_for_status()
-            except HTTPError as ex:
-                raise FileNotFoundError(f"can't get file head: {url}") from ex
+            if res.status_code == 404:
+                raise FileNotFoundError(f"Can't get file head: {url}")
+            res.raise_for_status()
             return head_from_headers(url, res.headers)
 
     def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
