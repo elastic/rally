@@ -65,7 +65,8 @@
   "loggers": {
     "elasticsearch": {
       "handlers": [
-        "rally_log_handler"
+        "rally_log_handler",
+        "rally_json_handler"
       ],
       "level": "WARNING",
       "propagate": false
@@ -79,7 +80,8 @@
     },
     "elastic_transport": {
       "handlers": [
-        "rally_log_handler"
+        "rally_log_handler",
+        "rally_json_handler"
       ],
       "level": "WARNING",
       "propagate": false

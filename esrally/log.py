@@ -72,6 +72,12 @@ def rename_actor_fields(record: logging.LogRecord, log_dict: dict[str, typing.An
         fields["address"] = log_dict.pop("actorAddress")
     if fields:
         collections.deep_update(log_dict, {"rally": {"thespian": fields}})
+    # Thespian does not serialize exception objects kept in exc_info log record attribute when
+    # forwarding logs to the logger actor but populates exc_text attribute instead, and sets
+    # exc_info to None. This is not recognized as stack trace by ECS Logging package, so we need to
+    # work it around setting "error.stack_trace" ECS field explicitly.
+    if record.exc_info is None and record.exc_text:
+        collections.deep_update(log_dict, {"error": {"stack_trace": record.exc_text}})
 
 
 # Special case for asyncio fields as they are not part of the standard ECS log dict
