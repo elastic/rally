@@ -153,7 +153,7 @@ class Manager:
 
     def _update_transfers(self):
         available_workers = max(1, int(self._max_workers * 0.8))
-        self._transfers = transfers = [tr for tr in self._transfers if not tr.done]
+        self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
         if transfers:
             max_connections = min(self._max_connections, max(1, available_workers // len(transfers)))
             for tr in transfers:

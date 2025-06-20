@@ -27,7 +27,7 @@ from collections.abc import Iterator, Mapping
 from typing import Any, BinaryIO, Protocol
 
 from esrally.storage._adapter import Head, ServiceUnavailableError
-from esrally.storage._client import Client
+from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._range import (
     MAX_LENGTH,
     NO_RANGE,
@@ -51,7 +51,6 @@ class TransferStatus(enum.Enum):
 
 
 MULTIPART_SIZE = 8 * 1024 * 1024
-MAX_CONNECTIONS = 16
 
 
 class Executor(Protocol):
@@ -76,7 +75,8 @@ class Transfer:
         max_connections: int = MAX_CONNECTIONS,
         resume: bool = True,
     ):
-        max_connections = max(1, max_connections)
+        if max_connections <= 0:
+            raise ValueError("max_connections must be greater than 0")
         if max_connections == 1 or not head.accept_ranges:
             multipart_size = MAX_LENGTH
         if not todo:
@@ -98,8 +98,13 @@ class Transfer:
         self._errors = list[Exception]()
         self._lock = threading.Lock()
         self._resumed_size = 0
-        if resume:
-            self._resume_status()
+        if resume and os.path.isfile(self._path + ".status"):
+            try:
+                self._resume_status()
+            except Exception as ex:
+                LOG.exception("Failed to resume transfer: %s", ex)
+            else:
+                LOG.info("resumed from existing status: %s", self.info())
 
     @property
     def path(self) -> str:
@@ -137,38 +142,46 @@ class Transfer:
             return True
 
     def _resume_status(self):
-        if not os.path.isfile(self._path) or not os.path.isfile(self._path + ".status"):
-            return
+        if not os.path.isfile(self._path):
+            raise FileNotFoundError(f"target file not found: {self._path}")
+
+        status_filename = self._path + ".status"
+        if not os.path.isfile(status_filename):
+            raise FileNotFoundError(f"status file not found: {status_filename}")
 
         with open(self.path + ".status") as fd:
             document = json.load(fd)
             if not isinstance(document, Mapping):
-                LOG.error("mismatching status file format: got %s, want dict", type(document))
-                return
+                raise ValueError(f"mismatching status file format: got {type(document)}, want dict")
 
-        url = str(document.get("url"))
+        url = document.get("url")
+        if url is None:
+            raise ValueError(f"url field not found in status file: {status_filename}")
         if url != self.url:
-            LOG.warning("mismatching status file url: %s != %s", url, self._head.url)
-            return
+            raise ValueError(f"mismatching url in status file: '{status_filename}', got '{url}', want '{self.url}'")
 
-        content_length = document.get("content_length", MAX_LENGTH)
+        content_length = document.get("content_length")
+        if content_length is None:
+            raise ValueError(f"content_length field not found in status file: {status_filename}")
+
         if self.content_length != content_length:
-            LOG.warning("mismatching content length: %s != %s", content_length, self._head.content_length)
-            return
+            raise ValueError(f"mismatching content length: got: {content_length}, want {self.content_length}")
 
-        transferred = rangeset(document.get("transferred", ""))
-        if transferred:
-            self._todo -= transferred
-            self._resumed_size = transferred.size
-            if not self._todo:
-                self._finished.set()
-            LOG.info("resumed from existing status: %s", self.info())
+        done_text = document.get("done")
+        if done_text is None:
+            raise ValueError(f"done field not found in status file: {status_filename}")
+
+        done = rangeset(done_text)
+        self._todo -= done
+        self._resumed_size = done.size
+        if not self._todo:
+            self._finished.set()
 
     def save_status(self):
         document = {
             "url": self.url,
             "content_length": self.content_length,
-            "transferred": str(self.transferred),
+            "done": str(self.done),
         }
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
         with open(self._path + ".status", "w") as fd:
@@ -189,7 +202,10 @@ class Transfer:
                     # It eventually spawns another thread for multipart transfer
                     self.start()
                 assert isinstance(fd, FileWriter)
-                self._client.get(self._head.url, fd, fd.ranges)
+                ranges: RangeSet = NO_RANGE
+                if self._head.accept_ranges:
+                    ranges = fd.ranges
+                self._client.get(self._head.url, fd, ranges)
         except StreamClosedError as ex:
             LOG.info("task cancelled: %s: %s", self.url, ex)
             cancelled = True
@@ -268,7 +284,7 @@ class Transfer:
         return ret
 
     @property
-    def transferred(self) -> RangeSet:
+    def done(self) -> RangeSet:
         with self._lock:
             todo = self._todo
             for fd in self._fds:
@@ -288,7 +304,7 @@ class Transfer:
     @property
     def progress(self) -> float:
         if self.content_length != MAX_LENGTH:
-            return 100.0 * self.transferred.size / self.content_length
+            return 100.0 * self.done.size / self.content_length
         return 0.0
 
     @property
@@ -312,14 +328,14 @@ class Transfer:
         :return: speed in bytes per seconds.
         """
         try:
-            return (self.transferred.size - self._resumed_size) / self.duration
+            return (self.done.size - self._resumed_size) / self.duration
         except ZeroDivisionError:
             return 0.0
 
     def info(self) -> str:
         return (
             f"- {self.url} {self.progress:.0f}% "
-            f"{pretty_size(self.transferred.size)}/{pretty_size(self.content_length)} {pretty_time(self.duration)} "
+            f"{pretty_size(self.done.size)}/{pretty_size(self.content_length)} {pretty_time(self.duration)} "
             f"{pretty_size(self.average_speed)}/s {self.status} {self._workers.count} workers"
         )
 
@@ -349,7 +365,7 @@ class Transfer:
         return list(self._errors)
 
     @property
-    def done(self) -> bool:
+    def finished(self) -> bool:
         return bool(self._finished)
 
 
@@ -424,7 +440,7 @@ class FileWriter(FileDescriptor):
 
     def __init__(self, path: str, ranges: RangeSet = NO_RANGE):
         if os.path.isfile(path):
-            fd = open(path, "r+b")  # pylint: disable=consider-using-with
+            fd = open(path, "r+b")
         else:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             fd = open(path, "w+b")  # pylint: disable=consider-using-with
