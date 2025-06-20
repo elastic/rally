@@ -1,0 +1,10 @@
+services:
+  # Web server
+  mirror-1:
+    build: it/storage/docker
+    ports:
+      - '3000:80'
+  mirror-2:
+    build: it/storage/docker
+    ports:
+      - '3001:80'
