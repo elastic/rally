@@ -32,7 +32,7 @@ from esrally.utils.cases import cases
 
 URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
 MISMATCH_URL = "https://rally-tracks.elastic.co/apm/span.json.gz"
-DATA = b"\0" * 1024
+DATA = b"\xff" * 1024
 
 
 class DummyExecutor:
@@ -105,17 +105,22 @@ class TransferCase:
     todo=TransferCase(todo="10-20, 30-40", want_done="0-29,41-1023", want_todo="30-40"),
     # It tests multipart working when multipart_size < content_length.
     multipart_size=TransferCase(multipart_size=128, want_done="0-127", want_todo="128-1023"),
-    # It checks multipart is disabled when one max_connections is 1.
+    # It tests multipart is disabled when one max_connections is 1.
     one_connection=TransferCase(multipart_size=128, max_connections=1, want_done="0-1023"),
-    # It checks when max_connections < 0.
+    # It tests when max_connections < 0.
     invalid_max_connections=TransferCase(multipart_size=128, max_connections=0, want_error=ValueError),
-    # It checks resuming from an existing status.
+    # It tests resuming from an existing status.
     rasume_status=TransferCase(
         resume_status={"done": "128-255", "url": URL, "content_length": 1024}, want_done="0-255", want_todo="256-1023"
     ),
-    # It checks disabling resuming from an existing status.
+    # It tests disabling resuming from an existing status.
     no_rasume=TransferCase(resume=False, resume_status={"done": "128-255", "url": URL, "content_length": 1024}, want_done="0-1023"),
+    # It tests mismatching URL in the status file produces re-starting transfer from the beginning
     mismach_status_url=TransferCase(resume_status={"done": "128-255", "url": MISMATCH_URL, "content_length": 1024}, want_done="0-1023"),
+    # It tests mismatching content_length in the status file produces re-starting transfer from the beginning
+    mismach_status_content_length=TransferCase(
+        resume_status={"done": "128-255", "url": MISMATCH_URL, "content_length": 212}, want_done="0-1023"
+    ),
 )
 def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLike) -> None:
     client = DummyClient.from_config(Config())
@@ -125,7 +130,7 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
     if case.resume_status is not None:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as fd:
-            fd.write(DATA)
+            fd.write(b"\0" * 1024)
         with open(status_path, "w") as fd:
             json.dump(case.resume_status, fd)
     try:
@@ -147,16 +152,30 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
     assert case.want_error is None
     transfer.start()
     executor.execute_tasks()
-    assert transfer.done == rangeset(case.want_done)
-    assert transfer.todo == rangeset(case.want_todo)
 
-    # Checks status file is created and it can be properly resumed
+    # It verifies the final state
+    want_done = rangeset(case.want_done)
+    want_todo = rangeset(case.want_todo)
+    want_written = rangeset(case.todo) - want_todo
+    assert transfer.done == want_done
+    assert transfer.todo == want_todo
+
+    # It verifies the file has been written
+    assert os.path.isfile(path)
+    with open(path, "rb") as fd:
+        for r in rangeset(want_written):
+            fd.seek(r.start)
+            assert DATA[r.start : r.end] == fd.read(r.size)
+
+    # It verifies the status file has been written
     assert os.path.isfile(status_path)
     with open(status_path) as fd:
         status = json.load(fd)
     assert status["url"] == case.url
     assert status["content_length"] == head.content_length
     assert status["done"] == case.want_done
+
+    # It verifies the transfer can be resumed from the file status
     transfer2 = Transfer(client=client, head=head, path=path, executor=executor)
     assert transfer2.done == transfer.done
     assert transfer2.todo == transfer.todo
