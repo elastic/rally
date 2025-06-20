@@ -102,7 +102,7 @@ class Transfer:
             try:
                 self._resume_status()
             except Exception as ex:
-                LOG.exception("Failed to resume transfer: %s", ex)
+                LOG.error("Failed to resume transfer: %s", ex)
             else:
                 LOG.info("resumed from existing status: %s", self.info())
 
