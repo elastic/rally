@@ -93,7 +93,7 @@ class Transfer:
         self._multipart_size = multipart_size
         self._head = head
         self._todo = todo
-        self._fds: list[FileDescriptor] = []
+        self._fds = list[FileDescriptor]()
         self._executor = executor
         self._errors = list[Exception]()
         self._lock = threading.Lock()
