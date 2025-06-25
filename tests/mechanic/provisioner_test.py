@@ -88,6 +88,7 @@ class TestBareProvisioner:
             "transport_port": "9300",
             "all_node_ips": '["10.17.22.22","10.17.22.23"]',
             "all_node_names": '["rally-node-0","rally-node-1"]',
+            "all_node_ips_count": 2,
             "minimum_master_nodes": 2,
             "install_root_path": "/opt/elasticsearch-5.0.0",
         }
@@ -209,6 +210,7 @@ class TestBareProvisioner:
             "transport_port": "9300",
             "all_node_ips": '["10.17.22.22","10.17.22.23"]',
             "all_node_names": '["rally-node-0","rally-node-1"]',
+            "all_node_ips_count": 2,
             "minimum_master_nodes": 2,
             "install_root_path": "/opt/elasticsearch-6.8.0",
             "plugin_name": "x-pack-security",
@@ -324,6 +326,7 @@ class TestElasticsearchInstaller:
             "transport_port": "9300",
             "all_node_ips": '["10.17.22.22","10.17.22.23"]',
             "all_node_names": '["rally-node-0","rally-node-1"]',
+            "all_node_ips_count": 2,
             "minimum_master_nodes": 2,
             "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT",
         }
@@ -369,6 +372,7 @@ class TestElasticsearchInstaller:
             "transport_port": "9300",
             "all_node_ips": '["10.17.22.22","10.17.22.23"]',
             "all_node_names": '["rally-node-0","rally-node-1"]',
+            "all_node_ips_count": 2,
             "minimum_master_nodes": 2,
             "install_root_path": "/install/elasticsearch-5.0.0-SNAPSHOT",
         }
