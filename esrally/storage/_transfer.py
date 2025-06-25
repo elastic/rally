@@ -24,7 +24,7 @@ import os
 import threading
 import time
 from collections.abc import Iterator, Mapping
-from typing import Any, BinaryIO, Protocol
+from typing import BinaryIO, Protocol
 
 from esrally.storage._adapter import Head, ServiceUnavailableError
 from esrally.storage._client import MAX_CONNECTIONS, Client
@@ -36,7 +36,7 @@ from esrally.storage._range import (
     RangeSet,
     rangeset,
 )
-from esrally.utils import threads
+from esrally.utils import pretty, threads
 
 LOG = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ class Transfer:
         self._multipart_size = multipart_size
         self._head = head
         self._todo = todo
-        self._fds: list[FileDescriptor] = []
+        self._fds = list[FileDescriptor]()
         self._executor = executor
         self._errors = list[Exception]()
         self._lock = threading.Lock()
@@ -335,8 +335,8 @@ class Transfer:
     def info(self) -> str:
         return (
             f"- {self.url} {self.progress:.0f}% "
-            f"{pretty_size(self.done.size)}/{pretty_size(self.content_length)} {pretty_time(self.duration)} "
-            f"{pretty_size(self.average_speed)}/s {self.status} {self._workers.count} workers"
+            f"{pretty.size(self.done.size)}/{pretty.size(self.content_length)} {pretty.seconds(self.duration)} "
+            f"{pretty.size(self.average_speed)}/s {self.status} {self._workers.count} workers"
         )
 
     def wait(self, timeout: float | None = None) -> bool:
@@ -367,40 +367,6 @@ class Transfer:
     @property
     def finished(self) -> bool:
         return bool(self._finished)
-
-
-def pretty_size(value: int | float | None) -> str:
-    if value is None:
-        return "?"
-    value = float(value)
-    if value < 1024.0:
-        return f"{value:.0f}B"
-    value /= 1024.0
-    if value < 1024.0:
-        return f"{value:.0f}KB"
-    value /= 1024.0
-    if value < 1024.0:
-        return f"{value:.2f}MB"
-    value /= 1024.0
-    if value < 1024.0:
-        return f"{value:.2f}GB"
-    value /= 1024.0
-    return f"{value:.2f}TB"
-
-
-def pretty_time(value: int | float) -> str:
-    value = float(value)
-    if value < 60.0:
-        return f"{value:.0f}s"
-    value /= 60.0
-    if value < 60.0:
-        return f"{value:.2f}m"
-    value /= 60.0
-    return f"{value:.2f}h"
-
-
-def pretty_func(fn: Any) -> str:
-    return getattr(fn, "__qualname__", None) or getattr(fn, "__name__", None) or str(fn)
 
 
 class StreamClosedError(Exception):
