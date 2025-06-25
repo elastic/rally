@@ -35,6 +35,7 @@ from esrally.storage._adapter import (
 )
 from esrally.storage._mirror import MirrorList
 from esrally.storage._range import NO_RANGE, RangeSet
+from esrally.utils import pretty
 from esrally.utils.threads import WaitGroup, WaitGroupLimitError
 
 LOG = logging.getLogger(__name__)
@@ -200,11 +201,14 @@ class Client(Adapter):
         return sum(s.latency for s in stats) / len(stats)
 
     def monitor(self):
+        infos = list[str]()
         with self._lock:
-            items = [(u, c) for u, c in self._connections.items() if c.count > 0]
-        for url, connections in items:
-            latency = self._average_latency(url)
-            LOG.info("active client connection(s) %s: count=%d, latency=%f", url, connections.count, latency)
+            for url, connection in self._connections.items():
+                if connection.count == 0:
+                    continue
+                latency = self._average_latency(url)
+                infos.append(f"- latency={pretty.seconds(latency)}, count={connection.count} url='{url}'")
+        LOG.info("active client connection(s):\n\t%s", "\n\t".join(infos))
 
 
 class ServerStats(NamedTuple):
