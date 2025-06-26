@@ -359,12 +359,12 @@ class Transfer:
         LOG.debug("transfer started: %s, %s", self.url, todo)
         done: RangeSet = NO_RANGE
         try:
-            # It opens a file descriptor bound to the part of the file assigned to this task.
-            fd = FileWriter(self.path, todo)
+            with self._lock:
+                # It opens a file descriptor bound to the part of the file assigned to this task.
+                fd = FileWriter(self.path, todo)
+                # It registers the file descriptor so that it can be closed from another thread.
+                self._fds.append(fd)
             with fd:
-                with self._lock:
-                    # It registers the file descriptor so that it can be closed from another thread.
-                    self._fds.append(fd)
                 try:
                     yield fd
                 finally:
