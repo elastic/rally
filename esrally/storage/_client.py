@@ -144,7 +144,7 @@ class Client(Adapter):
             except Exception:
                 # The exception is already logged by head method before caching it.
                 continue
-            if document_length is not None and document_length != head.document_length:
+            if document_length is not None and head.document_length is not None and document_length != head.document_length:
                 LOG.debug("unexpected document length: %r, got %d, want %d", url, document_length, head.document_length)
                 continue
             if accept_ranges and not head.accept_ranges:
