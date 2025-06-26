@@ -35,6 +35,7 @@ from esrally.storage._adapter import (
 )
 from esrally.storage._mirror import MirrorList
 from esrally.storage._range import NO_RANGE, RangeSet
+from esrally.utils import pretty
 from esrally.utils.threads import WaitGroup, WaitGroupLimitError
 
 LOG = logging.getLogger(__name__)
@@ -106,10 +107,10 @@ class Client(Adapter):
 
         return _head_or_raise(value)
 
-    def resolve(self, url: str, content_length: int | None = None, accept_ranges: bool = False, ttl: float = 60.0) -> Iterator[Head]:
+    def resolve(self, url: str, document_length: int | None = None, accept_ranges: bool = False, ttl: float = 60.0) -> Iterator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
         :param url: the remote file URL at its mirrored source location.
-        :param content_length: if not none it will filter out mirrors with a wrong content length.
+        :param document_length: if not none it will filter out mirrors with a unexpected document lengths.
         :param accept_ranges: if True it will filter out mirrors that are not supporting ranges.
         :param ttl: the time to live value (in seconds) to use for cached heads retrieval.
         :return: iterator over mirror URLs
@@ -143,23 +144,24 @@ class Client(Adapter):
             except Exception:
                 # The exception is already logged by head method before caching it.
                 continue
-            if content_length is not None and content_length != head.content_length:
-                LOG.debug("unexpected content length: %r, got %d, want %d", url, content_length, head.content_length)
+            if document_length is not None and head.document_length is not None and document_length != head.document_length:
+                LOG.debug("unexpected document length: %r, got %d, want %d", url, document_length, head.document_length)
                 continue
             if accept_ranges and not head.accept_ranges:
                 LOG.debug("it doesn't accept ranges: %r", url)
                 continue
             yield head
 
-    def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
+    def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE, document_length: int | None = None) -> Head:
         """It downloads a remote bucket object to a local file path.
 
         :param url: it represents the URL of the remote file.
         :param stream: it represents the destination file stream where to write data to.
+        :param document_length: it represents the document length of the file to transfer.
         :param ranges: it represents the portion of the file to transfer.
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
-        for head in self.resolve(url, accept_ranges=bool(ranges)):
+        for head in self.resolve(url, accept_ranges=bool(ranges), document_length=document_length):
             connections = self._server_connections(head.url)
             try:
                 connections.add(1)
@@ -201,10 +203,13 @@ class Client(Adapter):
 
     def monitor(self):
         with self._lock:
-            items = [(u, c) for u, c in self._connections.items() if c.count > 0]
-        for url, connections in items:
+            connections = {u: c for u, c in self._connections.items() if c.count > 0}
+            self._connections = connections
+        infos = list[str]()
+        for url, connection in sorted(connections.items()):
             latency = self._average_latency(url)
-            LOG.info("active client connection(s) %s: count=%d, latency=%f", url, connections.count, latency)
+            infos.append(f"- '{url}' count={connection.count} latency={pretty.seconds(latency)}")
+        LOG.info("Active client connection(s):\n  %s", "\n  ".join(infos))
 
 
 class ServerStats(NamedTuple):

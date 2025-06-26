@@ -199,6 +199,7 @@ class SecondsCase:
 
 @cases.cases(
     zero=SecondsCase(0, "0s"),
+    milliseconds=SecondsCase(3.1465, "3.146s"),
     integers=SecondsCase(42, "42s"),
     float=SecondsCase(42.0, "42s"),
     minute=SecondsCase(60, "1m0s"),

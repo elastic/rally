@@ -107,17 +107,19 @@ def _flat(o: Any) -> abc.Generator[tuple[str, str], None, None]:
 def seconds(s: float | int) -> str:
     if s < 0:
         raise ValueError("duration must be positive")
+    ms = int(s * 1000) % 1000
     s = int(s)
     d, s = divmod(s, 86400)
     h, s = divmod(s, 3600)
     m, s = divmod(s, 60)
-    s = int(s)
     if d > 0:
         return f"{d}d{h}h{m}m{s}s"
     if h > 0:
         return f"{h}h{m}m{s}s"
     if m > 0:
         return f"{m}m{s}s"
+    if ms > 0:
+        return f"{s}.{ms}s"
     return f"{s}s"
 
 

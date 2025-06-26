@@ -16,7 +16,6 @@
 # under the License.
 from __future__ import annotations
 
-import contextlib
 import enum
 import json
 import logging
@@ -24,9 +23,10 @@ import os
 import threading
 import time
 from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from typing import BinaryIO, Protocol
 
-from esrally.storage._adapter import Head, ServiceUnavailableError
+from esrally.storage._adapter import ServiceUnavailableError
 from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._range import (
     MAX_LENGTH,
@@ -67,38 +67,42 @@ class Transfer:
     def __init__(
         self,
         client: Client,
-        head: Head,
+        url: str,
         path: str,
         executor: Executor,
+        document_length: int | None,
         todo: RangeSet = NO_RANGE,
+        done: RangeSet = NO_RANGE,
         multipart_size: int = MULTIPART_SIZE,
         max_connections: int = MAX_CONNECTIONS,
         resume: bool = True,
     ):
         if max_connections <= 0:
             raise ValueError("max_connections must be greater than 0")
-        if max_connections == 1 or not head.accept_ranges:
+        if max_connections == 1:
             multipart_size = MAX_LENGTH
         if not todo:
             todo = Range(0, MAX_LENGTH)
-        if head.content_length is not None:
-            todo &= Range(0, head.content_length)
+        if document_length is not None:
+            todo &= Range(0, document_length)
 
-        self._client = client
+        self.client = client
+        self.url = url
+        self.path = path
+        self._document_length = document_length
         self._max_connections = max_connections
-        self._path = path
         self._started = threads.TimedEvent()
         self._workers = threads.WaitGroup(max_count=max_connections)
         self._finished = threads.TimedEvent()
         self._multipart_size = multipart_size
-        self._head = head
-        self._todo = todo
+        self._todo = todo - done
+        self._done = done
         self._fds = list[FileDescriptor]()
         self._executor = executor
         self._errors = list[Exception]()
         self._lock = threading.Lock()
         self._resumed_size = 0
-        if resume and os.path.isfile(self._path + ".status"):
+        if resume and os.path.isfile(self.path + ".status"):
             try:
                 self._resume_status()
             except Exception as ex:
@@ -107,12 +111,18 @@ class Transfer:
                 LOG.info("resumed from existing status: %s", self.info())
 
     @property
-    def path(self) -> str:
-        return self._path
+    def document_length(self) -> int | None:
+        return self._document_length
 
-    @property
-    def url(self) -> str:
-        return self._head.url
+    @document_length.setter
+    def document_length(self, value: int) -> None:
+        if self._document_length == value:
+            return
+        if self._document_length is not None:
+            raise RuntimeError("mismatching document length")
+        with self._lock:
+            self._todo = self._todo & Range(0, value)
+            self._document_length = value
 
     @property
     def max_connections(self) -> int:
@@ -142,10 +152,10 @@ class Transfer:
             return True
 
     def _resume_status(self):
-        if not os.path.isfile(self._path):
-            raise FileNotFoundError(f"target file not found: {self._path}")
+        if not os.path.isfile(self.path):
+            raise FileNotFoundError(f"target file not found: {self.path}")
 
-        status_filename = self._path + ".status"
+        status_filename = self.path + ".status"
         if not os.path.isfile(status_filename):
             raise FileNotFoundError(f"status file not found: {status_filename}")
 
@@ -160,19 +170,21 @@ class Transfer:
         if url != self.url:
             raise ValueError(f"mismatching url in status file: '{status_filename}', got '{url}', want '{self.url}'")
 
-        content_length = document.get("content_length")
-        if content_length is None:
-            raise ValueError(f"content_length field not found in status file: {status_filename}")
+        document_length = document.get("document_length")
+        if document_length is None:
+            raise ValueError(f"document_length field not found in status file: {status_filename}")
 
-        if self.content_length != content_length:
-            raise ValueError(f"mismatching content length: got: {content_length}, want {self.content_length}")
+        if self._document_length is not None and self._document_length != document_length:
+            raise ValueError(f"mismatching document length: got: {document_length}, want {self._document_length}")
 
         done_text = document.get("done")
         if done_text is None:
             raise ValueError(f"done field not found in status file: {status_filename}")
 
         done = rangeset(done_text)
-        self._todo -= done
+        if done:
+            self._done = self.done | done
+            self._todo = self._todo - done
         self._resumed_size = done.size
         if not self._todo:
             self._finished.set()
@@ -180,11 +192,11 @@ class Transfer:
     def save_status(self):
         document = {
             "url": self.url,
-            "content_length": self.content_length,
+            "document_length": self.document_length,
             "done": str(self.done),
         }
-        os.makedirs(os.path.dirname(self._path), exist_ok=True)
-        with open(self._path + ".status", "w") as fd:
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        with open(self.path + ".status", "w") as fd:
             json.dump(document, fd)
 
     def _run(self):
@@ -202,10 +214,9 @@ class Transfer:
                     # It eventually spawns another thread for multipart transfer
                     self.start()
                 assert isinstance(fd, FileWriter)
-                ranges: RangeSet = NO_RANGE
-                if self._head.accept_ranges:
-                    ranges = fd.ranges
-                self._client.get(self._head.url, fd, ranges)
+                head = self.client.get(self.url, fd, fd.ranges, document_length=self.document_length)
+                if head.document_length is not None:
+                    self.document_length = head.document_length
         except StreamClosedError as ex:
             LOG.info("task cancelled: %s: %s", self.url, ex)
             cancelled = True
@@ -247,7 +258,7 @@ class Transfer:
             except Exception as ex:
                 LOG.warning("error closing file descriptor %r: %s", fd.path, ex)
 
-    @contextlib.contextmanager
+    @contextmanager
     def _open(self) -> Iterator[FileDescriptor | None]:
         todo: RangeSet
 
@@ -260,37 +271,35 @@ class Transfer:
         LOG.debug("transfer started: %s, %s", self.url, todo)
         done: RangeSet = NO_RANGE
         try:
-            fd = FileWriter(self._path, todo)
+            fd = FileWriter(self.path, todo)
             with fd:
                 with self._lock:
                     self._fds.append(fd)
                 try:
                     yield fd
                 finally:
-                    done, todo = todo.split(fd.position)
+                    with self._lock:
+                        try:
+                            self._fds.remove(fd)
+                        except ValueError:
+                            pass
+                        done, todo = todo.split(fd.position)
+                        self._todo |= todo
+                        self._done |= done
         finally:
             if todo:
-                LOG.debug("transfer interrupted: %s, %s | %d", self.url, done, todo)
-                with self._lock:
-                    self._todo |= todo
+                LOG.debug("transfer interrupted: %s (done: %s, todo: %d).", self.url, done, todo)
             else:
-                LOG.debug("transfer done: %s, %s | %s", self.url, done, todo)
-
-    @property
-    def content_length(self) -> int:
-        ret = self._head.content_length
-        if ret is None:
-            ret = MAX_LENGTH
-        return ret
+                LOG.debug("transfer done: %s (done: %s).", self.url, done)
 
     @property
     def done(self) -> RangeSet:
         with self._lock:
-            todo = self._todo
+            done = self._done
             for fd in self._fds:
-                if fd.position < fd.ranges.end:
-                    todo |= Range(fd.position, fd.ranges.end)
-            return Range(0, self.content_length) - todo
+                if fd.position > 0:
+                    done |= Range(0, fd.position)
+        return done
 
     @property
     def todo(self) -> RangeSet:
@@ -303,9 +312,13 @@ class Transfer:
 
     @property
     def progress(self) -> float:
-        if self.content_length != MAX_LENGTH:
-            return 100.0 * self.done.size / self.content_length
-        return 0.0
+        document_length = self.document_length
+        if document_length is None:
+            return 0.0
+        done = self.done
+        if not done:
+            return 0.0
+        return 100.0 * done.size / document_length
 
     @property
     def duration(self) -> float:
@@ -327,15 +340,18 @@ class Transfer:
         """Obtain the average transfer speed .
         :return: speed in bytes per seconds.
         """
-        try:
-            return (self.done.size - self._resumed_size) / self.duration
-        except ZeroDivisionError:
+        done = self.done
+        if not done:
             return 0.0
+        duration = self.duration
+        if duration == 0.0:
+            return 0.0
+        return (done.size - self._resumed_size) / self.duration
 
     def info(self) -> str:
         return (
             f"- {self.url} {self.progress:.0f}% "
-            f"{pretty.size(self.done.size)}/{pretty.size(self.content_length)} {pretty.seconds(self.duration)} "
+            f"{pretty.size(self.done.size)}/{pretty.size(self.document_length)} {pretty.seconds(self.duration)} "
             f"{pretty.size(self.average_speed)}/s {self.status} {self._workers.count} workers"
         )
 
