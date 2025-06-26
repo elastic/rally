@@ -73,7 +73,12 @@ def response(
     "case",
     simple=HeadCase(URL, response(), Head(url=URL)),
     accept_ranges=HeadCase(URL, response(accept_ranges=True), Head(url=URL, accept_ranges=True)),
-    content_length=HeadCase(URL, response(content_length=512), Head(URL, content_length=512)),
+    content_length=HeadCase(URL, response(content_length=512), Head(URL, content_length=512, document_length=512)),
+    content_range=HeadCase(
+        URL,
+        response(content_range="bytes 3-20/128"),
+        Head(URL, accept_ranges=True, content_length=18, ranges=rangeset("3-20"), document_length=128),
+    ),
 )
 def test_head(case: HeadCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
@@ -99,12 +104,12 @@ class GetCase:
     "case",
     simple=GetCase(URL, response(), Head(url=URL)),
     accept_ranges=GetCase(URL, response(accept_ranges=True), Head(url=URL, accept_ranges=True)),
-    content_length=GetCase(URL, response(content_length=512), Head(url=URL, content_length=512)),
+    content_length=GetCase(URL, response(content_length=512), Head(url=URL, content_length=512, document_length=512)),
     read_data=GetCase(URL, response(data="some_data"), Head(url=URL), want_data="some_data"),
     ranges=GetCase(
         URL,
         response(content_range="bytes 10-20/30"),
-        Head(url=URL, ranges=rangeset("10-20"), accept_ranges=True, content_length=11),
+        Head(url=URL, ranges=rangeset("10-20"), accept_ranges=True, content_length=11, document_length=30),
         ranges="10-20",
         want_request_range="bytes=10-20",
     ),
@@ -158,10 +163,12 @@ class HeadFromHeadersCase:
 
 @cases(
     empty=HeadFromHeadersCase(URL, {}, Head(URL)),
-    content_length=HeadFromHeadersCase(URL, {"Content-Length": "10"}, Head(URL, content_length=10)),
+    content_length=HeadFromHeadersCase(URL, {"Content-Length": "10"}, Head(URL, content_length=10, document_length=10)),
     accept_ranges=HeadFromHeadersCase(URL, {"Accept-Ranges": "bytes"}, Head(URL, accept_ranges=True)),
     ranges=HeadFromHeadersCase(
-        URL, {"Content-Range": "bytes 512-1023/146515"}, Head(URL, ranges=rangeset("512-1023"), accept_ranges=True, content_length=512)
+        URL,
+        {"Content-Range": "bytes 512-1023/146515"},
+        Head(URL, ranges=rangeset("512-1023"), accept_ranges=True, content_length=512, document_length=146515),
     ),
 )
 def test_head_from_headers(case: HeadFromHeadersCase):

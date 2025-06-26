@@ -22,7 +22,6 @@ import os
 import threading
 
 from esrally import config
-from esrally.storage._adapter import Head
 from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.storage._transfer import Transfer
@@ -103,9 +102,6 @@ class Manager:
             client=Client.from_config(cfg),
         )
 
-    def _head(self, url: str) -> Head:
-        return self._client.head(url)
-
     def get(self, url: str, path: os.PathLike | str | None = None, ranges: RangeSet = NO_RANGE) -> Transfer:
         """It starts a new transfer of a file from local path to a remote url.
 
@@ -122,15 +118,18 @@ class Manager:
         path: os.PathLike | str | None = None,
         ranges: RangeSet = NO_RANGE,
     ) -> Transfer:
-        head = self._head(url)
         if path is None:
-            path = os.path.join(self._local_dir, head.url)
+            path = os.path.join(self._local_dir, url)
         # This also ensures the path is a string
         path = os.path.normpath(os.path.expanduser(path))
+
+        head = self._client.head(url)
+        # This also ensures the path is a string
         tr = Transfer(
             client=self._client,
+            url=url,
             path=path,
-            head=head,
+            document_length=head.content_length,
             executor=self._executor,
             todo=ranges,
             max_connections=self._max_connections,

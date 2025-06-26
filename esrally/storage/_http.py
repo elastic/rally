@@ -140,17 +140,17 @@ def content_range_from_headers(headers: CaseInsensitiveDict) -> tuple[RangeSet, 
         raise ValueError("multi range value is not unsupported")
 
     try:
-        value, content_length_text = content_range_text[len("bytes ") :].strip().replace(" ", "").split("/", 1)
-        content_length: int | None = None
-        if content_length_text != "*":
-            content_length = int(content_length_text)
-        return rangeset(value), content_length
+        value, document_length_text = content_range_text[len("bytes ") :].strip().replace(" ", "").split("/", 1)
+        document_length: int | None = None
+        if document_length_text != "*":
+            document_length = int(document_length_text)
+        return rangeset(value), document_length
     except ValueError:
         raise ValueError(f"invalid content range in '{content_range_text}'")
 
 
 def head_from_headers(url: str, headers: CaseInsensitiveDict) -> Head:
-    ranges, _ = content_range_from_headers(headers)
     content_length = content_length_from_headers(headers)
     accept_ranges = accept_ranges_from_headers(headers)
-    return Head.create(url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges)
+    ranges, document_length = content_range_from_headers(headers)
+    return Head.create(url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges, document_length=document_length)
