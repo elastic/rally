@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import difflib
 import enum
@@ -101,3 +102,41 @@ def _flat(o: Any) -> abc.Generator[tuple[str, str], None, None]:
                     yield str(k1), v2
     else:
         yield "", json.dumps(o)
+
+
+def seconds(s: float | int) -> str:
+    if s < 0:
+        raise ValueError("duration must be positive")
+    ms = int(s * 1000) % 1000
+    s = int(s)
+    d, s = divmod(s, 86400)
+    h, s = divmod(s, 3600)
+    m, s = divmod(s, 60)
+    if d > 0:
+        return f"{d}d{h}h{m}m{s}s"
+    if h > 0:
+        return f"{h}h{m}m{s}s"
+    if m > 0:
+        return f"{m}m{s}s"
+    if ms > 0:
+        return f"{s}.{ms}s"
+    return f"{s}s"
+
+
+def size(value: int | float | None) -> str:
+    if value is None:
+        return "?"
+    value = float(value)
+    if value < 100.0:
+        return f"{value:.0f}B"
+    value /= 1024.0
+    if value < 100.0:
+        return f"{value:.2f}KB"
+    value /= 1024.0
+    if value < 100.0:
+        return f"{value:.2f}MB"
+    value /= 1024.0
+    if value < 100.0:
+        return f"{value:.2f}GB"
+    value /= 1024.0
+    return f"{value:.2f}TB"
