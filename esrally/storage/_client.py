@@ -94,7 +94,7 @@ class Client(Adapter):
         try:
             value = adapter.head(url)
         except Exception as ex:
-            LOG.error("Failed to fetch remote head for file: %s", ex)
+            LOG.error("Failed to fetch remote head for file: %s, %s", url, ex)
             value = ex
         end_time = time.monotonic()
 
@@ -107,10 +107,13 @@ class Client(Adapter):
 
         return _head_or_raise(value)
 
-    def resolve(self, url: str, document_length: int | None = None, accept_ranges: bool = False, ttl: float = 60.0) -> Iterator[Head]:
+    def resolve(
+        self, url: str, document_length: int | None = None, crc32c: str | None = None, accept_ranges: bool = False, ttl: float = 60.0
+    ) -> Iterator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
         :param url: the remote file URL at its mirrored source location.
-        :param document_length: if not none it will filter out mirrors with a unexpected document lengths.
+        :param document_length: if not none it will filter out mirrors which file has an unexpected document lengths.
+        :param crc32c: if not none it will filter out mirrors which file has an unexpected crc32c checksum.
         :param accept_ranges: if True it will filter out mirrors that are not supporting ranges.
         :param ttl: the time to live value (in seconds) to use for cached heads retrieval.
         :return: iterator over mirror URLs
@@ -145,23 +148,29 @@ class Client(Adapter):
                 # The exception is already logged by head method before caching it.
                 continue
             if document_length is not None and head.document_length is not None and document_length != head.document_length:
-                LOG.debug("unexpected document length: %r, got %d, want %d", url, document_length, head.document_length)
+                LOG.debug("unexpected document length: %r, got %d, want %d", url, head.document_length, document_length)
+                continue
+            if crc32c is not None and head.crc32c is not None and head.crc32c != crc32c:
+                LOG.debug("unexpected crc32c checksum: %r, got %d, want %d", url, head.crc32c, crc32c)
                 continue
             if accept_ranges and not head.accept_ranges:
                 LOG.debug("it doesn't accept ranges: %r", url)
                 continue
             yield head
 
-    def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE, document_length: int | None = None) -> Head:
+    def get(
+        self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE, document_length: int | None = None, crc32c: str | None = None
+    ) -> Head:
         """It downloads a remote bucket object to a local file path.
 
-        :param url: it represents the URL of the remote file.
-        :param stream: it represents the destination file stream where to write data to.
-        :param document_length: it represents the document length of the file to transfer.
-        :param ranges: it represents the portion of the file to transfer.
+        :param url: the URL of the remote file.
+        :param stream: the destination file stream where to write data to.
+        :param document_length: the document length of the file to transfer.
+        :param crc32c: the crc32c checksum of the file to transfer.
+        :param ranges: the portion of the file to transfer.
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
-        for head in self.resolve(url, accept_ranges=bool(ranges), document_length=document_length):
+        for head in self.resolve(url, accept_ranges=bool(ranges), document_length=document_length, crc32c=crc32c):
             connections = self._server_connections(head.url)
             try:
                 connections.add(1)
@@ -204,7 +213,6 @@ class Client(Adapter):
     def monitor(self):
         with self._lock:
             connections = {u: c for u, c in self._connections.items() if c.count > 0}
-            self._connections = connections
         infos = list[str]()
         for url, connection in sorted(connections.items()):
             latency = self._average_latency(url)

@@ -100,6 +100,7 @@ class Transfer:
         multipart_size: int | None = None,
         max_connections: int = MAX_CONNECTIONS,
         resume: bool = True,
+        crc32c: str | None = None,
     ):
         """
         :param client: The client to use to download file parts from a remote service.
@@ -140,11 +141,12 @@ class Transfer:
         self._multipart_size = multipart_size
         self._todo = todo - done
         self._done = done
-        self._fds = list[FileDescriptor]()
+        self._fds: list[FileDescriptor] = []
         self._executor = executor
-        self._errors = list[Exception]()
+        self._errors: list[Exception] = []
         self._lock = threading.Lock()
         self._resumed_size = 0
+        self._crc32c = crc32c
         if resume and os.path.isfile(self.path + ".status"):
             try:
                 self._resume_status()
@@ -171,6 +173,7 @@ class Transfer:
             self._document_length = value
             # It ensures to finish requesting file parts as soon it reaches the expected document length.
             self._todo = self._todo & Range(0, value)
+            self._done = self._done & Range(0, value)
 
     @property
     def max_connections(self) -> int:
@@ -235,8 +238,12 @@ class Transfer:
         document_length = document.get("document_length")
         if document_length is None:
             raise ValueError(f"document_length field not found in status file: {status_filename}")
-        if self._document_length is not None and self._document_length != document_length:
-            raise ValueError(f"mismatching document length: got: {document_length}, want {self._document_length}")
+        self.document_length = document_length
+
+        # It checks the crc32c checksum to ensure the file was the same version.
+        crc32c = document.get("crc32c", None)
+        if crc32c is not None:
+            self.crc32c = crc32c
 
         # It skips the parts that has been already downloaded.
         done_text = document.get("done")
@@ -258,6 +265,7 @@ class Transfer:
             "url": self.url,
             "document_length": self.document_length,
             "done": str(self.done),
+            "crc32c": self.crc32c,
         }
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path + ".status", "w") as fd:
@@ -285,9 +293,13 @@ class Transfer:
                     self.start()
                 assert isinstance(fd, FileWriter)
                 # It downloads the part of the file from a remote location.
-                head = self.client.get(self.url, fd, fd.ranges, document_length=self.document_length)
-                # It checks the size of the file it downloaded the data from.
-                self.document_length = head.document_length
+                head = self.client.get(self.url, fd, fd.ranges, document_length=self._document_length, crc32c=self._crc32c)
+                if head.document_length is not None:
+                    # It checks the size of the file it downloaded the data from.
+                    self.document_length = head.document_length
+                if head.crc32c is not None:
+                    # It checks the crc32c check sum of the file it downloaded the data from.
+                    self.crc32c = head.crc32c
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
             cancelled = True
@@ -371,16 +383,19 @@ class Transfer:
                     with self._lock:
                         try:
                             # It de-registers the file descriptor so that we can't be closed from another thread.
+                            fd.flush()
                             self._fds.remove(fd)
                         except ValueError:
                             pass
+                        # After receiving data _document_length could have been changed reducing the range to download.
+                        todo &= Range(0, self._document_length or MAX_LENGTH)
                         # It updates the status of the works with the completed part.
                         done, todo = todo.split(fd.position)
                         self._todo |= todo
                         self._done |= done
         finally:
             if todo:
-                LOG.info("transfer interrupted: %s (done: %s, todo: %d).", self.url, done, todo)
+                LOG.info("transfer interrupted: %s (done: %s, todo: %s).", self.url, done, todo)
             else:
                 LOG.debug("transfer done: %s (done: %s).", self.url, done)
 
@@ -485,6 +500,21 @@ class Transfer:
     def finished(self) -> bool:
         return bool(self._finished)
 
+    @property
+    def crc32c(self) -> str | None:
+        return self._crc32c
+
+    @crc32c.setter
+    def crc32c(self, value: str) -> None:
+        if not value:
+            raise ValueError("crc32c value can't be empty")
+        with self._lock:
+            if value == self._crc32c:
+                return
+            if self._crc32c is not None:
+                raise ValueError(f"mismatching crc32c checksum: got: {value!r}, want: {self._crc32c}")
+            self._crc32c = value
+
 
 class StreamClosedError(Exception):
     pass
@@ -545,3 +575,8 @@ class FileWriter(FileDescriptor):
                 self.position += size
             if len(data) > size:
                 raise RangeError(f"data size exceeds file range: {len(data)} > {size}", self.ranges)
+
+    def flush(self):
+        with self._lock:
+            if self._fd is not None:
+                self._fd.flush()

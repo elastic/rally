@@ -26,13 +26,15 @@ import pytest
 from esrally.config import Config
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._client import Client
-from esrally.storage._range import NO_RANGE, Range, RangeSet, rangeset
-from esrally.storage._transfer import MAX_CONNECTIONS, MULTIPART_SIZE, Transfer
+from esrally.storage._range import NO_RANGE, RangeSet, rangeset
+from esrally.storage._transfer import MAX_CONNECTIONS, Transfer
 from esrally.utils.cases import cases
 
 URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
 MISMATCH_URL = "https://rally-tracks.elastic.co/apm/span.json.gz"
 DATA = b"\xff" * 1024
+CRC32C = "valid-crc32-checksum"
+MISMATCH_CRC32C = "invalid-crc32c-checksum"
 
 
 class DummyExecutor:
@@ -65,15 +67,17 @@ class DummyExecutor:
 class DummyClient(Client):
 
     def head(self, url: str, ttl: float | None = None) -> Head:
-        return Head.create(url, content_length=len(DATA), accept_ranges=True)
+        return Head.create(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
 
-    def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE, document_length: int | None = None) -> Head:
+    def get(
+        self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE, document_length: int | None = None, crc32c: str | None = None
+    ) -> Head:
         data = DATA
         if ranges:
             data = data[ranges.start : ranges.end]
         if data:
             stream.write(data)
-        return Head.create(url, ranges=ranges, content_length=len(data), document_length=len(DATA))
+        return Head.create(url, ranges=ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
 
 
 @pytest.fixture
@@ -90,43 +94,67 @@ class TransferCase:
     url: str = URL
     todo: str = ""
     document_length: int | None = len(DATA)
-    multipart_size: int = MULTIPART_SIZE
+    crc32c: str = CRC32C
+    multipart_size: int | None = None
     max_connections: int = MAX_CONNECTIONS
-    want_done: str = ""
-    want_todo: str = ""
-    want_written: str = ""
-    want_document_length: int = len(DATA)
-    want_error: type[Exception] | None = None
+    want_init_error: type[Exception] | None = None
+    want_init_todo: str = "0-1023"
+    want_init_done: str = ""
+    want_init_document_length: int | None = len(DATA)
+    want_final_error: type[Exception] | None = None
+    want_final_done: str = ""
+    want_final_todo: str = ""
+    want_final_written: str = ""
+    want_final_document_length: int = len(DATA)
     resume: bool = True
     resume_status: dict[str, str] | None = None
 
 
 @cases(
     # It tests default behavior for small transfers (content_length < multipart_size).
-    default=TransferCase(want_done="0-1023", want_written="0-1023"),
+    default=TransferCase(want_final_done="0-1023", want_final_written="0-1023"),
     # It tests limiting transfers scope to some ranges.
-    todo=TransferCase(todo="10-20, 30-40", want_done="10-20", want_todo="30-40", want_written="10-20"),
+    todo=TransferCase(
+        todo="10-20, 30-40", want_init_todo="10-20, 30-40", want_final_done="10-20", want_final_todo="30-40", want_final_written="10-20"
+    ),
     # It tests multipart working when multipart_size < content_length.
-    multipart_size=TransferCase(multipart_size=128, want_done="0-127", want_todo="128-1023", want_written="0-127"),
-    # # It tests multipart working when multipart_size < content_length.
-    # mismatching_document_length = TransferCase(want_done="0-49", document_length=50),
-    # # It tests multipart working when multipart_size < content_length.
-    # no_document_length = TransferCase(want_done="0-1023", document_length=None),
-    # It tests multipart is disabled when one max_connections is 1.
-    one_connection=TransferCase(multipart_size=128, max_connections=1, want_done="0-1023"),
+    multipart_size=TransferCase(multipart_size=128, want_final_done="0-127", want_final_todo="128-1023", want_final_written="0-127"),
+    # It tests multipart working when multipart_size < content_length.
+    mismatching_document_length=TransferCase(
+        want_final_done="0-49",
+        want_init_todo="0-49",
+        document_length=50,
+        want_init_document_length=50,
+        want_final_written="0-49",
+        want_final_document_length=50,
+        want_final_error=RuntimeError,
+    ),
+    # It tests multipart working when multipart_size < content_length.
+    no_document_length=TransferCase(want_init_document_length=None, want_init_todo="0-", want_final_done="0-1023", document_length=None),
     # It tests when max_connections < 0.
-    invalid_max_connections=TransferCase(multipart_size=128, max_connections=0, want_error=ValueError),
+    invalid_max_connections=TransferCase(multipart_size=128, max_connections=0, want_init_error=ValueError),
     # It tests resuming from an existing status.
     resume_status=TransferCase(
-        resume_status={"done": "128-255", "url": URL, "document_length": len(DATA)}, want_done="0-255", want_todo="256-1023"
+        resume_status={"done": "128-255", "url": URL, "document_length": len(DATA), "crc32c": CRC32C},
+        want_init_todo="0-127,256-1023",
+        want_init_done="128-255",
+        want_final_done="0-255",
+        want_final_todo="256-1023",
     ),
     # It tests disabling resuming from an existing status.
-    no_resume=TransferCase(resume=False, resume_status={"done": "128-255", "url": URL, "content_length": 1024}, want_done="0-1023"),
+    no_resume=TransferCase(
+        resume=False, resume_status={"done": "128-255", "url": URL, "document_length": len(DATA)}, want_final_done="0-1023"
+    ),
     # It tests mismatching URL in the status file produces re-starting transfer from the beginning
-    mismach_status_url=TransferCase(resume_status={"done": "128-255", "url": MISMATCH_URL, "content_length": 1024}, want_done="0-1023"),
+    mismach_status_url=TransferCase(
+        resume_status={"done": "128-255", "url": MISMATCH_URL, "document_length": len(DATA)}, want_final_done="0-1023"
+    ),
     # It tests mismatching content_length in the status file produces re-starting transfer from the beginning
-    mismach_status_content_length=TransferCase(
-        resume_status={"done": "128-255", "url": MISMATCH_URL, "content_length": 212}, want_done="0-1023"
+    mismach_status_document_length=TransferCase(
+        resume_status={"done": "128-255", "url": URL, "document_length": 212}, want_final_done="0-1023"
+    ),
+    mismach_status_crc32c=TransferCase(
+        resume_status={"done": "128-255", "url": URL, "document_length": len(DATA), "crc32c": MISMATCH_CRC32C}, want_final_done="0-1023"
     ),
 )
 def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLike) -> None:
@@ -150,36 +178,39 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
             multipart_size=case.multipart_size,
             max_connections=case.max_connections,
             resume=case.resume,
+            crc32c=case.crc32c,
         )
-    except ValueError as exc:
-        assert case.want_error is not None
-        assert isinstance(exc, case.want_error)
+    except Exception as exc:
+        assert case.want_init_error is not None
+        assert isinstance(exc, case.want_init_error)
         return
 
-    # It verifies the initial state after creation
-    want_todo = rangeset(case.todo) or Range(0, len(DATA))
-    want_done = NO_RANGE
-    if case.resume and case.resume_status is not None and case.resume_status["url"] == case.url:
-        want_done = rangeset(case.resume_status["done"])
-        want_todo = want_todo - want_done
-
+    # It verifies the initial status before running the first task.
+    assert case.want_init_error is None
     assert transfer.path == path
     assert transfer.url == transfer.url
-    assert transfer.todo == want_todo
-    assert transfer.done == want_done
-    assert transfer.document_length == case.want_document_length
+    assert transfer.todo == rangeset(case.want_init_todo)
+    assert transfer.done == rangeset(case.want_init_done)
+    assert transfer.document_length == case.want_init_document_length
 
-    assert case.want_error is None
     transfer.start()
     executor.execute_tasks()
 
+    try:
+        transfer.wait(timeout=0.0)
+    except Exception as exc:
+        assert case.want_final_error is not None
+        assert isinstance(exc, case.want_final_error)
+    else:
+        assert case.want_final_error is None
+
     # It verifies the status after the first task execution
-    want_done = rangeset(case.want_done)
-    want_todo = rangeset(case.want_todo)
-    want_written = rangeset(case.want_written)
+    want_done = rangeset(case.want_final_done)
+    want_todo = rangeset(case.want_final_todo)
+    want_written = rangeset(case.want_final_written)
     assert transfer.done == want_done
     assert transfer.todo == want_todo
-    assert transfer.document_length == case.want_document_length
+    assert transfer.document_length == case.want_final_document_length
 
     # It verifies the file has been written
     assert os.path.isfile(path)
@@ -194,8 +225,8 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
     with open(status_path) as fd:
         status = json.load(fd)
     assert status["url"] == case.url
-    assert status["document_length"] == case.want_document_length
-    assert status["done"] == case.want_done
+    assert status["document_length"] == case.want_final_document_length
+    assert status["done"] == case.want_final_done
 
     # It verifies the transfer can be resumed from the file status
     transfer2 = Transfer(
