@@ -16,9 +16,12 @@
 # under the License.
 from __future__ import annotations
 
+import json
 import os
 import random
+from collections.abc import Iterator
 from dataclasses import dataclass
+from os import PathLike
 from unittest.mock import create_autospec
 
 import pytest
@@ -30,47 +33,85 @@ from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 from esrally.types import Key
 from esrally.utils.cases import cases
 
-URL = "https://example.com"
-DATA = b"<!doctype html>\n<html>\n<head>\n"
-HEAD = Head(url=URL, content_length=len(DATA), accept_ranges=True)
+BASE_URL = "https://example.com"
+
+SOME_URL = f"{BASE_URL}/some/file.json"
+SOME_BODY = b"<!doctype html>\n<html>\n<head>\n"
+SOME_HEAD = Head.create(url=SOME_URL, content_length=len(SOME_BODY), accept_ranges=True)
+NO_RANGES_URL = f"{BASE_URL}/no/ranges.json.bz2"
+NO_RANGE_HEAD = Head.create(url=NO_RANGES_URL, content_length=len(SOME_BODY), accept_ranges=False)
+MIRRORING_BASE_URL = f"{BASE_URL}/mirroring"
+MIRRORING_URL = f"{MIRRORING_BASE_URL}/apm/span.json.bz2"
+MIRRORING_HEAD = Head.create(url=MIRRORING_URL, content_length=len(SOME_BODY), accept_ranges=True)
+MIRRORED_BASE_URL = f"{BASE_URL}/mirrored"
+MIRRORED_URL = f"{MIRRORED_BASE_URL}/apm/span.json.bz2"
+MIRRORED_HEAD = Head.create(url=MIRRORED_URL, content_length=len(SOME_BODY), accept_ranges=True)
+
+MIRRORED_NO_RANGE_BASE_URL = f"{BASE_URL}/mirrored-no-range"
+MIRRORED_NO_RANGE_URL = f"{MIRRORED_NO_RANGE_BASE_URL}/apm/span.json.bz2"
+MIRRORED_NO_RANGE_HEAD = Head.create(url=MIRRORED_NO_RANGE_URL, content_length=len(SOME_BODY), accept_ranges=False)
+
+NOT_FOUND_BASE_URL = "https://example.com/not-found"
+
+HEADS = {
+    SOME_URL: SOME_HEAD,
+    NO_RANGES_URL: NO_RANGE_HEAD,
+    MIRRORING_URL: MIRRORING_HEAD,
+    MIRRORED_URL: MIRRORED_HEAD,
+    MIRRORED_NO_RANGE_URL: MIRRORED_NO_RANGE_HEAD,
+}
 
 MIRROR_FILES = os.path.join(os.path.dirname(__file__), "mirrors.json")
-MIRRORING_URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
-MIRRORED_URL = "https://rally-tracks-eu-central-1.s3.eu-central-1.amazonaws.com/apm/span.json.bz2"
-NOT_FOUND_URL = "https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/apm/span.json.bz2"
-NO_RANGES_URL = f"{MIRRORING_URL}/no/ranges.json.bz2"
+MIRRORS = {
+    "mirrors": [
+        {
+            "sources": [MIRRORING_BASE_URL],
+            "destinations": [
+                MIRRORED_BASE_URL,
+                MIRRORED_NO_RANGE_BASE_URL,
+                NOT_FOUND_BASE_URL,
+            ],
+        }
+    ]
+}
 
 
 class HTTPSAdapter(Adapter):
 
     __adapter_URL_prefixes__ = "https://"
 
-    def __init__(self):
-        super().__init__()
-        self._head = HEAD
-        self._data = DATA
-
     def head(self, url: str) -> Head:
-        if url.startswith("https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/"):
-            # This simulates the case which a mirror server answers with 404 status
+        head = HEADS.get(url)
+        if head is None:
             raise FileNotFoundError
-        accept_ranges = True
-        if url.endswith("/no/ranges.json.bz2"):
-            accept_ranges = False
-        return Head(url=url, content_length=len(self._data), accept_ranges=accept_ranges)
+        return Head(*head)
 
     def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
+        head = HEADS.get(url)
+        if head is None:
+            raise FileNotFoundError
         if ranges:
-            stream.write(self._data)
-            return Head(url, content_length=len(self._data), accept_ranges=True, ranges=ranges)
-        else:
-            return Head(url, content_length=648, accept_ranges=True)
+            for r in ranges:
+                stream.write(SOME_BODY[r.start : r.end])
+            return Head.create(url=url, content_length=ranges.size, ranges=ranges, document_length=len(SOME_BODY))
+        stream.write(SOME_BODY)
+        return Head.create(url, content_length=len(SOME_BODY))
+
+
+@pytest.fixture(scope="function")
+def mirror_files(tmpdir: PathLike) -> Iterator[str]:
+    mirror_file = os.path.join(str(tmpdir), "mirrors.json")
+    with open(mirror_file, "w") as fd:
+        json.dump(MIRRORS, fd)
+    yield mirror_file
+    if os.path.exists(mirror_file):
+        os.remove(mirror_file)
 
 
 @pytest.fixture
-def cfg() -> Config:
+def cfg(mirror_files: str) -> Config:
     cfg = Config()
-    cfg.add(Scope.application, "storage", "storage.mirrors_files", MIRROR_FILES)
+    cfg.add(Scope.application, "storage", "storage.mirrors_files", mirror_files)
     cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:HTTPSAdapter")
     cfg.add(Scope.application, "storage", "storage.random_seed", 42)
     return cfg
@@ -112,7 +153,7 @@ def test_from_config(case: FromConfigCase) -> None:
         assert client._random.random() == case.want_random.random()
 
 
-@cases(default=HeadCase(URL, HEAD), ttl=HeadCase(URL, HEAD, ttl=300.0))
+@cases(default=HeadCase(SOME_URL, SOME_HEAD), ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=300.0))
 def test_head(case: HeadCase, client: Client) -> None:
     got = client.head(url=case.url, ttl=case.ttl)
     assert got == case.want
@@ -121,49 +162,68 @@ def test_head(case: HeadCase, client: Client) -> None:
 
 
 @dataclass()
-class GetCase:
-    url: str
-    want: Head
-    ranges: RangeSet = NO_RANGE
-    want_data: bytes | None = None
-
-
-@cases(
-    regular=GetCase(url=URL, want=Head(URL, 648, True)),
-    range=GetCase(URL, ranges=rangeset("0-29"), want=Head(URL, 30, True, rangeset("0-29")), want_data=DATA),
-    mirrors=GetCase(MIRRORING_URL, want=Head(MIRRORED_URL, 648, True)),
-)
-def test_get(case: GetCase, client: Client) -> None:
-    stream = create_autospec(Writable, spec_set=True, instance=True)
-    got = client.get(case.url, stream, case.ranges)
-    assert got == case.want
-    if case.want_data is not None:
-        stream.write.assert_called_once_with(case.want_data)
-
-
-@dataclass()
 class ResolveCase:
     url: str
-    want: list[Head]
-    content_length: int | None = None
+    want: set[Head]
+    document_length: int | None = None
     accept_ranges: bool = False
     ttl: float = 60.0
 
 
 @cases(
-    unmirrored=ResolveCase(url=URL, want=[Head(URL, 30, True)]),
-    mirrored=ResolveCase(url=MIRRORING_URL, want=[Head(MIRRORED_URL, 30, True), Head(MIRRORING_URL, 30, True)]),
-    content_length=ResolveCase(url=MIRRORING_URL, content_length=30, want=[Head(MIRRORED_URL, 30, True), Head(MIRRORING_URL, 30, True)]),
-    mismatching_content_length=ResolveCase(url=MIRRORING_URL, content_length=10, want=[]),
-    accept_ranges=ResolveCase(url=MIRRORING_URL, accept_ranges=True, want=[Head(MIRRORED_URL, 30, True), Head(MIRRORING_URL, 30, True)]),
-    reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=[]),
-    zero_ttl=ResolveCase(url=URL, ttl=0.0, want=[Head(URL, 30, True)]),
+    unmirrored=ResolveCase(url=SOME_URL, want={SOME_HEAD}),
+    mirrored=ResolveCase(url=MIRRORING_URL, want={MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD}),
+    document_length=ResolveCase(
+        url=MIRRORING_URL, document_length=len(SOME_BODY), want={MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD}
+    ),
+    mismatching_document_length=ResolveCase(url=MIRRORING_URL, document_length=10, want=set()),
+    accept_ranges=ResolveCase(url=MIRRORING_URL, accept_ranges=True, want={MIRRORED_HEAD, MIRRORING_HEAD}),
+    reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=set()),
+    zero_ttl=ResolveCase(url=SOME_URL, ttl=0.0, want={SOME_HEAD}),
 )
 def test_resolve(case: ResolveCase, client: Client) -> None:
-    got = list(client.resolve(case.url, content_length=case.content_length, accept_ranges=case.accept_ranges, ttl=case.ttl))
+    got = set(client.resolve(case.url, document_length=case.document_length, accept_ranges=case.accept_ranges, ttl=case.ttl))
     assert got == case.want, "unexpected resolve result"
     for g in got:
         if case.ttl > 0.0:
             assert g is client.head(url=g.url, ttl=case.ttl), "obtained head wasn't cached"
         else:
             assert g is not client.head(url=g.url, ttl=case.ttl), "obtained head was cached"
+
+
+@dataclass()
+class GetCase:
+    url: str
+    want_any: set[Head]
+    ranges: RangeSet = NO_RANGE
+    document_length: int = None
+    want_data: bytes | None = None
+
+
+@cases(
+    regular=GetCase(
+        SOME_URL,
+        {Head(url=SOME_URL, content_length=len(SOME_BODY), document_length=len(SOME_BODY), accept_ranges=False)},
+        want_data=SOME_BODY,
+    ),
+    range=GetCase(
+        SOME_URL,
+        {Head(SOME_URL, content_length=30, accept_ranges=True, ranges=rangeset("0-29"), document_length=len(SOME_BODY))},
+        ranges=rangeset("0-29"),
+        want_data=SOME_BODY,
+    ),
+    mirrors=GetCase(
+        MIRRORING_URL,
+        {
+            Head(url=MIRRORED_URL, content_length=len(SOME_BODY), document_length=len(SOME_BODY), accept_ranges=False),
+            Head(url=MIRRORED_NO_RANGE_URL, content_length=len(SOME_BODY), document_length=len(SOME_BODY), accept_ranges=False),
+        },
+        want_data=SOME_BODY,
+    ),
+)
+def test_get(case: GetCase, client: Client) -> None:
+    stream = create_autospec(Writable, spec_set=True, instance=True)
+    got = client.get(case.url, stream, case.ranges, document_length=case.document_length)
+    assert got in case.want_any
+    if case.want_data is not None:
+        stream.write.assert_called_once_with(case.want_data)

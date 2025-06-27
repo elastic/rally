@@ -64,7 +64,7 @@ class TimedEvent:
 
     On top of the threading.Event functionalities:
         - the set() method returns True in case the flag was False at the time it has been called;
-        - its time property returns the value of time.monotonic_ns() at the time set has been called first.
+        - its time property returns the value of time.monotonic() at the time set has been called first.
     """
 
     # After threading.Event class (with time() method)
@@ -89,7 +89,7 @@ class TimedEvent:
             if self._flag:
                 return False
             self._flag = True
-            self._time = time.monotonic_ns()
+            self._time = time.monotonic()
             self._cond.notify_all()
             return True
 
@@ -126,8 +126,8 @@ class TimedEvent:
 
     @property
     def time(self) -> float | None:
-        """It gets the result of time.monotonic_ns() at the moment the event has been set.
-        :return: the monotonic_ns time float value if set, or None otherwise.
+        """It gets the result of time.monotonic() at the moment the event has been set.
+        :return: the time.monotonic() float value if set, or None otherwise.
         """
         return self._time
 
