@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import logging
-from urllib.error import HTTPError
 
 import requests
 import requests.adapters
@@ -78,11 +77,11 @@ class HTTPAdapter(Adapter):
         self.session = session
 
     def head(self, url: str) -> Head:
-        with self.session.head(url, allow_redirects=True) as res:
-            try:
-                res.raise_for_status()
-            except HTTPError as ex:
-                raise FileNotFoundError(f"can't get file head: {url}") from ex
+        headers = {"x-amz-checksum-mode": "ENABLED"}
+        with self.session.head(url, allow_redirects=True, headers=headers) as res:
+            if res.status_code == 404:
+                raise FileNotFoundError(f"Can't get file head: {url}")
+            res.raise_for_status()
             return head_from_headers(url, res.headers)
 
     def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
@@ -142,17 +141,42 @@ def content_range_from_headers(headers: CaseInsensitiveDict) -> tuple[RangeSet, 
         raise ValueError("multi range value is not unsupported")
 
     try:
-        value, content_length_text = content_range_text[len("bytes ") :].strip().replace(" ", "").split("/", 1)
-        content_length: int | None = None
-        if content_length_text != "*":
-            content_length = int(content_length_text)
-        return rangeset(value), content_length
+        value, document_length_text = content_range_text[len("bytes ") :].strip().replace(" ", "").split("/", 1)
+        document_length: int | None = None
+        if document_length_text != "*":
+            document_length = int(document_length_text)
+        return rangeset(value), document_length
     except ValueError:
         raise ValueError(f"invalid content range in '{content_range_text}'")
 
 
+def hashes_from_headers(headers: CaseInsensitiveDict) -> dict[str, str]:
+    hashes = dict[str, str]()
+
+    hashes_text = headers.get("X-Goog-Hash", "").strip().replace(" ", "")
+    if hashes_text:
+        try:
+            for entry in hashes_text.split(","):
+                name, value = entry.split("=", 1)
+                hashes[name] = value
+        except ValueError as e:
+            raise ValueError(f"invalid X-Goog-Hash value: {hashes_text}") from e
+
+    for k, value in headers.items():
+        if k.startswith("x-amz-checksum-"):
+            name = k[len("x-amz-checksum-") :]
+            if name == "type":
+                continue
+            hashes[name] = value
+    return hashes
+
+
 def head_from_headers(url: str, headers: CaseInsensitiveDict) -> Head:
-    ranges, _ = content_range_from_headers(headers)
     content_length = content_length_from_headers(headers)
     accept_ranges = accept_ranges_from_headers(headers)
-    return Head.create(url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges)
+    ranges, document_length = content_range_from_headers(headers)
+    hashes = hashes_from_headers(headers)
+    crc32c = hashes.get("crc32c")
+    return Head.create(
+        url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges, document_length=document_length, crc32c=crc32c
+    )
