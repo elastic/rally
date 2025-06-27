@@ -141,9 +141,9 @@ class Transfer:
         self._multipart_size = multipart_size
         self._todo = todo - done
         self._done = done
-        self._fds = list[FileDescriptor]()
+        self._fds: list[FileDescriptor] = []
         self._executor = executor
-        self._errors = list[Exception]()
+        self._errors: list[Exception] = []
         self._lock = threading.Lock()
         self._resumed_size = 0
         self._crc32c = crc32c
@@ -173,6 +173,7 @@ class Transfer:
             self._document_length = value
             # It ensures to finish requesting file parts as soon it reaches the expected document length.
             self._todo = self._todo & Range(0, value)
+            self._done = self._done & Range(0, value)
 
     @property
     def max_connections(self) -> int:
@@ -293,9 +294,11 @@ class Transfer:
                 assert isinstance(fd, FileWriter)
                 # It downloads the part of the file from a remote location.
                 head = self.client.get(self.url, fd, fd.ranges, document_length=self._document_length, crc32c=self._crc32c)
-                # It checks the size of the file it downloaded the data from.
-                self.document_length = head.document_length
+                if head.document_length is not None:
+                    # It checks the size of the file it downloaded the data from.
+                    self.document_length = head.document_length
                 if head.crc32c is not None:
+                    # It checks the crc32c check sum of the file it downloaded the data from.
                     self.crc32c = head.crc32c
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
@@ -380,9 +383,12 @@ class Transfer:
                     with self._lock:
                         try:
                             # It de-registers the file descriptor so that we can't be closed from another thread.
+                            fd.flush()
                             self._fds.remove(fd)
                         except ValueError:
                             pass
+                        # After receiving data _document_length could have been changed reducing the range to download.
+                        todo &= Range(0, self._document_length or MAX_LENGTH)
                         # It updates the status of the works with the completed part.
                         done, todo = todo.split(fd.position)
                         self._todo |= todo
@@ -569,3 +575,8 @@ class FileWriter(FileDescriptor):
                 self.position += size
             if len(data) > size:
                 raise RangeError(f"data size exceeds file range: {len(data)} > {size}", self.ranges)
+
+    def flush(self):
+        with self._lock:
+            if self._fd is not None:
+                self._fd.flush()
