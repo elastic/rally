@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import pytest
 
@@ -22,12 +23,12 @@ from esrally.utils import convert
 
 class TestToBool:
     def test_convert_to_true(self):
-        values = ["True", "true", "Yes", "yes", "t", "y", "1", True]
+        values: list[str | bool] = ["True", "true", "Yes", "yes", "t", "y", "1", True]
         for value in values:
             assert convert.to_bool(value) is True
 
     def test_convert_to_false(self):
-        values = ["False", "false", "No", "no", "f", "n", "0", False]
+        values: list[str | bool] = ["False", "false", "No", "no", "f", "n", "0", False]
         for value in values:
             assert convert.to_bool(value) is False
 
@@ -35,7 +36,7 @@ class TestToBool:
         values = ["Invalid", None, []]
         for value in values:
             with pytest.raises(ValueError) as exc:
-                convert.to_bool(value)
+                convert.to_bool(value)  # type: ignore
             assert exc.value.args[0] == f"Cannot convert [{value}] to bool."
 
 
