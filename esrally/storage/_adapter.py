@@ -53,6 +53,7 @@ class Head(NamedTuple):
     accept_ranges: bool = False
     ranges: RangeSet = NO_RANGE
     document_length: int | None = None
+    crc32c: str | None = None
 
     @classmethod
     def create(
@@ -62,6 +63,7 @@ class Head(NamedTuple):
         accept_ranges: bool | None = None,
         ranges: RangeSet = NO_RANGE,
         document_length: int | None = None,
+        crc32c: str | None = None,
     ) -> Head:
         if accept_ranges is None:
             accept_ranges = bool(ranges)
@@ -69,7 +71,14 @@ class Head(NamedTuple):
             content_length = ranges.size
         if document_length is None and not ranges:
             document_length = content_length
-        return cls(url=url, accept_ranges=accept_ranges, content_length=content_length, ranges=ranges, document_length=document_length)
+        return cls(
+            url=url,
+            accept_ranges=accept_ranges,
+            content_length=content_length,
+            ranges=ranges,
+            document_length=document_length,
+            crc32c=crc32c,
+        )
 
 
 class Adapter(ABC):

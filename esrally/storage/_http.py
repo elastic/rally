@@ -77,7 +77,8 @@ class HTTPAdapter(Adapter):
         self.session = session
 
     def head(self, url: str) -> Head:
-        with self.session.head(url, allow_redirects=True) as res:
+        headers = {"x-amz-checksum-mode": "ENABLED"}
+        with self.session.head(url, allow_redirects=True, headers=headers) as res:
             if res.status_code == 404:
                 raise FileNotFoundError(f"Can't get file head: {url}")
             res.raise_for_status()
@@ -149,8 +150,33 @@ def content_range_from_headers(headers: CaseInsensitiveDict) -> tuple[RangeSet, 
         raise ValueError(f"invalid content range in '{content_range_text}'")
 
 
+def hashes_from_headers(headers: CaseInsensitiveDict) -> dict[str, str]:
+    hashes = dict[str, str]()
+
+    hashes_text = headers.get("X-Goog-Hash", "").strip().replace(" ", "")
+    if hashes_text:
+        try:
+            for entry in hashes_text.split(","):
+                name, value = entry.split("=", 1)
+                hashes[name] = value
+        except ValueError as e:
+            raise ValueError(f"invalid X-Goog-Hash value: {hashes_text}") from e
+
+    for k, value in headers.items():
+        if k.startswith("x-amz-checksum-"):
+            name = k[len("x-amz-checksum-") :]
+            if name == "type":
+                continue
+            hashes[name] = value
+    return hashes
+
+
 def head_from_headers(url: str, headers: CaseInsensitiveDict) -> Head:
     content_length = content_length_from_headers(headers)
     accept_ranges = accept_ranges_from_headers(headers)
     ranges, document_length = content_range_from_headers(headers)
-    return Head.create(url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges, document_length=document_length)
+    hashes = hashes_from_headers(headers)
+    crc32c = hashes.get("crc32c")
+    return Head.create(
+        url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges, document_length=document_length, crc32c=crc32c
+    )

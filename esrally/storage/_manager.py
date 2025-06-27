@@ -134,6 +134,7 @@ class Manager:
             todo=ranges,
             max_connections=self._max_connections,
             multipart_size=self._multipart_size,
+            crc32c=head.crc32c,
         )
         with self._lock:
             self._transfers.append(tr)
