@@ -44,6 +44,7 @@ from esrally.utils import (
     modules,
     net,
     opts,
+    pretty,
     repo,
     serverless,
 )
@@ -142,9 +143,9 @@ def list_tracks(cfg: types.Config):
         line = [
             t.name,
             t.description,
-            convert.number_to_human_string(t.number_of_documents),
-            convert.bytes_to_human_string(t.compressed_size_in_bytes),
-            convert.bytes_to_human_string(t.uncompressed_size_in_bytes),
+            pretty.number(t.number_of_documents),
+            pretty.size(t.compressed_size_in_bytes),
+            pretty.size(t.uncompressed_size_in_bytes),
         ]
         if not only_auto_generated_challenges:
             line.append(t.default_challenge)
@@ -192,9 +193,9 @@ def track_info(cfg: types.Config):
     console.println(f"Showing details for track [{t.name}]:\n")
     console.println(f"* Description: {t.description}")
     if t.number_of_documents:
-        console.println(f"* Documents: {convert.number_to_human_string(t.number_of_documents)}")
-        console.println(f"* Compressed Size: {convert.bytes_to_human_string(t.compressed_size_in_bytes)}")
-        console.println(f"* Uncompressed Size: {convert.bytes_to_human_string(t.uncompressed_size_in_bytes)}")
+        console.println(f"* Documents: {pretty.number(t.number_of_documents)}")
+        console.println(f"* Compressed Size: {pretty.size(t.compressed_size_in_bytes)}")
+        console.println(f"* Uncompressed Size: {pretty.size(t.uncompressed_size_in_bytes)}")
     console.println("")
 
     if t.selected_challenge:
@@ -488,7 +489,7 @@ class Decompressor:
         if uncompressed_size:
             msg = (
                 f"Decompressing track data from [{archive_path}] to [{documents_path}] (resulting size: "
-                f"[{convert.bytes_to_gb(uncompressed_size):.2f}] GB) ... "
+                f"{convert.size(uncompressed_size)}) ... "
             )
         else:
             msg = f"Decompressing track data from [{archive_path}] to [{documents_path}] ... "
@@ -532,8 +533,7 @@ class Downloader:
         try:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
-                size_in_mb = round(convert.bytes_to_mb(size_in_bytes))
-                self.logger.info("Downloading data from [%s] (%s MB) to [%s].", data_url, size_in_mb, target_path)
+                self.logger.info("Downloading data from [%s] (%s) to [%s].", data_url, convert.size(size_in_bytes), target_path)
             else:
                 self.logger.info("Downloading data from [%s] to [%s].", data_url, target_path)
 

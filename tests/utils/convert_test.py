@@ -16,9 +16,13 @@
 # under the License.
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
 
 from esrally.utils import convert
+from esrally.utils.cases import cases
+from esrally.utils.convert import TimeUnit
 
 
 class TestToBool:
@@ -96,18 +100,18 @@ class TestBytesToUnit:
         assert convert.bytes_to_unit("N/A", 12348004200) == 12348004200
 
     def test_to_bytes(self):
-        assert convert.bytes_to_unit("bytes", None) is None
-        assert convert.bytes_to_unit("bytes", 100) == 100
-        assert convert.bytes_to_unit("bytes", 4500) == 4500
-        assert convert.bytes_to_unit("bytes", 8004200) == 8004200
-        assert convert.bytes_to_unit("bytes", 12348004200) == 12348004200
+        assert convert.bytes_to_unit("B", None) is None
+        assert convert.bytes_to_unit("B", 100) == 100
+        assert convert.bytes_to_unit("B", 4500) == 4500
+        assert convert.bytes_to_unit("B", 8004200) == 8004200
+        assert convert.bytes_to_unit("B", 12348004200) == 12348004200
 
     def test_to_kb(self):
-        assert convert.bytes_to_unit("kb", None) is None
-        assert convert.bytes_to_unit("kB", 100) == pytest.approx(0.098, rel=0.1)
-        assert convert.bytes_to_unit("kB", 4500) == pytest.approx(4.4, rel=0.1)
-        assert convert.bytes_to_unit("kB", 8004200) == pytest.approx(7800, rel=0.1)
-        assert convert.bytes_to_unit("kB", 12348004200) == pytest.approx(12000000, rel=0.1)
+        assert convert.bytes_to_unit("KB", None) is None
+        assert convert.bytes_to_unit("KB", 100) == pytest.approx(0.098, rel=0.1)
+        assert convert.bytes_to_unit("KB", 4500) == pytest.approx(4.4, rel=0.1)
+        assert convert.bytes_to_unit("KB", 8004200) == pytest.approx(7800, rel=0.1)
+        assert convert.bytes_to_unit("KB", 12348004200) == pytest.approx(12000000, rel=0.1)
 
     def test_to_mb(self):
         assert convert.bytes_to_unit("MB", None) is None
@@ -122,3 +126,61 @@ class TestBytesToUnit:
         assert convert.bytes_to_unit("GB", 4500) == pytest.approx(4.2e-06, rel=0.1)
         assert convert.bytes_to_unit("GB", 8004200) == pytest.approx(0.0075, rel=0.1)
         assert convert.bytes_to_unit("GB", 12348004200) == pytest.approx(11, rel=0.1)
+
+
+@dataclass()
+class DurationCase:
+    value: float | int
+    want_str: str
+    unit: TimeUnit = TimeUnit.S
+
+
+@cases(
+    zero=DurationCase(0, "0s"),
+    nanos=DurationCase(1.23456789, "1ns", convert.TimeUnit.NS),
+    micros=DurationCase(1.23456789, "1.23us", convert.TimeUnit.US),
+    millis=DurationCase(1.23456789, "1.23ms", convert.TimeUnit.MS),
+    seconds=DurationCase(1.23456789, "1.23s", convert.TimeUnit.S),
+    minutes=DurationCase(1.23456789, "1m 14s", convert.TimeUnit.M),
+    hours=DurationCase(1.23456789, "1h 14m 04s", convert.TimeUnit.H),
+    days=DurationCase(1.23456789, "1d 05h 37m 46s", convert.TimeUnit.D),
+    integer=DurationCase(42, "42s"),
+    float=DurationCase(12.345, "12.35s"),
+    minute=DurationCase(60, "1m 00s"),
+    hundred=DurationCase(1e2, "1m 40s"),
+    thausands=DurationCase(1e3, "16m 40s"),
+    hour=DurationCase(3600, "1h 00m 00s"),
+    day=DurationCase(86400, "1d 00h 00m 00s"),
+    milions=DurationCase(1e6, "11d 13h 46m 40s"),
+)
+def test_duration(case: DurationCase):
+    got = convert.duration(case.value, case.unit)
+    assert str(got) == case.want_str
+
+
+@dataclass()
+class SizeCase:
+    value: float | int
+    want_str: str
+    unit: convert.SizeUnit = convert.SizeUnit.B
+
+
+@cases(
+    zero=SizeCase(0, "0B"),
+    float=SizeCase(1.234, "1B"),
+    integer=SizeCase(42, "42B"),
+    bytes=SizeCase(1.234, "1B", convert.SizeUnit.B),
+    kylos=SizeCase(1.234, "1.2KB", convert.SizeUnit.KB),
+    megas=SizeCase(1.234, "1.2MB", convert.SizeUnit.MB),
+    gigas=SizeCase(1.234, "1.2GB", convert.SizeUnit.GB),
+    teras=SizeCase(1.234, "1.2TB", convert.SizeUnit.TB),
+    hundred=SizeCase(100, "100B"),
+    thausands=SizeCase(3800, "3.7KB"),
+    hundred_kilos=SizeCase(100 * 1024, "100.0KB"),
+    milions=SizeCase(5000000, "4.8MB"),
+    bilions=SizeCase(4000000000, "3.7GB"),
+    trillions=SizeCase(2000000000000, "1.8TB"),
+)
+def test_size(case: SizeCase):
+    got = convert.size(case.value, unit=case.unit)
+    assert str(got) == case.want_str
