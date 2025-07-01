@@ -158,6 +158,12 @@ class TransferCase:
     ),
 )
 def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLike) -> None:
+    """It tests the execution of one single task (a single download step).
+
+    :param case: the transfer case to be tested.
+    :param executor: a dummy single-thread executor that allows to execute only tasks that have already been submitted.
+    :param tmpdir: the temporary directory to use for this test case.
+    """
     client = DummyClient.from_config(Config())
     path = os.path.join(str(tmpdir), os.path.basename(case.url))
     status_path = path + ".status"
@@ -193,10 +199,13 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
     assert transfer.done == rangeset(case.want_init_done)
     assert transfer.document_length == case.want_init_document_length
 
+    # It submits a single test task for execution.
     transfer.start()
+    # It only executes tasks that have been already submit.
     executor.execute_tasks()
 
     try:
+        # This is only needed to eventually extract the first transfer failure (if any).
         transfer.wait(timeout=0.0)
     except Exception as exc:
         assert case.want_final_error is not None
