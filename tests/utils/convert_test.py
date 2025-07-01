@@ -16,9 +16,12 @@
 # under the License.
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
 
 from esrally.utils import convert
+from esrally.utils.cases import cases
 
 
 class TestToBool:
@@ -47,24 +50,24 @@ class TestBytesToHuman:
         assert convert.bytes_to_human_unit(None) == "N/A"
 
     def test_positive_bytes(self):
-        assert convert.bytes_to_human_string(100) == "100 bytes"
+        assert convert.bytes_to_human_string(100) == "100 B"
         assert convert.bytes_to_human_value(100) == 100
-        assert convert.bytes_to_human_unit(100) == "bytes"
+        assert convert.bytes_to_human_unit(100) == "B"
 
     def test_negative_bytes(self):
-        assert convert.bytes_to_human_string(-100) == "-100 bytes"
+        assert convert.bytes_to_human_string(-100) == "-100 B"
         assert convert.bytes_to_human_value(-100) == -100
-        assert convert.bytes_to_human_unit(-100) == "bytes"
+        assert convert.bytes_to_human_unit(-100) == "B"
 
     def test_positive_kb(self):
-        assert convert.bytes_to_human_string(8808) == "8.6 kB"
+        assert convert.bytes_to_human_string(8808) == "8.6 KB"
         assert convert.bytes_to_human_value(8808) == 8.6015625
-        assert convert.bytes_to_human_unit(8808) == "kB"
+        assert convert.bytes_to_human_unit(8808) == "KB"
 
     def test_negative_kb(self):
-        assert convert.bytes_to_human_string(-88134) == "-86.1 kB"
+        assert convert.bytes_to_human_string(-88134) == "-86.1 KB"
         assert convert.bytes_to_human_value(-88134) == -86.068359375
-        assert convert.bytes_to_human_unit(-88134) == "kB"
+        assert convert.bytes_to_human_unit(-88134) == "KB"
 
     def test_positive_mb(self):
         assert convert.bytes_to_human_string(8808812) == "8.4 MB"
@@ -96,18 +99,18 @@ class TestBytesToUnit:
         assert convert.bytes_to_unit("N/A", 12348004200) == 12348004200
 
     def test_to_bytes(self):
-        assert convert.bytes_to_unit("bytes", None) is None
-        assert convert.bytes_to_unit("bytes", 100) == 100
-        assert convert.bytes_to_unit("bytes", 4500) == 4500
-        assert convert.bytes_to_unit("bytes", 8004200) == 8004200
-        assert convert.bytes_to_unit("bytes", 12348004200) == 12348004200
+        assert convert.bytes_to_unit("B", None) is None
+        assert convert.bytes_to_unit("B", 100) == 100
+        assert convert.bytes_to_unit("B", 4500) == 4500
+        assert convert.bytes_to_unit("B", 8004200) == 8004200
+        assert convert.bytes_to_unit("B", 12348004200) == 12348004200
 
     def test_to_kb(self):
-        assert convert.bytes_to_unit("kb", None) is None
-        assert convert.bytes_to_unit("kB", 100) == pytest.approx(0.098, rel=0.1)
-        assert convert.bytes_to_unit("kB", 4500) == pytest.approx(4.4, rel=0.1)
-        assert convert.bytes_to_unit("kB", 8004200) == pytest.approx(7800, rel=0.1)
-        assert convert.bytes_to_unit("kB", 12348004200) == pytest.approx(12000000, rel=0.1)
+        assert convert.bytes_to_unit("KB", None) is None
+        assert convert.bytes_to_unit("KB", 100) == pytest.approx(0.098, rel=0.1)
+        assert convert.bytes_to_unit("KB", 4500) == pytest.approx(4.4, rel=0.1)
+        assert convert.bytes_to_unit("KB", 8004200) == pytest.approx(7800, rel=0.1)
+        assert convert.bytes_to_unit("KB", 12348004200) == pytest.approx(12000000, rel=0.1)
 
     def test_to_mb(self):
         assert convert.bytes_to_unit("MB", None) is None
@@ -122,3 +125,67 @@ class TestBytesToUnit:
         assert convert.bytes_to_unit("GB", 4500) == pytest.approx(4.2e-06, rel=0.1)
         assert convert.bytes_to_unit("GB", 8004200) == pytest.approx(0.0075, rel=0.1)
         assert convert.bytes_to_unit("GB", 12348004200) == pytest.approx(11, rel=0.1)
+
+
+@dataclass()
+class DurationCase:
+    value: float | int
+    want_str: str
+    unit: convert.Duration.Unit = convert.Duration.Unit.S
+
+
+@cases(
+    zero=DurationCase(0, "0s"),
+    nanos=DurationCase(1.23456789, "1ns", convert.Duration.Unit.NS),
+    micros=DurationCase(1.23456789, "1.23us", convert.Duration.Unit.US),
+    millis=DurationCase(1.23456789, "1.23ms", convert.Duration.Unit.MS),
+    seconds=DurationCase(1.23456789, "1.23s", convert.Duration.Unit.S),
+    minutes=DurationCase(1.23456789, "1m 14s", convert.Duration.Unit.M),
+    hours=DurationCase(1.23456789, "1h 14m 4s", convert.Duration.Unit.H),
+    days=DurationCase(1.23456789, "1d 5h 37m 46s", convert.Duration.Unit.D),
+    integer=DurationCase(42, "42s"),
+    float=DurationCase(12.345, "12.35s"),
+    minute=DurationCase(60, "1m"),
+    hundred=DurationCase(1e2, "1m 40s"),
+    thausands=DurationCase(1e3, "16m 40s"),
+    hour=DurationCase(3600, "1h"),
+    day=DurationCase(86400, "1d"),
+    milions=DurationCase(1e6, "11d 13h 46m 40s"),
+)
+def test_duration(case: DurationCase):
+    got = convert.duration(case.value, case.unit)
+    assert str(got) == case.want_str
+
+
+@dataclass()
+class SizeCase:
+    value: float | int
+    want: int
+    want_to_unit: float
+    want_unit: convert.Size.Unit
+    want_str: str
+    unit: convert.Size.Unit = convert.Size.Unit.B
+
+
+@cases(
+    zero=SizeCase(0, 0, 0.0, convert.Size.Unit.B, "0 B"),
+    float=SizeCase(1.234, 1, 1.0, convert.Size.Unit.B, "1 B"),
+    integer=SizeCase(42, 42, 42.0, convert.Size.Unit.B, "42 B"),
+    bytes=SizeCase(1.234, 1, 1.0, convert.Size.Unit.B, "1 B", unit=convert.Size.Unit.B),
+    kylos=SizeCase(1.234, 1263, 1.2333984375, convert.Size.Unit.KB, "1.2 KB", unit=convert.Size.Unit.KB),
+    megas=SizeCase(1.234, 1293942, 1.233999252319336, convert.Size.Unit.MB, "1.2 MB", unit=convert.Size.Unit.MB),
+    gigas=SizeCase(1.234, 1324997410, 1.2339999992400408, convert.Size.Unit.GB, "1.2 GB", unit=convert.Size.Unit.GB),
+    teras=SizeCase(1.234, 1356797348675, 1.2339999999994689, convert.Size.Unit.TB, "1.2 TB", unit=convert.Size.Unit.TB),
+    hundred=SizeCase(100, 100, 100.0, convert.Size.Unit.B, "100 B"),
+    thausands=SizeCase(3800, 3800, 3.7109375, convert.Size.Unit.KB, "3.7 KB"),
+    hundred_kilos=SizeCase(102400, 102400, 100.0, convert.Size.Unit.KB, "100.0 KB"),
+    milions=SizeCase(5000000, 5000000, 4.76837158203125, convert.Size.Unit.MB, "4.8 MB"),
+    bilions=SizeCase(4000000000, 4000000000, 3.725290298461914, convert.Size.Unit.GB, "3.7 GB"),
+    trillions=SizeCase(2000000000000, 2000000000000, 1.8189894035458565, convert.Size.Unit.TB, "1.8 TB"),
+)
+def test_size(case: SizeCase):
+    got = convert.size(case.value, unit=case.unit)
+    assert got == case.want
+    assert got.to_unit(got.unit) == case.want_to_unit
+    assert got.unit == case.want_unit
+    assert str(got) == case.want_str

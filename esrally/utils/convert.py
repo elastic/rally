@@ -16,225 +16,236 @@
 # under the License.
 from __future__ import annotations
 
+import enum
+import math
 from collections.abc import Callable
-from typing import TypeVar, overload
-
-FROM_KB = 1024.0
-FROM_MB = 1024 * 1024
-FROM_GB = 1024 * 1024 * 1024
-TO_KB = 1.0 / FROM_KB
-TO_MB = 1.0 / FROM_MB
-TO_GB = 1.0 / FROM_GB
+from typing import TypeVar
 
 
-@overload
-def bytes_to_kb(b: None) -> None:
-    pass
+class Size(int):
+
+    class Unit(enum.IntEnum):
+        B = 1
+        KB = 1024 * B
+        MB = 1024 * KB
+        GB = 1024 * MB
+        TB = 1024 * GB
+
+        def __str__(self) -> str:
+            return self.name.upper()
+
+    @property
+    def unit(self) -> Unit:
+        it = iter(Size.Unit)
+        last = next(it)
+        x = math.fabs(self)
+        for unit in it:
+            if x < unit:
+                return last
+            last = unit
+        return last
+
+    def to_unit(self, unit: Unit) -> float:
+        return float(self / unit)
+
+    def kb(self) -> float:
+        return self.to_unit(Size.Unit.KB)
+
+    def mb(self) -> float:
+        return self.to_unit(Size.Unit.MB)
+
+    def gb(self) -> float:
+        return self.to_unit(Size.Unit.GB)
+
+    def tb(self) -> float:
+        return self.to_unit(Size.Unit.TB)
+
+    def __str__(self):
+        unit = self.unit
+        if unit == Size.Unit.B:
+            return f"{int(self)} B"
+        x = self.to_unit(unit)
+        return f"{x:.1f} {unit}"
 
 
-@overload
-def bytes_to_kb(b: int | float) -> float:
-    pass
+def size(x: int | float, unit: Size.Unit = Size.Unit.B) -> Size:
+    if isinstance(x, Size):
+        return x
+    return Size(x * unit)
 
 
-def bytes_to_kb(b):
-    if b is None:
-        return None
-    return b * TO_KB
-
-
-@overload
-def bytes_to_mb(b: None) -> None:
-    pass
-
-
-@overload
-def bytes_to_mb(b: int | float) -> float:
-    pass
-
-
-def bytes_to_mb(b):
-    if b is None:
-        return None
-    return b * TO_MB
-
-
-@overload
-def bytes_to_gb(b: None) -> None:
-    pass
-
-
-@overload
-def bytes_to_gb(b: int | float) -> float:
-    pass
-
-
-def bytes_to_gb(b):
-    if b is None:
-        return None
-    return b * TO_GB
-
-
-def bytes_to_human_string(b: float | int | None) -> str:
-    if b is None:
+def bytes_to_human_string(x: int | float | None) -> str | None:
+    if x is None:
         return "N/A"
-
-    value, unit = _bytes_to_human(b)
-    if unit == "bytes":
-        return f"{value} bytes"
-    return f"{value:.1f} {unit}"
+    return str(size(x))
 
 
-@overload
-def bytes_to_human_value(b: None) -> None:
-    pass
-
-
-@overload
-def bytes_to_human_value(b: int | float) -> float:
-    pass
-
-
-def bytes_to_human_value(b):
-    return _bytes_to_human(b)[0]
-
-
-def bytes_to_human_unit(b: float | int | None) -> str:
-    return _bytes_to_human(b)[1]
-
-
-@overload
-def bytes_to_unit(unit: str, b: None) -> None:
-    pass
-
-
-@overload
-def bytes_to_unit(unit: str, b: int) -> int | float:
-    pass
-
-
-@overload
-def bytes_to_unit(unit: str, b: float) -> float:
-    pass
-
-
-def bytes_to_unit(unit, b):
-    if unit == "N/A":
-        return b
-    elif unit == "GB":
-        return bytes_to_gb(b)
-    elif unit == "MB":
-        return bytes_to_mb(b)
-    elif unit == "kB":
-        return bytes_to_kb(b)
-    else:
-        return b
-
-
-@overload
-def _bytes_to_human(b: None) -> tuple[None, str]:
-    pass
-
-
-@overload
-def _bytes_to_human(b: int) -> tuple[float | int, str]:
-    pass
-
-
-@overload
-def _bytes_to_human(b: float) -> tuple[float, str]:
-    pass
-
-
-def _bytes_to_human(b):
-    if b is None:
-        return b, "N/A"
-    gb = bytes_to_gb(b)
-    if gb > 1.0 or gb < -1.0:
-        return gb, "GB"
-    mb = bytes_to_mb(b)
-    if mb > 1.0 or mb < -1.0:
-        return mb, "MB"
-    kb = bytes_to_kb(b)
-    if kb > 1.0 or kb < -1.0:
-        return kb, "kB"
-    return b, "bytes"
-
-
-def number_to_human_string(number: int | float) -> str:
-    return f"{number:,}"
-
-
-@overload
-def mb_to_bytes(mb: None) -> None:
-    pass
-
-
-@overload
-def mb_to_bytes(mb: float | int) -> int:
-    pass
-
-
-def mb_to_bytes(mb):
-    if mb is None:
+def bytes_to_human_value(x: int | float | None) -> float | None:
+    if x is None:
         return None
-    return int(mb * FROM_MB)
+    s = size(x)
+    return s.to_unit(s.unit)
 
 
-@overload
-def gb_to_bytes(gb: None) -> None:
-    pass
+def bytes_to_human_unit(x: int | float | None) -> str:
+    if x is None:
+        return "N/A"
+    return str(size(x).unit)
 
 
-@overload
-def gb_to_bytes(gb: int) -> int:
-    pass
-
-
-@overload
-def gb_to_bytes(gb: float) -> float:
-    pass
-
-
-def gb_to_bytes(gb):
-    if gb is None:
+def bytes_to_kb(x: int | float | None) -> float | None:
+    if x is None:
         return None
-    return gb * FROM_GB
+    return size(x).kb()
 
 
-T = TypeVar("T", float, int, None)
-
-TO_MS = 1000
-TO_M = 1.0 / 60
-FROM_MS = 0.001
-
-
-def seconds_to_ms(s: T) -> T:
-    if s is None:
+def bytes_to_mb(x: int | float | None) -> float | None:
+    if x is None:
         return None
-    return s * TO_MS
+    return size(x).mb()
 
 
-def seconds_to_hour_minute_seconds(s: T) -> tuple[T, T, T]:
-    if not s:
-        return s, s, s
-
-    hours = s // 3600
-    minutes = (s - 3600 * hours) // 60
-    seconds = s - 3600 * hours - 60 * minutes
-    return hours, minutes, seconds
-
-
-def ms_to_seconds(ms: T) -> float | None:
-    if ms is None:
+def bytes_to_gb(x: int | float | Size) -> float | None:
+    if x is None:
         return None
-    return ms * FROM_MS
+    return size(x).gb()
 
 
-def ms_to_minutes(ms: T) -> float | None:
-    if ms is None:
+def bytes_to_tb(x: int | float | Size) -> float | None:
+    if x is None:
         return None
-    return ms * FROM_MS * TO_M
+    return size(x).tb()
+
+
+def bytes_to_unit(unit: str, x: int | float | None) -> float | None:
+    if x is None:
+        return None
+    u = {
+        "bytes": Size.Unit.B,
+        "B": Size.Unit.B,
+        "KB": Size.Unit.KB,
+        "MB": Size.Unit.MB,
+        "GB": Size.Unit.GB,
+        "TB": Size.Unit.TB,
+    }.get(unit.strip(), Size.Unit.B)
+    return size(x).to_unit(u)
+
+
+def bytes_to_str(x: int | float | None) -> str:
+    if x is None:
+        return "N/A"
+    return str(size(x))
+
+
+class Duration(int):
+
+    class Unit(enum.IntEnum):
+        NS = 1
+        US = 1000 * NS
+        MS = 1000 * US
+        S = 1000 * MS
+        M = 60 * S
+        H = 60 * M
+        D = 24 * H
+
+        def __str__(self) -> str:
+            return self.name.lower()
+
+    @property
+    def unit(self) -> Unit:
+        if self == 0:
+            return Duration.Unit.S  # Special case
+        it = iter(Duration.Unit)
+        last = next(it)
+        for unit in it:
+            if self < unit:
+                return last
+            last = unit
+        return last
+
+    def to_unit(self, unit: Unit) -> float:
+        return float(self / unit)
+
+    def ns(self) -> float:
+        return self.to_unit(Duration.Unit.NS)
+
+    def us(self):
+        return self.to_unit(Duration.Unit.US)
+
+    def ms(self):
+        return self.to_unit(Duration.Unit.MS)
+
+    def s(self):
+        return self.to_unit(Duration.Unit.S)
+
+    def m(self):
+        return self.to_unit(Duration.Unit.M)
+
+    def h(self):
+        return self.to_unit(Duration.Unit.H)
+
+    def d(self):
+        return self.to_unit(Duration.Unit.D)
+
+    def __str__(self):
+        unit = self.unit
+        if unit == Duration.Unit.NS:
+            return f"{int(self)}ns"
+        if unit <= Duration.Unit.S:
+            x = self.to_unit(unit)
+            if x != int(x):
+                return f"{x:.2f}{unit}"
+            else:
+                return f"{int(x)}{unit}"
+
+        s = int(self.to_unit(Duration.Unit.S))
+        m, s = divmod(s, 60)
+        h, m = divmod(m, 60)
+        d, h = divmod(h, 24)
+        parts: list[str] = []
+        if d:
+            parts.append(f"{d}d")
+        if h:
+            parts.append(f"{h}h")
+        if m:
+            parts.append(f"{m}m")
+        if s:
+            parts.append(f"{s}s")
+        return " ".join(parts)
+
+
+def duration(x: int | float, unit: Duration.Unit = Duration.Unit.S) -> Duration:
+    if isinstance(x, Duration):
+        return x
+    if x < 0:
+        raise TypeError("negative duration")
+    return Duration(x * unit)
+
+
+def seconds_to_ms(x: int | float | None) -> float | None:
+    if x is None:
+        return None
+    return duration(x, Duration.Unit.S).ms()
+
+
+def seconds_to_hour_minute_seconds(x: int | float | None) -> tuple[int | None, int | None, int | float | None]:
+    if x is None:
+        return None, None, None
+    m, s = divmod(x, 60)
+    h, m = divmod(int(m), 60)
+    return h, m, s
+
+
+def ms_to_seconds(x: int | float | None) -> float | None:
+    if x is None:
+        return None
+    return duration(x, Duration.Unit.MS).s()
+
+
+def ms_to_minutes(x: int | float | None) -> float | None:
+    if x is None:
+        return None
+    return duration(x, Duration.Unit.MS).m()
 
 
 N = TypeVar("N", float, int)

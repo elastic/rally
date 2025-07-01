@@ -23,6 +23,8 @@ import re
 from collections import abc
 from typing import Any
 
+from esrally.utils import convert
+
 
 class Flag(enum.Flag):
     FLAT_DICT = enum.auto()
@@ -104,39 +106,19 @@ def _flat(o: Any) -> abc.Generator[tuple[str, str], None, None]:
         yield "", json.dumps(o)
 
 
-def seconds(s: float | int) -> str:
-    if s < 0:
-        raise ValueError("duration must be positive")
-    ms = int(s * 1000) % 1000
-    s = int(s)
-    d, s = divmod(s, 86400)
-    h, s = divmod(s, 3600)
-    m, s = divmod(s, 60)
-    if d > 0:
-        return f"{d}d{h}h{m}m{s}s"
-    if h > 0:
-        return f"{h}h{m}m{s}s"
-    if m > 0:
-        return f"{m}m{s}s"
-    if ms > 0:
-        return f"{s}.{ms}s"
-    return f"{s}s"
+def number(x: int | float | None) -> str:
+    if x is None:
+        return "N/A"
+    return f"{x:,}"
 
 
-def size(value: int | float | None) -> str:
-    if value is None:
-        return "?"
-    value = float(value)
-    if value < 100.0:
-        return f"{value:.0f}B"
-    value /= 1024.0
-    if value < 100.0:
-        return f"{value:.2f}KB"
-    value /= 1024.0
-    if value < 100.0:
-        return f"{value:.2f}MB"
-    value /= 1024.0
-    if value < 100.0:
-        return f"{value:.2f}GB"
-    value /= 1024.0
-    return f"{value:.2f}TB"
+def size(x: int | float | None, unit: convert.Size.Unit = convert.Size.Unit.B) -> str:
+    if x is None:
+        return "N/A"
+    return str(convert.size(x, unit))
+
+
+def duration(x: int | float | None, unit: convert.Duration.Unit = convert.Duration.Unit.S) -> str:
+    if x is None:
+        return "N/A"
+    return str(convert.duration(x, unit))

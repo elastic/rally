@@ -216,7 +216,7 @@ class Client(Adapter):
         infos = list[str]()
         for url, connection in sorted(connections.items()):
             latency = self._average_latency(url)
-            infos.append(f"- '{url}' count={connection.count} latency={pretty.seconds(latency)}")
+            infos.append(f"- '{url}' count={connection.count} latency={pretty.duration(latency)}")
         LOG.info("Active client connection(s):\n  %s", "\n  ".join(infos))
 
 

@@ -192,25 +192,25 @@ def test_diff(case: DiffCase):
 
 
 @dataclass()
-class SecondsCase:
+class DurationCase:
     value: float | int
     want: str
 
 
 @cases.cases(
-    zero=SecondsCase(0, "0s"),
-    milliseconds=SecondsCase(3.1465, "3.146s"),
-    integers=SecondsCase(42, "42s"),
-    float=SecondsCase(42.0, "42s"),
-    minute=SecondsCase(60, "1m0s"),
-    hundred=SecondsCase(1e2, "1m40s"),
-    thausands=SecondsCase(1e3, "16m40s"),
-    hour=SecondsCase(3600, "1h0m0s"),
-    day=SecondsCase(86400, "1d0h0m0s"),
-    milions=SecondsCase(1e6, "11d13h46m40s"),
+    zero=DurationCase(0, "0s"),
+    milliseconds=DurationCase(3.1465, "3.15s"),
+    integers=DurationCase(42, "42s"),
+    float=DurationCase(42.0, "42s"),
+    minute=DurationCase(60, "1m"),
+    hundred=DurationCase(1e2, "1m 40s"),
+    thausands=DurationCase(1e3, "16m 40s"),
+    hour=DurationCase(3600, "1h"),
+    day=DurationCase(86400, "1d"),
+    milions=DurationCase(1e6, "11d 13h 46m 40s"),
 )
-def test_seconds(case: SecondsCase):
-    got = pretty.seconds(case.value)
+def test_duration(case: DurationCase):
+    got = pretty.duration(case.value)
     assert got == case.want
 
 
@@ -221,18 +221,19 @@ class SizeCase:
 
 
 @cases.cases(
-    none=SizeCase(None, "?"),
-    zero=SizeCase(0, "0B"),
-    integers=SizeCase(42, "42B"),
-    float=SizeCase(42.0, "42B"),
-    hundred=SizeCase(100, "0.10KB"),
-    kilos=SizeCase(1024, "1.00KB"),
-    hundred_kilos=SizeCase(100 * 1024, "0.10MB"),
-    megas=SizeCase(1024 * 1024, "1.00MB"),
-    hundred_megas=SizeCase(100 * 1024 * 1024, "0.10GB"),
-    gigas=SizeCase(1024 * 1024 * 1024, "1.00GB"),
-    hundred_gigas=SizeCase(100 * 1024 * 1024 * 1024, "0.10TB"),
-    teras=SizeCase(1024 * 1024 * 1024 * 1024, "1.00TB"),
+    none=SizeCase(None, "N/A"),
+    zero=SizeCase(0, "0 B"),
+    integers=SizeCase(42, "42 B"),
+    float=SizeCase(42.0, "42 B"),
+    hundred=SizeCase(100, "100 B"),
+    kilos=SizeCase(1024, "1.0 KB"),
+    hundred_kilos=SizeCase(100 * 1024, "100.0 KB"),
+    megas=SizeCase(1024 * 1024, "1.0 MB"),
+    hundred_megas=SizeCase(100 * 1024 * 1024, "100.0 MB"),
+    gigas=SizeCase(1024 * 1024 * 1024, "1.0 GB"),
+    hundred_gigas=SizeCase(100 * 1024 * 1024 * 1024, "100.0 GB"),
+    teras=SizeCase(1024 * 1024 * 1024 * 1024, "1.0 TB"),
+    hundred_teras=SizeCase(100 * 1024 * 1024 * 1024 * 1024, "100.0 TB"),
 )
 def test_size(case: SizeCase):
     got = pretty.size(case.value)
