@@ -47,6 +47,9 @@ class TestBytesToHuman:
     def test_none(self):
         assert convert.bytes_to_human_value(None) is None
         assert convert.bytes_to_human_unit(None) == "N/A"
+        assert convert.bytes_to_kb(None) is None
+        assert convert.bytes_to_mb(None) is None
+        assert convert.bytes_to_gb(None) is None
 
     def test_positive_bytes(self):
         assert convert.bytes_to_human_value(100) == 100
@@ -57,28 +60,40 @@ class TestBytesToHuman:
         assert convert.bytes_to_human_unit(-100) == "B"
 
     def test_positive_kb(self):
+        assert convert.size(8808).to_unit(convert.Size.Unit.KB) == 8.6015625
         assert convert.bytes_to_human_value(8808) == 8.6015625
         assert convert.bytes_to_human_unit(8808) == "KB"
+        assert convert.bytes_to_kb(8808) == 8.6015625
 
     def test_negative_kb(self):
         assert convert.bytes_to_human_value(-88134) == -86.068359375
         assert convert.bytes_to_human_unit(-88134) == "KB"
+        assert convert.bytes_to_kb(-88134) == -86.068359375
+        assert convert.size(-88134).to_unit(convert.Size.Unit.KB) == -86.068359375
 
     def test_positive_mb(self):
         assert convert.bytes_to_human_value(8808812) == 8.400737762451172
         assert convert.bytes_to_human_unit(8808812) == "MB"
+        assert convert.bytes_to_mb(8808812) == 8.400737762451172
+        assert convert.size(8808812).to_unit(convert.Size.Unit.MB) == 8.400737762451172
 
     def test_negative_mb(self):
         assert convert.bytes_to_human_value(-881348666) == -840.5195865631104
         assert convert.bytes_to_human_unit(-881348666) == "MB"
+        assert convert.bytes_to_mb(-881348666) == -840.5195865631104
+        assert convert.size(-881348666).to_unit(convert.Size.Unit.MB) == -840.5195865631104
 
     def test_positive_gb(self):
         assert convert.bytes_to_human_value(8808812123) == 8.2038455856964
         assert convert.bytes_to_human_unit(8808812123) == "GB"
+        assert convert.bytes_to_gb(8808812123) == 8.2038455856964
+        assert convert.size(8808812123).to_unit(convert.Size.Unit.GB) == 8.2038455856964
 
     def test_negative_gb(self):
         assert convert.bytes_to_human_value(-881348666323) == -820.8199090538546
         assert convert.bytes_to_human_unit(-881348666323) == "GB"
+        assert convert.bytes_to_gb(-881348666323) == -820.8199090538546
+        assert convert.size(-881348666323).to_unit(convert.Size.Unit.GB) == -820.8199090538546
 
 
 class TestBytesToUnit:
@@ -121,31 +136,45 @@ class TestBytesToUnit:
 @dataclass()
 class DurationCase:
     value: float | int
+    want: int
     want_str: str
     unit: convert.Duration.Unit = convert.Duration.Unit.S
 
 
+NANOS = 1
+MICROS = 1000 * NANOS
+MILLIS = 1000 * MICROS
+SECOND = 1000 * MILLIS
+MINUTE = 60 * SECOND
+HOUR = 60 * MINUTE
+DAY = 24 * HOUR
+
+
 @cases(
-    zero=DurationCase(0, "0s"),
-    nanos=DurationCase(1.23456789, "1ns", convert.Duration.Unit.NS),
-    micros=DurationCase(1.23456789, "1.23us", convert.Duration.Unit.US),
-    millis=DurationCase(1.23456789, "1.23ms", convert.Duration.Unit.MS),
-    seconds=DurationCase(1.23456789, "1.23s", convert.Duration.Unit.S),
-    minutes=DurationCase(1.23456789, "1m 14s", convert.Duration.Unit.M),
-    hours=DurationCase(1.23456789, "1h 14m 4s", convert.Duration.Unit.H),
-    days=DurationCase(1.23456789, "1d 5h 37m 46s", convert.Duration.Unit.D),
-    integer=DurationCase(42, "42s"),
-    float=DurationCase(12.345, "12.35s"),
-    minute=DurationCase(60, "1m"),
-    hundred=DurationCase(1e2, "1m 40s"),
-    thausands=DurationCase(1e3, "16m 40s"),
-    hour=DurationCase(3600, "1h"),
-    day=DurationCase(86400, "1d"),
-    milions=DurationCase(1e6, "11d 13h 46m 40s"),
+    zero=DurationCase(0, 0, "0s"),
+    nanos=DurationCase(1.23456789, 1, "1ns", convert.Duration.Unit.NS),
+    micros=DurationCase(1.23456789, 1234, "1.23us", convert.Duration.Unit.US),
+    millis=DurationCase(1.23456789, 1234567, "1.23ms", convert.Duration.Unit.MS),
+    seconds=DurationCase(1.23456789, 1234567890, "1.23s", convert.Duration.Unit.S),
+    minutes=DurationCase(1.23456789, 1234567890 * 60, "1m 14s", convert.Duration.Unit.M),
+    hours=DurationCase(1.23456789, 1234567890 * 60 * 60, "1h 14m 4s", convert.Duration.Unit.H),
+    days=DurationCase(1.23456789, 106666665695999, "1d 5h 37m 46s", convert.Duration.Unit.D),
+    integer=DurationCase(42, 42 * SECOND, "42s"),
+    float=DurationCase(12.345, 12345 * MILLIS, "12.35s"),
+    minute=DurationCase(60, MINUTE, "1m"),
+    hundred=DurationCase(100, 100 * SECOND, "1m 40s"),
+    thausand=DurationCase(1000, 1000 * SECOND, "16m 40s"),
+    hour=DurationCase(3600, HOUR, "1h"),
+    day=DurationCase(86400, DAY, "1d"),
+    milions=DurationCase(1e6, 1000000 * 1000000000, "11d 13h 46m 40s"),
 )
 def test_duration(case: DurationCase):
     got = convert.duration(case.value, case.unit)
+    assert got == case.want
     assert str(got) == case.want_str
+    assert convert.seconds_to_ms(got.s()) == case.want / MILLIS
+    assert convert.ms_to_seconds(got.ms()) == case.want / SECOND
+    assert convert.ms_to_minutes(got.ms()) == case.want / MINUTE
 
 
 @dataclass()
@@ -180,3 +209,7 @@ def test_size(case: SizeCase):
     assert got.to_unit(got.unit) == case.want_to_unit
     assert got.unit == case.want_unit
     assert str(got) == case.want_str
+    assert got.kb() == case.want / 1024
+    assert got.mb() == case.want / (1024 * 1024)
+    assert got.gb() == case.want / (1024 * 1024 * 1024)
+    assert got.tb() == case.want / (1024 * 1024 * 1024 * 1024)

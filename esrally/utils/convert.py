@@ -99,7 +99,7 @@ def bytes_to_mb(x: int | float | None) -> float | None:
     return size(x).mb()
 
 
-def bytes_to_gb(x: int | float | Size) -> float | None:
+def bytes_to_gb(x: int | float | None) -> float | None:
     if x is None:
         return None
     return size(x).gb()
