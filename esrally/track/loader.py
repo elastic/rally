@@ -489,7 +489,7 @@ class Decompressor:
         if uncompressed_size:
             msg = (
                 f"Decompressing track data from [{archive_path}] to [{documents_path}] (resulting size: "
-                f"{convert.size(uncompressed_size)}) ... "
+                f"{pretty.size(uncompressed_size)}) ... "
             )
         else:
             msg = f"Decompressing track data from [{archive_path}] to [{documents_path}] ... "
@@ -533,7 +533,7 @@ class Downloader:
         try:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
-                self.logger.info("Downloading data from [%s] (%s) to [%s].", data_url, convert.size(size_in_bytes), target_path)
+                self.logger.info("Downloading data from [%s] (%s) to [%s].", data_url, pretty.size(size_in_bytes), target_path)
             else:
                 self.logger.info("Downloading data from [%s] to [%s].", data_url, target_path)
 

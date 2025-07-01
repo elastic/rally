@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import difflib
 import enum
@@ -21,6 +22,8 @@ import json
 import re
 from collections import abc
 from typing import Any
+
+from esrally.utils import convert
 
 
 class Flag(enum.Flag):
@@ -101,3 +104,15 @@ def _flat(o: Any) -> abc.Generator[tuple[str, str], None, None]:
                     yield str(k1), v2
     else:
         yield "", json.dumps(o)
+
+
+def number(x: int | float | None) -> str:
+    if x is None:
+        return "N/A"
+    return f"{x:,}"
+
+
+def size(x: int | float | None) -> str:
+    if x is None:
+        return "N/A"
+    return str(convert.size(x))
