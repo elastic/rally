@@ -64,7 +64,7 @@ class TimedEvent:
 
     On top of the threading.Event functionalities:
         - the set() method returns True in case the flag was False at the time it has been called;
-        - its time property returns the value of time.monotonic() at the time set has been called first.
+        - its time property returns the value of time.monotonic_ns() at the time set has been called first.
     """
 
     # After threading.Event class (with time() method)
@@ -72,7 +72,7 @@ class TimedEvent:
     def __init__(self):
         self._cond = threading.Condition(threading.Lock())
         self._flag = False
-        self._time: float | None = None
+        self._time: int | None = None
 
     def __bool__(self) -> bool:
         """Return true if and only if the internal flag is true."""
@@ -89,7 +89,7 @@ class TimedEvent:
             if self._flag:
                 return False
             self._flag = True
-            self._time = time.monotonic()
+            self._time = time.monotonic_ns()
             self._cond.notify_all()
             return True
 
@@ -125,9 +125,9 @@ class TimedEvent:
             return signaled
 
     @property
-    def time(self) -> float | None:
-        """It gets the result of time.monotonic() at the moment the event has been set.
-        :return: the time.monotonic() float value if set, or None otherwise.
+    def time(self) -> int | None:
+        """It gets the result of time.monotonic_ns() at the moment the event has been set.
+        :return: the time.monotonic_ns() float value if set, or None otherwise.
         """
         return self._time
 
