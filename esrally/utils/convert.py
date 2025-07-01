@@ -63,9 +63,9 @@ class Size(int):
     def __str__(self):
         unit = self.unit
         if unit == Size.Unit.B:
-            return f"{int(self)} B"
+            return f"{int(self)}B"
         x = self.to_unit(unit)
-        return f"{x:.1f} {unit}"
+        return f"{x:.1f}{unit}"
 
 
 def size(x: int | float, unit: Size.Unit = Size.Unit.B) -> Size:
@@ -228,11 +228,14 @@ def seconds_to_ms(x: int | float | None) -> float | None:
     return duration(x, Duration.Unit.S).ms()
 
 
-def seconds_to_hour_minute_seconds(x: int | float | None) -> tuple[int | None, int | None, int | float | None]:
+S = TypeVar("S", float, int, None)
+
+
+def seconds_to_hour_minute_seconds(x: S) -> tuple[S, S, S]:
     if x is None:
         return None, None, None
     m, s = divmod(x, 60)
-    h, m = divmod(int(m), 60)
+    h, m = divmod(m, 60)
     return h, m, s
 
 

@@ -26,7 +26,7 @@ from esrally.utils import cases, pretty
 class DumpCase:
     o: Any
     want: str
-    flags: pretty.Flag | None = None
+    flags: pretty.Flag = pretty.Flag.NONE
 
 
 @cases.cases(
@@ -68,7 +68,7 @@ class DumpCase:
 )
 def test_dump(case: DumpCase):
     params: dict[str, Any] = {}
-    if case.flags is not None:
+    if case.flags:
         params["flags"] = case.flags
     got = pretty.dump(case.o, **params)
     assert got == case.want
@@ -79,7 +79,7 @@ class DiffCase:
     old: Any
     new: Any
     want: str
-    flags: pretty.Flag | None = None
+    flags: pretty.Flag = pretty.Flag.NONE
 
 
 @cases.cases(
@@ -185,7 +185,7 @@ class DiffCase:
 )
 def test_diff(case: DiffCase):
     params: dict[str, Any] = {}
-    if case.flags is not None:
+    if case.flags:
         params["flags"] = case.flags
     got = pretty.diff(case.old, case.new, **params)
     assert got == case.want
@@ -222,18 +222,18 @@ class SizeCase:
 
 @cases.cases(
     none=SizeCase(None, "N/A"),
-    zero=SizeCase(0, "0 B"),
-    integers=SizeCase(42, "42 B"),
-    float=SizeCase(42.0, "42 B"),
-    hundred=SizeCase(100, "100 B"),
-    kilos=SizeCase(1024, "1.0 KB"),
-    hundred_kilos=SizeCase(100 * 1024, "100.0 KB"),
-    megas=SizeCase(1024 * 1024, "1.0 MB"),
-    hundred_megas=SizeCase(100 * 1024 * 1024, "100.0 MB"),
-    gigas=SizeCase(1024 * 1024 * 1024, "1.0 GB"),
-    hundred_gigas=SizeCase(100 * 1024 * 1024 * 1024, "100.0 GB"),
-    teras=SizeCase(1024 * 1024 * 1024 * 1024, "1.0 TB"),
-    hundred_teras=SizeCase(100 * 1024 * 1024 * 1024 * 1024, "100.0 TB"),
+    zero=SizeCase(0, "0B"),
+    integers=SizeCase(42, "42B"),
+    float=SizeCase(42.0, "42B"),
+    hundred=SizeCase(100, "100B"),
+    kilos=SizeCase(1024, "1.0KB"),
+    hundred_kilos=SizeCase(100 * 1024, "100.0KB"),
+    megas=SizeCase(1024 * 1024, "1.0MB"),
+    hundred_megas=SizeCase(100 * 1024 * 1024, "100.0MB"),
+    gigas=SizeCase(1024 * 1024 * 1024, "1.0GB"),
+    hundred_gigas=SizeCase(100 * 1024 * 1024 * 1024, "100.0GB"),
+    teras=SizeCase(1024 * 1024 * 1024 * 1024, "1.0TB"),
+    hundred_teras=SizeCase(100 * 1024 * 1024 * 1024 * 1024, "100.0TB"),
 )
 def test_size(case: SizeCase):
     got = pretty.size(case.value)
