@@ -36,7 +36,7 @@ from esrally.storage._range import (
     RangeSet,
     rangeset,
 )
-from esrally.utils import pretty, threads
+from esrally.utils import convert, pretty, threads
 
 LOG = logging.getLogger(__name__)
 
@@ -433,19 +433,19 @@ class Transfer:
         return 100.0 * done.size / document_length
 
     @property
-    def duration(self) -> float:
+    def duration(self) -> convert.Duration:
         """It obtains the transfer duration (up to now).
         :return: the transfer duration in seconds.
         """
         started = self._started.time
         if started is None:
             # It hasn't started yet.
-            return 0.0
+            return convert.Duration(0)
         finished = self._finished.time
         if finished is None:
             # It hasn't finished yet.
-            finished = time.monotonic()
-        return finished - started
+            finished = time.monotonic_ns()
+        return convert.duration(finished - started, convert.Duration.Unit.NS)
 
     @property
     def average_speed(self) -> float:
@@ -460,12 +460,12 @@ class Transfer:
         if duration == 0.0:
             # It hasn't started yet.
             return 0.0
-        return (done.size - self._resumed_size) / self.duration
+        return (done.size - self._resumed_size) / self.duration.s()
 
     def info(self) -> str:
         return (
             f"- {self.url} {self.progress:.0f}% "
-            f"{pretty.size(self.done.size)}/{pretty.size(self.document_length)} {pretty.duration(self.duration)} "
+            f"{pretty.size(self.done.size)}/{pretty.size(self.document_length)} {self.duration} "
             f"{pretty.size(self.average_speed)}/s {self.status} {self._workers.count} workers"
         )
 
