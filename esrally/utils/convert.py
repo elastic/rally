@@ -74,12 +74,6 @@ def size(x: int | float, unit: Size.Unit = Size.Unit.B) -> Size:
     return Size(x * unit)
 
 
-def bytes_to_human_string(x: int | float | None) -> str | None:
-    if x is None:
-        return "N/A"
-    return str(size(x))
-
-
 def bytes_to_human_value(x: int | float | None) -> float | None:
     if x is None:
         return None
@@ -105,23 +99,16 @@ def bytes_to_mb(x: int | float | None) -> float | None:
     return size(x).mb()
 
 
-def bytes_to_gb(x: int | float | Size) -> float | None:
+def bytes_to_gb(x: int | float | None) -> float | None:
     if x is None:
         return None
     return size(x).gb()
-
-
-def bytes_to_tb(x: int | float | Size) -> float | None:
-    if x is None:
-        return None
-    return size(x).tb()
 
 
 def bytes_to_unit(unit: str, x: int | float | None) -> float | None:
     if x is None:
         return None
     u = {
-        "bytes": Size.Unit.B,
         "B": Size.Unit.B,
         "KB": Size.Unit.KB,
         "MB": Size.Unit.MB,
@@ -129,12 +116,6 @@ def bytes_to_unit(unit: str, x: int | float | None) -> float | None:
         "TB": Size.Unit.TB,
     }.get(unit.strip(), Size.Unit.B)
     return size(x).to_unit(u)
-
-
-def bytes_to_str(x: int | float | None) -> str:
-    if x is None:
-        return "N/A"
-    return str(size(x))
 
 
 class Duration(int):
@@ -226,17 +207,6 @@ def seconds_to_ms(x: int | float | None) -> float | None:
     if x is None:
         return None
     return duration(x, Duration.Unit.S).ms()
-
-
-S = TypeVar("S", float, int, None)
-
-
-def seconds_to_hour_minute_seconds(x: S) -> tuple[S, S, S]:
-    if x is None:
-        return None, None, None
-    m, s = divmod(x, 60)
-    h, m = divmod(m, 60)
-    return h, m, s
 
 
 def ms_to_seconds(x: int | float | None) -> float | None:
