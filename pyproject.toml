@@ -201,6 +201,7 @@ module = [
     "esrally.mechanic.team",
     "esrally.storage.*",
     "esrally.utils.cases",
+    "esrally.utils.convert",
     "esrally.utils.io",
     "esrally.utils.modules",
     "esrally.utils.pretty",

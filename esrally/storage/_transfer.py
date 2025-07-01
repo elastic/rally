@@ -465,7 +465,7 @@ class Transfer:
     def info(self) -> str:
         return (
             f"- {self.url} {self.progress:.0f}% "
-            f"{pretty.size(self.done.size)}/{pretty.size(self.document_length)} {pretty.seconds(self.duration)} "
+            f"{pretty.size(self.done.size)}/{pretty.size(self.document_length)} {pretty.duration(self.duration)} "
             f"{pretty.size(self.average_speed)}/s {self.status} {self._workers.count} workers"
         )
 
