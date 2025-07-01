@@ -50,42 +50,42 @@ class TestBytesToHuman:
         assert convert.bytes_to_human_unit(None) == "N/A"
 
     def test_positive_bytes(self):
-        assert convert.bytes_to_human_string(100) == "100 B"
+        assert convert.bytes_to_human_string(100) == "100B"
         assert convert.bytes_to_human_value(100) == 100
         assert convert.bytes_to_human_unit(100) == "B"
 
     def test_negative_bytes(self):
-        assert convert.bytes_to_human_string(-100) == "-100 B"
+        assert convert.bytes_to_human_string(-100) == "-100B"
         assert convert.bytes_to_human_value(-100) == -100
         assert convert.bytes_to_human_unit(-100) == "B"
 
     def test_positive_kb(self):
-        assert convert.bytes_to_human_string(8808) == "8.6 KB"
+        assert convert.bytes_to_human_string(8808) == "8.6KB"
         assert convert.bytes_to_human_value(8808) == 8.6015625
         assert convert.bytes_to_human_unit(8808) == "KB"
 
     def test_negative_kb(self):
-        assert convert.bytes_to_human_string(-88134) == "-86.1 KB"
+        assert convert.bytes_to_human_string(-88134) == "-86.1KB"
         assert convert.bytes_to_human_value(-88134) == -86.068359375
         assert convert.bytes_to_human_unit(-88134) == "KB"
 
     def test_positive_mb(self):
-        assert convert.bytes_to_human_string(8808812) == "8.4 MB"
+        assert convert.bytes_to_human_string(8808812) == "8.4MB"
         assert convert.bytes_to_human_value(8808812) == 8.400737762451172
         assert convert.bytes_to_human_unit(8808812) == "MB"
 
     def test_negative_mb(self):
-        assert convert.bytes_to_human_string(-881348666) == "-840.5 MB"
+        assert convert.bytes_to_human_string(-881348666) == "-840.5MB"
         assert convert.bytes_to_human_value(-881348666) == -840.5195865631104
         assert convert.bytes_to_human_unit(-881348666) == "MB"
 
     def test_positive_gb(self):
-        assert convert.bytes_to_human_string(8808812123) == "8.2 GB"
+        assert convert.bytes_to_human_string(8808812123) == "8.2GB"
         assert convert.bytes_to_human_value(8808812123) == 8.2038455856964
         assert convert.bytes_to_human_unit(8808812123) == "GB"
 
     def test_negative_gb(self):
-        assert convert.bytes_to_human_string(-881348666323) == "-820.8 GB"
+        assert convert.bytes_to_human_string(-881348666323) == "-820.8GB"
         assert convert.bytes_to_human_value(-881348666323) == -820.8199090538546
         assert convert.bytes_to_human_unit(-881348666323) == "GB"
 
@@ -168,20 +168,20 @@ class SizeCase:
 
 
 @cases(
-    zero=SizeCase(0, 0, 0.0, convert.Size.Unit.B, "0 B"),
-    float=SizeCase(1.234, 1, 1.0, convert.Size.Unit.B, "1 B"),
-    integer=SizeCase(42, 42, 42.0, convert.Size.Unit.B, "42 B"),
-    bytes=SizeCase(1.234, 1, 1.0, convert.Size.Unit.B, "1 B", unit=convert.Size.Unit.B),
-    kylos=SizeCase(1.234, 1263, 1.2333984375, convert.Size.Unit.KB, "1.2 KB", unit=convert.Size.Unit.KB),
-    megas=SizeCase(1.234, 1293942, 1.233999252319336, convert.Size.Unit.MB, "1.2 MB", unit=convert.Size.Unit.MB),
-    gigas=SizeCase(1.234, 1324997410, 1.2339999992400408, convert.Size.Unit.GB, "1.2 GB", unit=convert.Size.Unit.GB),
-    teras=SizeCase(1.234, 1356797348675, 1.2339999999994689, convert.Size.Unit.TB, "1.2 TB", unit=convert.Size.Unit.TB),
-    hundred=SizeCase(100, 100, 100.0, convert.Size.Unit.B, "100 B"),
-    thausands=SizeCase(3800, 3800, 3.7109375, convert.Size.Unit.KB, "3.7 KB"),
-    hundred_kilos=SizeCase(102400, 102400, 100.0, convert.Size.Unit.KB, "100.0 KB"),
-    milions=SizeCase(5000000, 5000000, 4.76837158203125, convert.Size.Unit.MB, "4.8 MB"),
-    bilions=SizeCase(4000000000, 4000000000, 3.725290298461914, convert.Size.Unit.GB, "3.7 GB"),
-    trillions=SizeCase(2000000000000, 2000000000000, 1.8189894035458565, convert.Size.Unit.TB, "1.8 TB"),
+    zero=SizeCase(0, 0, 0.0, convert.Size.Unit.B, "0B"),
+    float=SizeCase(1.234, 1, 1.0, convert.Size.Unit.B, "1B"),
+    integer=SizeCase(42, 42, 42.0, convert.Size.Unit.B, "42B"),
+    bytes=SizeCase(1.234, 1, 1.0, convert.Size.Unit.B, "1B", unit=convert.Size.Unit.B),
+    kylos=SizeCase(1.234, 1263, 1.2333984375, convert.Size.Unit.KB, "1.2KB", unit=convert.Size.Unit.KB),
+    megas=SizeCase(1.234, 1293942, 1.233999252319336, convert.Size.Unit.MB, "1.2MB", unit=convert.Size.Unit.MB),
+    gigas=SizeCase(1.234, 1324997410, 1.2339999992400408, convert.Size.Unit.GB, "1.2GB", unit=convert.Size.Unit.GB),
+    teras=SizeCase(1.234, 1356797348675, 1.2339999999994689, convert.Size.Unit.TB, "1.2TB", unit=convert.Size.Unit.TB),
+    hundred=SizeCase(100, 100, 100.0, convert.Size.Unit.B, "100B"),
+    thausands=SizeCase(3800, 3800, 3.7109375, convert.Size.Unit.KB, "3.7KB"),
+    hundred_kilos=SizeCase(102400, 102400, 100.0, convert.Size.Unit.KB, "100.0KB"),
+    milions=SizeCase(5000000, 5000000, 4.76837158203125, convert.Size.Unit.MB, "4.8MB"),
+    bilions=SizeCase(4000000000, 4000000000, 3.725290298461914, convert.Size.Unit.GB, "3.7GB"),
+    trillions=SizeCase(2000000000000, 2000000000000, 1.8189894035458565, convert.Size.Unit.TB, "1.8TB"),
 )
 def test_size(case: SizeCase):
     got = convert.size(case.value, unit=case.unit)
