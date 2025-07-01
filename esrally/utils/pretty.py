@@ -112,7 +112,7 @@ def number(x: int | float | None) -> str:
     return f"{x:,}"
 
 
-def size(x: int | float | None) -> str:
+def size(x: int | float | None, unit: convert.Size.Unit = convert.Size.Unit.B) -> str:
     if x is None:
         return "N/A"
-    return str(convert.size(x))
+    return str(convert.size(x, unit))

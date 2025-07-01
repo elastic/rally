@@ -26,7 +26,7 @@ import certifi
 import urllib3
 
 from esrally import exceptions
-from esrally.utils import console, convert
+from esrally.utils import console, pretty
 
 _HTTP = None
 _HTTPS = None
@@ -72,7 +72,7 @@ class Progress:
     def __call__(self, bytes_read, bytes_total):
         if bytes_total:
             completed = bytes_read / bytes_total
-            self.p.print(f"{self.msg} ({convert.size(bytes_total)} total size)", self.percent_format % (completed * 100))
+            self.p.print(f"{self.msg} ({pretty.size(bytes_total)} total size)", self.percent_format % (completed * 100))
         else:
             self.p.print(self.msg, ".")
 
