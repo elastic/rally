@@ -189,3 +189,52 @@ def test_diff(case: DiffCase):
         params["flags"] = case.flags
     got = pretty.diff(case.old, case.new, **params)
     assert got == case.want
+
+
+@dataclass()
+class DurationCase:
+    value: float | int
+    want: str
+
+
+@cases.cases(
+    zero=DurationCase(0, "0s"),
+    milliseconds=DurationCase(3.1465, "3.15s"),
+    integers=DurationCase(42, "42s"),
+    float=DurationCase(42.0, "42s"),
+    minute=DurationCase(60, "1m"),
+    hundred=DurationCase(1e2, "1m 40s"),
+    thausands=DurationCase(1e3, "16m 40s"),
+    hour=DurationCase(3600, "1h"),
+    day=DurationCase(86400, "1d"),
+    milions=DurationCase(1e6, "11d 13h 46m 40s"),
+)
+def test_duration(case: DurationCase):
+    got = pretty.duration(case.value)
+    assert got == case.want
+
+
+@dataclass()
+class SizeCase:
+    value: float | int | None
+    want: str
+
+
+@cases.cases(
+    none=SizeCase(None, "N/A"),
+    zero=SizeCase(0, "0 B"),
+    integers=SizeCase(42, "42 B"),
+    float=SizeCase(42.0, "42 B"),
+    hundred=SizeCase(100, "100 B"),
+    kilos=SizeCase(1024, "1.0 KB"),
+    hundred_kilos=SizeCase(100 * 1024, "100.0 KB"),
+    megas=SizeCase(1024 * 1024, "1.0 MB"),
+    hundred_megas=SizeCase(100 * 1024 * 1024, "100.0 MB"),
+    gigas=SizeCase(1024 * 1024 * 1024, "1.0 GB"),
+    hundred_gigas=SizeCase(100 * 1024 * 1024 * 1024, "100.0 GB"),
+    teras=SizeCase(1024 * 1024 * 1024 * 1024, "1.0 TB"),
+    hundred_teras=SizeCase(100 * 1024 * 1024 * 1024 * 1024, "100.0 TB"),
+)
+def test_size(case: SizeCase):
+    got = pretty.size(case.value)
+    assert got == case.want

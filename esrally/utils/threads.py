@@ -72,7 +72,7 @@ class TimedEvent:
     def __init__(self):
         self._cond = threading.Condition(threading.Lock())
         self._flag = False
-        self._time: float | None = None
+        self._time: int | None = None
 
     def __bool__(self) -> bool:
         """Return true if and only if the internal flag is true."""
@@ -125,9 +125,9 @@ class TimedEvent:
             return signaled
 
     @property
-    def time(self) -> float | None:
+    def time(self) -> int | None:
         """It gets the result of time.monotonic_ns() at the moment the event has been set.
-        :return: the monotonic_ns time float value if set, or None otherwise.
+        :return: the time.monotonic_ns() float value if set, or None otherwise.
         """
         return self._time
 

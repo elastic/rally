@@ -200,13 +200,18 @@ class Duration(int):
 
         s = int(self.to_unit(Duration.Unit.S))
         m, s = divmod(s, 60)
-        if unit == Duration.Unit.M:
-            return f"{m}m {s:02d}s"
         h, m = divmod(m, 60)
-        if unit == Duration.Unit.H:
-            return f"{h}h {m:02d}m {s:02d}s"
         d, h = divmod(h, 24)
-        return f"{d}d {h:02d}h {m:02d}m {s:02d}s"
+        parts: list[str] = []
+        if d:
+            parts.append(f"{d}d")
+        if h:
+            parts.append(f"{h}h")
+        if m:
+            parts.append(f"{m}m")
+        if s:
+            parts.append(f"{s}s")
+        return " ".join(parts)
 
 
 def duration(x: int | float, unit: Duration.Unit = Duration.Unit.S) -> Duration:
