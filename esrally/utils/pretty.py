@@ -116,3 +116,9 @@ def size(x: int | float | None, unit: convert.Size.Unit = convert.Size.Unit.B) -
     if x is None:
         return "N/A"
     return str(convert.size(x, unit))
+
+
+def duration(x: int | float | None, unit: convert.Duration.Unit) -> str:
+    if x is None:
+        return "N/A"
+    return str(convert.duration(x, unit))
