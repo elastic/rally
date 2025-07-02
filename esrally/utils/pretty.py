@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import difflib
 import enum
@@ -22,13 +23,16 @@ import re
 from collections import abc
 from typing import Any
 
+from esrally.utils import convert
+
 
 class Flag(enum.Flag):
+    NONE = 0
     FLAT_DICT = enum.auto()
     DUMP_EQUALS = enum.auto()
 
 
-def dump(o: Any, flags: Flag = Flag(0)) -> str:
+def dump(o: Any, flags: Flag = Flag.NONE) -> str:
     """dump creates a human-readable multiline text to make easy to visualize the content of a JSON like object.
 
     :param o: the object the dump has to be obtained from.
@@ -43,7 +47,7 @@ def dump(o: Any, flags: Flag = Flag(0)) -> str:
 _HAS_DIFF = re.compile(r"^\+ ", flags=re.MULTILINE)
 
 
-def diff(old: Any, new: Any, flags: Flag = Flag(0)) -> str:
+def diff(old: Any, new: Any, flags: Flag = Flag.NONE) -> str:
     """diff creates a human-readable multiline text to make easy to visualize the difference of content between two JSON like object.
 
     :param old: the old object the diff dump has to be obtained from.
@@ -101,3 +105,21 @@ def _flat(o: Any) -> abc.Generator[tuple[str, str], None, None]:
                     yield str(k1), v2
     else:
         yield "", json.dumps(o)
+
+
+def number(x: int | float | None) -> str:
+    if x is None:
+        return "N/A"
+    return f"{x:,}"
+
+
+def size(x: int | float | None, unit: convert.Size.Unit = convert.Size.Unit.B) -> str:
+    if x is None:
+        return "N/A"
+    return str(convert.size(x, unit))
+
+
+def duration(x: int | float | None, unit: convert.Duration.Unit = convert.Duration.Unit.S) -> str:
+    if x is None:
+        return "N/A"
+    return str(convert.duration(x, unit))
