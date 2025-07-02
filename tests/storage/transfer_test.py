@@ -20,6 +20,7 @@ import json
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import pytest
 
@@ -165,7 +166,8 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
     :param tmpdir: the temporary directory to use for this test case.
     """
     client = DummyClient.from_config(Config())
-    path = os.path.join(str(tmpdir), os.path.basename(case.url))
+
+    path = os.path.join(str(tmpdir), os.path.basename(urlparse(case.url).path))
     status_path = path + ".status"
     if case.resume_status is not None:
         os.makedirs(os.path.dirname(path), exist_ok=True)
