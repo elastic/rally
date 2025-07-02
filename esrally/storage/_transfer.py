@@ -82,8 +82,8 @@ class Transfer:
     part of the remote file that has to be written to the local file.
 
     By reducing the size of the multipart_size it reduces the scope of each task, increasing the number of tasks and
-    parts of file to transfer. This produces some additional work because in increases the number of IO operations and
-    of request to the remote service. The advantage of that is making the task allocation between multiple threads more
+    parts of file to transfer. This produces some additional work because it increases the number of IO operations and
+    of requests to the remote service. The advantage of that is making the task allocation between multiple threads more
     dynamic and allows the client to have more granularity for load balance transfers between multiple connections and
     servers.
     """
