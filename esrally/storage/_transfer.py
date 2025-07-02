@@ -77,7 +77,7 @@ class Transfer:
 
     It splits the file in parts of up to multipart_size bytes, and allocate a task for downloading each part.
     Each task is being executed by a thread provided by the Executor. Each thread after executing the task will
-    eventually execute the next task. Every task open local file for writing. Then it seeks to the beginning of the
+    eventually execute the next task. Every task opens local file for writing. Then it seeks to the beginning of the
     file part before writing transferred data from there. On the network side it ask the server to send only the
     part of the remote file that has to be written to the local file.
 
