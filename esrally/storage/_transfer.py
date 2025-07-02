@@ -310,7 +310,7 @@ class Transfer:
                 count = self._workers.count
                 max_count = max(1, count - 1)
                 self._workers.max_count = max_count
-            # In case of the count of concurrent tasks is greater than 1 then if forbid to reschedule it.
+            # In case of the count of concurrent tasks is greater than 1 then it forbids to reschedule it.
             cancelled = count > 1
             LOG.info("service unavailable: %s, workers=%d/%d: %s", self.url, count, max_count, ex)
         except Exception as ex:
