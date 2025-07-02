@@ -131,7 +131,7 @@ class TransferCase:
     ),
     # It tests multipart working when multipart_size < content_length.
     no_document_length=TransferCase(want_init_document_length=None, want_init_todo="0-", want_final_done="0-1023", document_length=None),
-    # It tests when max_connections < 0.
+    # It tests when max_connections == 0.
     invalid_max_connections=TransferCase(multipart_size=128, max_connections=0, want_init_error=ValueError),
     # It tests resuming from an existing status.
     resume_status=TransferCase(
