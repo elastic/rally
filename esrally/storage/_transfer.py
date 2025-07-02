@@ -382,7 +382,7 @@ class Transfer:
                 finally:
                     with self._lock:
                         try:
-                            # It de-registers the file descriptor so that we can't be closed from another thread.
+                            # It de-registers the file descriptor so that it can't be closed from another thread.
                             fd.flush()
                             self._fds.remove(fd)
                         except ValueError:
