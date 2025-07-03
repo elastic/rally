@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
-from typing import Final
 from unittest.mock import create_autospec
 
 import pytest
@@ -40,40 +39,50 @@ from esrally.utils.cases import cases
 
 URL = "https://example.com"
 
+ACCEPT_RANGES_HEADER = {"Accept-Ranges": "bytes"}
+CONTENT_LENGTH_HEADER = {"Content-Length": "512"}
+CONTENT_RANGE_HEADER = {"Content-Range": "bytes 3-20/128"}
+X_GOOG_HASH_CRC32C_HEADER = {"X-Goog-Hash": "crc32c=some-checksum"}
+X_AMZ_CHECKSUM_CRC32C_HEADER = {"x-amz-checksum-crc32c": "some-checksum"}
+DATA = "some-data"
+
 
 @pytest.fixture()
 def session() -> Session:
     return create_autospec(Session, spec_set=True, instance=True)
 
 
+def response(
+    headers: dict[str, str] | None = None,
+    status_code: int = 200,
+    data: str = "",
+):
+    res = Response()
+    res.raw = io.StringIO(data)
+    res.status_code = status_code
+    res.headers = CaseInsensitiveDict()
+    if headers is not None:
+        res.headers.update(headers)
+    return res
+
+
 @dataclass()
 class HeadCase:
-    url: str
     response: Response
     want: Head
-
-
-def response(
-    status_code: int = 200, accept_ranges: bool = False, content_length: int | None = None, data: str = "", content_range: str = ""
-) -> Response:
-    ret = Response()
-    ret.raw = io.StringIO(data)
-    ret.status_code = status_code
-    ret.headers = CaseInsensitiveDict()
-    if accept_ranges:
-        ret.headers["Accept-Ranges"] = "bytes"
-    if content_length is not None:
-        ret.headers["Content-Length"] = str(content_length)
-    if content_range:
-        ret.headers["Content-Range"] = content_range
-    return ret
+    url: str = URL
 
 
 @cases(
-    "case",
-    simple=HeadCase(URL, response(), Head(url=URL)),
-    accept_ranges=HeadCase(URL, response(accept_ranges=True), Head(url=URL, accept_ranges=True)),
-    content_length=HeadCase(URL, response(content_length=512), Head(URL, content_length=512)),
+    simple=HeadCase(response(), Head(URL)),
+    accept_ranges=HeadCase(response(ACCEPT_RANGES_HEADER), Head(URL, accept_ranges=True)),
+    content_length=HeadCase(response(CONTENT_LENGTH_HEADER), Head(URL, content_length=512, document_length=512)),
+    content_range=HeadCase(
+        response(CONTENT_RANGE_HEADER),
+        Head(URL, accept_ranges=True, content_length=18, ranges=rangeset("3-20"), document_length=128),
+    ),
+    x_goog_hash=HeadCase(response(X_GOOG_HASH_CRC32C_HEADER), Head(URL, crc32c="some-checksum")),
+    x_amz_checksum=HeadCase(response(X_AMZ_CHECKSUM_CRC32C_HEADER), Head(URL, crc32c="some-checksum")),
 )
 def test_head(case: HeadCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
@@ -82,32 +91,29 @@ def test_head(case: HeadCase, session: Session) -> None:
     assert head == case.want
 
 
-NO_HEADERS: Final[dict] = {}
-
-
 @dataclass()
 class GetCase:
-    url: str
     response: Response
     want: Head
+    url: str = URL
     ranges: str = ""
     want_data: str = ""
     want_request_range: str = ""
 
 
 @cases(
-    "case",
-    simple=GetCase(URL, response(), Head(url=URL)),
-    accept_ranges=GetCase(URL, response(accept_ranges=True), Head(url=URL, accept_ranges=True)),
-    content_length=GetCase(URL, response(content_length=512), Head(url=URL, content_length=512)),
-    read_data=GetCase(URL, response(data="some_data"), Head(url=URL), want_data="some_data"),
+    default=GetCase(response(), Head(URL)),
+    accept_ranges=GetCase(response(ACCEPT_RANGES_HEADER), Head(URL, accept_ranges=True)),
+    content_length=GetCase(response(CONTENT_LENGTH_HEADER), Head(URL, content_length=512, document_length=512)),
+    read_data=GetCase(response(data="some_data"), Head(URL), want_data="some_data"),
     ranges=GetCase(
-        URL,
-        response(content_range="bytes 10-20/30"),
-        Head(url=URL, ranges=rangeset("10-20"), accept_ranges=True),
-        ranges="10-20",
-        want_request_range="bytes=10-20",
+        response(CONTENT_RANGE_HEADER),
+        Head(URL, accept_ranges=True, content_length=18, ranges=rangeset("3-20"), document_length=128),
+        ranges="3-20",
+        want_request_range="bytes=3-20",
     ),
+    x_goog_hash=GetCase(response(X_GOOG_HASH_CRC32C_HEADER), Head(URL, crc32c="some-checksum")),
+    x_amz_checksum=GetCase(response(X_AMZ_CHECKSUM_CRC32C_HEADER), Head(URL, crc32c="some-checksum")),
 )
 def test_get(case: GetCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
@@ -151,16 +157,21 @@ def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
 
 @dataclass()
 class HeadFromHeadersCase:
-    url: str
     headers: dict[str, str]
     want: Head | Exception
+    url: str = URL
 
 
 @cases(
-    empty=HeadFromHeadersCase(URL, {}, Head(URL)),
-    content_length=HeadFromHeadersCase(URL, {"Content-Length": "10"}, Head(URL, content_length=10)),
-    accept_ranges=HeadFromHeadersCase(URL, {"Accept-Ranges": "bytes"}, Head(URL, accept_ranges=True)),
-    ranges=HeadFromHeadersCase(URL, {"Content-Range": "bytes 512-1023/146515"}, Head(URL, ranges=rangeset("512-1023"), accept_ranges=True)),
+    empty=HeadFromHeadersCase({}, Head(URL)),
+    content_length=HeadFromHeadersCase(CONTENT_LENGTH_HEADER, Head(URL, content_length=512, document_length=512)),
+    accept_ranges=HeadFromHeadersCase(ACCEPT_RANGES_HEADER, Head(URL, accept_ranges=True)),
+    ranges=HeadFromHeadersCase(
+        CONTENT_RANGE_HEADER,
+        Head(URL, ranges=rangeset("3-20"), accept_ranges=True, content_length=18, document_length=128),
+    ),
+    x_goog_hash=HeadFromHeadersCase(X_GOOG_HASH_CRC32C_HEADER, Head(URL, crc32c="some-checksum")),
+    x_amz_checksum=HeadFromHeadersCase(X_AMZ_CHECKSUM_CRC32C_HEADER, Head(URL, crc32c="some-checksum")),
 )
 def test_head_from_headers(case: HeadFromHeadersCase):
     try:
