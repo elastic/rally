@@ -77,13 +77,13 @@ class Transfer:
 
     It splits the file in parts of up to multipart_size bytes, and allocate a task for downloading each part.
     Each task is being executed by a thread provided by the Executor. Each thread after executing the task will
-    eventually execute the next task. Every task open local file for writing. Then it seeks to the beginning of the
-    file part before writing transferred data from there. On the network side it ask the server to send only the
+    eventually execute the next task. Every task opens local file for writing. Then it seeks to the beginning of the
+    file part before writing transferred data from there. On the network side it asks the server to send only the
     part of the remote file that has to be written to the local file.
 
     By reducing the size of the multipart_size it reduces the scope of each task, increasing the number of tasks and
-    parts of file to transfer. This produces some additional work because in increases the number of IO operations and
-    of request to the remote service. The advantage of that is making the task allocation between multiple threads more
+    parts of file to transfer. This produces some additional work because it increases the number of IO operations and
+    of requests to the remote service. The advantage of that is making the task allocation between multiple threads more
     dynamic and allows the client to have more granularity for load balance transfers between multiple connections and
     servers.
     """
@@ -310,7 +310,7 @@ class Transfer:
                 count = self._workers.count
                 max_count = max(1, count - 1)
                 self._workers.max_count = max_count
-            # In case of the count of concurrent tasks is greater than 1 then if forbid to reschedule it.
+            # In case of the count of concurrent tasks is greater than 1 then it forbids to reschedule it.
             cancelled = count > 1
             LOG.info("service unavailable: %s, workers=%d/%d: %s", self.url, count, max_count, ex)
         except Exception as ex:
@@ -382,7 +382,7 @@ class Transfer:
                 finally:
                     with self._lock:
                         try:
-                            # It de-registers the file descriptor so that we can't be closed from another thread.
+                            # It de-registers the file descriptor so that it can't be closed from another thread.
                             fd.flush()
                             self._fds.remove(fd)
                         except ValueError:

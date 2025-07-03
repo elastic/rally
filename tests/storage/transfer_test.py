@@ -20,6 +20,7 @@ import json
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import pytest
 
@@ -131,7 +132,7 @@ class TransferCase:
     ),
     # It tests multipart working when multipart_size < content_length.
     no_document_length=TransferCase(want_init_document_length=None, want_init_todo="0-", want_final_done="0-1023", document_length=None),
-    # It tests when max_connections < 0.
+    # It tests when max_connections == 0.
     invalid_max_connections=TransferCase(multipart_size=128, max_connections=0, want_init_error=ValueError),
     # It tests resuming from an existing status.
     resume_status=TransferCase(
@@ -165,7 +166,8 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
     :param tmpdir: the temporary directory to use for this test case.
     """
     client = DummyClient.from_config(Config())
-    path = os.path.join(str(tmpdir), os.path.basename(case.url))
+
+    path = os.path.join(str(tmpdir), os.path.basename(urlparse(case.url).path))
     status_path = path + ".status"
     if case.resume_status is not None:
         os.makedirs(os.path.dirname(path), exist_ok=True)
