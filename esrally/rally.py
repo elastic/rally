@@ -570,10 +570,7 @@ def create_arg_parser():
         action="store_true",
     )
     stop_parser.add_argument(
-        "--skip-telemetry", 
-        help="Skip telemetry data collection. (default: false).", 
-        default=False, 
-        action="store_true"
+        "--skip-telemetry", help="Skip telemetry data collection. (default: false).", default=False, action="store_true"
     )
 
     for p in [list_parser, race_parser]:
