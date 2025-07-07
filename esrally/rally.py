@@ -569,6 +569,12 @@ def create_arg_parser():
         default=preserve_install,
         action="store_true",
     )
+    stop_parser.add_argument(
+        "--skip-telemetry", 
+        help="Skip telemetry data collection. (default: false).", 
+        default=False, 
+        action="store_true"
+    )
 
     for p in [list_parser, race_parser]:
         p.add_argument(
@@ -1159,6 +1165,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             mechanic.start(cfg)
         elif sub_command == "stop":
             cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "skip.telemetry", convert.to_bool(args.skip_telemetry))
             cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
             mechanic.stop(cfg)
         elif sub_command == "race":

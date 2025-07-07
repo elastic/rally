@@ -131,7 +131,6 @@ def stop(cfg: types.Config):
 
     cls = metrics.metrics_store_class(cfg)
     metrics_store = cls(cfg)
-
     race_store = metrics.race_store(cfg)
     try:
         current_race = race_store.find_by_race_id(race_id)
@@ -147,7 +146,7 @@ def stop(cfg: types.Config):
         current_race = None
         metrics_store = None
 
-    node_launcher.stop(nodes, metrics_store)
+    node_launcher.stop(nodes, metrics_store, cfg.opts("mechanic", "skip.telemetry"))
     _delete_node_file(root_path)
 
     if current_race:

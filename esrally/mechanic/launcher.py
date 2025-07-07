@@ -84,16 +84,16 @@ class DockerLauncher:
         logging.error(msg)
         raise exceptions.LaunchError(msg)
 
-    def stop(self, nodes, metrics_store):
+    def stop(self, nodes, metrics_store, skip_telemetry=False):
         self.logger.info("Shutting down [%d] nodes running in Docker on this host.", len(nodes))
         for node in nodes:
             self.logger.info("Stopping node [%s].", node.node_name)
-            if metrics_store:
+            if metrics_store and not skip_telemetry:
                 telemetry.add_metadata_for_node(metrics_store, node.node_name, node.host_name)
             node.telemetry.detach_from_node(node, running=True)
             process.run_subprocess_with_logging(self._docker_compose(node.binary_path, "down"))
             node.telemetry.detach_from_node(node, running=False)
-            if metrics_store:
+            if metrics_store and not skip_telemetry:
                 node.telemetry.store_system_metrics(node, metrics_store)
 
 
@@ -223,12 +223,12 @@ class ProcessLauncher:
 
         return wait_for_pidfile(pid_path)
 
-    def stop(self, nodes, metrics_store):
+    def stop(self, nodes, metrics_store, skip_telemetry=False):
         self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
         stopped_nodes = []
         for node in nodes:
             node_name = node.node_name
-            if metrics_store:
+            if metrics_store and not skip_telemetry:
                 telemetry.add_metadata_for_node(metrics_store, node_name, node.host_name)
             try:
                 es = psutil.Process(pid=node.pid)
@@ -258,6 +258,6 @@ class ProcessLauncher:
 
                 node.telemetry.detach_from_node(node, running=False)
             # store system metrics in any case (telemetry devices may derive system metrics while the node is running)
-            if metrics_store:
+            if metrics_store and not skip_telemetry:
                 node.telemetry.store_system_metrics(node, metrics_store)
         return stopped_nodes
