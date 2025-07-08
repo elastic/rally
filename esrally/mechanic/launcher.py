@@ -88,12 +88,12 @@ class DockerLauncher:
         self.logger.info("Shutting down [%d] nodes running in Docker on this host.", len(nodes))
         for node in nodes:
             self.logger.info("Stopping node [%s].", node.node_name)
-            if metrics_store and not skip_telemetry:
+            if metrics_store:
                 telemetry.add_metadata_for_node(metrics_store, node.node_name, node.host_name)
-            node.telemetry.detach_from_node(node, running=True)
+                node.telemetry.detach_from_node(node, running=True)
             process.run_subprocess_with_logging(self._docker_compose(node.binary_path, "down"))
-            node.telemetry.detach_from_node(node, running=False)
             if metrics_store and not skip_telemetry:
+                node.telemetry.detach_from_node(node, running=False)
                 node.telemetry.store_system_metrics(node, metrics_store)
 
 
@@ -230,9 +230,9 @@ class ProcessLauncher:
             node_name = node.node_name
             if metrics_store and not skip_telemetry:
                 telemetry.add_metadata_for_node(metrics_store, node_name, node.host_name)
+                node.telemetry.detach_from_node(node, running=True)
             try:
                 es = psutil.Process(pid=node.pid)
-                node.telemetry.detach_from_node(node, running=True)
             except psutil.NoSuchProcess:
                 self.logger.warning("No process found with PID [%s] for node [%s].", node.pid, node_name)
                 es = None
@@ -255,8 +255,8 @@ class ProcessLauncher:
                     except psutil.NoSuchProcess:
                         self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
                 self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
-
-                node.telemetry.detach_from_node(node, running=False)
+                if metrics_store and not skip_telemetry:
+                    node.telemetry.detach_from_node(node, running=False)
             # store system metrics in any case (telemetry devices may derive system metrics while the node is running)
             if metrics_store and not skip_telemetry:
                 node.telemetry.store_system_metrics(node, metrics_store)
