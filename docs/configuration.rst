@@ -207,6 +207,7 @@ defaults
 This section defines default values for certain command line parameters of Rally.
 
 * ``preserve_benchmark_candidate`` (default: false): Determines whether Elasticsearch installations will be preserved or wiped by default after a benchmark. For preserving an installation for a single benchmark, use the command line flag ``--preserve-install``.
+* ``skip.telemetry`` (default: None): Determines whether telemetry data collection should be skipped when stopping a benchmark. This can be set via the command line flag ``--skip-telemetry``.
 
 distributions
 ~~~~~~~~~~~~~
