@@ -67,6 +67,7 @@ This section defines how metrics are stored.
 * ``sample.queue.size`` (default: 2^20): The number of metrics samples that can be stored in Rally's in-memory queue.
 * ``metrics.request.downsample.factor`` (default: 1): Determines how many service time and latency samples should be kept in the metrics store. By default all values will be kept. To keep only e.g. every 100th sample, specify 100. This is useful to avoid overwhelming the metrics store in benchmarks with many clients (tens of thousands).
 * ``output.processingtime`` (default: false): If set to "true", Rally will show the additional metric :ref:`processing time <summary_report_processing_time>` in the command line report.
+* ``skip.telemetry`` (default: None): Determines whether telemetry data collection should be skipped when stopping a benchmark. This can be set either via configuration param ``skip.telemetry`` the command line flag ``--skip-telemetry``.
 
 The following settings are applicable only if ``datastore.type`` is set to "elasticsearch":
 
@@ -207,7 +208,6 @@ defaults
 This section defines default values for certain command line parameters of Rally.
 
 * ``preserve_benchmark_candidate`` (default: false): Determines whether Elasticsearch installations will be preserved or wiped by default after a benchmark. For preserving an installation for a single benchmark, use the command line flag ``--preserve-install``.
-* ``skip.telemetry`` (default: None): Determines whether telemetry data collection should be skipped when stopping a benchmark. This can be set via the command line flag ``--skip-telemetry``.
 
 distributions
 ~~~~~~~~~~~~~
