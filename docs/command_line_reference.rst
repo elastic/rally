@@ -574,7 +574,7 @@ and reference it when running Rally::
    esrally race --track=geonames --telemetry="node-stats" --telemetry-params="telemetry-params.json"
 
 ``skip-telemetry``
-~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 **Example**
 
