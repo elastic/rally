@@ -583,7 +583,7 @@ and reference it when running Rally::
    esrally stop --installation-id=INSTALLATION_ID --skip-telemetry
 
 
-This command line flag is used to skip telemetry collection when stopping a node that has been started with the ``start`` subcommand. This is useful if you want to stop a node but don't want to collect telemetry data for it.
+This command line flag is used to skip telemetry collection when running ``esrally stop`` for a node that has been started with the ``start`` subcommand. This is useful if you want to stop a node but don't want to collect telemetry data for it.
 
 ``runtime-jdk``
 ~~~~~~~~~~~~~~~
