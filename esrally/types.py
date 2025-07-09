@@ -145,6 +145,7 @@ Key = Literal[
     "serverless.mode",
     "serverless.operator",
     "skip.rest.api.check",
+    "skip.telemetry",
     "snapshot.cache",
     "source.build.method",
     "source.revision",
