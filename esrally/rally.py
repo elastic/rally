@@ -569,6 +569,13 @@ def create_arg_parser():
         default=preserve_install,
         action="store_true",
     )
+    stop_parser.add_argument(
+        # default is None, since it can be set via config file
+        "--skip-telemetry",
+        help="Skip telemetry data collection. (default: None).",
+        default=None,
+        action="store_true",
+    )
 
     for p in [list_parser, race_parser]:
         p.add_argument(
