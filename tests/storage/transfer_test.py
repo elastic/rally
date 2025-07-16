@@ -27,7 +27,7 @@ import pytest
 from esrally.config import Config
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._client import Client
-from esrally.storage._range import NO_RANGE, RangeSet, rangeset
+from esrally.storage._range import rangeset
 from esrally.storage._transfer import MAX_CONNECTIONS, Transfer
 from esrally.utils.cases import cases
 
@@ -70,15 +70,13 @@ class DummyClient(Client):
     def head(self, url: str, ttl: float | None = None) -> Head:
         return Head.create(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
 
-    def get(
-        self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE, document_length: int | None = None, crc32c: str | None = None
-    ) -> Head:
+    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         data = DATA
-        if ranges:
-            data = data[ranges.start : ranges.end]
+        if head is not None and head.ranges:
+            data = data[head.ranges.start : head.ranges.end]
         if data:
             stream.write(data)
-        return Head.create(url, ranges=ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
+        return Head.create(url, ranges=head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
 
 
 @pytest.fixture

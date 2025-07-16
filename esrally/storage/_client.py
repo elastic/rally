@@ -17,24 +17,24 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 import urllib.parse
 from collections import defaultdict, deque
 from collections.abc import Iterator
+from datetime import datetime
 from random import Random
 from typing import NamedTuple
 
-from esrally import config
+from esrally import types
 from esrally.storage._adapter import (
-    Adapter,
     AdapterRegistry,
     Head,
     ServiceUnavailableError,
     Writable,
 )
 from esrally.storage._mirror import MirrorList
-from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.utils import pretty
 from esrally.utils.threads import WaitGroup, WaitGroupLimitError
 
@@ -42,31 +42,36 @@ LOG = logging.getLogger(__name__)
 
 MIRRORS_FILES = "~/.rally/storage-mirrors.json"
 MAX_CONNECTIONS = 8
+RANDOM = Random(time.monotonic_ns())
 
 
-class Client(Adapter):
+class Client:
     """It handles client instances allocation allowing reusing pre-allocated instances from the same thread."""
 
     @classmethod
-    def from_config(cls, cfg: config.Config) -> Client:
+    def from_config(
+        cls, cfg: types.Config, adapters: AdapterRegistry | None = None, mirrors: MirrorList | None = None, random: Random | None = None
+    ) -> Client:
+        if adapters is None:
+            adapters = AdapterRegistry.from_config(cfg)
+        if mirrors is None:
+            mirrors = MirrorList.from_config(cfg)
+        if random is None:
+            random_seed = cfg.opts(section="storage", key="storage.random_seed", default_value=None, mandatory=False)
+            if random_seed is None:
+                random = RANDOM
+            else:
+                random = Random(random_seed)
         max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
-        random_seed = cfg.opts(section="storage", key="storage.random_seed", default_value=None, mandatory=False)
-        random = None
-        if random_seed is not None:
-            random = Random(random_seed)
-        return cls(
-            max_connections=max_connections, mirrors=MirrorList.from_config(cfg), adapters=AdapterRegistry.from_config(cfg), random=random
-        )
+        return cls(adapters=adapters, mirrors=mirrors, random=random, max_connections=max_connections)
 
     def __init__(
         self,
         adapters: AdapterRegistry,
         mirrors: MirrorList,
-        random: Random | None = None,
+        random: Random,
         max_connections: int = MAX_CONNECTIONS,
     ):
-        if random is None:
-            random = Random(time.time())
         self._adapters: AdapterRegistry = adapters
         self._cached_heads: dict[str, tuple[Head | Exception, float]] = {}
         self._connections: dict[str, WaitGroup] = defaultdict(lambda: WaitGroup(max_count=max_connections))
@@ -90,7 +95,7 @@ class Client(Adapter):
                     # cached value or error is enough recent to be used.
                     return _head_or_raise(value)
 
-        adapter = self._adapters.get(url)
+        adapter, url = self._adapters.get(url)
         try:
             value = adapter.head(url)
         except Exception as ex:
@@ -107,14 +112,21 @@ class Client(Adapter):
 
         return _head_or_raise(value)
 
-    def resolve(
-        self, url: str, document_length: int | None = None, crc32c: str | None = None, accept_ranges: bool = False, ttl: float = 60.0
-    ) -> Iterator[Head]:
+    @property
+    def adapters(self) -> AdapterRegistry:
+        return self._adapters
+
+    def list(self, url: str) -> Iterator[Head]:
+        adapter, url = self._adapters.get(url)
+        yield from adapter.list(url)
+
+    def resolve(self, url: str, check: Head | None, ttl: float = 60.0) -> Iterator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
         :param url: the remote file URL at its mirrored source location.
-        :param document_length: if not none it will filter out mirrors which file has an unexpected document lengths.
-        :param crc32c: if not none it will filter out mirrors which file has an unexpected crc32c checksum.
-        :param accept_ranges: if True it will filter out mirrors that are not supporting ranges.
+        :param check: extra parameters to mach remote heads.
+            - document_length: if not none it will filter out mirrors which file has an unexpected document lengths.
+            - crc32c: if not none it will filter out mirrors which file has an unexpected crc32c checksum.
+            - accept_ranges: if True it will filter out mirrors that are not supporting ranges.
         :param ttl: the time to live value (in seconds) to use for cached heads retrieval.
         :return: iterator over mirror URLs
         """
@@ -143,43 +155,43 @@ class Client(Adapter):
 
         for u in urls:
             try:
-                head = self.head(u, ttl=ttl)
-            except Exception:
+                got = self.head(u, ttl=ttl)
+            except Exception as ex:
                 # The exception is already logged by head method before caching it.
+                LOG.error("Failed to fetch remote head for file: %s, %s", u, ex)
                 continue
-            if document_length is not None and head.document_length is not None and document_length != head.document_length:
-                LOG.debug("unexpected document length: %r, got %d, want %d", url, head.document_length, document_length)
-                continue
-            if crc32c is not None and head.crc32c is not None and head.crc32c != crc32c:
-                LOG.debug("unexpected crc32c checksum: %r, got %d, want %d", url, head.crc32c, crc32c)
-                continue
-            if accept_ranges and not head.accept_ranges:
-                LOG.debug("it doesn't accept ranges: %r", url)
-                continue
-            yield head
+            if check is not None:
+                try:
+                    check.check(got)
+                except ValueError as ex:
+                    LOG.debug("unexpected mirrored file (url='%s'): %s", url, ex)
+                    continue
+            yield got
 
-    def get(
-        self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE, document_length: int | None = None, crc32c: str | None = None
-    ) -> Head:
+    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         """It downloads a remote bucket object to a local file path.
 
         :param url: the URL of the remote file.
         :param stream: the destination file stream where to write data to.
-        :param document_length: the document length of the file to transfer.
-        :param crc32c: the crc32c checksum of the file to transfer.
-        :param ranges: the portion of the file to transfer.
+        :param head: extra params for getting the file:
+            - document_length: the document length of the file to transfer.
+            - crc32c: the crc32c checksum of the file to transfer.
+            - ranges: the portion of the file to transfer.
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
-        for head in self.resolve(url, accept_ranges=bool(ranges), document_length=document_length, crc32c=crc32c):
-            connections = self._server_connections(head.url)
+        for got in self.resolve(url, check=head):
+            if got.url is None:
+                LOG.error("resolved mirror URL is None: %s", url)
+                continue
+            connections = self._server_connections(got.url)
             try:
                 connections.add(1)
             except WaitGroupLimitError:
                 LOG.debug("connection limit exceeded: url='%s'", url)
                 continue
-            adapter = self._adapters.get(head.url)
+            adapter, url = self._adapters.get(got.url)
             try:
-                return adapter.get(head.url, stream, ranges)
+                return adapter.get(url, stream, head=head)
             except ServiceUnavailableError as ex:
                 LOG.debug("service unavailable error received: url='%s' %s", url, ex)
                 with self._lock:
@@ -189,6 +201,30 @@ class Client(Adapter):
                 connections.done()
 
         raise ServiceUnavailableError(f"no service available for getting URL '{url}'")
+
+    def put(self, path: str, url: str, head: Head | None = None) -> Head:
+        if head is not None:
+            st = os.stat(path)
+            if head.date is None:
+                head.date = datetime.fromtimestamp(st.st_mtime)
+            file_size = st.st_size
+            if head.ranges:
+                if len(head.ranges) > 1:
+                    raise NotImplementedError("multiple ranges is not supported")
+                if head.ranges.end >= file_size:
+                    raise ValueError(f"ranges end must not exceed file size: {head.ranges.end} > {file_size}")
+            else:
+                if head.content_length is None:
+                    head.content_length = file_size
+                elif head.content_length != file_size:
+                    raise ValueError(f"unexpected file size: {file_size} != {head.document_length}, file '{path}'")
+
+        adapter, url = self._adapters.get(url)
+        with open(path, "rb") as stream:
+            if head is not None:
+                for r in head.ranges:
+                    stream.seek(r.start)
+            return adapter.put(stream, url, head=head)
 
     def _server_connections(self, url: str) -> WaitGroup:
         with self._lock:
@@ -217,7 +253,8 @@ class Client(Adapter):
         for url, connection in sorted(connections.items()):
             latency = self._average_latency(url)
             infos.append(f"- '{url}' count={connection.count} latency={pretty.duration(latency)}")
-        LOG.info("Active client connection(s):\n  %s", "\n  ".join(infos))
+        if len(infos) > 0:
+            LOG.info("Active client connection(s):\n  %s", "\n  ".join(infos))
 
 
 class ServerStats(NamedTuple):

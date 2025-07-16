@@ -159,6 +159,8 @@ Key = Literal[
     "storage.monitor_interval",
     "storage.multipart_size",
     "storage.random_seed",
+    "storage.sync.bucket_url",
+    "storage.sync.index_url",
     "target.arch",
     "target.os",
     "team.path",
@@ -168,6 +170,7 @@ Key = Literal[
     "track.name",
     "track.path",
     "track.repository.dir",
+    "transfer.manager.enabled",
     "user.tags",
     "values",
 ]

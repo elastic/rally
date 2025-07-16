@@ -16,84 +16,119 @@
 # under the License.
 from __future__ import annotations
 
+import fnmatch
+import logging
 import os
-import threading
+import re
 import typing
 import urllib.parse
-from typing import Any
+from collections.abc import Mapping
+from datetime import datetime
 
 import boto3
-import boto3.s3.transfer
+import botocore.exceptions
+from requests.structures import CaseInsensitiveDict
 
-from esrally.storage._adapter import Adapter, Head, Readable, Writable
-from esrally.storage._range import NO_RANGE, RangeSet
+from esrally.storage._adapter import Head, Readable
+from esrally.storage._http import HTTPAdapter
+
+_HTTPS_URL_RE = re.compile(fnmatch.translate("https://*.amazonaws.com/"))
+
+LOG = logging.getLogger(__name__)
+
+
+class S3Adapter(HTTPAdapter):
+    """Adapter class for s3 scheme protocol"""
+
+    _s3_client = None
+
+    @property
+    def _s3(self):
+        if self._s3_client is None:
+            self._s3_client = boto3.Session(profile_name="okta-elastic-dev").client("s3")
+        return self._s3_client
+
+    @classmethod
+    def match_url(cls, url: str) -> str:
+        if url.startswith("s3://") or _HTTPS_URL_RE.match(url):
+            return S3Address.from_url(url).url(scheme="https")
+        raise NotImplementedError
+
+    @classmethod
+    def _date_to_headers(cls, date: datetime | None, headers: CaseInsensitiveDict) -> None:
+        if date is not None:
+            headers["x-amz-date"] = date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def put(self, stream: Readable, url: str, head: Head | None = None, headers: Mapping[str, str] | None = None) -> Head:
+        if headers:
+            raise NotImplementedError("passing headers is not supported")
+
+        address = S3Address.from_url(url)
+        if head is not None:
+            if head.ranges:
+                raise NotImplementedError("ranges are not supported")
+
+        try:
+            self._s3.upload_fileobj(stream, address.bucket, address.key)
+        except botocore.exceptions.ClientError as ex:
+            if ex.response["Error"]["Code"] == "NoSuchBucket":
+                LOG.exception("Error uploading file to S3 service: %s", ex)
+                self._s3.create_bucket(
+                    Bucket=address.bucket,
+                    ACL="public-read-write",
+                    CreateBucketConfiguration={
+                        "LocationConstraint": "eu-central-1",
+                    },
+                )
+            raise
+
+        ret = self.head(url)
+        if head is not None:
+            head.check(ret)
+        return ret
 
 
 class S3Address(typing.NamedTuple):
+
     bucket: str
     key: str
-
-
-class S3Adapter(Adapter):
-    """Adapter class for s3 scheme protocol"""
-
-    __adapter_URL_prefixes__ = "s3://"
-
-    _local = threading.local()
-
-    def __init__(self):
-        self._config = boto3.s3.transfer.TransferConfig(use_threads=True)
+    region: str = ""
 
     @classmethod
-    def _s3(cls):
-        try:
-            return cls._local.s3
-        except AttributeError:
-            s3 = boto3.session.Session().resource("s3")
-            cls._local.s3 = s3
-            return s3
+    def from_url(cls, url: str, region: str = "") -> S3Address:
+        url = url.strip()
+        if not url:
+            raise ValueError("unspecified remote file url")
+        u = urllib.parse.urlparse(url, scheme="s3")
+        if u.scheme not in ("s3", "https"):
+            raise ValueError(f"invalid URL scheme '{url}'")
 
-    def head(self, url: str) -> Head:
-        addr = s3_address(url)
-        return s3_head(url, self._s3().Object(addr.bucket, addr.key))
+        if u.scheme == "s3":
+            bucket = u.netloc
+        elif u.scheme == "https":
+            bucket, right = u.netloc.split(".s3.", 1)
+            if not right.endswith("amazonaws.com"):
+                raise ValueError(f"https URL doesn't ends with 'amazonaws.com': '{url}'")
+            region = right[: -len("amazonaws.com")].rstrip(".")
+        else:
+            raise ValueError(f"invalid URL scheme '{url}'")
 
-    def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
-        if ranges:
-            raise NotImplementedError("this s3 implementation doesn't accepts ranges")
-        addr = s3_address(url)
-        head = s3_head(url, self._s3().Object(addr.bucket, addr.key))
-        self._s3().download_fileobj(addr.bucket, addr.key, stream, Config=self._config)
-        return head
+        key = os.path.normpath(u.path).strip("/")
+        if not key:
+            raise ValueError(f"unspecified object key in url: {url}")
+        return S3Address(bucket=bucket, key=key, region=region)
 
-    def put(self, url: str, stream: Readable, ranges: RangeSet = NO_RANGE) -> Head:
-        if ranges:
-            raise NotImplementedError("this s3 implementation doesn't accepts ranges")
-        addr = s3_address(url)
-        head = s3_head(url, self._s3().Object(addr.bucket, addr.key))
-        self._s3().upload_fileobj(stream, addr.bucket, addr.key, Config=self._config)
-        return head
+    def host(self, scheme: str = "s3") -> str:
+        if scheme == "s3":
+            return self.bucket
+        elif scheme == "https":
+            if self.region:
+                return f"{self.bucket}.s3.{self.region}.amazonaws.com"
+            else:
+                return f"{self.bucket}.s3.amazonaws.com"
+        else:
+            raise ValueError(f"unsupported scheme '{scheme}'")
 
-
-def s3_url(addr: S3Address) -> str:
-    return f"s3://{addr.bucket}/{addr.key}"
-
-
-def s3_address(url: str) -> S3Address:
-    url = url.strip()
-    if not url:
-        raise ValueError("unspecified remote file url")
-    u = urllib.parse.urlparse(url, scheme="s3")
-    if u.scheme != "s3":
-        raise ValueError(f"unsupported scheme in url: {url}")
-
-    bucket = u.netloc
-    if not bucket:
-        raise ValueError(f"unspecified bucket name in url: {url}")
-    key = os.path.normpath(u.path).strip("/")
-    if not key:
-        raise ValueError(f"unspecified object key in url: {url}")
-    return S3Address(bucket, key)
-
-
-def s3_head(url: str, obj: Any) -> Head:
-    return Head.create(url=url, content_length=obj.content_length)
+    def url(self, scheme: str = "s3") -> str:
+        netloc = self.host(scheme=scheme)
+        return urllib.parse.urlunparse((scheme, netloc, self.key, "", "", ""))

@@ -16,14 +16,13 @@
 # under the License.
 from __future__ import annotations
 
-import concurrent.futures
 import logging
 import os
 import threading
 
-from esrally import config
+from esrally import types
 from esrally.storage._client import MAX_CONNECTIONS, Client
-from esrally.storage._range import NO_RANGE, RangeSet
+from esrally.storage._executor import MAX_WORKERS, Executor, ThreadPoolExecutor
 from esrally.storage._transfer import Transfer
 from esrally.utils.threads import ContinuousTimer
 
@@ -33,20 +32,42 @@ LOCAL_DIR = "~/.rally/storage"
 MONITOR_INTERVAL = 2.0  # Seconds
 THREAD_NAME_PREFIX = "esrally.storage.transfer-worker"
 MULTIPART_SIZE = 8 * 1024 * 1024
-MAX_WORKERS = 32
 
 
-class Manager:
+class TransferManager:
     """It creates and perform file transfer operations in background."""
+
+    @classmethod
+    def from_config(cls, cfg: types.Config, client: Client | None = None, executor: Executor | None = None) -> TransferManager:
+        """It creates a TransferManager with initialization values taken from given configuration."""
+        local_dir = cfg.opts(section="storage", key="storage.local_dir", default_value=LOCAL_DIR, mandatory=False)
+        monitor_interval = cfg.opts(section="storage", key="storage.monitor_interval", default_value=MONITOR_INTERVAL, mandatory=False)
+        max_connections = cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False)
+        max_workers = cfg.opts(section="storage", key="storage.max_workers", default_value=MAX_WORKERS, mandatory=False)
+        multipart_size = cfg.opts(section="storage", key="storage.multipart_size", default_value=MULTIPART_SIZE, mandatory=False)
+        if client is None:
+            client = Client.from_config(cfg)
+        if executor is None:
+            executor = ThreadPoolExecutor.from_config(cfg)
+        return cls(
+            client=client,
+            executor=executor,
+            local_dir=local_dir,
+            monitor_interval=float(monitor_interval),
+            multipart_size=multipart_size,
+            max_connections=int(max_connections),
+            max_workers=int(max_workers),
+        )
 
     def __init__(
         self,
         client: Client,
+        executor: Executor,
         local_dir: str = LOCAL_DIR,
         monitor_interval: float = MONITOR_INTERVAL,
-        multipart_size: int = MULTIPART_SIZE,
-        max_workers: int = MAX_WORKERS,
         max_connections: int = MAX_CONNECTIONS,
+        max_workers: int = MAX_WORKERS,
+        multipart_size: int = MULTIPART_SIZE,
     ):
         """It manages files transfers.
 
@@ -71,9 +92,7 @@ class Manager:
         self._max_workers = max(1, max_workers)
         self._max_connections = max(1, min(max_connections, max_workers))
         self._multipart_size = multipart_size
-        self._executor: concurrent.futures.Executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=max_workers, thread_name_prefix="esrally.storage.transfer-worker"
-        )
+        self._executor = executor
         self._monitor_timer = ContinuousTimer(interval=monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
         self._monitor_timer.start()
 
@@ -85,38 +104,21 @@ class Manager:
             tr.close()
         self._monitor_timer.cancel()
 
-    @classmethod
-    def from_config(cls, cfg: config.Config) -> Manager:
-        """It creates a TransferManager with initialization values taken from given configuration."""
-        local_dir = cfg.opts(section="storage", key="storage.local_dir", default_value=LOCAL_DIR, mandatory=False)
-        monitor_interval = cfg.opts(section="storage", key="storage.monitor_interval", default_value=MONITOR_INTERVAL, mandatory=False)
-        max_workers = cfg.opts(section="storage", key="storage.max_workers", default_value=MAX_WORKERS, mandatory=False)
-        max_connections = cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False)
-        multipart_size = cfg.opts(section="storage", key="storage.multipart_size", default_value=MULTIPART_SIZE, mandatory=False)
-        return cls(
-            local_dir=local_dir,
-            monitor_interval=float(monitor_interval),
-            multipart_size=multipart_size,
-            max_workers=max_workers,
-            max_connections=int(max_connections),
-            client=Client.from_config(cfg),
-        )
-
-    def get(self, url: str, path: os.PathLike | str | None = None, ranges: RangeSet = NO_RANGE) -> Transfer:
+    def get(self, url: str, path: os.PathLike | str | None = None, document_length: int | None = None) -> Transfer:
         """It starts a new transfer of a file from local path to a remote url.
 
         :param url: remote file address.
         :param path: local file address.
-        :param ranges: the part of the file to download
+        :param document_length: the expected file size in bytes.
         :return: started transfer object.
         """
-        return self._transfer(url=url, path=path, ranges=ranges)
+        return self._transfer(url=url, path=path, document_length=document_length)
 
     def _transfer(
         self,
         url: str,
         path: os.PathLike | str | None = None,
-        ranges: RangeSet = NO_RANGE,
+        document_length: int | None = None,
     ) -> Transfer:
         if path is None:
             path = os.path.join(self._local_dir, url)
@@ -124,6 +126,8 @@ class Manager:
         path = os.path.normpath(os.path.expanduser(path))
 
         head = self._client.head(url)
+        if document_length is not None and head.content_length != document_length:
+            raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
         # This also ensures the path is a string
         tr = Transfer(
             client=self._client,
@@ -131,7 +135,6 @@ class Manager:
             path=path,
             document_length=head.content_length,
             executor=self._executor,
-            todo=ranges,
             max_connections=self._max_connections,
             multipart_size=self._multipart_size,
             crc32c=head.crc32c,
