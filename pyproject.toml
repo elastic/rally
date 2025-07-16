@@ -69,7 +69,7 @@ dependencies = [
     # License: MPL 2.0
     "certifi",
     # License: MIT
-    "yappi==1.5.1",
+    "yappi==1.6.10",
     # License: BSD
     "ijson==2.6.1",
     # License: Apache 2.0
