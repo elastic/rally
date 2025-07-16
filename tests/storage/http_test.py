@@ -26,13 +26,7 @@ from requests.structures import CaseInsensitiveDict
 
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
-from esrally.storage._http import (
-    CHUNK_SIZE,
-    MAX_RETRIES,
-    HTTPAdapter,
-    head_from_headers,
-    ranges_to_headers,
-)
+from esrally.storage._http import CHUNK_SIZE, MAX_RETRIES, HTTPAdapter
 from esrally.storage._range import rangeset
 from esrally.types import Key
 from esrally.utils.cases import cases
@@ -79,7 +73,7 @@ class HeadCase:
     content_length=HeadCase(response(CONTENT_LENGTH_HEADER), Head(URL, content_length=512, document_length=512)),
     content_range=HeadCase(
         response(CONTENT_RANGE_HEADER),
-        Head(URL, accept_ranges=True, content_length=18, ranges=rangeset("3-20"), document_length=128),
+        Head(URL, content_length=18, ranges=rangeset("3-20"), document_length=128),
     ),
     x_goog_hash=HeadCase(response(X_GOOG_HASH_CRC32C_HEADER), Head(URL, crc32c="some-checksum")),
     x_amz_checksum=HeadCase(response(X_AMZ_CHECKSUM_CRC32C_HEADER), Head(URL, crc32c="some-checksum")),
@@ -108,7 +102,7 @@ class GetCase:
     read_data=GetCase(response(data="some_data"), Head(URL), want_data="some_data"),
     ranges=GetCase(
         response(CONTENT_RANGE_HEADER),
-        Head(URL, accept_ranges=True, content_length=18, ranges=rangeset("3-20"), document_length=128),
+        Head(URL, content_length=18, ranges=rangeset("3-20"), document_length=128),
         ranges="3-20",
         want_request_range="bytes=3-20",
     ),
@@ -119,7 +113,7 @@ def test_get(case: GetCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
     session.get.return_value = case.response
     stream = create_autospec(Writable, spec_set=True, instance=True)
-    head = adapter.get(case.url, stream, ranges=rangeset(case.ranges))
+    head = adapter.get(case.url, stream, head=Head.create(ranges=rangeset(case.ranges)))
     assert head == case.want
     if case.want_data:
         stream.write.assert_called_once_with(case.want_data)
@@ -145,8 +139,10 @@ class RangesToHeadersCase:
     multipart=RangesToHeadersCase("1-5,7-10", NotImplementedError),
 )
 def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
+    # pylint: disable=protected-access
+    got = CaseInsensitiveDict()
     try:
-        got = ranges_to_headers(rangeset(case.ranges))
+        HTTPAdapter._ranges_to_headers(rangeset(case.ranges), got)
     except Exception as ex:
         got = ex
     if isinstance(case.want, type):
@@ -168,14 +164,15 @@ class HeadFromHeadersCase:
     accept_ranges=HeadFromHeadersCase(ACCEPT_RANGES_HEADER, Head(URL, accept_ranges=True)),
     ranges=HeadFromHeadersCase(
         CONTENT_RANGE_HEADER,
-        Head(URL, ranges=rangeset("3-20"), accept_ranges=True, content_length=18, document_length=128),
+        Head(URL, ranges=rangeset("3-20"), content_length=18, document_length=128),
     ),
     x_goog_hash=HeadFromHeadersCase(X_GOOG_HASH_CRC32C_HEADER, Head(URL, crc32c="some-checksum")),
     x_amz_checksum=HeadFromHeadersCase(X_AMZ_CHECKSUM_CRC32C_HEADER, Head(URL, crc32c="some-checksum")),
 )
-def test_head_from_headers(case: HeadFromHeadersCase):
+def test_make_head(case: HeadFromHeadersCase):
+    # pylint: disable=protected-access
     try:
-        got = head_from_headers(url=case.url, headers=CaseInsensitiveDict(case.headers))
+        got = HTTPAdapter._make_head(url=case.url, headers=CaseInsensitiveDict(case.headers))
     except Exception as ex:
         got = ex
     if isinstance(case.want, type):

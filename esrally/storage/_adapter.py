@@ -16,15 +16,17 @@
 # under the License.
 from __future__ import annotations
 
+import datetime
 import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
-from typing import NamedTuple, Protocol, runtime_checkable
+from collections.abc import Iterator
+from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
-from esrally.config import Config
 from esrally.storage._range import NO_RANGE, RangeSet
+from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
 
@@ -47,26 +49,27 @@ class Readable(Protocol):
         pass
 
 
-class Head(NamedTuple):
-    url: str
+@dataclass
+class Head:
+    url: str | None = None
     content_length: int | None = None
-    accept_ranges: bool = False
+    accept_ranges: bool | None = None
     ranges: RangeSet = NO_RANGE
     document_length: int | None = None
     crc32c: str | None = None
+    date: datetime.datetime | None = None
 
     @classmethod
     def create(
         cls,
-        url: str,
+        url: str | None = None,
         content_length: int | None = None,
         accept_ranges: bool | None = None,
         ranges: RangeSet = NO_RANGE,
         document_length: int | None = None,
         crc32c: str | None = None,
+        date: datetime.datetime | None = None,
     ) -> Head:
-        if accept_ranges is None:
-            accept_ranges = bool(ranges)
         if content_length is None and ranges:
             content_length = ranges.size
         if document_length is None and not ranges:
@@ -78,21 +81,24 @@ class Head(NamedTuple):
             ranges=ranges,
             document_length=document_length,
             crc32c=crc32c,
+            date=date,
         )
+
+    def check(self, other: Head) -> None:
+        for field in ("url", "content_length", "accept_ranges", "ranges", "document_length", "crc32c", "date"):
+            want = getattr(self, field)
+            got = getattr(other, field)
+            if not ({got, want} & {None, NO_RANGE}) and got != want:
+                raise ValueError(f"unexpected '{field}': got {got}, want {want}")
 
 
 class Adapter(ABC):
     """Base class for storage class client implementation"""
 
-    # A commas separated list of URL prefixes used to associate an adapter implementation to a remote file URL.
-    # This value will be overridden by `Adapter` subclasses to be consumed by `AdapterRegistry` class.
-    # Example:
-    #   ```
-    #   class HTTPAdapter(Adapter):
-    #       # The value will serve to associate any URL with "https" scheme to `HTTPAdapter` subclass.
-    #       __adapter_URL_prefixes__ = "http://, https://"
-    #   ```
-    __adapter_URL_prefixes__: str = ""
+    @classmethod
+    def match_url(cls, url: str) -> str:
+        """It returns a canonical URL in case this adapter accepts the URL, None otherwise."""
+        raise NotImplementedError
 
     @classmethod
     def from_config(cls, cfg: Config) -> Adapter:
@@ -114,33 +120,55 @@ class Adapter(ABC):
         """
 
     @abstractmethod
-    def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
+    def list(self, url: str) -> Iterator[Head]:
+        """It gets list of file headers.
+        :return: the Head of the remote file.
+        :raises ServiceUnavailableError: in case on temporary service failure.
+        """
+
+    @abstractmethod
+    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         """It downloads a remote bucket object to a local file path.
 
         :param url: it represents the URL of the remote file object.
         :param stream: it represents the local file stream where to write data to.
-        :param ranges: it represents the portion of the file to transfer (it must be empty or a continuous range).
+        :param head: it allows to specify optional parameters:
+            - range: portion of the file to transfer (it must be empty or a continuous range).
+            - document_length: the number of bytes to transfer.
+            - crc32c the CRC32C checksum of the file.
+            - date: the date the file has been modified.
+        :raises ServiceUnavailableError: in case on temporary service failure.
+        """
+
+    @abstractmethod
+    def put(self, stream: Readable, url: str, head: Head | None = None) -> Head:
+        """It uploads a local file object to a remote bucket.
+
+        :param stream: it represents the local file stream where to read data from.
+        :param url: it represents the URL of the remote file object.
+        :param head: it allows to specify optional parameters:
+            - range: the portion of the file to transfer (it must be empty or a continuous range).
+            - document_length: the number of bytes to transfer.
+            - crc32c the CRC32C checksum of the file.
+            - date: the date the file was modified.
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
 
 
 ADAPTER_CLASS_NAMES = ",".join(
     [
+        "esrally.storage._tracks:TracksRepositoryAdapter",
+        "esrally.storage._s3:S3Adapter",
         "esrally.storage._http:HTTPAdapter",
     ]
 )
-
-
-class AdapterClassEntry(NamedTuple):
-    url_prefix: str
-    cls: type[Adapter]
 
 
 class AdapterRegistry:
     """AdapterClassRegistry allows to register classes of adapters to be selected according to the target URL."""
 
     def __init__(self, cfg: Config) -> None:
-        self._classes: list[AdapterClassEntry] = []
+        self._classes: list[type[Adapter]] = []
         self._adapters: dict[type[Adapter], Adapter] = {}
         self._lock = threading.Lock()
         self._cfg = cfg
@@ -155,29 +183,38 @@ class AdapterRegistry:
         )
         for spec in adapters_specs:
             module_name, class_name = spec.split(":")
-            module = importlib.import_module(module_name)
-            obj = getattr(module, class_name)
+            try:
+                module = importlib.import_module(module_name)
+            except ModuleNotFoundError:
+                LOG.exception("unable to import module '%s'.", module_name)
+                continue
+            try:
+                obj = getattr(module, class_name)
+            except AttributeError:
+                raise ValueError("Invalid Adapter class name: '{class_name}'.")
             if not isinstance(obj, type) or not issubclass(obj, Adapter):
                 raise TypeError(f"'{obj}' is not a valid subclass of Adapter")
-            registry.register_class(obj, obj.__adapter_URL_prefixes__.split(","))
+            registry.register_class(obj)
         return registry
 
-    def register_class(self, cls: type[Adapter], prefixes: Iterable[str]) -> type[Adapter]:
+    def register_class(self, cls: type[Adapter]) -> type[Adapter]:
         with self._lock:
-            for p in prefixes:
-                self._classes.append(AdapterClassEntry(p.strip(), cls))
-            # The list of adapter classes is kept sorted from the longest prefix to the shorter to ensure that matching
-            # a shorter URL prefix will never hide matching a longer one.
-            self._classes.sort(key=lambda e: len(e.url_prefix), reverse=True)
+            self._classes.append(cls)
         return cls
 
-    def get(self, url: str) -> Adapter:
+    def get(self, url: str) -> tuple[Adapter, str]:
         with self._lock:
-            for e in self._classes:
-                if url.startswith(e.url_prefix):
-                    adapter = self._adapters.get(e.cls)
-                    if adapter is None:
-                        adapter = e.cls.from_config(self._cfg)
-                    self._adapters[e.cls] = adapter
-                    return adapter
-        raise ValueError(f"No adapter found for url '{url}'")
+            for cls in self._classes:
+                try:
+                    actual_url = cls.match_url(url)
+                    break
+                except NotImplementedError:
+                    continue
+            else:
+                raise ValueError(f"No adapter found for url '{url}'")
+
+        adapter = self._adapters.get(cls)
+        if adapter is None:
+            adapter = cls.from_config(self._cfg)
+        self._adapters[cls] = adapter
+        return adapter, actual_url
