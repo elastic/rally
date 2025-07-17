@@ -156,6 +156,8 @@ Key = Literal[
     "storage.max_connections",
     "storage.max_workers",
     "storage.mirrors_files",
+    "storage.monitor_interval",
+    "storage.multipart_size",
     "storage.random_seed",
     "target.arch",
     "target.os",
