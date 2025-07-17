@@ -548,10 +548,10 @@ class Downloader:
         if self.transfer_manager is not None:
             try:
                 tr = self.transfer_manager.get(data_url, target_path, size_in_bytes)
-                tr.start()
                 tr.wait()
-            except Exception as ex:
-                raise exceptions.DataError(f"Cannot download data from [{data_url}] using transfer manager: {ex}")
+                return
+            except Exception:
+                self.logger.exception("Cannot download data from '%s' using transfer manager.", data_url)
 
         try:
             io.ensure_dir(os.path.dirname(target_path))
