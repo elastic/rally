@@ -14,6 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import abc
 import glob
 import json
@@ -24,8 +26,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
-from collections.abc import Generator
-from typing import Callable, Optional
+from collections.abc import Callable, Generator
 
 import jinja2
 import jinja2.exceptions
@@ -34,6 +35,7 @@ import tabulate
 from jinja2 import meta
 
 from esrally import PROGRAM_NAME, config, exceptions, paths, time, types, version
+from esrally.storage import TransferManager
 from esrally.track import params, track
 from esrally.track.track import Parallel
 from esrally.utils import (
@@ -91,13 +93,16 @@ class TrackProcessor(abc.ABC):
 
 
 class TrackProcessorRegistry:
+
+    @classmethod
+    def from_config(cls, cfg: config.Config):
+        return cls(cfg)
+
     def __init__(self, cfg: types.Config):
         self.required_processors = [TaskFilterTrackProcessor(cfg), ServerlessFilterTrackProcessor(cfg), TestModeTrackProcessor(cfg)]
         self.track_processors = []
-        self.offline = cfg.opts("system", "offline.mode")
-        self.test_mode = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
-        self.base_config = cfg
-        self.custom_configuration = False
+        self.base_config: types.Config = cfg
+        self.custom_configuration: bool = False
 
     def register_track_processor(self, processor):
         if not self.custom_configuration:
@@ -109,7 +114,7 @@ class TrackProcessorRegistry:
         if hasattr(processor, "cfg"):
             processor.cfg = self.base_config
         if hasattr(processor, "downloader"):
-            processor.downloader = Downloader(self.offline, self.test_mode)
+            processor.downloader = Downloader.from_config(cfg=self.base_config)
         if hasattr(processor, "decompressor"):
             processor.decompressor = Decompressor()
         self.track_processors.append(processor)
@@ -455,7 +460,7 @@ class DefaultTrackPreparator(TrackProcessor):
     def __init__(self):
         super().__init__()
         # just declare here, will be injected later
-        self.cfg: Optional[types.Config] = None
+        self.cfg: types.Config | None = None
         self.downloader = None
         self.decompressor = None
         self.track = None
@@ -511,14 +516,24 @@ class Decompressor:
 
 
 class Downloader:
-    def __init__(self, offline, test_mode):
+
+    @classmethod
+    def from_config(cls, cfg: types.Config):
+        offline: bool = convert.to_bool(cfg.opts("system", "offline.mode", mandatory=False, default_value=False))
+        test_mode: bool = convert.to_bool(cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False))
+        transfer_manager: TransferManager | None = None
+        if convert.to_bool(cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=False)):
+            transfer_manager = TransferManager.from_config(cfg)
+        return cls(offline=offline, test_mode=test_mode, transfer_manager=transfer_manager)
+
+    def __init__(self, offline: bool, test_mode: bool, transfer_manager: TransferManager | None = None):
         self.offline = offline
         self.test_mode = test_mode
         self.logger = logging.getLogger(__name__)
+        self.transfer_manager = transfer_manager
 
     def download(self, base_url, target_path, size_in_bytes):
         file_name = os.path.basename(target_path)
-
         if not base_url:
             raise exceptions.DataError("Cannot download data because no base URL is provided.")
         if self.offline:
@@ -530,6 +545,14 @@ class Downloader:
             separator = "/"
         # join manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
         data_url = f"{base_url}{separator}{file_name}"
+        if self.transfer_manager is not None:
+            try:
+                tr = self.transfer_manager.get(data_url, target_path, size_in_bytes)
+                tr.start()
+                tr.wait()
+            except Exception as ex:
+                raise exceptions.DataError(f"Cannot download data from [{data_url}] using transfer manager: {ex}")
+
         try:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
