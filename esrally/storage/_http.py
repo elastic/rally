@@ -18,15 +18,23 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator, Mapping
+from datetime import datetime
 
 import requests
 import requests.adapters
 import urllib3
 from requests.structures import CaseInsensitiveDict
 
-from esrally.config import Config
-from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
+from esrally.storage._adapter import (
+    Adapter,
+    Head,
+    Readable,
+    ServiceUnavailableError,
+    Writable,
+)
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
+from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
 
@@ -62,13 +70,16 @@ class Session(requests.Session):
 class HTTPAdapter(Adapter):
     """It implements the `Adapter` interface for http(s) protocols using the requests library."""
 
-    # It associates any URL with "http" or "https" scheme to `HTTPAdapter` class.
-    __adapter_URL_prefixes__ = "http://, https://"
+    @classmethod
+    def match_url(cls, url: str) -> str:
+        if url.startswith("http://") or url.startswith("https://"):
+            return url
+        raise NotImplementedError
 
     @classmethod
     def from_config(cls, cfg: Config) -> Adapter:
         chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
-        return HTTPAdapter(session=Session.from_config(cfg), chunk_size=chunk_size)
+        return cls(session=Session.from_config(cfg), chunk_size=chunk_size)
 
     def __init__(self, session: requests.Session | None = None, chunk_size: int = CHUNK_SIZE):
         if session is None:
@@ -82,101 +93,130 @@ class HTTPAdapter(Adapter):
             if res.status_code == 404:
                 raise FileNotFoundError(f"Can't get file head: {url}")
             res.raise_for_status()
-            return head_from_headers(url, res.headers)
+        return self._make_head(url, res.headers)
 
-    def get(self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE) -> Head:
-        headers = ranges_to_headers(ranges)
+    def list(self, url: str) -> Iterator[Head]:
+        raise NotImplementedError("HTTP adapter doesn't implemented file listing.")
+
+    def get(self, url: str, stream: Writable, head: Head | None = None, headers: Mapping[str, str] | None = None) -> Head:
+        headers = self._headers(head, headers)
         with self.session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
             if res.status_code == 503:
                 raise ServiceUnavailableError()
             res.raise_for_status()
 
-            head = head_from_headers(url, res.headers)
-            if head.ranges != ranges:
-                raise ValueError(f"unexpected content range in server response: got {head.ranges}, want: {ranges}")
+            got = self._make_head(url, res.headers)
+            if head is not None:
+                head.check(got)
 
             for chunk in res.iter_content(self.chunk_size):
                 if chunk:
                     stream.write(chunk)
-        return head
+        return got
 
+    def put(self, stream: Readable, url: str, head: Head | None = None, headers: Mapping[str, str] | None = None) -> Head:
+        headers = self._headers(head, headers)
+        with self.session.put(url, data=stream, headers=headers) as res:
+            res.raise_for_status()
+            got = self._make_head(url, res.headers)
+            if head is not None:
+                head.check(got)
+        return got
 
-def ranges_to_headers(ranges: RangeSet, headers: CaseInsensitiveDict | None = None) -> CaseInsensitiveDict:
-    if headers is None:
-        headers = CaseInsensitiveDict()
-    if not ranges:
-        return headers
-    if len(ranges) > 1:
-        raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
-    headers["range"] = f"bytes={ranges[0]}"
-    return headers
+    @classmethod
+    def _headers(cls, head: Head | None, headers: Mapping[str, str] | None = None) -> CaseInsensitiveDict:
+        ret: CaseInsensitiveDict = CaseInsensitiveDict()
+        if head is not None:
+            cls._date_to_headers(head.date, ret)
+            cls._ranges_to_headers(head.ranges, ret)
+        if headers is not None:
+            ret.update(headers)
+        return ret
 
+    @classmethod
+    def _date_to_headers(cls, date: datetime | None, headers: CaseInsensitiveDict) -> None:
+        if date is not None:
+            raise NotImplementedError("date is not implemented yet")
 
-def content_length_from_headers(headers: CaseInsensitiveDict) -> int | None:
-    value = headers.get("content-length", "").strip()
-    if not value:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        raise ValueError(f"invalid content-length value: {value}") from None
+    @classmethod
+    def _ranges_to_headers(cls, ranges: RangeSet, headers: CaseInsensitiveDict) -> None:
+        if not ranges:
+            return
+        if len(ranges) > 1:
+            raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
+        headers["range"] = f"bytes={ranges[0]}"
 
+    @classmethod
+    def _make_head(cls, url: str, headers: CaseInsensitiveDict) -> Head:
+        content_length = cls._content_length_from_headers(headers)
+        accept_ranges = cls._accept_ranges_from_headers(headers)
+        ranges, document_length = cls._content_range_from_headers(headers)
+        hashes = cls._hashes_from_headers(headers)
+        crc32c = hashes.get("crc32c")
+        return Head.create(
+            url=url,
+            content_length=content_length,
+            accept_ranges=accept_ranges,
+            ranges=ranges,
+            document_length=document_length,
+            crc32c=crc32c,
+        )
 
-def accept_ranges_from_headers(headers: CaseInsensitiveDict) -> bool | None:
-    got = headers.get("accept-ranges", "").strip()
-    if not got:
-        return None
-    return got == "bytes"
-
-
-def content_range_from_headers(headers: CaseInsensitiveDict) -> tuple[RangeSet, int | None]:
-    content_range_text = headers.get("content-range", "").strip()
-    if not content_range_text:
-        return NO_RANGE, None
-
-    if not content_range_text.startswith("bytes "):
-        raise ValueError(f"invalid content range: {content_range_text}")
-
-    if "," in content_range_text:
-        raise ValueError("multi range value is not unsupported")
-
-    try:
-        value, document_length_text = content_range_text[len("bytes ") :].strip().replace(" ", "").split("/", 1)
-        document_length: int | None = None
-        if document_length_text != "*":
-            document_length = int(document_length_text)
-        return rangeset(value), document_length
-    except ValueError:
-        raise ValueError(f"invalid content range in '{content_range_text}'")
-
-
-def hashes_from_headers(headers: CaseInsensitiveDict) -> dict[str, str]:
-    hashes = dict[str, str]()
-
-    hashes_text = headers.get("X-Goog-Hash", "").strip().replace(" ", "")
-    if hashes_text:
+    @classmethod
+    def _content_length_from_headers(cls, headers: CaseInsensitiveDict) -> int | None:
+        value = headers.get("content-length", "").strip()
+        if not value:
+            return None
         try:
-            for entry in hashes_text.split(","):
-                name, value = entry.split("=", 1)
+            return int(value)
+        except ValueError:
+            raise ValueError(f"invalid content-length value: {value}") from None
+
+    @classmethod
+    def _accept_ranges_from_headers(cls, headers: CaseInsensitiveDict) -> bool | None:
+        got = headers.get("accept-ranges", "").strip()
+        if not got:
+            return None
+        return got == "bytes"
+
+    @classmethod
+    def _content_range_from_headers(cls, headers: CaseInsensitiveDict) -> tuple[RangeSet, int | None]:
+        content_range_text = headers.get("content-range", "").strip()
+        if not content_range_text:
+            return NO_RANGE, None
+
+        if not content_range_text.startswith("bytes "):
+            raise ValueError(f"invalid content range: {content_range_text}")
+
+        if "," in content_range_text:
+            raise ValueError("multi range value is not unsupported")
+
+        try:
+            value, document_length_text = content_range_text[len("bytes ") :].strip().replace(" ", "").split("/", 1)
+            document_length: int | None = None
+            if document_length_text != "*":
+                document_length = int(document_length_text)
+            return rangeset(value), document_length
+        except ValueError:
+            raise ValueError(f"invalid content range in '{content_range_text}'")
+
+    @classmethod
+    def _hashes_from_headers(cls, headers: CaseInsensitiveDict) -> dict[str, str]:
+        hashes = dict[str, str]()
+
+        hashes_text = headers.get("X-Goog-Hash", "").strip().replace(" ", "")
+        if hashes_text:
+            try:
+                for entry in hashes_text.split(","):
+                    name, value = entry.split("=", 1)
+                    hashes[name] = value
+            except ValueError as e:
+                raise ValueError(f"invalid X-Goog-Hash value: {hashes_text}") from e
+
+        for k, value in headers.items():
+            if k.startswith("x-amz-checksum-"):
+                name = k[len("x-amz-checksum-") :]
+                if name == "type":
+                    continue
                 hashes[name] = value
-        except ValueError as e:
-            raise ValueError(f"invalid X-Goog-Hash value: {hashes_text}") from e
-
-    for k, value in headers.items():
-        if k.startswith("x-amz-checksum-"):
-            name = k[len("x-amz-checksum-") :]
-            if name == "type":
-                continue
-            hashes[name] = value
-    return hashes
-
-
-def head_from_headers(url: str, headers: CaseInsensitiveDict) -> Head:
-    content_length = content_length_from_headers(headers)
-    accept_ranges = accept_ranges_from_headers(headers)
-    ranges, document_length = content_range_from_headers(headers)
-    hashes = hashes_from_headers(headers)
-    crc32c = hashes.get("crc32c")
-    return Head.create(
-        url=url, content_length=content_length, accept_ranges=accept_ranges, ranges=ranges, document_length=document_length, crc32c=crc32c
-    )
+        return hashes
