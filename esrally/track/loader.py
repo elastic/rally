@@ -522,7 +522,7 @@ class Downloader:
         offline: bool = convert.to_bool(cfg.opts("system", "offline.mode", mandatory=False, default_value=False))
         test_mode: bool = convert.to_bool(cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False))
         transfer_manager: TransferManager | None = None
-        if convert.to_bool(cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=False)):
+        if convert.to_bool(cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=True)):
             transfer_manager = TransferManager.from_config(cfg)
         return cls(offline=offline, test_mode=test_mode, transfer_manager=transfer_manager)
 
