@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import copy
 import os
@@ -21,13 +22,16 @@ import random
 import re
 import textwrap
 import urllib.error
+from dataclasses import dataclass
 from unittest import mock
 
 import pytest
 
 from esrally import config, exceptions
+from esrally.storage.testing import DummyAdapter
 from esrally.track import loader, track
 from esrally.utils import io
+from esrally.utils.cases import cases
 
 
 def strip_ws(s):
@@ -4323,3 +4327,67 @@ class TestTrackProcessorRegistry:
         ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         assert len(expected_processors) == len(actual_processors)
+
+
+@pytest.fixture
+def multipart_downloader() -> loader.Downloader:
+    cfg = config.Config()
+    cfg.add(config.Scope.application, "system", "offline.mode", False)
+    cfg.add(config.Scope.application, "track", "test.mode.enabled", False)
+    cfg.add(config.Scope.application, "track", "track.downloader.multipart_enabled", True)
+    cfg.add(config.Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
+    return loader.Downloader.from_config(cfg)
+
+
+BASE_URL = "https://example.com"
+
+
+class StorageAdapter(DummyAdapter):
+    SOME_URL = f"{BASE_URL}/some-file.txt"
+    SOME_DATA = b"simple file data"
+    DATA = {
+        SOME_URL: SOME_DATA,
+    }
+
+    @classmethod
+    def download_http(cls, url, local_path, expected_size_in_bytes=None, progress_indicator=None):
+        data = cls.DATA[url]
+        with open(local_path, "wb") as f:
+            f.write(data)
+        return len(data)
+
+
+@dataclass
+class DownloaderCase:
+    base_url: str = BASE_URL
+    offline: bool = False
+    test_mode: bool = False
+    multipart_enabled: bool = False
+    size_in_bytes: int | None = None
+    want_error: tuple[type[Exception], ...] = tuple()
+
+    def cfg(self) -> config.Config:
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "offline.mode", self.offline)
+        cfg.add(config.Scope.application, "track", "test.mode.enabled", self.test_mode)
+        cfg.add(config.Scope.application, "track", "track.downloader.multipart_enabled", self.multipart_enabled)
+        return cfg
+
+    def downloader(self) -> loader.Downloader:
+        return loader.Downloader.from_config(self.cfg())
+
+
+@cases(
+    simple=DownloaderCase(),
+    offline=DownloaderCase(offline=True, want_error=(exceptions.SystemSetupError,)),
+)
+def test_downloader(case: DownloaderCase, tmpdir: os.PathLike) -> None:
+    target_path = os.path.join(tmpdir, "some-file.txt")
+    downloader = case.downloader()
+    with mock.patch("esrally.utils.net._download_http", StorageAdapter.download_http):
+        try:
+            downloader.download(case.base_url, target_path=target_path, size_in_bytes=case.size_in_bytes)
+        except case.want_error:
+            return
+        else:
+            assert not case.want_error

@@ -532,19 +532,15 @@ class Downloader:
         self.logger = logging.getLogger(__name__)
         self.transfer_manager = transfer_manager
 
-    def download(self, base_url, target_path, size_in_bytes):
+    def download(self, base_url: str, target_path: str, size_in_bytes: int | None = None) -> None:
         file_name = os.path.basename(target_path)
         if not base_url:
             raise exceptions.DataError("Cannot download data because no base URL is provided.")
         if self.offline:
             raise exceptions.SystemSetupError(f"Cannot find [{target_path}]. Please disable offline mode and retry.")
 
-        if base_url.endswith("/"):
-            separator = ""
-        else:
-            separator = "/"
-        # join manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
-        data_url = f"{base_url}{separator}{file_name}"
+        # It joins manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
+        data_url = f"{base_url.rstrip('/')}/{file_name}"
         if self.transfer_manager is not None:
             try:
                 tr = self.transfer_manager.get(data_url, target_path, size_in_bytes)

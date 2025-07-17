@@ -15,4 +15,5 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from esrally.storage._adapter import Adapter
 from esrally.storage._manager import TransferManager
