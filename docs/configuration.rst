@@ -204,6 +204,14 @@ HTTP Adapter
 
   .. _urllib3.Retry: https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html
 
+track
+~~~~~
+
+This section specifies how tracks corpora files has to be fetched. Available options are:
+
+* ``track.downloader.multipart_enabled`` if true, it will enable the use the new multipart `storage` module for
+  downloading corpora files. For more configuration options please have a look to the `storage` configuration section.
+  NOTE: the storage module is still experimental and its use should be limited for now.
 
 tracks
 ~~~~~~
