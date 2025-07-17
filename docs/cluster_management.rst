@@ -60,6 +60,9 @@ When the benchmark has finished, we can stop the node again::
 
 If you only want to shutdown the node but don't want to delete the node and the data, pass ``--preserve-install`` additionally.
 
+If you want to avoid telemetry data collection to the metrics store when stopping the node, you can also pass ``--skip-telemetry`` to the stop command:
+
+    esrally stop --installation-id="${INSTALLATION_ID}" --preserve-install --skip-telemetry
 
 Levelling Up: Benchmarking a Cluster
 ------------------------------------

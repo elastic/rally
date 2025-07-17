@@ -128,29 +128,30 @@ def stop(cfg: types.Config):
         raise exceptions.SystemSetupError(f"Unknown build type [{node_config.build_type}]")
 
     nodes, race_id = _load_node_file(root_path)
-
-    cls = metrics.metrics_store_class(cfg)
-    metrics_store = cls(cfg)
-
-    race_store = metrics.race_store(cfg)
-    try:
-        current_race = race_store.find_by_race_id(race_id)
-        metrics_store.open(
-            race_id=current_race.race_id,
-            race_timestamp=current_race.race_timestamp,
-            track_name=current_race.track_name,
-            challenge_name=current_race.challenge_name,
-        )
-    except exceptions.NotFound:
-        logging.getLogger(__name__).info("Could not find race [%s] and will thus not persist system metrics.", race_id)
-        # Don't persist system metrics if we can't retrieve the race as we cannot derive the required meta-data.
-        current_race = None
-        metrics_store = None
+    skip_telemetry = cfg.opts("mechanic", "skip.telemetry", default_value=False, mandatory=False)
+    metrics_store = None
+    if not skip_telemetry:
+        cls = metrics.metrics_store_class(cfg)
+        metrics_store = cls(cfg)
+        race_store = metrics.race_store(cfg)
+        try:
+            current_race = race_store.find_by_race_id(race_id)
+            metrics_store.open(
+                race_id=current_race.race_id,
+                race_timestamp=current_race.race_timestamp,
+                track_name=current_race.track_name,
+                challenge_name=current_race.challenge_name,
+            )
+        except exceptions.NotFound:
+            logging.getLogger(__name__).info("Could not find race [%s] and will thus not persist system metrics.", race_id)
+            # Don't persist system metrics if we can't retrieve the race as we cannot derive the required meta-data.
+            current_race = None
+            metrics_store = None
 
     node_launcher.stop(nodes, metrics_store)
     _delete_node_file(root_path)
 
-    if current_race:
+    if metrics_store is not None and current_race:
         metrics_store.flush(refresh=True)
         for node in nodes:
             results = metrics.calculate_system_results(metrics_store, node.node_name)

@@ -67,6 +67,7 @@ This section defines how metrics are stored.
 * ``sample.queue.size`` (default: 2^20): The number of metrics samples that can be stored in Rally's in-memory queue.
 * ``metrics.request.downsample.factor`` (default: 1): Determines how many service time and latency samples should be kept in the metrics store. By default all values will be kept. To keep only e.g. every 100th sample, specify 100. This is useful to avoid overwhelming the metrics store in benchmarks with many clients (tens of thousands).
 * ``output.processingtime`` (default: false): If set to "true", Rally will show the additional metric :ref:`processing time <summary_report_processing_time>` in the command line report.
+* ``skip.telemetry`` (default: None): Determines whether telemetry data collection should be skipped when stopping a benchmark. This can be set either via configuration param ``skip.telemetry`` the command line flag ``--skip-telemetry``.
 
 The following settings are applicable only if ``datastore.type`` is set to "elasticsearch":
 
@@ -136,8 +137,12 @@ remote servers. Available options are:
   At this point in time `esrally.storage._http:HTTPAdapter` is the only existing `Adapter` implementations intended
   for public use and that is already the default one. So it is required to edit this option for special customizations.
 
+* ``storage.local_dir`` indicates the default directory where to store local files when no path has been specified.
+
 * ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
   bucket. The default value is 8.
+
+* ``storage.max_workers`` indicates the maximum number of worker threads used for making storage files transfers.
 
 * ``storage.mirror_files`` is used to provide a json file that specify the mapping for mirrors URLs resolution.
   Example::
@@ -166,6 +171,15 @@ remote servers. Available options are:
   for the files on the destination mirror endpoints URLs or use the original source endpoint URL in case the files
   are not mirrored or they have a different size from the source one. The client will prefer endpoints with the lower
   latency fetching the head of the file.
+
+* ``storage.monitor_interval`` represents the time interval (in seconds) `TransferManager` should wait two consecutive
+  monitor operations (log transfer and connections statistics, adjust the maximum number of connections, etc.).
+
+* ``storage.multipart_size`` represents the size in bytes to be used for making file parts separation to distribute
+  them to worker threads. Each part will be downloaded separately and in parallel using a dedicated connection by a
+  worker threads. In case there will be more parts that the maximum allowed connections and threads (see
+  ``storage.max_workers`` and ``storage.max_connections`` options), then the transfer of the parts exceeding these limits
+  will be performed as soon a worker thread or a connection get released by other part transfer.
 
 * ``storage.random_seed`` a string used to initialize the client random number generator. This could be used to make
   problems easier to reproduce in continuous integration. In most of the cases it should be left empty.

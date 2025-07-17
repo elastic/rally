@@ -27,6 +27,7 @@ import pytest
 from esrally.config import Config
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._client import Client
+from esrally.storage._executor import DummyExecutor
 from esrally.storage._range import rangeset
 from esrally.storage._transfer import MAX_CONNECTIONS, Transfer
 from esrally.utils.cases import cases
@@ -36,33 +37,6 @@ MISMATCH_URL = "https://rally-tracks.elastic.co/apm/span.json.gz"
 DATA = b"\xff" * 1024
 CRC32C = "valid-crc32-checksum"
 MISMATCH_CRC32C = "invalid-crc32c-checksum"
-
-
-class DummyExecutor:
-
-    def __init__(self):
-        self.tasks: list[tuple] | None = []
-
-    def submit(self, fn, /, *args, **kwargs):
-        """Submits a callable to be executed with the given arguments.
-
-        Schedules the callable to be executed as fn(*args, **kwargs).
-        """
-        tasks = self.tasks
-        if tasks is None:
-            raise RuntimeError("Executor already closed")
-        self.tasks.append((fn, args, kwargs))
-
-    def execute_tasks(self):
-        tasks = self.tasks
-        if tasks is None:
-            raise RuntimeError("Executor already closed")
-        self.tasks = []
-        for fn, args, kwargs in tasks:
-            fn(*args, **kwargs)
-
-    def shutdown(self):
-        self.tasks = None
 
 
 class DummyClient(Client):
