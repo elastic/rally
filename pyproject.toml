@@ -69,7 +69,7 @@ dependencies = [
     # License: MPL 2.0
     "certifi",
     # License: MIT
-    "yappi==1.5.1",
+    "yappi==1.6.10",
     # License: BSD
     "ijson==2.6.1",
     # License: Apache 2.0
@@ -82,7 +82,7 @@ dependencies = [
     "zstandard==0.21.0",
     # License: Python Software Foundation License
     "typing-extensions==4.12.2",
-    # License:  BSD-2-Clause license 
+    # License:  BSD-2-Clause license
     "python-json-logger==2.0.7",
     # License: Apache 2.0
     "ecs-logging==2.2.0",
