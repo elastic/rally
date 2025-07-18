@@ -17,9 +17,9 @@
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable
 
-from esrally.storage._adapter import Adapter, Head, Readable, Writable
+from esrally.storage._adapter import Adapter, Head, Writable
 from esrally.storage._range import NO_RANGE, RangeSet
 
 
@@ -59,9 +59,3 @@ class DummyAdapter(Adapter):
 
         stream.write(data)
         return Head(url, content_length=len(data))
-
-    def list(self, url: str) -> Iterator[Head]:
-        raise NotImplementedError()
-
-    def put(self, stream: Readable, url: str, head: Head | None = None) -> Head:
-        raise NotImplementedError()

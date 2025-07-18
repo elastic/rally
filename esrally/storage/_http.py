@@ -26,13 +26,7 @@ import requests.adapters
 import urllib3
 from requests.structures import CaseInsensitiveDict
 
-from esrally.storage._adapter import (
-    Adapter,
-    Head,
-    Readable,
-    ServiceUnavailableError,
-    Writable,
-)
+from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 from esrally.types import Config
 
@@ -112,15 +106,6 @@ class HTTPAdapter(Adapter):
             for chunk in res.iter_content(self.chunk_size):
                 if chunk:
                     stream.write(chunk)
-        return got
-
-    def put(self, stream: Readable, url: str, head: Head | None = None, headers: Mapping[str, str] | None = None) -> Head:
-        headers = self._headers(head, headers)
-        with self.session.put(url, data=stream, headers=headers) as res:
-            res.raise_for_status()
-            got = self._make_head(url, res.headers)
-            if head is not None:
-                head.check(got)
         return got
 
     @classmethod
