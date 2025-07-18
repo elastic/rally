@@ -23,11 +23,13 @@ import re
 import textwrap
 import urllib.error
 from dataclasses import dataclass
+from email.message import Message
 from unittest import mock
 
 import pytest
 
 from esrally import config, exceptions
+from esrally.storage._adapter import Head
 from esrally.storage.testing import DummyAdapter
 from esrally.track import loader, track
 from esrally.utils import io
@@ -4340,37 +4342,36 @@ def multipart_downloader() -> loader.Downloader:
 
 
 BASE_URL = "https://example.com"
+SOME_PATH = "some/file.txt"
+SOME_URL = f"{BASE_URL}/{SOME_PATH}"
+SOME_DATA = b"simple file data"
+SOME_HEAD = Head(SOME_URL, accept_ranges=True, content_length=len(SOME_DATA))
+INVALID_PATH = "some/invalid-file.txt"
 
 
 class StorageAdapter(DummyAdapter):
-    SOME_URL = f"{BASE_URL}/some-file.txt"
-    SOME_DATA = b"simple file data"
     DATA = {
         SOME_URL: SOME_DATA,
     }
-
-    @classmethod
-    def download_http(cls, url, local_path, expected_size_in_bytes=None, progress_indicator=None):
-        data = cls.DATA[url]
-        with open(local_path, "wb") as f:
-            f.write(data)
-        return len(data)
+    HEADS = (SOME_HEAD,)
 
 
 @dataclass
 class DownloaderCase:
-    base_url: str = BASE_URL
+    path: str = SOME_PATH
     offline: bool = False
     test_mode: bool = False
     multipart_enabled: bool = False
     size_in_bytes: int | None = None
     want_error: tuple[type[Exception], ...] = tuple()
+    want_data: bytes | None = None
 
     def cfg(self) -> config.Config:
         cfg = config.Config()
         cfg.add(config.Scope.application, "system", "offline.mode", self.offline)
         cfg.add(config.Scope.application, "track", "test.mode.enabled", self.test_mode)
         cfg.add(config.Scope.application, "track", "track.downloader.multipart_enabled", self.multipart_enabled)
+        cfg.add(config.Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
         return cfg
 
     def downloader(self) -> loader.Downloader:
@@ -4378,16 +4379,38 @@ class DownloaderCase:
 
 
 @cases(
-    simple=DownloaderCase(),
-    offline=DownloaderCase(offline=True, want_error=(exceptions.SystemSetupError,)),
+    "multipart_enabled",
+    legacy=False,
+    multipart=True,
 )
-def test_downloader(case: DownloaderCase, tmpdir: os.PathLike) -> None:
-    target_path = os.path.join(tmpdir, "some-file.txt")
+@cases(
+    simple=DownloaderCase(want_data=SOME_DATA),
+    offline=DownloaderCase(offline=True, want_error=(exceptions.SystemSetupError,)),
+    test_mode=DownloaderCase(path=INVALID_PATH, test_mode=True, want_error=(exceptions.DataError,)),
+)
+def test_downloader(case: DownloaderCase, multipart_enabled: bool, tmpdir: os.PathLike) -> None:
+    target_path = os.path.join(tmpdir, case.path)
+    base_url = f"{BASE_URL}/{os.path.dirname(case.path)}"
+    case.multipart_enabled = multipart_enabled
     downloader = case.downloader()
-    with mock.patch("esrally.utils.net._download_http", StorageAdapter.download_http):
+    with mock.patch("esrally.utils.net._download_http", _patched_download_http):
         try:
-            downloader.download(case.base_url, target_path=target_path, size_in_bytes=case.size_in_bytes)
+            downloader.download(base_url, target_path, case.size_in_bytes)
         except case.want_error:
             return
         else:
             assert not case.want_error
+    assert os.path.exists(target_path)
+    if case.want_data is not None:
+        with open(target_path, "rb") as fp:
+            assert fp.read() == case.want_data
+
+
+def _patched_download_http(url: str, local_path: str, expected_size_in_bytes=None, progress_indicator=None):
+    try:
+        data = StorageAdapter.DATA[url]
+    except KeyError:
+        raise urllib.error.HTTPError(url, 404, f"No data available for url {url}", Message(), None)
+    with open(local_path, "wb") as f:
+        f.write(data)
+    return len(data)

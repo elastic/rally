@@ -541,15 +541,7 @@ class Downloader:
 
         # It joins manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
         data_url = f"{base_url.rstrip('/')}/{file_name}"
-        if self.transfer_manager is not None:
-            try:
-                tr = self.transfer_manager.get(data_url, target_path, size_in_bytes)
-                tr.wait()
-                return
-            except Exception:
-                self.logger.exception("Cannot download data from '%s' using transfer manager.", data_url)
-
-        try:
+        if self.transfer_manager is None:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
                 self.logger.info("Downloading data from [%s] (%s) to [%s].", data_url, pretty.size(size_in_bytes), target_path)
@@ -558,23 +550,38 @@ class Downloader:
 
             # we want to have a bit more accurate download progress as these files are typically very large
             progress = net.Progress("[INFO] Downloading track data", accuracy=1)
-            net.download(data_url, target_path, size_in_bytes, progress_indicator=progress)
+            try:
+                net.download(data_url, target_path, size_in_bytes, progress_indicator=progress)
+            except urllib.error.HTTPError as e:
+                if e.code == 404 and self.test_mode:
+                    raise exceptions.DataError(
+                        "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
+                    ) from None
+
+                msg = f"Could not download [{data_url}] to [{target_path}]"
+                if e.reason:
+                    msg += f" (HTTP status: {e.code}, reason: {e.reason})"
+                else:
+                    msg += f" (HTTP status: {e.code})"
+                raise exceptions.DataError(msg) from e
+            except urllib.error.URLError as e:
+                raise exceptions.DataError(f"Could not download [{data_url}] to [{target_path}].") from e
+
             progress.finish()
             self.logger.info("Downloaded data from [%s] to [%s].", data_url, target_path)
-        except urllib.error.HTTPError as e:
-            if e.code == 404 and self.test_mode:
-                raise exceptions.DataError(
-                    "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
-                ) from None
-
-            msg = f"Could not download [{data_url}] to [{target_path}]"
-            if e.reason:
-                msg += f" (HTTP status: {e.code}, reason: {e.reason})"
-            else:
-                msg += f" (HTTP status: {e.code})"
-            raise exceptions.DataError(msg) from e
-        except urllib.error.URLError as e:
-            raise exceptions.DataError(f"Could not download [{data_url}] to [{target_path}].") from e
+        else:
+            try:
+                tr = self.transfer_manager.get(data_url, target_path, size_in_bytes)
+                tr.wait()
+                return
+            except FileNotFoundError as ex:
+                if self.test_mode:
+                    raise exceptions.DataError(
+                        "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
+                    ) from None
+                raise exceptions.DataError(f"Cannot download data from '{data_url}' using transfer manager.") from ex
+            except Exception as ex:
+                raise exceptions.DataError(f"Cannot download data from '{data_url}' using transfer manager.") from ex
 
         if not os.path.isfile(target_path):
             raise exceptions.SystemSetupError(
