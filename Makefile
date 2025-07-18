@@ -20,7 +20,7 @@ SHELL := /bin/bash
 VIRTUAL_ENV ?= .venv
 VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
 
-PY_VERSION = 3.10.9
+PY_VERSION = 3.12.2
 
 .PHONY: install \
 	check-venv \
