@@ -35,6 +35,8 @@ RUN chgrp 0 /entrypoint.sh && \
 RUN mkdir -p /rally/.rally && \
     chown -R 1000:0 /rally/
 
+COPY --from=ghcr.io/astral-sh/uv:0.7.12 /uv /uvx /bin/
+
 USER 1000
 
 RUN mkdir -p /rally/esrally
@@ -42,14 +44,16 @@ COPY pyproject.toml /rally/
 COPY README.md /rally/
 COPY esrally/ /rally/esrally/
 
-RUN python3 -m venv /rally/venv
+ENV VIRTUAL_ENV=/rally/venv
 ENV PATH=/rally/venv/bin:$PATH
+ENV UV_PROJECT_ENVIRONMENT=/rally/venv
+RUN uv venv /rally/venv
 
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN python3 -m pip install --upgrade hatch hatchling pip wheel
-RUN python3 -m pip install /rally
+RUN uv pip install --upgrade hatch hatchling pip wheel
+RUN make install
 
 LABEL org.label-schema.schema-version="1.0" \
   org.label-schema.vendor="Elastic" \
