@@ -27,7 +27,8 @@ import pytest
 from esrally.config import Config
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._client import Client
-from esrally.storage._range import NO_RANGE, RangeSet, rangeset
+from esrally.storage._executor import DummyExecutor
+from esrally.storage._range import rangeset
 from esrally.storage._transfer import MAX_CONNECTIONS, Transfer
 from esrally.utils.cases import cases
 
@@ -38,47 +39,18 @@ CRC32C = "valid-crc32-checksum"
 MISMATCH_CRC32C = "invalid-crc32c-checksum"
 
 
-class DummyExecutor:
-
-    def __init__(self):
-        self.tasks: list[tuple] | None = []
-
-    def submit(self, fn, /, *args, **kwargs):
-        """Submits a callable to be executed with the given arguments.
-
-        Schedules the callable to be executed as fn(*args, **kwargs).
-        """
-        tasks = self.tasks
-        if tasks is None:
-            raise RuntimeError("Executor already closed")
-        self.tasks.append((fn, args, kwargs))
-
-    def execute_tasks(self):
-        tasks = self.tasks
-        if tasks is None:
-            raise RuntimeError("Executor already closed")
-        self.tasks = []
-        for fn, args, kwargs in tasks:
-            fn(*args, **kwargs)
-
-    def shutdown(self):
-        self.tasks = None
-
-
 class DummyClient(Client):
 
     def head(self, url: str, ttl: float | None = None) -> Head:
         return Head.create(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
 
-    def get(
-        self, url: str, stream: Writable, ranges: RangeSet = NO_RANGE, document_length: int | None = None, crc32c: str | None = None
-    ) -> Head:
+    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         data = DATA
-        if ranges:
-            data = data[ranges.start : ranges.end]
+        if head is not None and head.ranges:
+            data = data[head.ranges.start : head.ranges.end]
         if data:
             stream.write(data)
-        return Head.create(url, ranges=ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
+        return Head.create(url, ranges=head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
 
 
 @pytest.fixture

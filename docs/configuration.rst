@@ -137,8 +137,12 @@ remote servers. Available options are:
   At this point in time `esrally.storage._http:HTTPAdapter` is the only existing `Adapter` implementations intended
   for public use and that is already the default one. So it is required to edit this option for special customizations.
 
+* ``storage.local_dir`` indicates the default directory where to store local files when no path has been specified.
+
 * ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
   bucket. The default value is 8.
+
+* ``storage.max_workers`` indicates the maximum number of worker threads used for making storage files transfers.
 
 * ``storage.mirror_files`` is used to provide a json file that specify the mapping for mirrors URLs resolution.
   Example::
@@ -168,6 +172,15 @@ remote servers. Available options are:
   are not mirrored or they have a different size from the source one. The client will prefer endpoints with the lower
   latency fetching the head of the file.
 
+* ``storage.monitor_interval`` represents the time interval (in seconds) `TransferManager` should wait two consecutive
+  monitor operations (log transfer and connections statistics, adjust the maximum number of connections, etc.).
+
+* ``storage.multipart_size`` represents the size in bytes to be used for making file parts separation to distribute
+  them to worker threads. Each part will be downloaded separately and in parallel using a dedicated connection by a
+  worker threads. In case there will be more parts that the maximum allowed connections and threads (see
+  ``storage.max_workers`` and ``storage.max_connections`` options), then the transfer of the parts exceeding these limits
+  will be performed as soon a worker thread or a connection get released by other part transfer.
+
 * ``storage.random_seed`` a string used to initialize the client random number generator. This could be used to make
   problems easier to reproduce in continuous integration. In most of the cases it should be left empty.
 
@@ -191,6 +204,14 @@ HTTP Adapter
 
   .. _urllib3.Retry: https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html
 
+track
+~~~~~
+
+This section specifies how tracks corpora files has to be fetched. Available options are:
+
+* ``track.downloader.multipart_enabled`` if true, it will enable the use the new multipart `storage` module for
+  downloading corpora files. For more configuration options please have a look to the `storage` configuration section.
+  NOTE: the storage module is still experimental and its use should be limited for now.
 
 tracks
 ~~~~~~
