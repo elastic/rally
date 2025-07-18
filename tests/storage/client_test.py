@@ -16,10 +16,10 @@
 # under the License.
 from __future__ import annotations
 
-import copy
 import json
 import os
 import random
+from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
 from os import PathLike
@@ -28,9 +28,10 @@ from unittest.mock import create_autospec
 import pytest
 
 from esrally.config import Config, Scope
-from esrally.storage._adapter import Adapter, Head, Readable, Writable
+from esrally.storage._adapter import Head, Writable
 from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
+from esrally.storage.testing import DummyAdapter
 from esrally.types import Key
 from esrally.utils.cases import cases
 
@@ -54,13 +55,13 @@ MIRRORED_NO_RANGE_HEAD = Head.create(url=MIRRORED_NO_RANGE_URL, content_length=l
 
 NOT_FOUND_BASE_URL = "https://example.com/not-found"
 
-HEADS = {
-    SOME_URL: SOME_HEAD,
-    NO_RANGES_URL: NO_RANGE_HEAD,
-    MIRRORING_URL: MIRRORING_HEAD,
-    MIRRORED_URL: MIRRORED_HEAD,
-    MIRRORED_NO_RANGE_URL: MIRRORED_NO_RANGE_HEAD,
-}
+HEADS = (
+    SOME_HEAD,
+    NO_RANGE_HEAD,
+    MIRRORING_HEAD,
+    MIRRORED_HEAD,
+    MIRRORED_NO_RANGE_HEAD,
+)
 
 MIRROR_FILES = os.path.join(os.path.dirname(__file__), "mirrors.json")
 MIRRORS = {
@@ -77,38 +78,9 @@ MIRRORS = {
 }
 
 
-class HTTPSAdapter(Adapter):
-
-    @classmethod
-    def match_url(cls, url: str) -> str:
-        """It returns a canonical URL in case this adapter accepts the URL, None otherwise."""
-        return url
-
-    def head(self, url: str) -> Head:
-        head = HEADS.get(url)
-        if head is None:
-            raise FileNotFoundError
-        return copy.copy(head)
-
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
-        if url not in HEADS:
-            raise FileNotFoundError
-        if head is None or not head.ranges:
-            stream.write(SOME_BODY)
-            accept_ranges = None
-            if head is not None:
-                accept_ranges = head.accept_ranges
-            return Head(url=url, content_length=len(SOME_BODY), document_length=len(SOME_BODY), accept_ranges=accept_ranges)
-
-        for r in head.ranges:
-            stream.write(SOME_BODY[r.start : r.end])
-        return Head(url=url, content_length=head.ranges.size, ranges=head.ranges, document_length=len(SOME_BODY), accept_ranges=True)
-
-    def put(self, stream: Readable, url: str, head: Head | None = None) -> Head:
-        raise NotImplementedError
-
-    def list(self, url: str) -> Iterator[Head]:
-        raise NotImplementedError
+class StorageAdapter(DummyAdapter):
+    HEADS = HEADS
+    DATA: dict[str, bytes] = defaultdict(lambda: SOME_BODY)
 
 
 @pytest.fixture(scope="function")
@@ -125,8 +97,8 @@ def mirror_files(tmpdir: PathLike) -> Iterator[str]:
 def cfg(mirror_files: str) -> Config:
     cfg = Config()
     cfg.add(Scope.application, "storage", "storage.mirrors_files", mirror_files)
-    cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:HTTPSAdapter")
     cfg.add(Scope.application, "storage", "storage.random_seed", 42)
+    cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
     return cfg
 
 
