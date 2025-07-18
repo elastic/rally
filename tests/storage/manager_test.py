@@ -24,9 +24,10 @@ from typing import Any
 import pytest
 
 from esrally import config, types
-from esrally.storage._adapter import Adapter, Head, Readable, Writable
+from esrally.storage._adapter import Head
 from esrally.storage._executor import DummyExecutor, Executor
 from esrally.storage._manager import TransferManager
+from esrally.storage.testing import DummyAdapter
 from esrally.utils.cases import cases
 
 
@@ -37,7 +38,7 @@ def cfg(tmpdir: os.PathLike) -> types.Config:
         config.Scope.application,
         "storage",
         "storage.adapters",
-        f"{__name__}:HTTPAdapter",
+        f"{__name__}:StorageAdapter",
     )
     cfg.add(config.Scope.application, "storage", "storage.local_dir", str(tmpdir))
     return cfg
@@ -66,37 +67,16 @@ SIMPLE_DATA = b"example document"
 SIMPLE_HEAD = Head(url=SIMPLE_URL, content_length=len(SIMPLE_DATA))
 
 
-class HTTPAdapter(Adapter):
+class StorageAdapter(DummyAdapter):
 
     @classmethod
     def match_url(cls, url: str) -> str:
         return url
 
-    HEADS: dict[str, Head] = {SIMPLE_URL: SIMPLE_HEAD}
-
-    def head(self, url: str) -> Head:
-        try:
-            return self.HEADS[url]
-        except KeyError:
-            raise FileNotFoundError(f"No such URL: {url}")
-
-    def list(self, url: str) -> Iterator[Head]:
-        raise NotImplementedError()
-
+    HEADS = (SIMPLE_HEAD,)
     DATA = {
         SIMPLE_URL: SIMPLE_DATA,
     }
-
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
-        try:
-            data = self.DATA[url]
-        except KeyError:
-            raise FileNotFoundError(f"No such URL: {url}")
-        stream.write(data)
-        return self.HEADS[url]
-
-    def put(self, stream: Readable, url: str, head: Head | None = None) -> Head:
-        raise NotImplementedError()
 
 
 @dataclass

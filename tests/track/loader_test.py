@@ -4387,6 +4387,7 @@ class DownloaderCase:
     simple=DownloaderCase(want_data=SOME_DATA),
     offline=DownloaderCase(offline=True, want_error=(exceptions.SystemSetupError,)),
     test_mode=DownloaderCase(path=INVALID_PATH, test_mode=True, want_error=(exceptions.DataError,)),
+    invalid=DownloaderCase(path=INVALID_PATH, want_error=(exceptions.DataError,)),
 )
 def test_downloader(case: DownloaderCase, multipart_enabled: bool, tmpdir: os.PathLike) -> None:
     target_path = os.path.join(tmpdir, case.path)
