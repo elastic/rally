@@ -37,13 +37,20 @@ RUN chgrp 0 /entrypoint.sh && \
 RUN mkdir -p /rally/.rally && \
     chown -R 1000:0 /rally/
 
+COPY --from=ghcr.io/astral-sh/uv:0.7.12 /uv /uvx /bin/
+
 USER 1000
 
-RUN python3 -m venv /rally/venv
-ENV PATH=/rally/venv/bin:$PATH
 
-RUN python3 -m pip install --upgrade hatch hatchling pip wheel
-RUN python3 -m pip install esrally==$RALLY_VERSION
+ENV VIRTUAL_ENV=/rally/venv
+ENV PATH=/rally/venv/bin:$PATH
+ENV UV_PROJECT_ENVIRONMENT=/rally/venv
+RUN uv venv /rally/venv
+
+RUN uv pip install --upgrade hatch hatchling pip wheel
+
+# Install Rally from the official repository
+RUN uv pip install esrally==$RALLY_VERSION
 
 
 LABEL org.label-schema.schema-version="1.0" \
