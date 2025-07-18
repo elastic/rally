@@ -21,7 +21,7 @@ import os
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 
-from esrally.config import Config
+from esrally.types import Config
 
 MIRRORS_FILES = ""
 

@@ -140,6 +140,8 @@ remote servers. Available options are:
 * ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
   bucket. The default value is 8.
 
+* ``storage.max_workers`` indicates the maximum number of worker threads used for making storage files transfers.
+
 * ``storage.mirror_files`` is used to provide a json file that specify the mapping for mirrors URLs resolution.
   Example::
 
