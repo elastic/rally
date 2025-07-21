@@ -23,7 +23,7 @@ import threading
 from abc import ABC, abstractmethod
 from collections.abc import Container, Iterable
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.types import Config
@@ -86,9 +86,14 @@ class Head:
                 continue
             want = getattr(self, field)
             got = getattr(other, field)
-            # If both got abd want are specified, then they have to match.
-            if all([got, want]) and got != want:
+            if _all_specified(got, want) and got != want:
+                # If both got and want are specified, then they have to match.
                 raise ValueError(f"unexpected '{field}': got {got}, want {want}")
+
+
+def _all_specified(*objs: Any) -> bool:
+    # This behaves like all(), but it treats False as True.
+    return all(o or o is False for o in objs)
 
 
 class Adapter(ABC):
