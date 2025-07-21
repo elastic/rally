@@ -21,8 +21,9 @@ import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Container, Iterable
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.types import Config
@@ -39,6 +40,9 @@ class Writable(Protocol):
 
     def write(self, data: bytes) -> None:
         pass
+
+
+_HEAD_CHECK_IGNORE = frozenset(["url"])
 
 
 @dataclass
@@ -76,19 +80,27 @@ class Head:
             date=date,
         )
 
-    def check(self, other: Head) -> None:
+    def check(self, other: Head, ignore: Container[str] = _HEAD_CHECK_IGNORE) -> None:
         for field in ("url", "content_length", "accept_ranges", "ranges", "document_length", "crc32c", "date"):
+            if ignore is not None and field in ignore:
+                continue
             want = getattr(self, field)
             got = getattr(other, field)
-            if not ({got, want} & {None, NO_RANGE}) and got != want:
+            if _all_specified(got, want) and got != want:
+                # If both got and want are specified, then they have to match.
                 raise ValueError(f"unexpected '{field}': got {got}, want {want}")
+
+
+def _all_specified(*objs: Any) -> bool:
+    # This behaves like all(), but it treats False as True.
+    return all(o or o is False for o in objs)
 
 
 class Adapter(ABC):
     """Base class for storage class client implementation"""
 
     @classmethod
-    def match_url(cls, url: str) -> str:
+    def match_url(cls, url: str) -> bool:
         """It returns a canonical URL in case this adapter accepts the URL, None otherwise."""
         raise NotImplementedError
 
@@ -126,13 +138,11 @@ class Adapter(ABC):
         """
 
 
-ADAPTER_CLASS_NAMES = ",".join(
-    [
-        "esrally.storage._tracks:TracksRepositoryAdapter",
-        "esrally.storage._s3:S3Adapter",
-        "esrally.storage._http:HTTPAdapter",
-    ]
-)
+ADAPTER_CLASS_NAMES = [
+    "esrally.storage._tracks:TracksRepositoryAdapter",
+    "esrally.storage._s3:S3Adapter",
+    "esrally.storage._http:HTTPAdapter",
+]
 
 
 class AdapterRegistry:
@@ -156,13 +166,14 @@ class AdapterRegistry:
     @classmethod
     def from_config(cls, cfg: Config) -> AdapterRegistry:
         registry = cls(cfg)
-        adapters_specs = (
-            cfg.opts(section="storage", key="storage.adapters", default_value=ADAPTER_CLASS_NAMES, mandatory=False)
-            .replace(" ", "")
-            .split(",")
+        adapter_names: Iterable[str] = cfg.opts(
+            section="storage", key="storage.adapters", default_value=ADAPTER_CLASS_NAMES, mandatory=False
         )
-        for spec in adapters_specs:
-            module_name, class_name = spec.split(":")
+        if isinstance(adapter_names, str):
+            # It parses adapter names when it has been defined as a single string.
+            adapter_names = adapter_names.replace(" ", "").split(",")
+        for adapter_name in adapter_names:
+            module_name, class_name = adapter_name.split(":")
             try:
                 module = importlib.import_module(module_name)
             except ModuleNotFoundError:
@@ -182,19 +193,16 @@ class AdapterRegistry:
             self._classes.append(cls)
         return cls
 
-    def get(self, url: str) -> tuple[Adapter, str]:
-        with self._lock:
-            for cls in self._classes:
-                try:
-                    actual_url = cls.match_url(url)
-                    break
-                except NotImplementedError:
-                    continue
-            else:
-                raise ValueError(f"No adapter found for url '{url}'")
+    def get(self, url: str) -> Adapter:
+        for cls in self._classes:
+            if cls.match_url(url):
+                break
+        else:
+            raise ValueError(f"No adapter found for URL: {url}")
 
         adapter = self._adapters.get(cls)
-        if adapter is None:
-            adapter = cls.from_config(self._cfg)
-        self._adapters[cls] = adapter
-        return adapter, actual_url
+        if adapter is not None:
+            return adapter
+
+        self._adapters[cls] = adapter = cls.from_config(self._cfg)
+        return adapter
