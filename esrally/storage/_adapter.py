@@ -21,6 +21,7 @@ import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Container
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -39,6 +40,9 @@ class Writable(Protocol):
 
     def write(self, data: bytes) -> None:
         pass
+
+
+_HEAD_CHECK_IGNORE = frozenset(["url"])
 
 
 @dataclass
@@ -76,11 +80,14 @@ class Head:
             date=date,
         )
 
-    def check(self, other: Head) -> None:
+    def check(self, other: Head, ignore: Container[str] = _HEAD_CHECK_IGNORE) -> None:
         for field in ("url", "content_length", "accept_ranges", "ranges", "document_length", "crc32c", "date"):
+            if ignore is not None and field in ignore:
+                continue
             want = getattr(self, field)
             got = getattr(other, field)
-            if not ({got, want} & {None, NO_RANGE}) and got != want:
+            # If both got abd want are specified, then they have to match.
+            if all([got, want]) and got != want:
                 raise ValueError(f"unexpected '{field}': got {got}, want {want}")
 
 
