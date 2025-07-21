@@ -61,6 +61,11 @@ class Session(requests.Session):
             self.mount("https://", adapter)
 
 
+_CONTENT_RANGE_PREFIX = "bytes "
+_AMZ_CHECKSUM_PREFIX = "x-amz-checksum-"
+_GOOG_HASH_KEY = "X-Goog-Hash"
+
+
 class HTTPAdapter(Adapter):
     """It implements the `Adapter` interface for http(s) protocols using the requests library."""
 
@@ -170,37 +175,42 @@ class HTTPAdapter(Adapter):
         if not content_range_text:
             return NO_RANGE, None
 
-        if not content_range_text.startswith("bytes "):
-            raise ValueError(f"invalid content range: {content_range_text}")
+        if not content_range_text.startswith(_CONTENT_RANGE_PREFIX):
+            raise NotImplementedError(f"Unsupported prefix for 'content-range' header: {content_range_text}")
 
         if "," in content_range_text:
-            raise ValueError("multi range value is not unsupported")
+            raise NotImplementedError("Multi range value for 'content-range' header is not supported.")
 
         try:
-            value, document_length_text = content_range_text[len("bytes ") :].strip().replace(" ", "").split("/", 1)
-            document_length: int | None = None
-            if document_length_text != "*":
-                document_length = int(document_length_text)
-            return rangeset(value), document_length
+            range_text, document_length_text = content_range_text[len(_CONTENT_RANGE_PREFIX) :].replace(" ", "").split("/", 1)
         except ValueError:
-            raise ValueError(f"invalid content range in '{content_range_text}'")
+            raise ValueError(f"Invalid value for 'content-range' header: '{content_range_text}'") from None
+
+        try:
+            document_length = int(document_length_text)
+        except ValueError:
+            document_length = None
+            if document_length_text.strip() != "*":
+                raise ValueError(f"Invalid value for 'content-length' header: '{document_length_text}'") from None
+        else:
+            if document_length is not None and document_length < 0:
+                raise ValueError(f"Value for 'content-length' header: '{document_length}' < 0")
+        return rangeset(range_text), document_length
 
     @classmethod
     def _hashes_from_headers(cls, headers: CaseInsensitiveDict) -> dict[str, str]:
-        hashes = dict[str, str]()
-
-        hashes_text = headers.get("X-Goog-Hash", "").strip().replace(" ", "")
+        hashes: dict[str, str] = {}
+        hashes_text = headers.get(_GOOG_HASH_KEY, "").replace(" ", "")
         if hashes_text:
-            try:
-                for entry in hashes_text.split(","):
-                    name, value = entry.split("=", 1)
-                    hashes[name] = value
-            except ValueError as e:
-                raise ValueError(f"invalid X-Goog-Hash value: {hashes_text}") from e
+            for entry in hashes_text.split(","):
+                if "=" not in entry:
+                    raise ValueError(f"invalid X-Goog-Hash value: {hashes_text}") from None
+                name, value = entry.split("=", 1)
+                hashes[name] = value
 
         for k, value in headers.items():
-            if k.startswith("x-amz-checksum-"):
-                name = k[len("x-amz-checksum-") :]
+            if k.startswith(_AMZ_CHECKSUM_PREFIX):
+                name = k[len(_AMZ_CHECKSUM_PREFIX) :]
                 if name == "type":
                     continue
                 hashes[name] = value
