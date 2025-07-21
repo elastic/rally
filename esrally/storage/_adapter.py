@@ -23,7 +23,7 @@ import threading
 from abc import ABC, abstractmethod
 from collections.abc import Container, Iterable, Iterator
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.types import Config
@@ -103,6 +103,9 @@ def _all_specified(*objs: Any) -> bool:
     return all(o or o is False for o in objs)
 
 
+A = TypeVar("A", "Adapter", "Adapter")
+
+
 class Adapter(ABC):
     """Base class for storage class client implementation"""
 
@@ -112,7 +115,7 @@ class Adapter(ABC):
         raise NotImplementedError
 
     @classmethod
-    def from_config(cls, cfg: Config) -> Adapter:
+    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
         """Default `Adapter` objects factory method used to create adapters from `esrally` client.
 
         Default implementation will ignore `cfg` parameter. It can be overridden from `Adapter` implementations that
@@ -121,7 +124,7 @@ class Adapter(ABC):
         :param cfg: the configuration object from which to get configuration values.
         :return: an adapter object.
         """
-        return cls()
+        return cls(**kwargs)
 
     @abstractmethod
     def head(self, url: str) -> Head:
@@ -167,8 +170,7 @@ class Adapter(ABC):
 
 
 ADAPTER_CLASS_NAMES = [
-    "esrally.storage._tracks:TracksRepositoryAdapter",
-    "esrally.storage._s3:S3Adapter",
+    "esrally.storage._aws:S3Adapter",
     "esrally.storage._http:HTTPAdapter",
 ]
 
@@ -207,9 +209,9 @@ class AdapterRegistry:
             registry.register_class(obj)
         return registry
 
-    def register_class(self, cls: type[Adapter]) -> type[Adapter]:
+    def register_class(self, cls: type[Adapter], position: int = -1) -> type[Adapter]:
         with self._lock:
-            self._classes.append(cls)
+            self._classes.insert(position, cls)
         return cls
 
     def get(self, url: str) -> Adapter:

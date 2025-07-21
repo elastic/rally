@@ -151,6 +151,7 @@ Key = Literal[
     "source.revision",
     "src.root.dir",
     "storage.adapters",
+    "storage.aws.profile",
     "storage.http.chunk_size",
     "storage.http.max_retries",
     "storage.local_dir",
@@ -171,6 +172,8 @@ Key = Literal[
     "track.name",
     "track.path",
     "track.repository.dir",
+    "track.repository.url",
+    "track.bucket.urls",
     "user.tags",
     "values",
 ]

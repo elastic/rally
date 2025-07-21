@@ -17,25 +17,89 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from typing import Any, TypeVar
 from urllib.parse import urlparse
+from xml.etree import ElementTree
 
-from esrally import config
-from esrally.config import Config
-from esrally.storage._adapter import AdapterRegistry
-from esrally.storage._client import Client
-from esrally.storage._executor import Executor, ThreadPoolExecutor
-from esrally.storage._manager import TransferManager
+import requests
 
-INDEX_URL = "https://rally-tracks.elastic.co/"
+import esrally.config
+from esrally.storage import (
+    AdapterRegistry,
+    Client,
+    Executor,
+    Head,
+    HTTPAdapter,
+    ThreadPoolExecutor,
+    TransferManager,
+)
+from esrally.types import Config
+
+A = TypeVar("A")
+
+
+class TracksRepositoryAdapter(HTTPAdapter):
+
+    REPOSITORY_URL = "https://rally-tracks.elastic.co/"
+
+    _XML_CONTENT_TYPE = "application/xml"
+    _XML_ENCODING_PREFIX = "charset="
+    _XML_NODE_PREFIX = "{http://doc.s3.amazonaws.com/2006-03-01}"
+    _XML_NODE_CONTENTS = f"{_XML_NODE_PREFIX}Contents"
+    _XML_NODE_KEY = f"{_XML_NODE_PREFIX}Key"
+    _XML_NODE_SIZE = f"{_XML_NODE_PREFIX}Size"
+
+    @classmethod
+    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
+        index_url = cfg.opts("tracks", "track.repository.url", cls.REPOSITORY_URL, mandatory=False)
+        return super().from_config(cfg, index_url=index_url)
+
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return url.startswith(cls.REPOSITORY_URL)
+
+    def list(self, url: str) -> Iterator[Head]:
+        encoding = "utf-8"
+        LOG.debug("Getting file list from '%s'...", url)
+        with requests.get(url, timeout=60.0) as res:
+            res.raise_for_status()
+            content_type = res.headers.get("content-type", "").replace(" ", "")
+            if content_type:
+                if ";" in content_type:
+                    content_type, *others = content_type.split(";")
+                    for other in others:
+                        if other.startswith(self._XML_ENCODING_PREFIX):
+                            encoding = other[len(self._XML_ENCODING_PREFIX) :].lower()
+                            break
+            if content_type != self._XML_CONTENT_TYPE:
+                raise ValueError(f"Invalid content type: '{content_type}' != 'application/xml'")
+            content = res.content.decode(encoding)
+
+        LOG.debug("Parsing file list from '%s'...", url)
+        base_url = url.rstrip("/") + "/"
+        root = ElementTree.fromstring(content)
+        for node in root.iter(self._XML_NODE_CONTENTS):
+            key = node.find(self._XML_NODE_KEY)
+            if key is None or not key.text or key.text.endswith("/"):
+                # Skip invalid nodes or directories
+                continue
+
+            content_length = None
+            size = node.find(self._XML_NODE_SIZE)
+            if size is not None and size.text:
+                content_length = int(size.text)
+                if not content_length:
+                    continue
+            file_url = base_url + key.text
+            LOG.debug("Found track file '%s' (size=%s) ...", file_url, content_length)
+            yield Head.create(url=file_url, content_length=content_length)
+
 
 BUCKET_URLS = (
     "s3://es-perf-fressi-eu-west-1/",
     "s3://es-perf-fressi-us-west-1/",
 )
-
-MIRRORS_FILES = "~/.rally/storage-mirrors.json"
-
 
 LOG = logging.getLogger(__name__)
 
@@ -53,13 +117,14 @@ class Sync:
     ) -> Sync:
         if client is None:
             client = Client.from_config(cfg, adapters=adapters)
+        client.adapters.register_class(TracksRepositoryAdapter, position=0)
         if executor is None:
             executor = ThreadPoolExecutor.from_config(cfg)
         if manager is None:
             manager = TransferManager.from_config(cfg, client=client, executor=executor)
 
-        bucket_urls = cfg.opts("storage", "storage.sync.bucket_url", BUCKET_URLS, mandatory=False)
-        index_url = cfg.opts("storage", "storage.sync.index_url", INDEX_URL, mandatory=False)
+        bucket_urls = cfg.opts("storage", "track.bucket.urls", BUCKET_URLS, mandatory=False)
+        index_url = cfg.opts("storage", "track.repository.url", TracksRepositoryAdapter.REPOSITORY_URL, mandatory=False)
         return cls(client=client, executor=executor, manager=manager, index_url=index_url, bucket_urls=bucket_urls)
 
     def __init__(self, client: Client, executor: Executor, manager: TransferManager, index_url: str, bucket_urls: Iterable[str]) -> None:
@@ -71,7 +136,7 @@ class Sync:
             bucket_urls = bucket_urls.split(",")
         self._bucket_urls = [u.strip().rstrip("/") + "/" for u in bucket_urls]
 
-    def start(self) -> None:
+    def run(self) -> None:
         for head in self._client.list(self._index_url):
             assert head.url is not None
             url: str = head.url  # It makes mypy happy
@@ -102,10 +167,8 @@ class Sync:
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    cfg = config.Config()
-    cfg.add(config.Scope.application, "storage", "storage.mirrors_files", MIRRORS_FILES)
-    sync = Sync.from_config(cfg)
-    sync.start()
+    sync = Sync.from_config(esrally.config.Config())
+    sync.run()
 
 
 if __name__ == "__main__":

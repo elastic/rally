@@ -80,6 +80,10 @@ class Client:
         self._random: Random = random
         self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
 
+    @property
+    def adapters(self):
+        return self._adapters
+
     def head(self, url: str, ttl: float | None = None) -> Head:
         """It gets remote file headers."""
 
