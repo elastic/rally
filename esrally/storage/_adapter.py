@@ -144,6 +144,15 @@ class AdapterRegistry:
         self._lock = threading.Lock()
         self._cfg = cfg
 
+    def __getnewargs_ex__(self) -> tuple[tuple, dict]:
+        return tuple(), dict(cfg=self._cfg)
+
+    def __getstate__(self):
+        return tuple()
+
+    def __setstate__(self, state):
+        pass
+
     @classmethod
     def from_config(cls, cfg: Config) -> AdapterRegistry:
         registry = cls(cfg)

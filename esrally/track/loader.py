@@ -50,6 +50,7 @@ from esrally.utils import (
     repo,
     serverless,
 )
+from esrally.utils.net import download
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
@@ -524,9 +525,10 @@ class Downloader:
         transfer_manager: TransferManager | None = None
         if convert.to_bool(cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=True)):
             transfer_manager = TransferManager.from_config(cfg)
-        return cls(offline=offline, test_mode=test_mode, transfer_manager=transfer_manager)
+        return cls(cfg, offline=offline, test_mode=test_mode, transfer_manager=transfer_manager)
 
-    def __init__(self, offline: bool, test_mode: bool, transfer_manager: TransferManager | None = None):
+    def __init__(self, cfg: types.Config, offline: bool, test_mode: bool, transfer_manager: TransferManager | None = None):
+        self.cfg: types.Config = cfg
         self.offline = offline
         self.test_mode = test_mode
         self.logger = logging.getLogger(__name__)

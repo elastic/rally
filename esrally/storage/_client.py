@@ -72,11 +72,26 @@ class Client:
     ):
         self._adapters: AdapterRegistry = adapters
         self._cached_heads: dict[str, tuple[Head | Exception, float]] = {}
+        self._max_connections = max_connections
         self._connections: dict[str, WaitGroup] = defaultdict(lambda: WaitGroup(max_count=max_connections))
         self._lock = threading.Lock()
         self._mirrors: MirrorList = mirrors
         self._random: Random = random
         self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
+
+    def __getnewargs_ex__(self) -> tuple[tuple, dict]:
+        return tuple(), dict(
+            adapters=self._adapters,
+            mirrors=self._mirrors,
+            random=self._random,
+            max_connections=self._max_connections,
+        )
+
+    def __getstate__(self):
+        return tuple()
+
+    def __setstate__(self, state):
+        pass
 
     def head(self, url: str, ttl: float | None = None) -> Head:
         """It gets remote file headers."""

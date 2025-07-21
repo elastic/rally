@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import os
+import pickle
 import random
 import re
 import textwrap
@@ -4415,3 +4416,16 @@ def _patched_download_http(url: str, local_path: str, expected_size_in_bytes=Non
     with open(local_path, "wb") as f:
         f.write(data)
     return len(data)
+
+
+@cases(
+    "multipart_enabled",
+    legacy=False,
+    multipart=True,
+)
+@cases(simple=DownloaderCase(want_data=SOME_DATA))
+def test_pickle_downloader(case: DownloaderCase, multipart_enabled: bool) -> None:
+    case.multipart_enabled = multipart_enabled
+    downloader0 = case.downloader()
+    data = pickle.dumps(downloader0)
+    downloader1 = pickle.loads(data)
