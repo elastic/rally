@@ -100,7 +100,7 @@ class Adapter(ABC):
     """Base class for storage class client implementation"""
 
     @classmethod
-    def match_url(cls, url: str) -> str:
+    def match_url(cls, url: str) -> bool:
         """It returns a canonical URL in case this adapter accepts the URL, None otherwise."""
         raise NotImplementedError
 
@@ -184,19 +184,16 @@ class AdapterRegistry:
             self._classes.append(cls)
         return cls
 
-    def get(self, url: str) -> tuple[Adapter, str]:
-        with self._lock:
-            for cls in self._classes:
-                try:
-                    actual_url = cls.match_url(url)
-                    break
-                except NotImplementedError:
-                    continue
-            else:
-                raise ValueError(f"No adapter found for url '{url}'")
+    def get(self, url: str) -> Adapter:
+        for cls in self._classes:
+            if cls.match_url(url):
+                break
+        else:
+            raise ValueError(f"No adapter found for URL: {url}")
 
         adapter = self._adapters.get(cls)
-        if adapter is None:
-            adapter = cls.from_config(self._cfg)
-        self._adapters[cls] = adapter
-        return adapter, actual_url
+        if adapter is not None:
+            return adapter
+
+        self._adapters[cls] = adapter = cls.from_config(self._cfg)
+        return adapter

@@ -29,8 +29,8 @@ class DummyAdapter(Adapter):
     DATA: dict[str, bytes] = {}
 
     @classmethod
-    def match_url(cls, url: str) -> str:
-        return url
+    def match_url(cls, url: str) -> bool:
+        return True
 
     def __init__(self, heads: Iterable[Head] | None = None, data: dict[str, bytes] | None = None) -> None:
         if heads is None:

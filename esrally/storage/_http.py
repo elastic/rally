@@ -70,10 +70,8 @@ class HTTPAdapter(Adapter):
     """It implements the `Adapter` interface for http(s) protocols using the requests library."""
 
     @classmethod
-    def match_url(cls, url: str) -> str:
-        if url.startswith("http://") or url.startswith("https://"):
-            return url
-        raise NotImplementedError
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("http://") or url.startswith("https://")
 
     @classmethod
     def from_config(cls, cfg: Config) -> Adapter:

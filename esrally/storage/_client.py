@@ -93,7 +93,7 @@ class Client:
                     # cached value or error is enough recent to be used.
                     return _head_or_raise(value)
 
-        adapter, url = self._adapters.get(url)
+        adapter = self._adapters.get(url)
         try:
             value = adapter.head(url)
         except Exception as ex:
@@ -179,7 +179,7 @@ class Client:
             except WaitGroupLimitError:
                 LOG.debug("connection limit exceeded: url='%s'", url)
                 continue
-            adapter, url = self._adapters.get(got.url)
+            adapter = self._adapters.get(got.url)
             try:
                 return adapter.get(url, stream, head=head)
             except ServiceUnavailableError as ex:
