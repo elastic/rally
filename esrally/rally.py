@@ -1097,7 +1097,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
     cfg.add(config.Scope.application, "system", "quiet.mode", args.quiet)
     cfg.add(config.Scope.application, "system", "offline.mode", args.offline)
     logger = logging.getLogger(__name__)
-    
+
     try:
         if sub_command == "compare":
             configure_reporting_params(args, cfg)
