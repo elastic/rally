@@ -328,6 +328,6 @@ When a benchmark is executed with ``--enable-assertions`` and this query returns
 Skipping telemetry data collection when hitting an error.
 --------------------------------------------------------------
 
-In some cases, you may want to skip telemetry data collection when Rally hits an error. This can be useful in cases you want to avoid storing telemetry results when a benchmark got unexpected results. To enable this behavior, you can either use the ``skip.telemetry`` configuration setting in your ``rally.ini`` file or pass the ``--skip-telemetry`` command line flag when stopping Rally. This will prevent Rally from sending telemetry data to the metrics store. 
+In some cases, you may want to skip telemetry data collection when Rally hits an error. This can be useful in cases you want to avoid storing telemetry results when a benchmark got unexpected results . To enable this behavior, you can pass the ``--skip-telemetry`` command line flag when executing `esrally stop`. This will prevent Rally from sending telemetry data to the metrics store. 
 
 	esrally stop --installation-id=INSTALLATION_ID  --skip-telemetry
