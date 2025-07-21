@@ -20,6 +20,7 @@ import json
 import logging
 from collections.abc import Iterator, Mapping
 from datetime import datetime
+from typing import Any
 
 import requests
 import requests.adapters
@@ -77,9 +78,10 @@ class HTTPAdapter(Adapter):
         raise NotImplementedError
 
     @classmethod
-    def from_config(cls, cfg: Config) -> Adapter:
+    def from_config(cls, cfg: Config, **kwargs: dict[str, Any]) -> Adapter:
         chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
-        return cls(session=Session.from_config(cfg), chunk_size=chunk_size)
+        session = Session.from_config(cfg)
+        return cls(session=session, chunk_size=chunk_size, **kwargs)
 
     def __init__(self, session: requests.Session | None = None, chunk_size: int = CHUNK_SIZE):
         if session is None:
@@ -147,12 +149,16 @@ class HTTPAdapter(Adapter):
         headers["range"] = f"bytes={ranges[0]}"
 
     @classmethod
-    def _make_head(cls, url: str, headers: CaseInsensitiveDict) -> Head:
-        content_length = cls._content_length_from_headers(headers)
+    def _make_head(cls, url: str, headers: CaseInsensitiveDict, other: Head | None = None) -> Head:
         accept_ranges = cls._accept_ranges_from_headers(headers)
+        content_length = cls._content_length_from_headers(headers)
         ranges, document_length = cls._content_range_from_headers(headers)
-        hashes = cls._hashes_from_headers(headers)
-        crc32c = hashes.get("crc32c")
+        crc32c = cls._hashes_from_headers(headers).get("crc32c")
+        if other is not None:
+            accept_ranges = accept_ranges or other.accept_ranges
+            content_length = content_length or other.content_length
+            ranges = ranges or other.ranges
+            crc32c = crc32c or other.crc32c
         return Head.create(
             url=url,
             content_length=content_length,

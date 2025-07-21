@@ -16,76 +16,90 @@
 # under the License.
 from __future__ import annotations
 
-import fnmatch
 import logging
 import os
-import re
 import typing
 import urllib.parse
 from collections.abc import Mapping
 from datetime import datetime
+from typing import Any
 
 import boto3
-import botocore.exceptions
 from requests.structures import CaseInsensitiveDict
 
-from esrally.storage._adapter import Head, Readable
-from esrally.storage._http import HTTPAdapter
-
-_HTTPS_URL_RE = re.compile(fnmatch.translate("https://*.amazonaws.com/"))
+from esrally.storage._adapter import Adapter, Head, Readable, Writable
+from esrally.storage._http import CHUNK_SIZE, HTTPAdapter, Session
+from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
+
+AWS_PROFILE: str | None = None
 
 
 class S3Adapter(HTTPAdapter):
     """Adapter class for s3 scheme protocol"""
+
+    @classmethod
+    def from_config(cls, cfg: Config, **kwargs: dict[str, Any]) -> Adapter:
+        aws_profile = cfg.opts("storage", "storage.aws.profile", default_value=AWS_PROFILE, mandatory=False)
+        return super().from_config(cfg, aws_profile=aws_profile, **kwargs)
+
+    def __init__(self, session: Session | None = None, chunk_size: int = CHUNK_SIZE, aws_profile: str | None = AWS_PROFILE) -> None:
+        super().__init__(session=session, chunk_size=chunk_size)
+        self._aws_profile = aws_profile
+
+    @classmethod
+    def match_url(cls, url: str) -> str:
+        if url.startswith("s3://"):
+            return url
+        raise NotImplementedError
+
+    def get(self, url: str, stream: Writable, head: Head | None = None, headers: Mapping[str, str] | None = None) -> Head:
+        if headers:
+            head = self._make_head(url, CaseInsensitiveDict(headers), other=head)
+        ranges = ""
+        if head:
+            ranges = str(head.ranges)
+        address = S3Address.from_url(url)
+        headers = self._s3.get_object(Bucket=address.bucket, Key=address.key, Range=ranges)
+        ret = self._make_head(url, CaseInsensitiveDict(headers))
+        if head is not None:
+            head.check(ret)
+        return ret
+
+    def head(self, url: str) -> Head:
+        address = S3Address.from_url(url)
+        headers = self._s3.head_object(Bucket=address.bucket, Key=address.key)
+        return self._make_head(url, CaseInsensitiveDict(headers))
+
+    def put(self, stream: Readable, url: str, head: Head | None = None, headers: Mapping[str, str] | None = None) -> Head:
+        if headers:
+            head = self._make_head(url, CaseInsensitiveDict(headers), other=head)
+        if head and head.ranges:
+            raise NotImplementedError("Range headers is not supported.")
+
+        address = S3Address.from_url(url)
+        LOG.info("Uploading file to '%s'...", url)
+        headers = self._s3.upload_fileobj(stream, address.bucket, address.key)
+        LOG.info("File uploaded: '%s'.", url)
+
+        ret = self._make_head(url, CaseInsensitiveDict(headers))
+        if head is not None:
+            head.check(ret)
+        return ret
 
     _s3_client = None
 
     @property
     def _s3(self):
         if self._s3_client is None:
-            self._s3_client = boto3.Session(profile_name="okta-elastic-dev").client("s3")
+            self._s3_client = boto3.Session(profile_name=self._aws_profile).client("s3")
         return self._s3_client
-
-    @classmethod
-    def match_url(cls, url: str) -> str:
-        if url.startswith("s3://") or _HTTPS_URL_RE.match(url):
-            return S3Address.from_url(url).url(scheme="https")
-        raise NotImplementedError
 
     @classmethod
     def _date_to_headers(cls, date: datetime | None, headers: CaseInsensitiveDict) -> None:
         if date is not None:
             headers["x-amz-date"] = date.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    def put(self, stream: Readable, url: str, head: Head | None = None, headers: Mapping[str, str] | None = None) -> Head:
-        if headers:
-            raise NotImplementedError("passing headers is not supported")
-
-        address = S3Address.from_url(url)
-        if head is not None:
-            if head.ranges:
-                raise NotImplementedError("ranges are not supported")
-
-        try:
-            self._s3.upload_fileobj(stream, address.bucket, address.key)
-        except botocore.exceptions.ClientError as ex:
-            if ex.response["Error"]["Code"] == "NoSuchBucket":
-                LOG.exception("Error uploading file to S3 service: %s", ex)
-                self._s3.create_bucket(
-                    Bucket=address.bucket,
-                    ACL="public-read-write",
-                    CreateBucketConfiguration={
-                        "LocationConstraint": "eu-central-1",
-                    },
-                )
-            raise
-
-        ret = self.head(url)
-        if head is not None:
-            head.check(ret)
-        return ret
 
 
 class S3Address(typing.NamedTuple):

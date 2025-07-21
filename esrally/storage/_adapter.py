@@ -21,7 +21,7 @@ import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Container, Iterator
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -47,6 +47,9 @@ class Readable(Protocol):
 
     def read(self, size: int = -1) -> bytes:
         pass
+
+
+_HEAD_CHECK_IGNORE = frozenset(["url"])
 
 
 @dataclass
@@ -84,8 +87,10 @@ class Head:
             date=date,
         )
 
-    def check(self, other: Head) -> None:
+    def check(self, other: Head, ignore: Container[str] = _HEAD_CHECK_IGNORE) -> None:
         for field in ("url", "content_length", "accept_ranges", "ranges", "document_length", "crc32c", "date"):
+            if ignore is not None and field in ignore:
+                continue
             want = getattr(self, field)
             got = getattr(other, field)
             if not ({got, want} & {None, NO_RANGE}) and got != want:

@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from urllib.parse import urlparse
 
 from esrally import config
@@ -27,8 +28,11 @@ from esrally.storage._executor import Executor, ThreadPoolExecutor
 from esrally.storage._manager import TransferManager
 
 INDEX_URL = "https://rally-tracks.elastic.co/"
-# BUCKET_URL = "s3://es-perf-fressi-eu-central-1/"
-BUCKET_URL = "s3://es-perf-fressi-us-west-1/"
+
+BUCKET_URLS = (
+    "s3://es-perf-fressi-eu-west-1/",
+    "s3://es-perf-fressi-us-west-1/",
+)
 
 MIRRORS_FILES = "~/.rally/storage-mirrors.json"
 
@@ -55,15 +59,17 @@ class Sync:
             manager = TransferManager.from_config(cfg, client=client, executor=executor)
 
         index_url = cfg.opts("storage", "storage.sync.index_url", INDEX_URL, mandatory=False)
-        bucket_url = cfg.opts("storage", "storage.sync.bucket_url", BUCKET_URL, mandatory=False)
-        return cls(client=client, executor=executor, manager=manager, index_url=index_url, bucket_url=bucket_url)
+        bucket_urls = cfg.opts("storage", "storage.sync.bucket_url", BUCKET_URLS, mandatory=False)
+        return cls(client=client, executor=executor, manager=manager, index_url=index_url, bucket_urls=bucket_urls)
 
-    def __init__(self, client: Client, executor: Executor, manager: TransferManager, index_url: str, bucket_url: str) -> None:
+    def __init__(self, client: Client, executor: Executor, manager: TransferManager, index_url: str, bucket_urls: Iterable[str]) -> None:
         self._client = client
         self._executor = executor
         self._manager = manager
         self._index_url = index_url
-        self._bucket_url = bucket_url.strip().rstrip("/") + "/"
+        if isinstance(bucket_urls, str):
+            bucket_urls = bucket_urls.split(",")
+        self._bucket_urls = [u.strip().rstrip("/") + "/" for u in bucket_urls]
 
     def start(self) -> None:
         for head in self._client.list(self._index_url):
@@ -75,17 +81,23 @@ class Sync:
                 LOG.error("Failed fetching head from '%s': %s", url, ex)
 
             path = urlparse(url).path.lstrip("/")
-            bucket_url = self._bucket_url + path
+            bucket_urls = {u + path for u in self._bucket_urls}
+            for bucket_url in list(bucket_urls):
+                try:
+                    got = self._client.head(bucket_url)
+                    head.check(got)
+                    bucket_urls.remove(bucket_url)
+                except Exception as ex:
+                    LOG.debug("File '%s' need to be uploaded: %s", bucket_url, ex)
 
-            try:
-                got = self._client.head(bucket_url)
-                head.check(got)
-            except Exception as ex:
-                LOG.error("Failed fetching head from '%s': %s", bucket_url, ex)
+            if not bucket_urls:
+                LOG.info("File '%s' already uploaded on buckets.", url)
+                continue
 
             tr1 = self._manager.get(url)
             tr1.wait()
-            self._client.put(tr1.path, bucket_url, head=head)
+            for bucket_url in bucket_urls:
+                self._client.put(tr1.path, bucket_url, head=head)
 
 
 def main():

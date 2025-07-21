@@ -151,6 +151,7 @@ Key = Literal[
     "source.revision",
     "src.root.dir",
     "storage.adapters",
+    "storage.aws.profile",
     "storage.http.chunk_size",
     "storage.http.max_retries",
     "storage.local_dir",
