@@ -159,6 +159,8 @@ Key = Literal[
     "storage.mirrors_files",
     "storage.monitor_interval",
     "storage.multipart_size",
+    "storage.sync.bucket_url",
+    "storage.sync.index_url",
     "storage.random_seed",
     "target.arch",
     "target.os",
