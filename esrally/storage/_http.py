@@ -136,8 +136,8 @@ class HTTPAdapter(Adapter):
         content_length = cls._content_length_from_headers(headers)
         accept_ranges = cls._accept_ranges_from_headers(headers)
         ranges, document_length = cls._content_range_from_headers(headers)
-        hashes = cls._hashes_from_headers(headers)
-        crc32c = hashes.get("crc32c")
+        crc32c = cls._hashes_from_headers(headers).get("crc32c")
+        # TODO: date header is not supported yet.
         return Head.create(
             url=url,
             content_length=content_length,
