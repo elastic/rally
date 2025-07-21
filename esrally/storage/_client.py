@@ -110,10 +110,6 @@ class Client:
 
         return _head_or_raise(value)
 
-    @property
-    def adapters(self) -> AdapterRegistry:
-        return self._adapters
-
     def resolve(self, url: str, check: Head | None, ttl: float = 60.0) -> Iterator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
         :param url: the remote file URL at its mirrored source location.
