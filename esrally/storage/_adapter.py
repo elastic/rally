@@ -21,6 +21,7 @@ import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Container, Iterable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -39,6 +40,9 @@ class Writable(Protocol):
 
     def write(self, data: bytes) -> None:
         pass
+
+
+_HEAD_CHECK_IGNORE = frozenset(["url"])
 
 
 @dataclass
@@ -76,11 +80,14 @@ class Head:
             date=date,
         )
 
-    def check(self, other: Head) -> None:
+    def check(self, other: Head, ignore: Container[str] = _HEAD_CHECK_IGNORE) -> None:
         for field in ("url", "content_length", "accept_ranges", "ranges", "document_length", "crc32c", "date"):
+            if ignore is not None and field in ignore:
+                continue
             want = getattr(self, field)
             got = getattr(other, field)
-            if not ({got, want} & {None, NO_RANGE}) and got != want:
+            # If both got abd want are specified, then they have to match.
+            if all([got, want]) and got != want:
                 raise ValueError(f"unexpected '{field}': got {got}, want {want}")
 
 
@@ -126,13 +133,11 @@ class Adapter(ABC):
         """
 
 
-ADAPTER_CLASS_NAMES = ",".join(
-    [
-        "esrally.storage._tracks:TracksRepositoryAdapter",
-        "esrally.storage._s3:S3Adapter",
-        "esrally.storage._http:HTTPAdapter",
-    ]
-)
+ADAPTER_CLASS_NAMES = [
+    "esrally.storage._tracks:TracksRepositoryAdapter",
+    "esrally.storage._s3:S3Adapter",
+    "esrally.storage._http:HTTPAdapter",
+]
 
 
 class AdapterRegistry:
@@ -147,13 +152,14 @@ class AdapterRegistry:
     @classmethod
     def from_config(cls, cfg: Config) -> AdapterRegistry:
         registry = cls(cfg)
-        adapters_specs = (
-            cfg.opts(section="storage", key="storage.adapters", default_value=ADAPTER_CLASS_NAMES, mandatory=False)
-            .replace(" ", "")
-            .split(",")
+        adapter_names: Iterable[str] = cfg.opts(
+            section="storage", key="storage.adapters", default_value=ADAPTER_CLASS_NAMES, mandatory=False
         )
-        for spec in adapters_specs:
-            module_name, class_name = spec.split(":")
+        if isinstance(adapter_names, str):
+            # It parses adapter names when it has been defined as a single string.
+            adapter_names = adapter_names.replace(" ", "").split(",")
+        for adapter_name in adapter_names:
+            module_name, class_name = adapter_name.split(":")
             try:
                 module = importlib.import_module(module_name)
             except ModuleNotFoundError:
