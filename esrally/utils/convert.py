@@ -139,7 +139,7 @@ class Duration(int):
         it = iter(Duration.Unit)
         last = next(it)
         for unit in it:
-            if self < unit:
+            if abs(self) < unit:
                 return last
             last = unit
         return last
@@ -198,8 +198,6 @@ class Duration(int):
 def duration(x: int | float, unit: Duration.Unit = Duration.Unit.S) -> Duration:
     if isinstance(x, Duration):
         return x
-    if x < 0:
-        raise TypeError("negative duration")
     return Duration(x * unit)
 
 
