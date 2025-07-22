@@ -19,8 +19,9 @@ SHELL := /bin/bash
 # We assume an active virtualenv for development
 VIRTUAL_ENV ?= .venv
 VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
+VE_MISSING_HELP := "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_ENV); have you executed make install?\033[0m\n"
 
-PY_VERSION = 3.12.2
+PY_VERSION = $(shell jq -r '.python_versions.DEFAULT_PY_VERSION' .ci/variables.json)
 
 .PHONY: install \
 	check-venv \
@@ -94,13 +95,13 @@ serve-docs: check-venv
 	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
 
 test: check-venv
-	uv run --python=3.9 nox -s test-3.9
-	uv run --python=3.12 nox -s test-3.12
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.9
+	. $(VENV_ACTIVATE_FILE); nox -s test-3.12
 
 # checks min and max python versions
 it: check-venv python-caches-clean
-	uv run --python=3.9 nox -s it-3.9
-	uv run --python=3.12 nox -s it-3.12
+	. $(VENV_ACTIVATE_FILE); nox -s it-3.9
+	. $(VENV_ACTIVATE_FILE); nox -s it-3.12
 
 check-all: lint test it
 
