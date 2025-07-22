@@ -153,19 +153,25 @@ class HTTPAdapter(Adapter):
             crc32c=crc32c,
         )
 
+    _CONTENT_LENGTH_HEADER = "Content-Length"
+
     @classmethod
     def _content_length_from_headers(cls, headers: CaseInsensitiveDict) -> int | None:
-        value = headers.get("content-length", "").strip()
-        if not value:
+        value = headers.get(cls._CONTENT_LENGTH_HEADER, None)
+        if value is None:
             return None
+        if isinstance(value, str):
+            value = value.strip()
         try:
             return int(value)
-        except ValueError:
-            raise ValueError(f"invalid content-length value: {value}") from None
+        except (ValueError, TypeError):
+            raise ValueError(f"invalid content length value: {value}") from None
+
+    _ACCEPT_RANGES_HEADER = "Accept-Ranges"
 
     @classmethod
     def _accept_ranges_from_headers(cls, headers: CaseInsensitiveDict) -> bool | None:
-        got = headers.get("accept-ranges", "").strip()
+        got = headers.get(cls._ACCEPT_RANGES_HEADER, "").strip()
         if not got:
             return None
         return got == "bytes"

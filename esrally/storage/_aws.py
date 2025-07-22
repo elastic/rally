@@ -91,6 +91,9 @@ class S3Adapter(HTTPAdapter):
             self._s3_client = boto3.Session(profile_name=self._aws_profile).client("s3")
         return self._s3_client
 
+    _CONTENT_LENGTH_HEADER = "ContentLength"
+    _ACCEPT_RANGES_HEADER = "AcceptRanges"
+
     @classmethod
     def _date_to_headers(cls, date: datetime | None, headers: CaseInsensitiveDict) -> None:
         if date is not None:

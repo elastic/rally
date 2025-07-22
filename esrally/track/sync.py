@@ -153,7 +153,7 @@ class Sync:
                     head.check(got)
                     bucket_urls.remove(bucket_url)
                 except Exception as ex:
-                    LOG.debug("File '%s' need to be uploaded: %s", bucket_url, ex)
+                    LOG.debug("File '%s' need to be updated: %s", bucket_url, ex)
 
             if not bucket_urls:
                 LOG.info("File '%s' already uploaded on buckets.", url)
