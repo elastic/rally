@@ -23,6 +23,7 @@ from unittest.mock import call, create_autospec
 
 import boto3
 import pytest
+from requests.structures import CaseInsensitiveDict
 
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._aws import S3Adapter
@@ -123,32 +124,32 @@ def test_get(case: GetCase, s3_client) -> None:
     assert [call(data) for data in case.want_write_data] == stream.write.mock_calls
 
 
-# @dataclass()
-# class RangesToHeadersCase:
-#     ranges: str
-#     want: dict[str, str] | type[Exception]
-#
-#
-# @cases(
-#     no_ranges=RangesToHeadersCase("", {}),
-#     range=RangesToHeadersCase("10-20", {"Range": "bytes=10-20"}),
-#     open_left=RangesToHeadersCase("-20", {"Range": "bytes=0-20"}),
-#     open_right=RangesToHeadersCase("10-", {"Range": "bytes=10-"}),
-#     multipart=RangesToHeadersCase("1-5,7-10", NotImplementedError),
-# )
-# def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
-#     # py lint: disable=protected-access
-#     got = CaseInsensitiveDict()
-#     try:
-#         S3Adapter._ranges_to_headers(rangeset(case.ranges), got)
-#     except Exception as ex:
-#         got = ex
-#     if isinstance(case.want, type):
-#         assert isinstance(got, case.want)
-#     else:
-#         assert got == CaseInsensitiveDict(case.want)
-#
-#
+@dataclass()
+class RangesToHeadersCase:
+    ranges: str
+    want: dict[str, str] | type[Exception]
+
+
+@cases(
+    no_ranges=RangesToHeadersCase("", {}),
+    range=RangesToHeadersCase("10-20", {"Range": "bytes=10-20"}),
+    open_left=RangesToHeadersCase("-20", {"Range": "bytes=0-20"}),
+    open_right=RangesToHeadersCase("10-", {"Range": "bytes=10-"}),
+    multipart=RangesToHeadersCase("1-5,7-10", NotImplementedError),
+)
+def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
+    # pylint: disable=protected-access
+    got = CaseInsensitiveDict()
+    try:
+        S3Adapter._ranges_to_headers(rangeset(case.ranges), got)
+    except Exception as ex:
+        got = ex
+    if isinstance(case.want, type):
+        assert isinstance(got, case.want)
+    else:
+        assert got == CaseInsensitiveDict(case.want)
+
+
 # @dataclass()
 # class HeadFromHeadersCase:
 #     headers: dict[str, str]

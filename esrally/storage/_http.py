@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from datetime import datetime
 from typing import Any, TypeVar
 
@@ -123,17 +123,19 @@ class HTTPAdapter(Adapter):
         return ret
 
     @classmethod
-    def _date_to_headers(cls, date: datetime | None, headers: CaseInsensitiveDict) -> None:
+    def _date_to_headers(cls, date: datetime | None, headers: MutableMapping[str, Any]) -> None:
         if date is not None:
             raise NotImplementedError("date is not implemented yet")
 
+    _RANGE_HEADER = "Range"
+
     @classmethod
-    def _ranges_to_headers(cls, ranges: RangeSet, headers: CaseInsensitiveDict) -> None:
+    def _ranges_to_headers(cls, ranges: RangeSet, headers: MutableMapping[str, Any]) -> None:
         if not ranges:
             return
         if len(ranges) > 1:
             raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
-        headers["range"] = f"bytes={ranges[0]}"
+        headers[cls._RANGE_HEADER] = f"bytes={ranges[0]}"
 
     @classmethod
     def _make_head(cls, url: str, headers: CaseInsensitiveDict) -> Head:

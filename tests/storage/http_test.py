@@ -35,7 +35,7 @@ URL = "https://example.com"
 
 ACCEPT_RANGES_HEADER = {"Accept-Ranges": "bytes"}
 CONTENT_LENGTH_HEADER = {"Content-Length": "512"}
-CONTENT_RANGE_HEADER = {"Content-Range": "bytes 3-20/128"}
+CONTENT_RANGE_HEADER = {"Content-Range": "bytes 3-20/128", "Content-Length": "18"}
 X_GOOG_HASH_CRC32C_HEADER = {"X-Goog-Hash": "crc32c=some-checksum"}
 X_AMZ_CHECKSUM_CRC32C_HEADER = {"x-amz-checksum-crc32c": "some-checksum"}
 DATA = "some-data"
@@ -70,7 +70,7 @@ class HeadCase:
 @cases(
     simple=HeadCase(response(), Head(URL)),
     accept_ranges=HeadCase(response(ACCEPT_RANGES_HEADER), Head(URL, accept_ranges=True)),
-    content_length=HeadCase(response(CONTENT_LENGTH_HEADER), Head(URL, content_length=512, document_length=512)),
+    content_length=HeadCase(response(CONTENT_LENGTH_HEADER), Head(URL, content_length=512)),
     content_range=HeadCase(
         response(CONTENT_RANGE_HEADER),
         Head(URL, content_length=18, ranges=rangeset("3-20"), document_length=128),
@@ -98,7 +98,7 @@ class GetCase:
 @cases(
     default=GetCase(response(), Head(URL)),
     accept_ranges=GetCase(response(ACCEPT_RANGES_HEADER), Head(URL, accept_ranges=True)),
-    content_length=GetCase(response(CONTENT_LENGTH_HEADER), Head(URL, content_length=512, document_length=512)),
+    content_length=GetCase(response(CONTENT_LENGTH_HEADER), Head(URL, content_length=512)),
     read_data=GetCase(response(data="some_data"), Head(URL), want_data="some_data"),
     ranges=GetCase(
         response(CONTENT_RANGE_HEADER),
@@ -113,7 +113,7 @@ def test_get(case: GetCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
     session.get.return_value = case.response
     stream = create_autospec(Writable, spec_set=True, instance=True)
-    head = adapter.get(case.url, stream, head=Head.create(ranges=rangeset(case.ranges)))
+    head = adapter.get(case.url, stream, head=Head(ranges=rangeset(case.ranges)))
     assert head == case.want
     if case.want_data:
         stream.write.assert_called_once_with(case.want_data)
@@ -160,7 +160,7 @@ class HeadFromHeadersCase:
 
 @cases(
     empty=HeadFromHeadersCase({}, Head(URL)),
-    content_length=HeadFromHeadersCase(CONTENT_LENGTH_HEADER, Head(URL, content_length=512, document_length=512)),
+    content_length=HeadFromHeadersCase(CONTENT_LENGTH_HEADER, Head(URL, content_length=512)),
     accept_ranges=HeadFromHeadersCase(ACCEPT_RANGES_HEADER, Head(URL, accept_ranges=True)),
     ranges=HeadFromHeadersCase(
         CONTENT_RANGE_HEADER,

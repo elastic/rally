@@ -19,12 +19,11 @@ from __future__ import annotations
 import logging
 import os
 import urllib.parse
+from collections.abc import MutableMapping
 from datetime import datetime
 from typing import Any, NamedTuple, TypeVar
 
 import boto3
-
-# from botocore.client import S3
 from requests.structures import CaseInsensitiveDict
 
 from esrally.storage._adapter import Head, Readable, Writable
@@ -62,12 +61,12 @@ class S3Adapter(HTTPAdapter):
         return self._make_head(url, CaseInsensitiveDict(res))
 
     def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
-        kwargs = {}
+        headers: dict[str, Any] = {}
         if head is not None and head.ranges:
-            kwargs["Range"] = f"bytes={head.ranges}"
+            self._ranges_to_headers(head.ranges, headers)
 
         address = S3Address.from_url(url)
-        res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **kwargs)
+        res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
         ret = self._make_head(url, CaseInsensitiveDict(res))
         if head is not None:
             head.check(ret)
@@ -104,9 +103,10 @@ class S3Adapter(HTTPAdapter):
     _CONTENT_LENGTH_HEADER = "ContentLength"
     _ACCEPT_RANGES_HEADER = "AcceptRanges"
     _CONTENT_RANGE_HEADER = "ContentRange"
+    _RANGE_HEADER = "Range"
 
     @classmethod
-    def _date_to_headers(cls, date: datetime | None, headers: CaseInsensitiveDict) -> None:
+    def _date_to_headers(cls, date: datetime | None, headers: MutableMapping[str, Any]) -> None:
         if date is not None:
             headers["x-amz-date"] = date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
