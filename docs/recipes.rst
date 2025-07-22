@@ -324,10 +324,3 @@ When a benchmark is executed with ``--enable-assertions`` and this query returns
 
     [ERROR] Cannot race. Error in load generator [0]
         Cannot run task [geo_distance]: Expected [hits] to be > [0] but was [0].
-
-Skipping telemetry data collection when hitting an error.
---------------------------------------------------------------
-
-In some cases, you may want to skip telemetry data collection when Rally hits an error. This can be useful in cases you want to avoid storing telemetry results when a benchmark got unexpected results . To enable this behavior, you can pass the ``--skip-telemetry`` command line flag when executing `esrally stop`. This will prevent Rally from sending telemetry data to the metrics store. 
-
-	esrally stop --installation-id=INSTALLATION_ID  --skip-telemetry
