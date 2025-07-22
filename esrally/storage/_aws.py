@@ -56,21 +56,28 @@ class S3Adapter(HTTPAdapter):
     def match_url(cls, url: str) -> bool:
         return url.startswith("s3://")
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
-        ranges = ""
-        if head:
-            ranges = str(head.ranges)
-        address = S3Address.from_url(url)
-        headers = self._s3.get_object(Bucket=address.bucket, Key=address.key, Range=ranges)
-        ret = self._make_head(url, CaseInsensitiveDict(headers))
-        if head is not None:
-            head.check(ret)
-        return ret
-
     def head(self, url: str) -> Head:
         address = S3Address.from_url(url)
-        headers = self._s3.head_object(Bucket=address.bucket, Key=address.key)
-        return self._make_head(url, CaseInsensitiveDict(headers))
+        res = self._s3.head_object(Bucket=address.bucket, Key=address.key)
+        return self._make_head(url, CaseInsensitiveDict(res))
+
+    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+        kwargs = {}
+        if head is not None and head.ranges:
+            kwargs["Range"] = f"bytes={head.ranges}"
+
+        address = S3Address.from_url(url)
+        res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **kwargs)
+        ret = self._make_head(url, CaseInsensitiveDict(res))
+        if head is not None:
+            head.check(ret)
+        body = res.get("Body")
+        if body is None:
+            raise RuntimeError("S3 client returned no body.")
+        for chunk in body.iter_content(self.chunk_size):
+            if chunk:
+                stream.write(chunk)
+        return ret
 
     def put(self, stream: Readable, url: str, head: Head | None = None) -> Head:
         if head is not None and head.ranges:

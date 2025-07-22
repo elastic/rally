@@ -141,7 +141,7 @@ class HTTPAdapter(Adapter):
         content_length = cls._content_length_from_headers(headers)
         ranges, document_length = cls._content_range_from_headers(headers)
         crc32c = cls._hashes_from_headers(headers).get("crc32c")
-        return Head.create(
+        return Head(
             url=url,
             content_length=content_length,
             accept_ranges=accept_ranges,
