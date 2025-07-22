@@ -22,6 +22,7 @@ from unittest import mock
 
 import pytest
 
+from esrally import types
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Adapter, AdapterRegistry
 from esrally.utils.cases import cases
@@ -30,27 +31,36 @@ from esrally.utils.cases import cases
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_config(cls, cfg: Config) -> Adapter:
+    def from_config(cls, cfg: types.Config) -> Adapter:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 
 class HTTPAdapter(MockAdapter, ABC):
 
-    __adapter_URL_prefixes__ = "http://"
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("http://")
 
 
 class HTTPSAdapter(MockAdapter, ABC):
 
-    __adapter_URL_prefixes__ = "https://"
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("https://")
 
 
 class ExampleAdapter(MockAdapter, ABC):
-    __adapter_URL_prefixes__ = "https://example.com/"
+
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("https://example.com/")
 
 
 class ExampleAdapterWithPath(MockAdapter, ABC):
 
-    __adapter_URL_prefixes__ = "https://example.com/some/path/"
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("https://example.com/some/path/")
 
 
 @pytest.fixture()
@@ -60,7 +70,7 @@ def cfg() -> Config:
         Scope.application,
         "storage",
         "storage.adapters",
-        f"{__name__}:HTTPSAdapter,{__name__}:HTTPAdapter,{__name__}:ExampleAdapter,{__name__}:ExampleAdapterWithPath",
+        f"{__name__}:ExampleAdapterWithPath,{__name__}:ExampleAdapter,{__name__}:HTTPSAdapter,{__name__}:HTTPAdapter",
     )
     return cfg
 
@@ -74,31 +84,29 @@ def registry(cfg: Config) -> AdapterRegistry:
 @dataclass()
 class RegistryCase:
     url: str
-    want: type[Adapter] | type[Exception]
+    want_type: type[Adapter] | None = None
+    want_error: type[Exception] | None = None
 
 
 @cases(
-    ftp=RegistryCase("ftp://example.com", ValueError),
-    http=RegistryCase("http://example.com", HTTPAdapter),
-    https=RegistryCase("https://example.com", HTTPSAdapter),
-    example=RegistryCase("https://example.com/", ExampleAdapter),
+    ftp=RegistryCase("ftp://example.com", want_error=ValueError),
+    http=RegistryCase("http://example.com", want_type=HTTPAdapter),
+    https=RegistryCase("https://example.com", want_type=HTTPSAdapter),
+    example=RegistryCase("https://example.com/", want_type=ExampleAdapter),
     example_with_path=RegistryCase("https://example.com/some/path/", ExampleAdapterWithPath),
 )
 def test_adapter_registry_get(case: RegistryCase, registry: AdapterRegistry) -> None:
     try:
-        got = registry.get(case.url)
+        adapter = registry.get(case.url)
+        error = None
     except Exception as ex:
-        got = ex
-    assert isinstance(got, case.want)
-    if isinstance(case.want, Adapter):
-        assert got is registry.get(case.url)
+        adapter = None, None
+        error = ex
 
+    if case.want_type is not None:
+        assert isinstance(adapter, case.want_type)
+        adapter2 = registry.get(case.url)
+        assert adapter2 is adapter
 
-def test_adapter_registry_order(registry: AdapterRegistry) -> None:
-    registered_prefixes = [c.url_prefix for c in registry._classes]  # pylint: disable=protected-access
-    assert registered_prefixes == [
-        "https://example.com/some/path/",
-        "https://example.com/",
-        "https://",
-        "http://",
-    ], "prefixes are not sorted from the longest to the shortest"
+    if case.want_error is not None:
+        assert isinstance(error, case.want_error)

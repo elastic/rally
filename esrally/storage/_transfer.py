@@ -24,10 +24,11 @@ import threading
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from typing import BinaryIO, Protocol
+from typing import BinaryIO
 
-from esrally.storage._adapter import ServiceUnavailableError
+from esrally.storage._adapter import Head, ServiceUnavailableError
 from esrally.storage._client import MAX_CONNECTIONS, Client
+from esrally.storage._executor import Executor
 from esrally.storage._range import (
     MAX_LENGTH,
     NO_RANGE,
@@ -51,22 +52,6 @@ class TransferStatus(enum.Enum):
 
 
 MULTIPART_SIZE = 8 * 1024 * 1024
-
-
-class Executor(Protocol):
-    """Executor protocol is used by Transfer class to submit tasks execution.
-
-    Notable implementation of this protocol is concurrent.futures.ThreadPoolExecutor[1] class.
-
-    [1] https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
-    """
-
-    def submit(self, fn, /, *args, **kwargs):
-        """Submits a callable to be executed with the given arguments.
-
-        Schedules the callable to be executed as fn(*args, **kwargs).
-        """
-        raise NotImplementedError()
 
 
 class Transfer:
@@ -251,6 +236,10 @@ class Transfer:
             raise ValueError(f"done field not found in status file: {status_filename}")
         done = rangeset(done_text)
         if done:
+            file_size = os.path.getsize(self.path)
+            if done.end > file_size:
+                raise ValueError(f"corrupted file size is smaller than completed part: {done.end} > {file_size} (path='{self.path}')")
+
             self._done = self.done | done
             self._todo = self._todo - done
         # Update the resumed size so that it will compute download speed only on the new parts.
@@ -293,7 +282,9 @@ class Transfer:
                     self.start()
                 assert isinstance(fd, FileWriter)
                 # It downloads the part of the file from a remote location.
-                head = self.client.get(self.url, fd, fd.ranges, document_length=self._document_length, crc32c=self._crc32c)
+                head = self.client.get(
+                    self.url, fd, head=Head(ranges=fd.ranges, document_length=self._document_length, crc32c=self._crc32c)
+                )
                 if head.document_length is not None:
                     # It checks the size of the file it downloaded the data from.
                     self.document_length = head.document_length

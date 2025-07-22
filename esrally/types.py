@@ -154,6 +154,7 @@ Key = Literal[
     "storage.http.chunk_size",
     "storage.http.max_retries",
     "storage.max_connections",
+    "storage.max_workers",
     "storage.mirrors_files",
     "storage.random_seed",
     "target.arch",
