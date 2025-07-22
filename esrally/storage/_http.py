@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, TypeVar
 
@@ -95,9 +95,6 @@ class HTTPAdapter(Adapter):
                 raise FileNotFoundError(f"Can't get file head: {url}")
             res.raise_for_status()
         return self._make_head(url, res.headers)
-
-    def list(self, url: str) -> Iterator[Head]:
-        raise NotImplementedError("HTTP adapter doesn't implemented file listing.")
 
     def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         headers = self._headers(head)
@@ -176,9 +173,11 @@ class HTTPAdapter(Adapter):
             return None
         return got == "bytes"
 
+    _CONTENT_RANGE_HEADER = "Content-Range"
+
     @classmethod
     def _content_range_from_headers(cls, headers: CaseInsensitiveDict) -> tuple[RangeSet, int | None]:
-        content_range_text = headers.get("content-range", "").strip()
+        content_range_text = headers.get(cls._CONTENT_RANGE_HEADER, "").strip()
         if not content_range_text:
             return NO_RANGE, None
 

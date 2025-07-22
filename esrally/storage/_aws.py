@@ -23,10 +23,12 @@ from datetime import datetime
 from typing import Any, NamedTuple, TypeVar
 
 import boto3
+
+# from botocore.client import S3
 from requests.structures import CaseInsensitiveDict
 
 from esrally.storage._adapter import Head, Readable, Writable
-from esrally.storage._http import CHUNK_SIZE, HTTPAdapter, Session
+from esrally.storage._http import HTTPAdapter
 from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
@@ -37,17 +39,18 @@ A = TypeVar("A", "S3Adapter", "S3Adapter")
 
 
 class S3Adapter(HTTPAdapter):
-    """Adapter class for s3 scheme protocol"""
+    """Adapter class for s3:// scheme protocol"""
 
     @classmethod
     def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
         assert issubclass(cls, S3Adapter)
         aws_profile = cfg.opts("storage", "storage.aws.profile", default_value=AWS_PROFILE, mandatory=False)
-        return super().from_config(cfg, aws_profile=aws_profile, **kwargs)
+        return cls(aws_profile=aws_profile)
 
-    def __init__(self, session: Session | None = None, chunk_size: int = CHUNK_SIZE, aws_profile: str | None = AWS_PROFILE) -> None:
-        super().__init__(session=session, chunk_size=chunk_size)
+    def __init__(self, aws_profile: str | None = AWS_PROFILE, s3_client: Any = None) -> None:
+        super().__init__()
         self._aws_profile = aws_profile
+        self._s3_client = s3_client
 
     @classmethod
     def match_url(cls, url: str) -> bool:
@@ -93,6 +96,7 @@ class S3Adapter(HTTPAdapter):
 
     _CONTENT_LENGTH_HEADER = "ContentLength"
     _ACCEPT_RANGES_HEADER = "AcceptRanges"
+    _CONTENT_RANGE_HEADER = "ContentRange"
 
     @classmethod
     def _date_to_headers(cls, date: datetime | None, headers: CaseInsensitiveDict) -> None:
