@@ -20,6 +20,7 @@ import json
 import logging
 from collections.abc import Iterator, Mapping
 from datetime import datetime
+from typing import Any, TypeVar
 
 import requests
 import requests.adapters
@@ -65,6 +66,8 @@ _CONTENT_RANGE_PREFIX = "bytes "
 _AMZ_CHECKSUM_PREFIX = "x-amz-checksum-"
 _GOOG_HASH_KEY = "X-Goog-Hash"
 
+A = TypeVar("A", "HTTPAdapter", "HTTPAdapter")
+
 
 class HTTPAdapter(Adapter):
     """It implements the `Adapter` interface for http(s) protocols using the requests library."""
@@ -74,7 +77,8 @@ class HTTPAdapter(Adapter):
         return url.startswith("http://") or url.startswith("https://")
 
     @classmethod
-    def from_config(cls, cfg: Config) -> Adapter:
+    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
+        assert issubclass(cls, HTTPAdapter)
         chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
         return cls(session=Session.from_config(cfg), chunk_size=chunk_size)
 
@@ -95,8 +99,8 @@ class HTTPAdapter(Adapter):
     def list(self, url: str) -> Iterator[Head]:
         raise NotImplementedError("HTTP adapter doesn't implemented file listing.")
 
-    def get(self, url: str, stream: Writable, head: Head | None = None, headers: Mapping[str, str] | None = None) -> Head:
-        headers = self._headers(head, headers)
+    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+        headers = self._headers(head)
         with self.session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
             if res.status_code == 503:
                 raise ServiceUnavailableError()
@@ -136,11 +140,10 @@ class HTTPAdapter(Adapter):
 
     @classmethod
     def _make_head(cls, url: str, headers: CaseInsensitiveDict) -> Head:
-        content_length = cls._content_length_from_headers(headers)
         accept_ranges = cls._accept_ranges_from_headers(headers)
+        content_length = cls._content_length_from_headers(headers)
         ranges, document_length = cls._content_range_from_headers(headers)
         crc32c = cls._hashes_from_headers(headers).get("crc32c")
-        # TODO: date header is not supported yet.
         return Head.create(
             url=url,
             content_length=content_length,
@@ -150,19 +153,25 @@ class HTTPAdapter(Adapter):
             crc32c=crc32c,
         )
 
+    _CONTENT_LENGTH_HEADER = "Content-Length"
+
     @classmethod
     def _content_length_from_headers(cls, headers: CaseInsensitiveDict) -> int | None:
-        value = headers.get("content-length", "").strip()
-        if not value:
+        value = headers.get(cls._CONTENT_LENGTH_HEADER, None)
+        if value is None:
             return None
+        if isinstance(value, str):
+            value = value.strip()
         try:
             return int(value)
-        except ValueError:
-            raise ValueError(f"invalid content-length value: {value}") from None
+        except (ValueError, TypeError):
+            raise ValueError(f"invalid content length value: {value}") from None
+
+    _ACCEPT_RANGES_HEADER = "Accept-Ranges"
 
     @classmethod
     def _accept_ranges_from_headers(cls, headers: CaseInsensitiveDict) -> bool | None:
-        got = headers.get("accept-ranges", "").strip()
+        got = headers.get(cls._ACCEPT_RANGES_HEADER, "").strip()
         if not got:
             return None
         return got == "bytes"
