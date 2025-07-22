@@ -24,10 +24,10 @@ from datetime import datetime
 from typing import Any, NamedTuple, TypeVar
 
 import boto3
-from requests.structures import CaseInsensitiveDict
+import requests
 
 from esrally.storage._adapter import Head, Readable, Writable
-from esrally.storage._http import HTTPAdapter
+from esrally.storage._http import CHUNK_SIZE, HTTPAdapter
 from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
@@ -44,11 +44,17 @@ class S3Adapter(HTTPAdapter):
     def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
         assert issubclass(cls, S3Adapter)
         aws_profile = cfg.opts("storage", "storage.aws.profile", default_value=AWS_PROFILE, mandatory=False)
-        return cls(aws_profile=aws_profile)
+        return super().from_config(cfg, aws_profile=aws_profile)
 
-    def __init__(self, aws_profile: str | None = AWS_PROFILE, s3_client: Any = None) -> None:
-        super().__init__()
-        self._aws_profile = aws_profile
+    def __init__(
+        self,
+        aws_profile: str | None = AWS_PROFILE,
+        s3_client: Any = None,
+        session: requests.Session | None = None,
+        chunk_size: int = CHUNK_SIZE,
+    ) -> None:
+        super().__init__(session=session, chunk_size=chunk_size)
+        self.aws_profile = aws_profile
         self._s3_client = s3_client
 
     @classmethod
@@ -58,16 +64,15 @@ class S3Adapter(HTTPAdapter):
     def head(self, url: str) -> Head:
         address = S3Address.from_url(url)
         res = self._s3.head_object(Bucket=address.bucket, Key=address.key)
-        return self._make_head(url, CaseInsensitiveDict(res))
+        return self._head_from_headers(url, res)
 
     def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         headers: dict[str, Any] = {}
-        if head is not None and head.ranges:
-            self._ranges_to_headers(head.ranges, headers)
+        self._head_to_headers(head, headers)
 
         address = S3Address.from_url(url)
         res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
-        ret = self._make_head(url, CaseInsensitiveDict(res))
+        ret = self._head_from_headers(url, res)
         if head is not None:
             head.check(ret)
         body = res.get("Body")
@@ -84,10 +89,10 @@ class S3Adapter(HTTPAdapter):
 
         address = S3Address.from_url(url)
         LOG.info("Uploading file to '%s'...", url)
-        headers = self._s3.upload_fileobj(stream, address.bucket, address.key)
+        res = self._s3.upload_fileobj(stream, address.bucket, address.key)
         LOG.info("File uploaded: '%s'.", url)
 
-        ret = self._make_head(url, CaseInsensitiveDict(headers))
+        ret = self._head_from_headers(url, res)
         if head is not None:
             head.check(ret)
         return ret
@@ -97,7 +102,7 @@ class S3Adapter(HTTPAdapter):
     @property
     def _s3(self):
         if self._s3_client is None:
-            self._s3_client = boto3.Session(profile_name=self._aws_profile).client("s3")
+            self._s3_client = boto3.Session(profile_name=self.aws_profile).client("s3")
         return self._s3_client
 
     _CONTENT_LENGTH_HEADER = "ContentLength"

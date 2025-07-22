@@ -23,11 +23,13 @@ from unittest.mock import call, create_autospec
 
 import boto3
 import pytest
-from requests.structures import CaseInsensitiveDict
 
+from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._aws import S3Adapter
+from esrally.storage._http import CHUNK_SIZE
 from esrally.storage._range import rangeset
+from esrally.types import Key
 from esrally.utils.cases import cases
 
 SOME_BUCKET = "some-example"
@@ -127,7 +129,8 @@ def test_get(case: GetCase, s3_client) -> None:
 @dataclass()
 class RangesToHeadersCase:
     ranges: str
-    want: dict[str, str] | type[Exception]
+    want_headers: dict[str, str] | None = None
+    want_errors: tuple[type[Exception], ...] = tuple()
 
 
 @cases(
@@ -135,19 +138,17 @@ class RangesToHeadersCase:
     range=RangesToHeadersCase("10-20", {"Range": "bytes=10-20"}),
     open_left=RangesToHeadersCase("-20", {"Range": "bytes=0-20"}),
     open_right=RangesToHeadersCase("10-", {"Range": "bytes=10-"}),
-    multipart=RangesToHeadersCase("1-5,7-10", NotImplementedError),
+    multipart=RangesToHeadersCase("1-5,7-10", want_errors=(NotImplementedError,)),
 )
 def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
     # pylint: disable=protected-access
-    got = CaseInsensitiveDict()
+    got: dict[str, Any] = {}
     try:
         S3Adapter._ranges_to_headers(rangeset(case.ranges), got)
-    except Exception as ex:
-        got = ex
-    if isinstance(case.want, type):
-        assert isinstance(got, case.want)
-    else:
-        assert got == CaseInsensitiveDict(case.want)
+    except case.want_errors:
+        return
+
+    assert got == case.want_headers
 
 
 # @dataclass()
@@ -176,31 +177,25 @@ def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
 #         assert isinstance(got, case.want)
 #     else:
 #         assert got == case.want
-#
-#
-# @dataclass()
-# class FromConfigCase:
-#     opts: dict[Key, str]
-#     want_chunk_size: int = CHUNK_SIZE
-#     want_max_retries: int = MAX_RETRIES
-#     want_backoff_factor: int = 0
-#
-#
-# @cases(
-#     default=FromConfigCase({}),
-#     chunk_size=FromConfigCase({"storage.http.chunk_size": "10"}, want_chunk_size=10),
-#     max_retries=FromConfigCase({"storage.http.max_retries": "3"}, want_max_retries=3),
-#     max_retries_yml=FromConfigCase(
-#         {"storage.http.max_retries": '{"total": 5, "backoff_factor": 5}'}, want_max_retries=5, want_backoff_factor=5
-#     ),
-# )
-# def test_from_config(case: FromConfigCase) -> None:
-#     cfg = Config()
-#     for k, v in case.opts.items():
-#         cfg.add(Scope.application, "storage", k, v)
-#     adapter = HTTPAdapter.from_config(cfg)
-#     assert isinstance(adapter, HTTPAdapter)
-#     assert adapter.chunk_size == case.want_chunk_size
-#     retry = adapter.session.adapters["https://"].max_retries
-#     assert retry.total == case.want_max_retries
-#     assert retry.backoff_factor == case.want_backoff_factor
+
+
+@dataclass()
+class FromConfigCase:
+    opts: dict[Key, str]
+    want_aws_profile: str = None
+    want_chunk_size: int = CHUNK_SIZE
+
+
+@cases(
+    default=FromConfigCase({}),
+    chunk_size=FromConfigCase({"storage.http.chunk_size": "10"}, want_chunk_size=10),
+    aws_profile=FromConfigCase({"storage.aws.profile": "foo"}, want_aws_profile="foo"),
+)
+def test_from_config(case: FromConfigCase) -> None:
+    cfg = Config()
+    for k, v in case.opts.items():
+        cfg.add(Scope.application, "storage", k, v)
+    adapter = S3Adapter.from_config(cfg)
+    assert isinstance(adapter, S3Adapter)
+    assert adapter.chunk_size == case.want_chunk_size
+    assert adapter.aws_profile == case.want_aws_profile

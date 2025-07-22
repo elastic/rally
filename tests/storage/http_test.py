@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
+from typing import Any
 from unittest.mock import create_autospec
 
 import pytest
@@ -128,7 +129,8 @@ def test_get(case: GetCase, session: Session) -> None:
 @dataclass()
 class RangesToHeadersCase:
     ranges: str
-    want: dict[str, str] | type[Exception]
+    want_headers: dict[str, str] | None = None
+    want_errors: tuple[type[Exception], ...] = tuple()
 
 
 @cases(
@@ -136,19 +138,17 @@ class RangesToHeadersCase:
     range=RangesToHeadersCase("10-20", {"Range": "bytes=10-20"}),
     open_left=RangesToHeadersCase("-20", {"Range": "bytes=0-20"}),
     open_right=RangesToHeadersCase("10-", {"Range": "bytes=10-"}),
-    multipart=RangesToHeadersCase("1-5,7-10", NotImplementedError),
+    multipart=RangesToHeadersCase("1-5,7-10", want_errors=(NotImplementedError,)),
 )
 def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
     # pylint: disable=protected-access
-    got = CaseInsensitiveDict()
+    got: dict[str, Any] = {}
     try:
         HTTPAdapter._ranges_to_headers(rangeset(case.ranges), got)
-    except Exception as ex:
-        got = ex
-    if isinstance(case.want, type):
-        assert isinstance(got, case.want)
-    else:
-        assert got == CaseInsensitiveDict(case.want)
+    except case.want_errors:
+        return
+
+    assert got == case.want_headers
 
 
 @dataclass()
@@ -169,10 +169,10 @@ class HeadFromHeadersCase:
     x_goog_hash=HeadFromHeadersCase(X_GOOG_HASH_CRC32C_HEADER, Head(URL, crc32c="some-checksum")),
     x_amz_checksum=HeadFromHeadersCase(X_AMZ_CHECKSUM_CRC32C_HEADER, Head(URL, crc32c="some-checksum")),
 )
-def test_make_head(case: HeadFromHeadersCase):
+def test_head_from_headers(case: HeadFromHeadersCase):
     # pylint: disable=protected-access
     try:
-        got = HTTPAdapter._make_head(url=case.url, headers=CaseInsensitiveDict(case.headers))
+        got = HTTPAdapter._head_from_headers(url=case.url, headers=case.headers)
     except Exception as ex:
         got = ex
     if isinstance(case.want, type):
