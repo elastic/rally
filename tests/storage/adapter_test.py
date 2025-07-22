@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -31,7 +32,7 @@ from esrally.utils.cases import cases
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_config(cls, cfg: types.Config) -> Adapter:
+    def from_config(cls: type[Adapter], cfg: types.Config, **kwargs: dict[str, Any]) -> MockAdapter:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 
@@ -100,7 +101,7 @@ def test_adapter_registry_get(case: RegistryCase, registry: AdapterRegistry) -> 
         adapter = registry.get(case.url)
         error = None
     except Exception as ex:
-        adapter = None, None
+        adapter = None
         error = ex
 
     if case.want_type is not None:

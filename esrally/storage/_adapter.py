@@ -209,9 +209,12 @@ class AdapterRegistry:
             registry.register_class(obj)
         return registry
 
-    def register_class(self, cls: type[Adapter], position: int = -1) -> type[Adapter]:
+    def register_class(self, cls: type[Adapter], position: int | None = None) -> type[Adapter]:
         with self._lock:
-            self._classes.insert(position, cls)
+            if position is None:
+                self._classes.append(cls)
+            else:
+                self._classes.insert(position, cls)
         return cls
 
     def get(self, url: str) -> Adapter:
