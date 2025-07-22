@@ -25,7 +25,7 @@ import boto3
 import pytest
 
 from esrally.config import Config, Scope
-from esrally.storage._adapter import Head, Writable
+from esrally.storage._adapter import Head, Readable, Writable
 from esrally.storage._aws import S3Adapter
 from esrally.storage._http import CHUNK_SIZE
 from esrally.storage._range import rangeset
@@ -127,6 +127,36 @@ def test_get(case: GetCase, s3_client) -> None:
 
 
 @dataclass()
+class PutCase:
+    response: dict[str, Any]
+    want: Head
+    url: str = SOME_URL
+    ranges: str = ""
+    content_length: int | None = None
+    want_bucket: str = SOME_BUCKET
+    want_key: str = SOME_KEY
+    want_range: str = ""
+
+
+@cases(
+    empty=PutCase({}, Head(SOME_URL)),
+    accept_ranges=PutCase(ACCEPT_RANGES_HEADERS, Head(SOME_URL, accept_ranges=True)),
+    content_length=PutCase(CONTENT_LENGTH_HEADERS, Head(SOME_URL, content_length=512)),
+    read_data=PutCase(SOME_DATA_HEADERS, Head(SOME_URL, content_length=len(SOME_DATA))),
+)
+def test_put(case: PutCase, s3_client):
+    s3_client.upload_fileobj.return_value = case.response
+    adapter = S3Adapter(s3_client=s3_client)
+    stream = create_autospec(Readable, spec_set=True, instance=True)
+    got = adapter.put(stream, case.url, head=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
+    kwargs = {}
+    assert got == case.want
+    if case.want_range:
+        kwargs["Range"] = f"bytes={case.ranges}"
+    s3_client.upload_fileobj.assert_called_once_with(stream, case.want_bucket, case.want_key)
+
+
+@dataclass()
 class RangesToHeadersCase:
     ranges: str
     want_headers: dict[str, str] | None = None
@@ -151,32 +181,30 @@ def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
     assert got == case.want_headers
 
 
-# @dataclass()
-# class HeadFromHeadersCase:
-#     headers: dict[str, str]
-#     want: Head | Exception
-#     url: str = URL
-#
-#
-# @cases(
-#     empty=HeadFromHeadersCase({}, Head(URL)),
-#     content_length=HeadFromHeadersCase(CONTENT_LENGTH_HEADER, Head(URL, content_length=512, document_length=512)),
-#     accept_ranges=HeadFromHeadersCase(ACCEPT_RANGES_HEADER, Head(URL, accept_ranges=True)),
-#     ranges=HeadFromHeadersCase(
-#         CONTENT_RANGE_HEADER,
-#         Head(URL, ranges=rangeset("3-20"), content_length=18, document_length=128),
-#     ),
-# )
-# def test_make_head(case: HeadFromHeadersCase):
-#     # py lint: disable=protected-access
-#     try:
-#         got = S3Adapter._make_head(url=case.url, headers=CaseInsensitiveDict(case.headers))
-#     except Exception as ex:
-#         got = ex
-#     if isinstance(case.want, type):
-#         assert isinstance(got, case.want)
-#     else:
-#         assert got == case.want
+@dataclass()
+class HeadFromHeadersCase:
+    headers: dict[str, str]
+    want_head: Head | None = None
+    url: str = SOME_URL
+    want_errors: tuple[type[Exception], ...] = tuple()
+
+
+@cases(
+    empty=HeadFromHeadersCase({}, Head(SOME_URL)),
+    content_length=HeadFromHeadersCase(CONTENT_LENGTH_HEADERS, Head(SOME_URL, content_length=512)),
+    accept_ranges=HeadFromHeadersCase(ACCEPT_RANGES_HEADERS, Head(SOME_URL, accept_ranges=True)),
+    ranges=HeadFromHeadersCase(
+        CONTENT_RANGE_HEADERS,
+        Head(SOME_URL, ranges=rangeset("3-20"), content_length=18, document_length=128),
+    ),
+)
+def test_head_from_headers(case: HeadFromHeadersCase):
+    # pylint: disable=protected-access
+    try:
+        got = S3Adapter._head_from_headers(url=case.url, headers=case.headers)
+    except case.want_errors:
+        return
+    assert got == case.want_head
 
 
 @dataclass()
