@@ -6,7 +6,7 @@ Prerequisites
 
 Install the following software packages:
 
-* uv installed, Follow `the instructions <https://docs.astral.sh/uv/getting-started/installation/>`_ to install.
+* `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ 
 * JDK version required to build Elasticsearch. Please refer to the `build setup requirements <https://github.com/elastic/elasticsearch/blob/main/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase>`_.
 * `Docker <https://docs.docker.com/install/>`_ and on Linux additionally `docker-compose <https://docs.docker.com/compose/install/>`_.
 * `jq <https://stedolan.github.io/jq/download/>`_
