@@ -21,10 +21,12 @@ VIRTUAL_ENV ?= .venv
 VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
 VE_MISSING_HELP := "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_ENV); have you executed make install?\033[0m\n"
 
-PY_VERSION = $(shell jq -r '.python_versions.DEFAULT_PY_VERSION' .ci/variables.json)
+PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
 
 .PHONY: install \
 	check-venv \
+	venv-destroy \
+	reinstall \
 	check-uv \
 	venv-destroy \
 	clean \
@@ -46,6 +48,12 @@ PY_VERSION = $(shell jq -r '.python_versions.DEFAULT_PY_VERSION' .ci/variables.j
 
 install: check-uv
 	uv sync --python $(PY_VERSION) --locked --extra=develop
+
+venv-destroy:
+	# Remove virtual environment
+	rm -rf ${VIRTUAL_ENV}
+
+reinstall: venv-destroy install
 
 check-venv:
 	@if [[ ! -f $(VENV_ACTIVATE_FILE) ]]; then \
