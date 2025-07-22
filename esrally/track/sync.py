@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable, Iterator
-from typing import Any, TypeVar
+from typing import TypeVar
 from urllib.parse import urlparse
 from xml.etree import ElementTree
 
@@ -49,11 +49,6 @@ class TracksRepositoryAdapter(HTTPAdapter):
     _XML_NODE_CONTENTS = f"{_XML_NODE_PREFIX}Contents"
     _XML_NODE_KEY = f"{_XML_NODE_PREFIX}Key"
     _XML_NODE_SIZE = f"{_XML_NODE_PREFIX}Size"
-
-    @classmethod
-    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
-        index_url = cfg.opts("tracks", "track.repository.url", cls.REPOSITORY_URL, mandatory=False)
-        return super().from_config(cfg, index_url=index_url)
 
     @classmethod
     def match_url(cls, url: str) -> bool:
@@ -93,7 +88,7 @@ class TracksRepositoryAdapter(HTTPAdapter):
                     continue
             file_url = base_url + key.text
             LOG.debug("Found track file '%s' (size=%s) ...", file_url, content_length)
-            yield Head.create(url=file_url, content_length=content_length)
+            yield Head(url=file_url, content_length=content_length)
 
 
 BUCKET_URLS = (

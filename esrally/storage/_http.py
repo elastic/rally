@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping, MutableMapping
 from datetime import datetime
 from typing import Any, TypeVar
 
@@ -80,7 +80,10 @@ class HTTPAdapter(Adapter):
     def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
         assert issubclass(cls, HTTPAdapter)
         chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
-        return cls(session=Session.from_config(cfg), chunk_size=chunk_size)
+        kwargs.setdefault("chunk_size", chunk_size)  # type: ignore
+        session = Session.from_config(cfg)
+        kwargs.setdefault("session", session)  # type: ignore
+        return super().from_config(cfg, **kwargs)
 
     def __init__(self, session: requests.Session | None = None, chunk_size: int = CHUNK_SIZE):
         if session is None:
@@ -89,24 +92,21 @@ class HTTPAdapter(Adapter):
         self.session = session
 
     def head(self, url: str) -> Head:
-        headers = {"x-amz-checksum-mode": "ENABLED"}
-        with self.session.head(url, allow_redirects=True, headers=headers) as res:
+        with self.session.head(url, allow_redirects=True) as res:
             if res.status_code == 404:
                 raise FileNotFoundError(f"Can't get file head: {url}")
             res.raise_for_status()
-        return self._make_head(url, res.headers)
-
-    def list(self, url: str) -> Iterator[Head]:
-        raise NotImplementedError("HTTP adapter doesn't implemented file listing.")
+        return self._head_from_headers(url, res.headers)
 
     def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
-        headers = self._headers(head)
+        headers: MutableMapping[str, str] = CaseInsensitiveDict()
+        self._head_to_headers(head, headers)
         with self.session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
             if res.status_code == 503:
                 raise ServiceUnavailableError()
             res.raise_for_status()
 
-            got = self._make_head(url, res.headers)
+            got = self._head_from_headers(url, res.headers)
             if head is not None:
                 head.check(got)
 
@@ -116,35 +116,33 @@ class HTTPAdapter(Adapter):
         return got
 
     @classmethod
-    def _headers(cls, head: Head | None, headers: Mapping[str, str] | None = None) -> CaseInsensitiveDict:
-        ret: CaseInsensitiveDict = CaseInsensitiveDict()
+    def _head_to_headers(cls, head: Head | None, headers: MutableMapping[str, str]) -> None:
         if head is not None:
-            cls._date_to_headers(head.date, ret)
-            cls._ranges_to_headers(head.ranges, ret)
-        if headers is not None:
-            ret.update(headers)
-        return ret
+            cls._date_to_headers(head.date, headers)
+            cls._ranges_to_headers(head.ranges, headers)
 
     @classmethod
-    def _date_to_headers(cls, date: datetime | None, headers: CaseInsensitiveDict) -> None:
+    def _date_to_headers(cls, date: datetime | None, headers: MutableMapping[str, str]) -> None:
         if date is not None:
             raise NotImplementedError("date is not implemented yet")
 
+    _RANGE_HEADER = "Range"
+
     @classmethod
-    def _ranges_to_headers(cls, ranges: RangeSet, headers: CaseInsensitiveDict) -> None:
+    def _ranges_to_headers(cls, ranges: RangeSet, headers: MutableMapping[str, str]) -> None:
         if not ranges:
             return
         if len(ranges) > 1:
             raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
-        headers["range"] = f"bytes={ranges[0]}"
+        headers[cls._RANGE_HEADER] = f"bytes={ranges[0]}"
 
     @classmethod
-    def _make_head(cls, url: str, headers: CaseInsensitiveDict) -> Head:
+    def _head_from_headers(cls, url: str, headers: Mapping[str, str]) -> Head:
         accept_ranges = cls._accept_ranges_from_headers(headers)
         content_length = cls._content_length_from_headers(headers)
         ranges, document_length = cls._content_range_from_headers(headers)
         crc32c = cls._hashes_from_headers(headers).get("crc32c")
-        return Head.create(
+        return Head(
             url=url,
             content_length=content_length,
             accept_ranges=accept_ranges,
@@ -156,7 +154,7 @@ class HTTPAdapter(Adapter):
     _CONTENT_LENGTH_HEADER = "Content-Length"
 
     @classmethod
-    def _content_length_from_headers(cls, headers: CaseInsensitiveDict) -> int | None:
+    def _content_length_from_headers(cls, headers: Mapping[str, str]) -> int | None:
         value = headers.get(cls._CONTENT_LENGTH_HEADER, None)
         if value is None:
             return None
@@ -170,15 +168,17 @@ class HTTPAdapter(Adapter):
     _ACCEPT_RANGES_HEADER = "Accept-Ranges"
 
     @classmethod
-    def _accept_ranges_from_headers(cls, headers: CaseInsensitiveDict) -> bool | None:
+    def _accept_ranges_from_headers(cls, headers: Mapping[str, str]) -> bool | None:
         got = headers.get(cls._ACCEPT_RANGES_HEADER, "").strip()
         if not got:
             return None
         return got == "bytes"
 
+    _CONTENT_RANGE_HEADER = "Content-Range"
+
     @classmethod
-    def _content_range_from_headers(cls, headers: CaseInsensitiveDict) -> tuple[RangeSet, int | None]:
-        content_range_text = headers.get("content-range", "").strip()
+    def _content_range_from_headers(cls, headers: Mapping[str, str]) -> tuple[RangeSet, int | None]:
+        content_range_text = headers.get(cls._CONTENT_RANGE_HEADER, "").strip()
         if not content_range_text:
             return NO_RANGE, None
 
@@ -205,7 +205,7 @@ class HTTPAdapter(Adapter):
         return rangeset(range_text), document_length
 
     @classmethod
-    def _hashes_from_headers(cls, headers: CaseInsensitiveDict) -> dict[str, str]:
+    def _hashes_from_headers(cls, headers: Mapping[str, str]) -> dict[str, str]:
         hashes: dict[str, str] = {}
         hashes_text = headers.get(_GOOG_HASH_KEY, "").replace(" ", "")
         if hashes_text:

@@ -62,31 +62,6 @@ class Head:
     crc32c: str | None = None
     date: datetime.datetime | None = None
 
-    @classmethod
-    def create(
-        cls,
-        url: str | None = None,
-        content_length: int | None = None,
-        accept_ranges: bool | None = None,
-        ranges: RangeSet = NO_RANGE,
-        document_length: int | None = None,
-        crc32c: str | None = None,
-        date: datetime.datetime | None = None,
-    ) -> Head:
-        if content_length is None and ranges:
-            content_length = ranges.size
-        if document_length is None and not ranges:
-            document_length = content_length
-        return cls(
-            url=url,
-            accept_ranges=accept_ranges,
-            content_length=content_length,
-            ranges=ranges,
-            document_length=document_length,
-            crc32c=crc32c,
-            date=date,
-        )
-
     def check(self, other: Head, ignore: Container[str] = _HEAD_CHECK_IGNORE) -> None:
         for field in ("url", "content_length", "accept_ranges", "ranges", "document_length", "crc32c", "date"):
             if ignore is not None and field in ignore:

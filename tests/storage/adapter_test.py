@@ -18,21 +18,23 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 from unittest import mock
 
 import pytest
 
-from esrally import types
-from esrally.config import Config, Scope
+import esrally.config
 from esrally.storage._adapter import Adapter, AdapterRegistry
+from esrally.types import Config
 from esrally.utils.cases import cases
+
+A = TypeVar("A", "MockAdapter", "MockAdapter")
 
 
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_config(cls: type[Adapter], cfg: types.Config, **kwargs: dict[str, Any]) -> MockAdapter:
+    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 
@@ -66,9 +68,9 @@ class ExampleAdapterWithPath(MockAdapter, ABC):
 
 @pytest.fixture()
 def cfg() -> Config:
-    cfg = Config()
+    cfg = esrally.config.Config()
     cfg.add(
-        Scope.application,
+        esrally.config.Scope.application,
         "storage",
         "storage.adapters",
         f"{__name__}:ExampleAdapterWithPath,{__name__}:ExampleAdapter,{__name__}:HTTPSAdapter,{__name__}:HTTPAdapter",
@@ -101,7 +103,7 @@ def test_adapter_registry_get(case: RegistryCase, registry: AdapterRegistry) -> 
         adapter = registry.get(case.url)
         error = None
     except Exception as ex:
-        adapter = None
+        adapter = None, None
         error = ex
 
     if case.want_type is not None:
