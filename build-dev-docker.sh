@@ -53,8 +53,8 @@ export GIT_SHA
 DATE=$(date +%Y%m%d)
 export DATE
 
-if [[ ${RALLY_BRANCH} =~ .*\/.* ]]; then
-  branch_name=$(echo "${RALLY_BRANCH}" | sed 's/\//_/')
+if [[ "${RALLY_BRANCH}" =~ .*\/.* ]]; then
+  branch_name=$(echo "${RALLY_BRANCH}" | sed 's/\//_/g')
 else
   branch_name="${RALLY_BRANCH}"
 fi
