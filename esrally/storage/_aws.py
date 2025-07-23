@@ -89,10 +89,10 @@ class S3Adapter(HTTPAdapter):
 
         address = S3Address.from_url(url)
         LOG.info("Uploading file to '%s'...", url)
-        res = self._s3.upload_fileobj(stream, address.bucket, address.key)
+        self._s3.upload_fileobj(stream, address.bucket, address.key)
         LOG.info("File uploaded: '%s'.", url)
 
-        ret = self._head_from_headers(url, res)
+        ret = self.head(url)
         if head is not None:
             head.check(ret)
         return ret

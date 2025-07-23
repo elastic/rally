@@ -151,7 +151,7 @@ class Sync:
                     LOG.debug("File '%s' need to be updated: %s", bucket_url, ex)
 
             if not bucket_urls:
-                LOG.info("File '%s' already uploaded on buckets.", url)
+                LOG.info("File '%s' already uploaded on bucket(s).", url)
                 continue
 
             tr1 = self._manager.get(url)
