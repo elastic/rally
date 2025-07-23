@@ -27,9 +27,9 @@ import pytest
 from esrally.config import Config
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._client import Client
-from esrally.storage._executor import DummyExecutor
 from esrally.storage._range import rangeset
 from esrally.storage._transfer import MAX_CONNECTIONS, Transfer
+from esrally.storage.testing import DummyExecutor
 from esrally.utils.cases import cases
 
 URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
