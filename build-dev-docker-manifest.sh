@@ -42,15 +42,16 @@ else
     export RALLY_DOCKER_IMAGE="docker.elastic.co/es-perf/rally"
 fi
 
-export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
+RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
+export RALLY_LICENSE
 
-export GIT_SHA=$(git rev-parse --short HEAD)
-export DATE=$(date +%Y%m%d)
+GIT_SHA=$(git rev-parse --short HEAD)
+DATE=$(date +%Y%m%d)
 
 export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}"
-export MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
-if [[ $RALLY_BRANCH == $MAIN_BRANCH ]]; then
+if [[ "$RALLY_BRANCH" == "$MAIN_BRANCH" ]]; then
     export DOCKER_TAG_LATEST="dev-latest"
 else
     export DOCKER_TAG_LATEST="${RALLY_BRANCH}-latest"
