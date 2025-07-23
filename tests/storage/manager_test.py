@@ -69,10 +69,6 @@ SIMPLE_HEAD = Head(url=SIMPLE_URL, content_length=len(SIMPLE_DATA))
 
 class StorageAdapter(DummyAdapter):
 
-    @classmethod
-    def match_url(cls, url: str) -> str:
-        return url
-
     HEADS = (SIMPLE_HEAD,)
     DATA = {
         SIMPLE_URL: SIMPLE_DATA,

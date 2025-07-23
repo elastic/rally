@@ -93,26 +93,8 @@ class TransferManager:
         self._max_connections = max(1, min(max_connections, max_workers))
         self._multipart_size = multipart_size
         self._executor = executor
-        self._monitor_interval = monitor_interval
         self._monitor_timer = ContinuousTimer(interval=monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
         self._monitor_timer.start()
-
-    def __getnewargs_ex__(self) -> tuple[tuple, dict]:
-        return tuple(), dict(
-            client=self._client,
-            # executor=self._executor,
-            local_dir=self._local_dir,
-            monitor_interval=self._monitor_interval,
-            max_connections=self._max_connections,
-            max_workers=self._max_workers,
-            multipart_size=self._multipart_size,
-        )
-
-    def __getstate__(self):
-        return tuple()
-
-    def __setstate__(self, state):
-        pass
 
     def shutdown(self):
         with self._lock:
