@@ -16,6 +16,7 @@
 # under the License.
 from __future__ import annotations
 
+import atexit
 import logging
 import os
 import threading
@@ -163,3 +164,35 @@ class TransferManager:
                 tr.max_connections = max_connections
                 tr.save_status()
                 tr.start()
+
+
+_LOCK = threading.Lock()
+_MANAGER: TransferManager | None = None
+
+
+def init_transfer_manager(cfg: types.Config, client: Client | None = None, executor: Executor | None = None) -> bool:
+    global _MANAGER
+    with _LOCK:
+        if _MANAGER is not None:
+            LOG.debug("Transfer manager already initialized")
+            return False
+        _MANAGER = TransferManager.from_config(cfg, client, executor)
+        atexit.register(_MANAGER.shutdown)
+        return True
+
+
+def quit_transfer_manager() -> bool:
+    global _MANAGER
+    with _LOCK:
+        if _MANAGER is None:
+            LOG.debug("Transfer manager not initialized.")
+            return False
+        _MANAGER.shutdown()
+        _MANAGER = None
+        return True
+
+
+def transfer_manager() -> TransferManager:
+    if _MANAGER is None:
+        raise RuntimeError("Transfer manager not initialized.")
+    return _MANAGER

@@ -45,19 +45,27 @@ else
     export RALLY_DOCKER_IMAGE="docker.elastic.co/es-perf/rally"
 fi
 
-export RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
+RALLY_LICENSE=$(awk 'FNR>=2 && FNR<=2' LICENSE | sed 's/^[ \t]*//')
+export RALLY_LICENSE
 
-export GIT_SHA=$(git rev-parse --short HEAD)
-export DATE=$(date +%Y%m%d)
+GIT_SHA=$(git rev-parse --short HEAD)
+export GIT_SHA
+DATE=$(date +%Y%m%d)
+export DATE
 
-export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}-${ARCH}"
+if [[ "${RALLY_BRANCH}" =~ .*\/.* ]]; then
+  branch_name=$(echo "${RALLY_BRANCH}" | sed 's/\//_/g')
+else
+  branch_name="${RALLY_BRANCH}"
+fi
+export RALLY_VERSION="${branch_name}-${GIT_SHA}-${DATE}-${ARCH}"
 export RALLY_VERSION_TAG="${RALLY_VERSION}"
-export MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
-if [[ $RALLY_BRANCH == $MAIN_BRANCH ]]; then
+if [[ "$RALLY_BRANCH" == "$MAIN_BRANCH" ]]; then
     export DOCKER_TAG_LATEST="dev-latest-${ARCH}"
 else
-    export DOCKER_TAG_LATEST="${RALLY_BRANCH}-latest-${ARCH}"
+    export DOCKER_TAG_LATEST="${branch_name}-latest-${ARCH}"
 fi
 
 # Make new temporary directory to checkout the `RALLY_BRANCH` branch
@@ -65,7 +73,15 @@ tmp_dir=$(mktemp --directory)
 pushd "$tmp_dir"
 git clone https://github.com/elastic/rally
 pushd rally
-git checkout "${RALLY_BRANCH}"
+
+if [[ "${RALLY_BRANCH}" =~ refs\/.* ]]; then
+  branch_name=$(echo "${RALLY_BRANCH}" | sed 's/refs\///')
+  git fetch origin "${branch_name}:_temp"
+  git checkout "_temp"
+  unset branch_name
+else
+  git checkout "${RALLY_BRANCH}"
+fi
 echo "Rally commit: $(git --no-pager log --oneline -n1)"
 popd
 popd
@@ -76,7 +92,7 @@ echo "========================================================"
 echo "Building Docker image for Rally $RALLY_VERSION          "
 echo "========================================================"
 
-docker build -t ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile ${rally_dir}
+docker build -t "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile "${rally_dir}"
 
 echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
@@ -89,15 +105,15 @@ echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION   "
 echo "======================================================="
 
 trap push_failed ERR
-docker push ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}
+docker push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}"
 
 if [[ $PUSH_LATEST == "true" ]]; then
     echo "============================================"
     echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     echo "============================================"
 
-    docker tag ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION} ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
-    docker push ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
+    docker tag "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
+    docker push "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
 fi
 
 trap - ERR

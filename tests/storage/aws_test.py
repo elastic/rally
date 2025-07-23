@@ -145,7 +145,7 @@ class PutCase:
     read_data=PutCase(SOME_DATA_HEADERS, Head(SOME_URL, content_length=len(SOME_DATA))),
 )
 def test_put(case: PutCase, s3_client):
-    s3_client.upload_fileobj.return_value = case.response
+    s3_client.head_object.return_value = case.response
     adapter = S3Adapter(s3_client=s3_client)
     stream = create_autospec(Readable, spec_set=True, instance=True)
     got = adapter.put(stream, case.url, head=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))

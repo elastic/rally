@@ -53,28 +53,3 @@ class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor, Executor):
         executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="esrally.storage.executor")
         assert isinstance(executor, Executor)
         return executor
-
-
-class DummyExecutor(Executor):
-
-    def __init__(self):
-        self.tasks: list[tuple] | None = []
-
-    def submit(self, fn, /, *args, **kwargs):
-        """Submits a callable to be executed with the given arguments.
-
-        Schedules the callable to be executed as fn(*args, **kwargs).
-        """
-        if self.tasks is None:
-            raise RuntimeError("Executor already closed")
-        self.tasks.append((fn, args, kwargs))
-
-    def execute_tasks(self):
-        if self.tasks is None:
-            raise RuntimeError("Executor already closed")
-        tasks, self.tasks = self.tasks, []
-        for fn, args, kwargs in tasks:
-            fn(*args, **kwargs)
-
-    def shutdown(self):
-        self.tasks = None
