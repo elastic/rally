@@ -48,21 +48,26 @@ export RALLY_LICENSE
 GIT_SHA=$(git rev-parse --short HEAD)
 DATE=$(date +%Y%m%d)
 
-export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}"
+if [[ "${RALLY_BRANCH}" =~ .*\/.* ]]; then
+  branch_name=$(echo "${RALLY_BRANCH}" | sed 's/\//_/g')
+else
+  branch_name="${RALLY_BRANCH}"
+fi
+export RALLY_VERSION="${branch_name}-${GIT_SHA}-${DATE}"
 MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
 if [[ "$RALLY_BRANCH" == "$MAIN_BRANCH" ]]; then
     export DOCKER_TAG_LATEST="dev-latest"
 else
-    export DOCKER_TAG_LATEST="${RALLY_BRANCH}-latest"
+    export DOCKER_TAG_LATEST="${branch_name}-latest"
 fi
 
 echo "========================================================"
 echo "Pulling Docker images for Rally $RALLY_VERSION          "
 echo "========================================================"
 
-docker pull ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-amd64
-docker pull ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-arm64
+docker pull "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-amd64"
+docker pull "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-arm64"
 
 echo "======================================================="
 echo "Creating Docker manifest image for Rally $RALLY_VERSION"
