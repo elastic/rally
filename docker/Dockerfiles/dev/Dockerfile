@@ -1,4 +1,4 @@
-FROM docker.elastic.co/wolfi/python:3.12.3-dev AS builder
+FROM docker.elastic.co/wolfi/chainguard-base:latest AS builder
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
 
@@ -8,7 +8,7 @@ ENV RALLY_RUNNING_IN_DOCKER=True
 USER root
 
 RUN apk update 
-RUN apk add curl git gcc pigz bash zstd bzip2 gzip openssh procps
+RUN apk add curl git gcc jq pigz bash zstd bzip2 gzip openssh procps
 
 # pbzip2 doesn't have a package for wolfi, so we build it from source
 RUN apk add bzip2-dev make wget 
@@ -35,21 +35,25 @@ RUN chgrp 0 /entrypoint.sh && \
 RUN mkdir -p /rally/.rally && \
     chown -R 1000:0 /rally/
 
+COPY --from=ghcr.io/astral-sh/uv:0.7.12 /uv /uvx /bin/
+
 USER 1000
 
-RUN mkdir -p /rally/esrally
-COPY pyproject.toml /rally/
+COPY Makefile /rally/
 COPY README.md /rally/
+COPY .ci/variables.json /rally/.ci/
 COPY esrally/ /rally/esrally/
+COPY pyproject.toml /rally/
+COPY uv.lock /rally/
 
-RUN python3 -m venv /rally/venv
+ENV VIRTUAL_ENV=/rally/venv
 ENV PATH=/rally/venv/bin:$PATH
+ENV UV_PROJECT_ENVIRONMENT=/rally/venv
 
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
-RUN python3 -m pip install --upgrade hatch hatchling pip wheel
-RUN python3 -m pip install /rally
+RUN make install
 
 LABEL org.label-schema.schema-version="1.0" \
   org.label-schema.vendor="Elastic" \
