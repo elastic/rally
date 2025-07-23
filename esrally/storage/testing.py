@@ -20,6 +20,7 @@ import copy
 from collections.abc import Iterable
 
 from esrally.storage._adapter import Adapter, Head, Writable
+from esrally.storage._executor import Executor
 from esrally.storage._range import NO_RANGE, RangeSet
 
 
@@ -59,3 +60,28 @@ class DummyAdapter(Adapter):
 
         stream.write(data)
         return Head(url, content_length=len(data))
+
+
+class DummyExecutor(Executor):
+
+    def __init__(self):
+        self.tasks: list[tuple] | None = []
+
+    def submit(self, fn, /, *args, **kwargs):
+        """Submits a callable to be executed with the given arguments.
+
+        Schedules the callable to be executed as fn(*args, **kwargs).
+        """
+        if self.tasks is None:
+            raise RuntimeError("Executor already closed")
+        self.tasks.append((fn, args, kwargs))
+
+    def execute_tasks(self):
+        if self.tasks is None:
+            raise RuntimeError("Executor already closed")
+        tasks, self.tasks = self.tasks, []
+        for fn, args, kwargs in tasks:
+            fn(*args, **kwargs)
+
+    def shutdown(self):
+        self.tasks = None

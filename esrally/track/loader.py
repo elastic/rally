@@ -35,7 +35,7 @@ import tabulate
 from jinja2 import meta
 
 from esrally import PROGRAM_NAME, config, exceptions, paths, time, types, version
-from esrally.storage import TransferManager
+from esrally.storage import init_transfer_manager, transfer_manager
 from esrally.track import params, track
 from esrally.track.track import Parallel
 from esrally.utils import (
@@ -50,7 +50,8 @@ from esrally.utils import (
     repo,
     serverless,
 )
-from esrally.utils.net import download
+
+LOG = logging.getLogger(__name__)
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
@@ -253,12 +254,12 @@ def _load_single_track(cfg: types.Config, track_repository, track_name, install_
             processor.on_after_load_track(current_track)
         return current_track
     except FileNotFoundError as e:
-        logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
+        LOG.exception("Cannot load track [%s]", track_name)
         raise exceptions.SystemSetupError(
             f"Cannot load track [{track_name}]. List the available tracks with [{PROGRAM_NAME} list tracks]."
         ) from e
-    except BaseException:
-        logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
+    except Exception:
+        LOG.exception("Cannot load track [%s]", track_name)
         raise
 
 
@@ -284,7 +285,7 @@ def load_track_plugins(
     """
     repo = track_repo(cfg, fetch=force_update, update=force_update)
     track_plugin_path = repo.track_dir(track_name)
-    logging.getLogger(__name__).debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
+    LOG.debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
     plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
 
     if plugin_reader.can_load():
@@ -471,9 +472,7 @@ class DefaultTrackPreparator(TrackProcessor):
         for document_set in corpus.documents:
             if document_set.is_bulk:
                 data_root = data_dir(cfg, track.name, corpus.name)
-                logging.getLogger(__name__).info(
-                    "Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root
-                )
+                LOG.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root)
                 if len(data_root) == 1:
                     preparator.prepare_document_set(document_set, data_root[0])
                 # attempt to prepare everything in the current directory and fallback to the corpus directory
@@ -489,7 +488,7 @@ class DefaultTrackPreparator(TrackProcessor):
 
 class Decompressor:
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = LOG
 
     def decompress(self, archive_path, documents_path, uncompressed_size):
         if uncompressed_size:
@@ -522,17 +521,18 @@ class Downloader:
     def from_config(cls, cfg: types.Config):
         offline: bool = convert.to_bool(cfg.opts("system", "offline.mode", mandatory=False, default_value=False))
         test_mode: bool = convert.to_bool(cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False))
-        transfer_manager: TransferManager | None = None
-        if convert.to_bool(cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=True)):
-            transfer_manager = TransferManager.from_config(cfg)
-        return cls(cfg, offline=offline, test_mode=test_mode, transfer_manager=transfer_manager)
+        use_transfer_manager: bool = convert.to_bool(
+            cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=True)
+        )
+        if use_transfer_manager:
+            init_transfer_manager(cfg)  # TODO: It should call this at a higher level.
+        return cls(offline=offline, test_mode=test_mode, use_transfer_manager=use_transfer_manager)
 
-    def __init__(self, cfg: types.Config, offline: bool, test_mode: bool, transfer_manager: TransferManager | None = None):
-        self.cfg: types.Config = cfg
+    def __init__(self, offline: bool, test_mode: bool, use_transfer_manager: bool = False):
         self.offline = offline
         self.test_mode = test_mode
-        self.logger = logging.getLogger(__name__)
-        self.transfer_manager = transfer_manager
+        self.logger = LOG
+        self.use_transfer_manager = use_transfer_manager
 
     def download(self, base_url: str, target_path: str, size_in_bytes: int | None = None) -> None:
         file_name = os.path.basename(target_path)
@@ -543,7 +543,20 @@ class Downloader:
 
         # It joins manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
         data_url = f"{base_url.rstrip('/')}/{file_name}"
-        if self.transfer_manager is None:
+        if self.use_transfer_manager:
+            try:
+                tr = transfer_manager().get(data_url, target_path, size_in_bytes)
+                tr.wait()
+                return
+            except FileNotFoundError as ex:
+                if self.test_mode:
+                    raise exceptions.DataError(
+                        "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
+                    ) from None
+                raise exceptions.DataError(f"Cannot download data from '{data_url}' using transfer manager.") from ex
+            except Exception as ex:
+                raise exceptions.DataError(f"Cannot download data from '{data_url}' using transfer manager.") from ex
+        else:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
                 self.logger.info("Downloading data from [%s] (%s) to [%s].", data_url, pretty.size(size_in_bytes), target_path)
@@ -571,19 +584,6 @@ class Downloader:
 
             progress.finish()
             self.logger.info("Downloaded data from [%s] to [%s].", data_url, target_path)
-        else:
-            try:
-                tr = self.transfer_manager.get(data_url, target_path, size_in_bytes)
-                tr.wait()
-                return
-            except FileNotFoundError as ex:
-                if self.test_mode:
-                    raise exceptions.DataError(
-                        "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
-                    ) from None
-                raise exceptions.DataError(f"Cannot download data from '{data_url}' using transfer manager.") from ex
-            except Exception as ex:
-                raise exceptions.DataError(f"Cannot download data from '{data_url}' using transfer manager.") from ex
 
         if not os.path.isfile(target_path):
             raise exceptions.SystemSetupError(
@@ -734,7 +734,7 @@ class TemplateSource:
         self.source = source
         self.fileglobber = fileglobber
         self.assembled_source = None
-        self.logger = logging.getLogger(__name__)
+        self.logger = LOG
 
     def load_template_from_file(self):
         loader = jinja2.FileSystemLoader(self.base_path)
@@ -876,7 +876,7 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
 
 class TaskFilterTrackProcessor(TrackProcessor):
     def __init__(self, cfg: types.Config):
-        self.logger = logging.getLogger(__name__)
+        self.logger = LOG
         include_tasks = cfg.opts("track", "include.tasks", mandatory=False)
         exclude_tasks = cfg.opts("track", "exclude.tasks", mandatory=False)
 
@@ -943,7 +943,7 @@ class TaskFilterTrackProcessor(TrackProcessor):
 
 class ServerlessFilterTrackProcessor(TrackProcessor):
     def __init__(self, cfg: types.Config):
-        self.logger = logging.getLogger(__name__)
+        self.logger = LOG
         self.serverless_mode = convert.to_bool(cfg.opts("driver", "serverless.mode", mandatory=False, default_value=False))
         self.serverless_operator = convert.to_bool(cfg.opts("driver", "serverless.operator", mandatory=False, default_value=False))
 
@@ -990,7 +990,7 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
 class TestModeTrackProcessor(TrackProcessor):
     def __init__(self, cfg: types.Config):
         self.test_mode_enabled = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
-        self.logger = logging.getLogger(__name__)
+        self.logger = LOG
 
     def on_after_load_track(self, track):
         if not self.test_mode_enabled:
@@ -1121,7 +1121,7 @@ class TrackFileReader:
             build_flavor=self.build_flavor,
             serverless_operator=self.serverless_operator,
         )
-        self.logger = logging.getLogger(__name__)
+        self.logger = LOG
 
     def read(self, track_name, track_spec_file, mapping_dir):
         """
@@ -1268,9 +1268,9 @@ class TrackPluginReader:
             # every module needs to have a register() method
             for module in root_modules:
                 module.register(self)
-        except BaseException:
-            msg = "Could not register track plugin at [%s]" % self.loader.root_path
-            logging.getLogger(__name__).exception(msg)
+        except Exception:
+            msg = f"Could not register track plugin at [{self.loader.root_path}]"
+            LOG.exception(msg)
             raise exceptions.SystemSetupError(msg)
 
     def register_param_source(self, name, param_source):
@@ -1318,7 +1318,7 @@ class TrackSpecificationReader:
         self.complete_track_params = complete_track_params
         self.selected_challenge = selected_challenge
         self.source = source
-        self.logger = logging.getLogger(__name__)
+        self.logger = LOG
 
     def __call__(self, track_name, track_specification, mapping_dir, spec_file=None):
         self.name = track_name

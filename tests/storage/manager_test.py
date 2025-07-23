@@ -20,14 +20,19 @@ import os
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
 from esrally import config, types
 from esrally.storage._adapter import Head
-from esrally.storage._executor import DummyExecutor, Executor
-from esrally.storage._manager import TransferManager
-from esrally.storage.testing import DummyAdapter
+from esrally.storage._manager import (
+    TransferManager,
+    init_transfer_manager,
+    quit_transfer_manager,
+    transfer_manager,
+)
+from esrally.storage.testing import DummyAdapter, DummyExecutor
 from esrally.utils.cases import cases
 
 
@@ -54,7 +59,7 @@ def executor() -> Iterator[DummyExecutor]:
 
 
 @pytest.fixture
-def manager(cfg: types.Config, executor: Executor) -> Iterator[TransferManager]:
+def manager(cfg: types.Config, executor: DummyExecutor) -> Iterator[TransferManager]:
     manager = TransferManager.from_config(cfg, executor=executor)
     try:
         yield manager
@@ -121,3 +126,31 @@ def test_get(case: GetCase, manager: TransferManager, executor: DummyExecutor, t
                 assert f.read() == SIMPLE_DATA
     if case.document_length is not None:
         assert os.path.getsize(tr.path) == case.document_length
+
+
+@patch("esrally.storage._manager._MANAGER", None)
+def test_global_transfer_manager(cfg: types.Config, tmpdir: os.PathLike) -> None:
+    with pytest.raises(RuntimeError) as excinfo:
+        assert transfer_manager() is None
+    assert str(excinfo.value) == "Transfer manager not initialized."
+
+    init_transfer_manager(cfg)
+    got = transfer_manager()
+    assert isinstance(got, TransferManager)
+
+    tr = got.get(url=SIMPLE_URL, document_length=len(SIMPLE_DATA))
+    assert tr.wait(timeout=60.0)
+    assert os.path.exists(tr.path)
+
+    init_transfer_manager(cfg)
+    assert got is transfer_manager()
+
+    quit_transfer_manager()
+    with pytest.raises(RuntimeError) as excinfo:
+        assert transfer_manager() is None
+    assert str(excinfo.value) == "Transfer manager not initialized."
+
+    quit_transfer_manager()
+    with pytest.raises(RuntimeError) as excinfo:
+        assert transfer_manager() is None
+    assert str(excinfo.value) == "Transfer manager not initialized."

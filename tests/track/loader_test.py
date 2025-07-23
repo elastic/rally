@@ -4367,16 +4367,22 @@ class DownloaderCase:
     want_error: tuple[type[Exception], ...] = tuple()
     want_data: bytes | None = None
 
+    _cfg: config.Config | None = None
+    _downloader: loader.Downloader | None = None
+
     def cfg(self) -> config.Config:
-        cfg = config.Config()
-        cfg.add(config.Scope.application, "system", "offline.mode", self.offline)
-        cfg.add(config.Scope.application, "track", "test.mode.enabled", self.test_mode)
-        cfg.add(config.Scope.application, "track", "track.downloader.multipart_enabled", self.multipart_enabled)
-        cfg.add(config.Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
-        return cfg
+        if self._cfg is None:
+            self._cfg = cfg = config.Config()
+            cfg.add(config.Scope.application, "system", "offline.mode", self.offline)
+            cfg.add(config.Scope.application, "track", "test.mode.enabled", self.test_mode)
+            cfg.add(config.Scope.application, "track", "track.downloader.multipart_enabled", self.multipart_enabled)
+            cfg.add(config.Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
+        return self._cfg
 
     def downloader(self) -> loader.Downloader:
-        return loader.Downloader.from_config(self.cfg())
+        if self._downloader is None:
+            self._downloader = loader.Downloader.from_config(self.cfg())
+        return self._downloader
 
 
 @cases(
@@ -4395,7 +4401,10 @@ def test_downloader(case: DownloaderCase, multipart_enabled: bool, tmpdir: os.Pa
     base_url = f"{BASE_URL}/{os.path.dirname(case.path)}"
     case.multipart_enabled = multipart_enabled
     downloader = case.downloader()
-    with mock.patch("esrally.utils.net._download_http", _patched_download_http):
+    with (
+        mock.patch("esrally.utils.net._download_http", _patched_download_http),
+        # mock.patch("esrally.storage._manager._MANAGER", None),
+    ):
         try:
             downloader.download(base_url, target_path, case.size_in_bytes)
         except case.want_error:
@@ -4406,6 +4415,10 @@ def test_downloader(case: DownloaderCase, multipart_enabled: bool, tmpdir: os.Pa
     if case.want_data is not None:
         with open(target_path, "rb") as fp:
             assert fp.read() == case.want_data
+    copy = pickle.loads(pickle.dumps(downloader))
+    assert downloader.use_transfer_manager == copy.use_transfer_manager
+    assert downloader.test_mode == copy.test_mode
+    assert downloader.offline == copy.offline
 
 
 def _patched_download_http(url: str, local_path: str, expected_size_in_bytes=None, progress_indicator=None):
@@ -4416,16 +4429,3 @@ def _patched_download_http(url: str, local_path: str, expected_size_in_bytes=Non
     with open(local_path, "wb") as f:
         f.write(data)
     return len(data)
-
-
-@cases(
-    "multipart_enabled",
-    legacy=False,
-    multipart=True,
-)
-@cases(simple=DownloaderCase(want_data=SOME_DATA))
-def test_pickle_downloader(case: DownloaderCase, multipart_enabled: bool) -> None:
-    case.multipart_enabled = multipart_enabled
-    downloader0 = case.downloader()
-    data = pickle.dumps(downloader0)
-    downloader1 = pickle.loads(data)
