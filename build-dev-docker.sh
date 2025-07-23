@@ -53,15 +53,18 @@ export GIT_SHA
 DATE=$(date +%Y%m%d)
 export DATE
 
-export RALLY_VERSION="${RALLY_BRANCH}-${GIT_SHA}-${DATE}-${ARCH}"
-export RALLY_VERSION_TAG="${RALLY_VERSION}"
+if [[ ${RALLY_BRANCH} =~ .*\/.* ]]; then
+  branch_name=$(echo "${RALLY_BRANCH}" | sed 's/\//_/')
+else
+  branch_name="${RALLY_BRANCH}"
+fi
+export RALLY_VERSION="${branch_name}-${GIT_SHA}-${DATE}-${ARCH}"
 MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
-export MAIN_BRANCH
 
 if [[ "$RALLY_BRANCH" == "$MAIN_BRANCH" ]]; then
     export DOCKER_TAG_LATEST="dev-latest-${ARCH}"
 else
-    export DOCKER_TAG_LATEST="${RALLY_BRANCH}-latest-${ARCH}"
+    export DOCKER_TAG_LATEST="${branch_name}-latest-${ARCH}"
 fi
 
 # Make new temporary directory to checkout the `RALLY_BRANCH` branch
