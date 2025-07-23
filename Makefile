@@ -17,63 +17,68 @@
 
 SHELL := /bin/bash
 # We assume an active virtualenv for development
-PYENV_REGEX := .pyenv/shims
-PY_BIN := python3
-# https://github.com/pypa/pip/issues/5599
-PIP_WRAPPER := $(PY_BIN) -m pip
-export PY39 := $(shell jq -r '.python_versions.PY39' .ci/variables.json)
-export PY310 := $(shell jq -r '.python_versions.PY310' .ci/variables.json)
-export PY311 := $(shell jq -r '.python_versions.PY311' .ci/variables.json)
-export PY312 := $(shell jq -r '.python_versions.PY312' .ci/variables.json)
-export HATCH_VERSION := $(shell jq -r '.prerequisite_versions.HATCH' .ci/variables.json)
-export HATCHLING_VERSION := $(shell jq -r '.prerequisite_versions.HATCHLING' .ci/variables.json)
-export PIP_VERSION := $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
-export WHEEL_VERSION := $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variables.json)
 VIRTUAL_ENV ?= .venv
 VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
-VENV_ACTIVATE := . $(VENV_ACTIVATE_FILE)
-VEPYTHON := $(VIRTUAL_ENV)/bin/$(PY_BIN)
-PYENV_ERROR := "\033[0;31mIMPORTANT\033[0m: Please install pyenv.\n"
-PYENV_PREREQ_HELP := "\033[0;31mIMPORTANT\033[0m: please type \033[0;31mpyenv init\033[0m, follow the instructions there and restart your terminal before proceeding any further.\n"
-VE_MISSING_HELP := "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_ENV); have you executed make venv-create?\033[0m\n"
+VE_MISSING_HELP := "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_ENV); have you executed make install?\033[0m\n"
 
-prereq:
-	pyenv install --skip-existing $(PY39)
-	pyenv install --skip-existing $(PY310)
-	pyenv install --skip-existing $(PY311)
-	pyenv install --skip-existing $(PY312)
-	pyenv local $(PY312)
-	@# Ensure all Python versions are registered for this project
-	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
-	-@ printf $(PYENV_PREREQ_HELP)
+PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
 
-venv-create:
-	@if [[ ! -x $$(command -v pyenv) ]]; then \
-		printf $(PYENV_ERROR); \
-		exit 1; \
-	fi;
-	@if [[ ! -f $(VENV_ACTIVATE_FILE) ]]; then \
-		eval "$$(pyenv init -)" && eval "$$(pyenv init --path)" && $(PY_BIN) -mvenv $(VIRTUAL_ENV); \
-		printf "Created python3 venv under $(PWD)/$(VIRTUAL_ENV).\n"; \
-	fi;
+.PHONY: install \
+	check-venv \
+	venv-destroy \
+	reinstall \
+	check-uv \
+	venv-destroy \
+	clean \
+	uv-add \
+	uv-lock \
+	nondocs-clean \
+	docs-clean \
+	python-caches-clean \
+	lint \
+	format \
+	docs \
+	serve-docs \
+	test \
+	it \
+	check-all \
+	benchmark \
+	release-checks \
+	release
+
+install: check-uv
+	uv sync --python $(PY_VERSION) --locked --extra=develop
+
+venv-destroy:
+	# Remove virtual environment
+	rm -rf ${VIRTUAL_ENV}
+
+reinstall: venv-destroy install
 
 check-venv:
 	@if [[ ! -f $(VENV_ACTIVATE_FILE) ]]; then \
-	printf $(VE_MISSING_HELP); \
+		printf $(VE_MISSING_HELP); \
 	fi
 
-install-user: venv-create
-	. $(VENV_ACTIVATE_FILE); $(PY_BIN) -m ensurepip --upgrade --default-pip 
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade hatch==$(HATCH_VERSION) hatchling==$(HATCHLING_VERSION) pip==$(PIP_VERSION) wheel==$(WHEEL_VERSION)
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
+check-uv:
+	@if [[ ! -x $$(command -v uv) ]]; then \
+		printf "Please install uv by running the following outside of a virtual env: [ curl -LsSf https://astral.sh/uv/install.sh | sh ]\n"; \
+	fi
 
-install: install-user
-	# Also install development dependencies
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop]
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install git+https://github.com/elastic/pytest-rally.git
-
+venv-destroy:
+	@echo "Removing virtual environment $(VIRTUAL_ENV)"
+	rm -rf $(VIRTUAL_ENV)
 
 clean: nondocs-clean docs-clean
+
+uv-add:
+ifndef ARGS
+	$(error Missing arguments. Use make uv-add ARGS="...")
+endif
+	uv add --python $(PY_VERSION) $$ARGS
+
+uv-lock:
+	uv lock --python $(PY_VERSION)
 
 nondocs-clean:
 	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
@@ -85,8 +90,8 @@ docs-clean:
 python-caches-clean:
 	-@find . -name "__pycache__" -prune -exec rm -rf -- \{\} \;
 
-lint: check-venv
-	@. $(VENV_ACTIVATE_FILE); pre-commit run --all-files
+lint: check-uv
+	uv run --python=$(PY_VERSION) pre-commit run --all-files
 
 # pre-commit run also formats files, but let's keep `make format` for convenience
 format: lint
@@ -109,7 +114,7 @@ it: check-venv python-caches-clean
 check-all: lint test it
 
 benchmark: check-venv
-	. $(VENV_ACTIVATE_FILE); pytest benchmarks/
+	uv run --python=$(PY_VERSION) pytest benchmarks/
 
 release-checks: check-venv
 	. $(VENV_ACTIVATE_FILE); ./release-checks.sh $(release_version) $(next_version)
@@ -118,4 +123,3 @@ release-checks: check-venv
 release: check-venv release-checks clean docs lint test it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean lint format docs serve-docs test it check-all benchmark release release-checks prereq venv-create check-env
