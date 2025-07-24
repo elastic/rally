@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import concurrent.futures
-from typing import Protocol, runtime_checkable
+from typing import Protocol, Self, runtime_checkable
 
 from esrally.types import Config
 
@@ -26,8 +26,9 @@ MAX_WORKERS = 32
 
 @runtime_checkable
 class Executor(Protocol):
-    """Executor protocol is used by Transfer class to submit tasks execution.
+    """This is a protocol class for concrete asynchronous executors.
 
+    Executor protocol is used by Transfer class to submit tasks execution.
     Notable implementation of this protocol is concurrent.futures.ThreadPoolExecutor[1] class.
 
     [1] https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
@@ -45,11 +46,9 @@ class Executor(Protocol):
         raise NotImplementedError()
 
 
-class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor, Executor):
+class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
 
     @classmethod
-    def from_config(cls, cfg: Config) -> concurrent.futures.Executor:
+    def from_config(cls, cfg: Config) -> Self:
         max_workers = int(cfg.opts("storage", "storage.max_workers", MAX_WORKERS, mandatory=False))
-        executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="esrally.storage.executor")
-        assert isinstance(executor, Executor)
-        return executor
+        return cls(max_workers=max_workers, thread_name_prefix="esrally.storage.executor")

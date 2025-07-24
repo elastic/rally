@@ -157,7 +157,7 @@ class AdapterRegistry:
         self._cfg = cfg
 
     @classmethod
-    def from_config(cls, cfg: Config) -> AdapterRegistry:
+    def from_config(cls, cfg: Config) -> Self:
         registry = cls(cfg)
         adapter_names: Iterable[str] = cfg.opts(
             section="storage", key="storage.adapters", default_value=ADAPTER_CLASS_NAMES, mandatory=False

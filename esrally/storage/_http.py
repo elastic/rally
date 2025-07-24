@@ -44,7 +44,7 @@ MAX_RETRIES = 10
 class Session(requests.Session):
 
     @classmethod
-    def from_config(cls, cfg: Config) -> Session:
+    def from_config(cls, cfg: Config) -> Self:
         max_retries: urllib3.Retry | int | None = 0
         max_retries_text = cfg.opts("storage", "storage.http.max_retries", MAX_RETRIES, mandatory=False)
         if max_retries_text:
