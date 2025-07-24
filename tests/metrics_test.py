@@ -159,7 +159,7 @@ class TestEsClient:
 
     @pytest.mark.parametrize("password_configuration", [None, "config", "environment"])
     @mock.patch("esrally.client.EsClientFactory")
-    def test_config_opts_parsing(self, client_esclientfactory, password_configuration, monkeypatch):
+    def test_config_opts_parsing_basic(self, client_esclientfactory, password_configuration, monkeypatch):
         cfg = config.Config()
 
         _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
@@ -191,8 +191,7 @@ class TestEsClient:
                 raise
 
             assert (
-                e.message
-                == "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+                e.message == "Either basic authentication (username and password) or an API key is required in the reporting configuration."
             )
             return
 
@@ -202,6 +201,109 @@ class TestEsClient:
             "basic_auth_user": _datastore_user,
             "basic_auth_password": _datastore_password,
             "verify_certs": _datastore_verify_certs,
+        }
+
+        client_esclientfactory.assert_called_with(
+            hosts=[{"host": _datastore_host, "port": _datastore_port}],
+            client_options=expected_client_options,
+            distribution_version=None,
+            distribution_flavor=None,
+        )
+
+    @pytest.mark.parametrize("apikey_configuration", [None, "config", "environment"])
+    @mock.patch("esrally.client.EsClientFactory")
+    def test_config_opts_parsing_apikey(self, client_esclientfactory, apikey_configuration, monkeypatch):
+        cfg = config.Config()
+
+        _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
+        _datastore_port = random.randint(1024, 65535)
+        _datastore_secure = random.choice(["True", "true"])
+        _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
+        _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
+        _datastore_apikey = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(60)])
+        _datastore_verify_certs = random.choice([True, False])
+        _datastore_probe_version = False
+
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", _datastore_user)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.probe.cluster_version", _datastore_probe_version)
+
+        if apikey_configuration == "config":
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.api_key", _datastore_apikey)
+        elif apikey_configuration == "environment":
+            monkeypatch.setenv("RALLY_REPORTING_DATASTORE_API_KEY", _datastore_apikey)
+        elif apikey_configuration == "both":
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.api_key", _datastore_apikey)
+
+        if not _datastore_verify_certs:
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
+
+        try:
+            metrics.EsClientFactory(cfg)
+        except exceptions.ConfigError as e:
+            if apikey_configuration is not None:
+                raise
+
+            assert (
+                e.message == "Either basic authentication (username and password) or an API key is required in the reporting configuration."
+            )
+            return
+
+        expected_client_options = {
+            "use_ssl": True,
+            "timeout": 120,
+            "verify_certs": _datastore_verify_certs,
+            "api_key": _datastore_apikey,
+        }
+
+        client_esclientfactory.assert_called_with(
+            hosts=[{"host": _datastore_host, "port": _datastore_port}],
+            client_options=expected_client_options,
+            distribution_version=None,
+            distribution_flavor=None,
+        )
+
+    @mock.patch("esrally.client.EsClientFactory")
+    def test_config_opts_parsing_both_password_apikey(self, client_esclientfactory, monkeypatch):
+        cfg = config.Config()
+
+        _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
+        _datastore_port = random.randint(1024, 65535)
+        _datastore_secure = random.choice(["True", "true"])
+        _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
+        _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
+        _datastore_apikey = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(60)])
+        _datastore_verify_certs = random.choice([True, False])
+        _datastore_probe_version = False
+
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", _datastore_user)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.probe.cluster_version", _datastore_probe_version)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.api_key", _datastore_apikey)
+
+        if not _datastore_verify_certs:
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
+
+        try:
+            metrics.EsClientFactory(cfg)
+        except exceptions.ConfigError as e:
+            assert (
+                e.message
+                == "Both basic authentication (username/password) and API key are provided. Please provide only one authentication method."
+            )
+            return
+
+        expected_client_options = {
+            "use_ssl": True,
+            "timeout": 120,
+            "verify_certs": _datastore_verify_certs,
+            "api_key": _datastore_apikey,
         }
 
         client_esclientfactory.assert_called_with(

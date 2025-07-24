@@ -264,7 +264,7 @@ class EsClientFactory:
             )
         if not ((user and password) or api_key):
             raise exceptions.ConfigError(
-                "You must provide either basic authentication (username and password) or an API key for the metrics store."
+                "Either basic authentication (username and password) or an API key is required in the reporting configuration."
             )
 
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
