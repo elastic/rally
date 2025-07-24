@@ -25,7 +25,7 @@ from collections import defaultdict, deque
 from collections.abc import Iterator
 from datetime import datetime
 from random import Random
-from typing import NamedTuple
+from typing import NamedTuple, Self
 
 from esrally import types
 from esrally.storage._adapter import (
@@ -51,7 +51,7 @@ class Client:
     @classmethod
     def from_config(
         cls, cfg: types.Config, adapters: AdapterRegistry | None = None, mirrors: MirrorList | None = None, random: Random | None = None
-    ) -> Client:
+    ) -> Self:
         if adapters is None:
             adapters = AdapterRegistry.from_config(cfg)
         if mirrors is None:

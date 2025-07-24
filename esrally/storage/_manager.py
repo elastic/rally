@@ -20,6 +20,7 @@ import atexit
 import logging
 import os
 import threading
+from typing import Self
 
 from esrally import types
 from esrally.storage._client import MAX_CONNECTIONS, Client
@@ -39,7 +40,7 @@ class TransferManager:
     """It creates and perform file transfer operations in background."""
 
     @classmethod
-    def from_config(cls, cfg: types.Config, client: Client | None = None, executor: Executor | None = None) -> TransferManager:
+    def from_config(cls, cfg: types.Config, client: Client | None = None, executor: Executor | None = None) -> Self:
         """It creates a TransferManager with initialization values taken from given configuration."""
         local_dir = cfg.opts(section="storage", key="storage.local_dir", default_value=LOCAL_DIR, mandatory=False)
         monitor_interval = cfg.opts(section="storage", key="storage.monitor_interval", default_value=MONITOR_INTERVAL, mandatory=False)
@@ -176,7 +177,7 @@ def init_transfer_manager(cfg: types.Config, client: Client | None = None, execu
         if _MANAGER is not None:
             LOG.debug("Transfer manager already initialized")
             return False
-        _MANAGER = TransferManager.from_config(cfg, client, executor)
+        _MANAGER = TransferManager.from_config(cfg, client=client, executor=executor)
         atexit.register(_MANAGER.shutdown)
         return True
 
