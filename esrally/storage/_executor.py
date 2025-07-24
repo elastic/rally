@@ -46,7 +46,7 @@ class Executor(Protocol):
         raise NotImplementedError()
 
 
-class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
+class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor, Executor):
 
     @classmethod
     def from_config(cls, cfg: Config) -> Self:
