@@ -88,17 +88,17 @@ class HTTPAdapter(Adapter):
             if res.status_code == 404:
                 raise FileNotFoundError(f"Can't get file head: {url}")
             res.raise_for_status()
-        return self._head_from_headers(url, res.headers)
+        return head_from_headers(url, res.headers)
 
     def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         headers: MutableMapping[str, str] = CaseInsensitiveDict()
-        self._head_to_headers(head, headers)
+        head_to_headers(head, headers)
         with self.session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
             if res.status_code == 503:
                 raise ServiceUnavailableError()
             res.raise_for_status()
 
-            got = self._head_from_headers(url, res.headers)
+            got = head_from_headers(url, res.headers)
             if head is not None:
                 head.check(got)
 
@@ -107,46 +107,48 @@ class HTTPAdapter(Adapter):
                     stream.write(chunk)
         return got
 
-    @classmethod
-    def _head_to_headers(cls, head: Head | None, headers: MutableMapping[str, str]) -> None:
-        if head is not None:
-            cls._date_to_headers(head.date, headers)
-            cls._ranges_to_headers(head.ranges, headers)
 
-    @classmethod
-    def _date_to_headers(cls, date: datetime | None, headers: MutableMapping[str, str]) -> None:
-        if date is not None:
-            raise NotImplementedError("date is not implemented yet")
+_ACCEPT_RANGES_HEADER = "Accept-Ranges"
+_CONTENT_RANGE_HEADER = "Content-Range"
+_CONTENT_LENGTH_HEADER = "Content-Length"
 
-    _RANGE_HEADER = "Range"
 
-    @classmethod
-    def _ranges_to_headers(cls, ranges: RangeSet, headers: MutableMapping[str, str]) -> None:
-        if not ranges:
-            return
-        if len(ranges) > 1:
-            # This will never be supported as notable services like S3 don't support it.
-            raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
-        headers[cls._RANGE_HEADER] = f"bytes={ranges[0]}"
+def head_from_headers(url: str, headers: Mapping[str, Any]) -> Head:
+    accept_ranges = parse_accept_ranges(headers.get(_ACCEPT_RANGES_HEADER, ""))
+    content_length = parse_content_length(headers.get(_CONTENT_LENGTH_HEADER, ""))
+    ranges, document_length = parse_content_range(headers.get(_CONTENT_RANGE_HEADER, ""))
+    crc32c = parse_hashes_from_headers(headers).get("crc32c")
+    return Head(
+        url=url,
+        content_length=content_length,
+        accept_ranges=accept_ranges,
+        ranges=ranges,
+        document_length=document_length,
+        crc32c=crc32c,
+    )
 
-    _ACCEPT_RANGES_HEADER = "Accept-Ranges"
-    _CONTENT_RANGE_HEADER = "Content-Range"
-    _CONTENT_LENGTH_HEADER = "Content-Length"
 
-    @classmethod
-    def _head_from_headers(cls, url: str, headers: Mapping[str, Any]) -> Head:
-        accept_ranges = parse_accept_ranges(headers.get(cls._ACCEPT_RANGES_HEADER, ""))
-        content_length = parse_content_length(headers.get(cls._CONTENT_LENGTH_HEADER, ""))
-        ranges, document_length = parse_content_range(headers.get(cls._CONTENT_RANGE_HEADER, ""))
-        crc32c = parse_hashes_from_headers(headers).get("crc32c")
-        return Head(
-            url=url,
-            content_length=content_length,
-            accept_ranges=accept_ranges,
-            ranges=ranges,
-            document_length=document_length,
-            crc32c=crc32c,
-        )
+def head_to_headers(head: Head | None, headers: MutableMapping[str, str]) -> None:
+    if head is not None:
+        date_to_headers(head.date, headers)
+        ranges_to_headers(head.ranges, headers)
+
+
+def date_to_headers(date: datetime | None, headers: MutableMapping[str, str]) -> None:
+    if date is not None:
+        raise NotImplementedError("date is not implemented yet")
+
+
+_RANGE_HEADER = "Range"
+
+
+def ranges_to_headers(ranges: RangeSet, headers: MutableMapping[str, str]) -> None:
+    if not ranges:
+        return
+    if len(ranges) > 1:
+        # This will never be supported as notable services like S3 don't support it.
+        raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
+    headers[_RANGE_HEADER] = f"bytes={ranges[0]}"
 
 
 def parse_accept_ranges(text: str) -> bool | None:

@@ -26,7 +26,7 @@ import pytest
 
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Readable, Writable
-from esrally.storage._aws import S3Adapter, S3Client
+from esrally.storage._aws import S3Adapter, S3Client, head_from_response
 from esrally.storage._http import CHUNK_SIZE
 from esrally.storage._range import rangeset
 from esrally.types import Key
@@ -37,8 +37,8 @@ SOME_KEY = "some/key"
 SOME_URL = f"s3://{SOME_BUCKET}/{SOME_KEY}"
 
 ACCEPT_RANGES_HEADERS = {"AcceptRanges": "bytes"}
-CONTENT_LENGTH_HEADERS = {"ContentLength": "512"}
-CONTENT_RANGE_HEADERS = {"ContentRange": "bytes 3-20/128", "ContentLength": "18"}
+CONTENT_LENGTH_HEADERS = {"ContentLength": 512}
+CONTENT_RANGE_HEADERS = {"ContentRange": "bytes 3-20/128", "ContentLength": 18}
 
 
 @dataclass()
@@ -73,18 +73,18 @@ def test_head(case: HeadCase, s3_client) -> None:
     s3_client.head_object.assert_called_with(Bucket=case.want_bucket, Key=case.want_key)
 
 
-class Body:
+class DummyBody:
     def __init__(self, body: bytes) -> None:
         self.body = body
 
-    def iter_content(self, chunk_size: int) -> Iterable[bytes]:
+    def iter_chunks(self, chunk_size: int) -> Iterable[bytes]:
         while self.body:
             yield self.body[:chunk_size]
             self.body = self.body[chunk_size:]
 
 
 SOME_DATA = b"some-data"
-SOME_DATA_HEADERS = {"ContentLength": len(SOME_DATA), "Body": Body(SOME_DATA)}
+SOME_DATA_HEADERS = {"ContentLength": len(SOME_DATA), "Body": DummyBody(SOME_DATA)}
 
 
 @dataclass()
@@ -113,7 +113,7 @@ class GetCase:
     ),
 )
 def test_get(case: GetCase, s3_client) -> None:
-    case.response.setdefault("Body", Body(b""))
+    case.response.setdefault("Body", DummyBody(b""))
     s3_client.get_object.return_value = case.response
     adapter = S3Adapter(s3_client=s3_client)
     stream = create_autospec(Writable, spec_set=True, instance=True)
@@ -157,51 +157,25 @@ def test_put(case: PutCase, s3_client):
 
 
 @dataclass()
-class RangesToHeadersCase:
-    ranges: str
-    want_headers: dict[str, str] | None = None
-    want_errors: tuple[type[Exception], ...] = tuple()
-
-
-@cases(
-    no_ranges=RangesToHeadersCase("", {}),
-    range=RangesToHeadersCase("10-20", {"Range": "bytes=10-20"}),
-    open_left=RangesToHeadersCase("-20", {"Range": "bytes=0-20"}),
-    open_right=RangesToHeadersCase("10-", {"Range": "bytes=10-"}),
-    multipart=RangesToHeadersCase("1-5,7-10", want_errors=(NotImplementedError,)),
-)
-def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
-    # pylint: disable=protected-access
-    got: dict[str, Any] = {}
-    try:
-        S3Adapter._ranges_to_headers(rangeset(case.ranges), got)
-    except case.want_errors:
-        return
-
-    assert got == case.want_headers
-
-
-@dataclass()
-class HeadFromHeadersCase:
-    headers: dict[str, str]
+class HeadFromResponseCase:
+    response: dict[str, Any]
     want_head: Head | None = None
     url: str = SOME_URL
     want_errors: tuple[type[Exception], ...] = tuple()
 
 
 @cases(
-    empty=HeadFromHeadersCase({}, Head(SOME_URL)),
-    content_length=HeadFromHeadersCase(CONTENT_LENGTH_HEADERS, Head(SOME_URL, content_length=512)),
-    accept_ranges=HeadFromHeadersCase(ACCEPT_RANGES_HEADERS, Head(SOME_URL, accept_ranges=True)),
-    ranges=HeadFromHeadersCase(
+    empty=HeadFromResponseCase({}, Head(SOME_URL)),
+    content_length=HeadFromResponseCase(CONTENT_LENGTH_HEADERS, Head(SOME_URL, content_length=512)),
+    accept_ranges=HeadFromResponseCase(ACCEPT_RANGES_HEADERS, Head(SOME_URL, accept_ranges=True)),
+    ranges=HeadFromResponseCase(
         CONTENT_RANGE_HEADERS,
         Head(SOME_URL, ranges=rangeset("3-20"), content_length=18, document_length=128),
     ),
 )
-def test_head_from_headers(case: HeadFromHeadersCase):
-    # pylint: disable=protected-access
+def test_head_from_response(case: HeadFromResponseCase):
     try:
-        got = S3Adapter._head_from_headers(url=case.url, headers=case.headers)
+        got = head_from_response(url=case.url, response=case.response)
     except case.want_errors:
         return
     assert got == case.want_head

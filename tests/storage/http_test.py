@@ -27,7 +27,13 @@ from requests.structures import CaseInsensitiveDict
 
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
-from esrally.storage._http import CHUNK_SIZE, MAX_RETRIES, HTTPAdapter
+from esrally.storage._http import (
+    CHUNK_SIZE,
+    MAX_RETRIES,
+    HTTPAdapter,
+    head_from_headers,
+    ranges_to_headers,
+)
 from esrally.storage._range import rangeset
 from esrally.types import Key
 from esrally.utils.cases import cases
@@ -144,7 +150,7 @@ def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
     # pylint: disable=protected-access
     got: dict[str, Any] = {}
     try:
-        HTTPAdapter._ranges_to_headers(rangeset(case.ranges), got)
+        ranges_to_headers(rangeset(case.ranges), got)
     except case.want_errors:
         return
 
@@ -172,7 +178,7 @@ class HeadFromHeadersCase:
 def test_head_from_headers(case: HeadFromHeadersCase):
     # pylint: disable=protected-access
     try:
-        got = HTTPAdapter._head_from_headers(url=case.url, headers=case.headers)
+        got = head_from_headers(url=case.url, headers=case.headers)
     except Exception as ex:
         got = ex
     if isinstance(case.want, type):

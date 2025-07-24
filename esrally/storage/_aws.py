@@ -19,8 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import urllib.parse
-from collections.abc import Callable, Mapping, MutableMapping
-from datetime import datetime
+from collections.abc import Callable, Mapping
 from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 import boto3
@@ -30,11 +29,11 @@ from botocore.response import StreamingBody
 from esrally.storage._adapter import Adapter, Head, Readable, Self, Writable
 from esrally.storage._http import (
     CHUNK_SIZE,
+    head_to_headers,
     parse_accept_ranges,
     parse_content_range,
     parse_hashes_from_headers,
 )
-from esrally.storage._range import RangeSet
 from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
@@ -70,15 +69,15 @@ class S3Adapter(Adapter):
     def head(self, url: str) -> Head:
         address = S3Address.from_url(url)
         res = self._s3.head_object(Bucket=address.bucket, Key=address.key)
-        return _head_from_response(url, res)
+        return head_from_response(url, res)
 
     def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         headers: dict[str, Any] = {}
-        _head_to_headers(head, headers)
+        head_to_headers(head, headers)
 
         address = S3Address.from_url(url)
         res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
-        ret = _head_from_response(url, res)
+        ret = head_from_response(url, res)
         if head is not None:
             head.check(ret)
         body: StreamingBody | None = res.get("Body")
@@ -165,27 +164,7 @@ _CRC32C_HEADER = "Crc32c"
 _RANGE_HEADER = "Range"
 
 
-def _head_to_headers(head: Head | None, headers: MutableMapping[str, str]) -> None:
-    if head is not None:
-        _date_to_headers(head.date, headers)
-        _ranges_to_headers(head.ranges, headers)
-
-
-def _date_to_headers(date: datetime | None, headers: MutableMapping[str, str]) -> None:
-    if date is not None:
-        raise NotImplementedError("date is not implemented yet")
-
-
-def _ranges_to_headers(ranges: RangeSet, headers: MutableMapping[str, str]) -> None:
-    if not ranges:
-        return
-    if len(ranges) > 1:
-        # This will never be supported as notable services like S3 don't support it.
-        raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
-    headers[_RANGE_HEADER] = f"bytes={ranges[0]}"
-
-
-def _head_from_response(url: str, response: Mapping[str, Any]) -> Head:
+def head_from_response(url: str, response: Mapping[str, Any]) -> Head:
     accept_ranges = parse_accept_ranges(response.get(_ACCEPT_RANGES_HEADER, ""))
     content_length = response.get(_CONTENT_LENGTH_HEADER)
     ranges, document_length = parse_content_range(response.get(_CONTENT_RANGE_HEADER, ""))
