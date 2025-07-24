@@ -679,7 +679,6 @@ develop = [
     { name = "pytest-asyncio" },
     { name = "pytest-benchmark" },
     { name = "pytest-httpserver" },
-    { name = "pytest-rally" },
     { name = "sphinx" },
     { name = "tox" },
     { name = "trustme" },
@@ -733,7 +732,6 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'develop'", specifier = "==0.19.0" },
     { name = "pytest-benchmark", marker = "extra == 'develop'", specifier = "==3.4.1" },
     { name = "pytest-httpserver", marker = "extra == 'develop'", specifier = "==1.0.5" },
-    { name = "pytest-rally", marker = "extra == 'develop'", git = "https://github.com/elastic/pytest-rally.git" },
     { name = "python-json-logger", specifier = "==2.0.7" },
     { name = "requests", specifier = "<2.32.0" },
     { name = "sphinx", marker = "extra == 'develop'", specifier = "==5.1.1" },
@@ -1851,11 +1849,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/78/e1/689fa6e00d83f37b1
 wheels = [
     { url = "https://files.pythonhosted.org/packages/02/6b/89c84644c14b67e4a8ac1f5a12c65b91dea81d2e738f18c5193e8c20ecd1/pytest_httpserver-1.0.5-py3-none-any.whl", hash = "sha256:9a4c5308da1482e0b2d792278518d400cf4043746e3da0fdb05747f56d6f80b2", size = 15333, upload-time = "2022-07-29T18:16:06.003Z" },
 ]
-
-[[package]]
-name = "pytest-rally"
-version = "0.0.1"
-source = { git = "https://github.com/elastic/pytest-rally.git#5bc8856f0532d38590e49fe2d15d8bf98a9f947f" }
 
 [[package]]
 name = "python-dateutil"

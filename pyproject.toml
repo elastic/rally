@@ -113,7 +113,6 @@ develop = [
     "pytest-benchmark==3.4.1",
     "pytest-asyncio==0.19.0",
     "pytest-httpserver==1.0.5",
-    "pytest-rally@git+https://github.com/elastic/pytest-rally.git#egg=master",
     "tox==3.25.0",
     "nox==2024.3.2",
     "sphinx==5.1.1",
