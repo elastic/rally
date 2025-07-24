@@ -94,8 +94,8 @@ def create_config():
     cfg.add(config.Scope.application, "reporting", "datastore.host", "localhost")
     cfg.add(config.Scope.application, "reporting", "datastore.port", "0")
     cfg.add(config.Scope.application, "reporting", "datastore.secure", False)
-    cfg.add(config.Scope.application, "reporting", "datastore.user", "user")
-    cfg.add(config.Scope.application, "reporting", "datastore.password", "password")
+    cfg.add(config.Scope.application, "reporting", "datastore.user", "")
+    cfg.add(config.Scope.application, "reporting", "datastore.password", "")
     # disable version probing to avoid any network calls in tests
     cfg.add(config.Scope.application, "reporting", "datastore.probe.cluster_version", False)
     # only internal devices are active
