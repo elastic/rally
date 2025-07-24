@@ -26,7 +26,7 @@ import pytest
 
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Readable, Writable
-from esrally.storage._aws import S3Adapter
+from esrally.storage._aws import S3Adapter, S3Client
 from esrally.storage._http import CHUNK_SIZE
 from esrally.storage._range import rangeset
 from esrally.types import Key
@@ -51,7 +51,7 @@ class HeadCase:
 
 
 @pytest.fixture
-def s3_client():
+def s3_client() -> S3Client:
     cls = type(boto3.Session().client("s3"))
     return create_autospec(cls, instance=True)
 

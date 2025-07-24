@@ -62,11 +62,6 @@ class Session(requests.Session):
             self.mount("https://", adapter)
 
 
-_CONTENT_RANGE_PREFIX = "bytes "
-_AMZ_CHECKSUM_PREFIX = "x-amz-checksum-"
-_GOOG_HASH_KEY = "X-Goog-Hash"
-
-
 class HTTPAdapter(Adapter):
     """It implements the `Adapter` interface for http(s) protocols using the requests library."""
 
@@ -75,17 +70,16 @@ class HTTPAdapter(Adapter):
         return url.startswith("http://") or url.startswith("https://")
 
     @classmethod
-    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
-        assert issubclass(cls, HTTPAdapter)
-        chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
-        kwargs.setdefault("chunk_size", chunk_size)
-        session = Session.from_config(cfg)
-        kwargs.setdefault("session", session)
-        return super().from_config(cfg, **kwargs)
+    def from_config(cls, cfg: Config, session: requests.Session | None = None, chunk_size: int | None = None, **kwargs: Any) -> Self:
+        if session is None:
+            session = Session.from_config(cfg)
+        if chunk_size is None:
+            chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
+        return super().from_config(cfg, session=session, chunk_size=chunk_size, **kwargs)
 
     def __init__(self, session: requests.Session | None = None, chunk_size: int = CHUNK_SIZE):
         if session is None:
-            session = requests.session()
+            session = requests.Session()
         self.chunk_size = chunk_size
         self.session = session
 
@@ -135,12 +129,16 @@ class HTTPAdapter(Adapter):
             raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
         headers[cls._RANGE_HEADER] = f"bytes={ranges[0]}"
 
+    _ACCEPT_RANGES_HEADER = "Accept-Ranges"
+    _CONTENT_RANGE_HEADER = "Content-Range"
+    _CONTENT_LENGTH_HEADER = "Content-Length"
+
     @classmethod
-    def _head_from_headers(cls, url: str, headers: Mapping[str, str]) -> Head:
-        accept_ranges = cls._accept_ranges_from_headers(headers)
-        content_length = cls._content_length_from_headers(headers)
-        ranges, document_length = cls._content_range_from_headers(headers)
-        crc32c = cls._hashes_from_headers(headers).get("crc32c")
+    def _head_from_headers(cls, url: str, headers: Mapping[str, Any]) -> Head:
+        accept_ranges = parse_accept_ranges(headers.get(cls._ACCEPT_RANGES_HEADER, ""))
+        content_length = parse_content_length(headers.get(cls._CONTENT_LENGTH_HEADER, ""))
+        ranges, document_length = parse_content_range(headers.get(cls._CONTENT_RANGE_HEADER, ""))
+        crc32c = parse_hashes_from_headers(headers).get("crc32c")
         return Head(
             url=url,
             content_length=content_length,
@@ -150,74 +148,80 @@ class HTTPAdapter(Adapter):
             crc32c=crc32c,
         )
 
-    _CONTENT_LENGTH_HEADER = "Content-Length"
 
-    @classmethod
-    def _content_length_from_headers(cls, headers: Mapping[str, str]) -> int | None:
-        value = headers.get(cls._CONTENT_LENGTH_HEADER, None)
-        if value is None:
-            return None
-        if isinstance(value, str):
-            value = value.strip()
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            raise ValueError(f"invalid content length value: {value}") from None
+def parse_accept_ranges(text: str) -> bool | None:
+    got = text.strip()
+    if not got:
+        return None
+    return got == "bytes"
 
-    _ACCEPT_RANGES_HEADER = "Accept-Ranges"
 
-    @classmethod
-    def _accept_ranges_from_headers(cls, headers: Mapping[str, str]) -> bool | None:
-        got = headers.get(cls._ACCEPT_RANGES_HEADER, "").strip()
-        if not got:
-            return None
-        return got == "bytes"
+def parse_content_length(text: str) -> int | None:
+    text = text.strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except (ValueError, TypeError):
+        raise ValueError(f"invalid content length value: {text}") from None
 
-    _CONTENT_RANGE_HEADER = "Content-Range"
 
-    @classmethod
-    def _content_range_from_headers(cls, headers: Mapping[str, str]) -> tuple[RangeSet, int | None]:
-        content_range_text = headers.get(cls._CONTENT_RANGE_HEADER, "").strip()
-        if not content_range_text:
-            return NO_RANGE, None
+_CONTENT_RANGE_PREFIX = "bytes "
 
-        if not content_range_text.startswith(_CONTENT_RANGE_PREFIX):
-            raise NotImplementedError(f"Unsupported prefix for 'content-range' header: {content_range_text}")
 
-        if "," in content_range_text:
-            raise NotImplementedError("Multi range value for 'content-range' header is not supported.")
+def parse_content_range(text: str) -> tuple[RangeSet, int | None]:
+    text = text.strip()
+    if not text:
+        return NO_RANGE, None
 
-        try:
-            range_text, document_length_text = content_range_text[len(_CONTENT_RANGE_PREFIX) :].replace(" ", "").split("/", 1)
-        except ValueError:
-            raise ValueError(f"Invalid value for 'content-range' header: '{content_range_text}'") from None
+    if not text.startswith(_CONTENT_RANGE_PREFIX):
+        raise NotImplementedError(f"Unsupported prefix for 'content-range' header: {text}")
 
-        try:
-            document_length = int(document_length_text)
-        except ValueError:
-            document_length = None
-            if document_length_text.strip() != "*":
-                raise ValueError(f"Invalid value for 'content-length' header: '{document_length_text}'") from None
-        else:
-            if document_length is not None and document_length < 0:
-                raise ValueError(f"Value for 'content-length' header: '{document_length}' < 0")
-        return rangeset(range_text), document_length
+    if "," in text:
+        raise NotImplementedError("Multi range value for 'content-range' header is not supported.")
 
-    @classmethod
-    def _hashes_from_headers(cls, headers: Mapping[str, str]) -> dict[str, str]:
-        hashes: dict[str, str] = {}
-        hashes_text = headers.get(_GOOG_HASH_KEY, "").replace(" ", "")
-        if hashes_text:
-            for entry in hashes_text.split(","):
-                if "=" not in entry:
-                    raise ValueError(f"invalid X-Goog-Hash value: {hashes_text}") from None
-                name, value = entry.split("=", 1)
-                hashes[name] = value
+    try:
+        range_text, document_length_text = text[len(_CONTENT_RANGE_PREFIX) :].replace(" ", "").split("/", 1)
+    except ValueError:
+        raise ValueError(f"Invalid value for content-range header: '{text}'") from None
 
-        for k, value in headers.items():
-            if k.startswith(_AMZ_CHECKSUM_PREFIX):
-                name = k[len(_AMZ_CHECKSUM_PREFIX) :]
-                if name == "type":
-                    continue
-                hashes[name] = value
-        return hashes
+    try:
+        document_length = int(document_length_text)
+    except ValueError as ex:
+        if document_length_text != "*":
+            raise ValueError(f"Invalid document length for content range: '{text}', {ex}") from None
+        document_length = None
+    else:
+        assert isinstance(document_length, int)
+        if document_length < 0:
+            raise ValueError(f"Invalid document length for content range: '{document_length}' < 0")
+
+    try:
+        ranges = rangeset(range_text)
+    except ValueError as ex:
+        raise ValueError(f"Invalid range for content range: '{range_text}', {ex}") from None
+
+    return ranges, document_length
+
+
+_AMZ_CHECKSUM_PREFIX = "x-amz-checksum-"
+_GOOG_HASH_KEY = "X-Goog-Hash"
+
+
+def parse_hashes_from_headers(headers: Mapping[str, Any]) -> dict[str, str]:
+    hashes: dict[str, str] = {}
+    hashes_text = headers.get(_GOOG_HASH_KEY, "").replace(" ", "")
+    if hashes_text:
+        for entry in hashes_text.split(","):
+            if "=" not in entry:
+                raise ValueError(f"invalid X-Goog-Hash value: {hashes_text}") from None
+            name, value = entry.split("=", 1)
+            hashes[name] = value
+
+    for k, value in headers.items():
+        if k.startswith(_AMZ_CHECKSUM_PREFIX):
+            name = k[len(_AMZ_CHECKSUM_PREFIX) :]
+            if name == "type":
+                continue
+            hashes[name] = value
+    return hashes

@@ -19,15 +19,22 @@ from __future__ import annotations
 import logging
 import os
 import urllib.parse
-from collections.abc import MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from datetime import datetime
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 import boto3
-import requests
+from boto3.s3.transfer import TransferConfig
+from botocore.response import StreamingBody
 
-from esrally.storage._adapter import Head, Readable, Self, Writable
-from esrally.storage._http import CHUNK_SIZE, HTTPAdapter
+from esrally.storage._adapter import Adapter, Head, Readable, Self, Writable
+from esrally.storage._http import (
+    CHUNK_SIZE,
+    parse_accept_ranges,
+    parse_content_range,
+    parse_hashes_from_headers,
+)
+from esrally.storage._range import RangeSet
 from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
@@ -35,22 +42,24 @@ LOG = logging.getLogger(__name__)
 AWS_PROFILE: str | None = None
 
 
-class S3Adapter(HTTPAdapter):
+class S3Adapter(Adapter):
     """Adapter class for s3:// scheme protocol"""
 
     @classmethod
-    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
-        aws_profile = cfg.opts("storage", "storage.aws.profile", default_value=AWS_PROFILE, mandatory=False)
-        return super().from_config(cfg, aws_profile=aws_profile)
+    def from_config(cls, cfg: Config, chunk_size: int | None = None, aws_profile: str | None = None, **kwargs: Any) -> Self:
+        if aws_profile is None:
+            aws_profile = cfg.opts("storage", "storage.aws.profile", default_value=AWS_PROFILE, mandatory=False)
+        if chunk_size is None:
+            chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
+        return super().from_config(cfg, aws_profile=aws_profile, chunk_size=chunk_size, **kwargs)
 
     def __init__(
         self,
         aws_profile: str | None = AWS_PROFILE,
-        s3_client: Any = None,
-        session: requests.Session | None = None,
         chunk_size: int = CHUNK_SIZE,
+        s3_client: S3Client | None = None,
     ) -> None:
-        super().__init__(session=session, chunk_size=chunk_size)
+        self.chunk_size = chunk_size
         self.aws_profile = aws_profile
         self._s3_client = s3_client
 
@@ -61,21 +70,21 @@ class S3Adapter(HTTPAdapter):
     def head(self, url: str) -> Head:
         address = S3Address.from_url(url)
         res = self._s3.head_object(Bucket=address.bucket, Key=address.key)
-        return self._head_from_headers(url, res)
+        return _head_from_response(url, res)
 
     def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         headers: dict[str, Any] = {}
-        self._head_to_headers(head, headers)
+        _head_to_headers(head, headers)
 
         address = S3Address.from_url(url)
         res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
-        ret = self._head_from_headers(url, res)
+        ret = _head_from_response(url, res)
         if head is not None:
             head.check(ret)
-        body = res.get("Body")
+        body: StreamingBody | None = res.get("Body")
         if body is None:
             raise RuntimeError("S3 client returned no body.")
-        for chunk in body.iter_content(self.chunk_size):
+        for chunk in body.iter_chunks(self.chunk_size):
             if chunk:
                 stream.write(chunk)
         return ret
@@ -86,7 +95,7 @@ class S3Adapter(HTTPAdapter):
 
         address = S3Address.from_url(url)
         LOG.info("Uploading file to '%s'...", url)
-        self._s3.upload_fileobj(stream, address.bucket, address.key)
+        self._s3.upload_fileobj(Fileobj=stream, Bucket=address.bucket, Key=address.key)
         LOG.info("File uploaded: '%s'.", url)
 
         ret = self.head(url)
@@ -97,20 +106,10 @@ class S3Adapter(HTTPAdapter):
     _s3_client = None
 
     @property
-    def _s3(self):
+    def _s3(self) -> S3Client:
         if self._s3_client is None:
             self._s3_client = boto3.Session(profile_name=self.aws_profile).client("s3")
         return self._s3_client
-
-    _CONTENT_LENGTH_HEADER = "ContentLength"
-    _ACCEPT_RANGES_HEADER = "AcceptRanges"
-    _CONTENT_RANGE_HEADER = "ContentRange"
-    _RANGE_HEADER = "Range"
-
-    @classmethod
-    def _date_to_headers(cls, date: datetime | None, headers: MutableMapping[str, Any]) -> None:
-        if date is not None:
-            headers["x-amz-date"] = date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class S3Address(NamedTuple):
@@ -157,3 +156,66 @@ class S3Address(NamedTuple):
     def url(self, scheme: str = "s3") -> str:
         netloc = self.host(scheme=scheme)
         return urllib.parse.urlunparse((scheme, netloc, self.key, "", "", ""))
+
+
+_ACCEPT_RANGES_HEADER = "AcceptRanges"
+_CONTENT_LENGTH_HEADER = "ContentLength"
+_CONTENT_RANGE_HEADER = "ContentRange"
+_CRC32C_HEADER = "Crc32c"
+_RANGE_HEADER = "Range"
+
+
+def _head_to_headers(head: Head | None, headers: MutableMapping[str, str]) -> None:
+    if head is not None:
+        _date_to_headers(head.date, headers)
+        _ranges_to_headers(head.ranges, headers)
+
+
+def _date_to_headers(date: datetime | None, headers: MutableMapping[str, str]) -> None:
+    if date is not None:
+        raise NotImplementedError("date is not implemented yet")
+
+
+def _ranges_to_headers(ranges: RangeSet, headers: MutableMapping[str, str]) -> None:
+    if not ranges:
+        return
+    if len(ranges) > 1:
+        # This will never be supported as notable services like S3 don't support it.
+        raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
+    headers[_RANGE_HEADER] = f"bytes={ranges[0]}"
+
+
+def _head_from_response(url: str, response: Mapping[str, Any]) -> Head:
+    accept_ranges = parse_accept_ranges(response.get(_ACCEPT_RANGES_HEADER, ""))
+    content_length = response.get(_CONTENT_LENGTH_HEADER)
+    ranges, document_length = parse_content_range(response.get(_CONTENT_RANGE_HEADER, ""))
+    crc32 = parse_hashes_from_headers(response).get(_CRC32C_HEADER)
+    return Head(
+        url=url,
+        accept_ranges=accept_ranges,
+        content_length=content_length,
+        ranges=ranges,
+        document_length=document_length,
+        crc32c=crc32,
+    )
+
+
+@runtime_checkable
+class S3Client(Protocol):
+
+    def head_object(self, Bucket: str, Key: str) -> Mapping[str, Any]:
+        raise NotImplementedError()
+
+    def get_object(self, Bucket: str, Key: str, **kwargs: Any) -> Mapping[str, Any]:
+        raise NotImplementedError()
+
+    def upload_fileobj(
+        self,
+        Fileobj: Readable,
+        Bucket: str,
+        Key: str,
+        ExtraArgs: Mapping[str, Any] | None = None,
+        Callback: Callable[[int], Any] | None = None,
+        Config: TransferConfig | None = None,
+    ) -> None:
+        raise NotImplementedError()
