@@ -234,7 +234,7 @@ class EsClientFactory:
         hosts = [{"host": host, "port": port}]
         secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
 
-        user = self._config.opts("reporting", "datastore.user", default_value=None, mandatory=False)
+        user = self._config.opts("reporting", "datastore.user", mandatory=False)
         distribution_version = None
         distribution_flavor = None
         password = None
@@ -245,26 +245,24 @@ class EsClientFactory:
                 password = os.environ["RALLY_REPORTING_DATASTORE_PASSWORD"]
             except KeyError:
                 try:
-                    password = self._config.opts("reporting", "datastore.password", default_value=None, mandatory=False)
+                    password = self._config.opts("reporting", "datastore.password")
                 except exceptions.ConfigError:
-                    password = None
+                    raise exceptions.ConfigError(
+                        "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+                    )
         # Try to get api_key
         try:
             api_key = os.environ["RALLY_REPORTING_DATASTORE_API_KEY"]
         except KeyError:
             try:
-                api_key = self._config.opts("reporting", "datastore.api_key", default_value=None, mandatory=False)
+                api_key = self._config.opts("reporting", "datastore.api_key", mandatory=False)
             except exceptions.ConfigError:
                 api_key = None
 
-        # Enforce that either (user and password) or api_key is provided, but not both or neither
+        # Enforce that one of (user and password) or api_key is provided, but not both
         if (user and password) and api_key:
             raise exceptions.ConfigError(
                 "Both basic authentication (username/password) and API key are provided. Please provide only one authentication method."
-            )
-        if not ((user and password) or api_key):
-            raise exceptions.ConfigError(
-                "Either basic authentication (username and password) or an API key is required in the reporting configuration."
             )
 
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
