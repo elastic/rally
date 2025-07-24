@@ -131,6 +131,7 @@ class HTTPAdapter(Adapter):
         if not ranges:
             return
         if len(ranges) > 1:
+            # This will never be supported as notable services like S3 don't support it.
             raise NotImplementedError(f"unsupported multi range requests: ranges are {ranges}")
         headers[cls._RANGE_HEADER] = f"bytes={ranges[0]}"
 
