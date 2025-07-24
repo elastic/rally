@@ -248,7 +248,10 @@ class EsClientFactory:
                     password = self._config.opts("reporting", "datastore.password")
                 except exceptions.ConfigError:
                     raise exceptions.ConfigError(
-                        "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+                        (
+                            "No password configured through [reporting] configuration or "
+                            "RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+                        )
                     )
         # Try to get api_key
         try:
