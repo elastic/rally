@@ -487,8 +487,6 @@ class DefaultTrackPreparator(TrackProcessor):
 
 
 class Decompressor:
-    def __init__(self):
-        self.logger = LOG
 
     def decompress(self, archive_path, documents_path, uncompressed_size):
         if uncompressed_size:
@@ -499,7 +497,7 @@ class Decompressor:
         else:
             msg = f"Decompressing track data from [{archive_path}] to [{documents_path}] ... "
 
-        console.info(msg, end="", flush=True, logger=self.logger)
+        console.info(msg, end="", flush=True, logger=LOG)
         io.decompress(archive_path, io.dirname(archive_path))
         console.println("[OK]")
         if not os.path.isfile(documents_path):
@@ -531,7 +529,6 @@ class Downloader:
     def __init__(self, offline: bool, test_mode: bool, use_transfer_manager: bool = False):
         self.offline = offline
         self.test_mode = test_mode
-        self.logger = LOG
         self.use_transfer_manager = use_transfer_manager
 
     def download(self, base_url: str, target_path: str, size_in_bytes: int | None = None) -> None:
@@ -559,9 +556,9 @@ class Downloader:
         else:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
-                self.logger.info("Downloading data from [%s] (%s) to [%s].", data_url, pretty.size(size_in_bytes), target_path)
+                LOG.info("Downloading data from [%s] (%s) to [%s].", data_url, pretty.size(size_in_bytes), target_path)
             else:
-                self.logger.info("Downloading data from [%s] to [%s].", data_url, target_path)
+                LOG.info("Downloading data from [%s] to [%s].", data_url, target_path)
 
             # we want to have a bit more accurate download progress as these files are typically very large
             progress = net.Progress("[INFO] Downloading track data", accuracy=1)
@@ -583,7 +580,7 @@ class Downloader:
                 raise exceptions.DataError(f"Could not download [{data_url}] to [{target_path}].") from e
 
             progress.finish()
-            self.logger.info("Downloaded data from [%s] to [%s].", data_url, target_path)
+            LOG.info("Downloaded data from [%s] to [%s].", data_url, target_path)
 
         if not os.path.isfile(target_path):
             raise exceptions.SystemSetupError(
@@ -734,14 +731,13 @@ class TemplateSource:
         self.source = source
         self.fileglobber = fileglobber
         self.assembled_source = None
-        self.logger = LOG
 
     def load_template_from_file(self):
         loader = jinja2.FileSystemLoader(self.base_path)
         try:
             base_track = loader.get_source(jinja2.Environment(), self.template_file_name)
         except jinja2.TemplateNotFound:
-            self.logger.exception("Could not load track from [%s].", self.template_file_name)
+            LOG.exception("Could not load track from [%s].", self.template_file_name)
             raise TrackSyntaxError(f"Could not load track from '{self.template_file_name}'")
         self.assembled_source = self.replace_includes(self.base_path, base_track[0])
 
@@ -876,7 +872,6 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
 
 class TaskFilterTrackProcessor(TrackProcessor):
     def __init__(self, cfg: types.Config):
-        self.logger = LOG
         include_tasks = cfg.opts("track", "include.tasks", mandatory=False)
         exclude_tasks = cfg.opts("track", "exclude.tasks", mandatory=False)
 
@@ -932,10 +927,10 @@ class TaskFilterTrackProcessor(TrackProcessor):
                         if self._filter_out_match(leaf_task):
                             leafs_to_remove.append(leaf_task)
                     for leaf_task in leafs_to_remove:
-                        self.logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
+                        LOG.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
                         task.remove_task(leaf_task)
             for task in tasks_to_remove:
-                self.logger.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
+                LOG.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
                 challenge.remove_task(task)
 
         return track
@@ -943,7 +938,6 @@ class TaskFilterTrackProcessor(TrackProcessor):
 
 class ServerlessFilterTrackProcessor(TrackProcessor):
     def __init__(self, cfg: types.Config):
-        self.logger = LOG
         self.serverless_mode = convert.to_bool(cfg.opts("driver", "serverless.mode", mandatory=False, default_value=False))
         self.serverless_operator = convert.to_bool(cfg.opts("driver", "serverless.operator", mandatory=False, default_value=False))
 
@@ -952,7 +946,7 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
             return not operation.run_on_serverless
 
         if operation.type == "raw-request":
-            self.logger.info("Treating raw-request operation for operation [%s] as public.", operation.name)
+            LOG.info("Treating raw-request operation for operation [%s] as public.", operation.name)
 
         try:
             op = track.OperationType.from_hyphenated_string(operation.type)
@@ -962,7 +956,7 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
             else:
                 return op.serverless_status < serverless.Status.Public
         except KeyError:
-            self.logger.info("Treating user-provided operation type [%s] for operation [%s] as public.", operation.type, operation.name)
+            LOG.info("Treating user-provided operation type [%s] for operation [%s] as public.", operation.type, operation.name)
             return False
 
     def on_after_load_track(self, track):
@@ -990,23 +984,21 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
 class TestModeTrackProcessor(TrackProcessor):
     def __init__(self, cfg: types.Config):
         self.test_mode_enabled = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
-        self.logger = LOG
 
     def on_after_load_track(self, track):
         if not self.test_mode_enabled:
             return track
-        self.logger.info("Preparing track [%s] for test mode.", str(track))
+        LOG.info("Preparing track [%s] for test mode.", str(track))
         for corpus in track.corpora:
             for document_set in corpus.documents:
                 # TODO #341: Should we allow this for snapshots too?
                 if document_set.is_bulk:
                     if document_set.number_of_documents > 1000:
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug(
-                                "Reducing corpus size to 1000 documents in corpus [%s], uncompressed source file [%s]",
-                                corpus.name,
-                                document_set.document_file,
-                            )
+                        LOG.debug(
+                            "Reducing corpus size to 1000 documents in corpus [%s], uncompressed source file [%s]",
+                            corpus.name,
+                            document_set.document_file,
+                        )
 
                         document_set.number_of_documents = 1000
 
@@ -1028,13 +1020,12 @@ class TestModeTrackProcessor(TrackProcessor):
                         document_set.compressed_size_in_bytes = None
                         document_set.uncompressed_size_in_bytes = None
                     else:
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug(
-                                "Maintaining existing size of %d documents in corpus [%s], uncompressed source file [%s]",
-                                document_set.number_of_documents,
-                                corpus.name,
-                                document_set.document_file,
-                            )
+                        LOG.debug(
+                            "Maintaining existing size of %d documents in corpus [%s], uncompressed source file [%s]",
+                            document_set.number_of_documents,
+                            corpus.name,
+                            document_set.document_file,
+                        )
 
         for challenge in track.challenges:
             for task in challenge.schedule:
@@ -1044,26 +1035,18 @@ class TestModeTrackProcessor(TrackProcessor):
                     # at least one iteration for each client.
                     if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
                         count = leaf_task.clients
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug("Resetting warmup iterations to %d for [%s]", count, str(leaf_task))
+                        LOG.debug("Resetting warmup iterations to %d for [%s]", count, leaf_task)
                         leaf_task.warmup_iterations = count
                     if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
                         count = leaf_task.clients
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug("Resetting measurement iterations to %d for [%s]", count, str(leaf_task))
+                        LOG.debug("Resetting measurement iterations to %d for [%s]", count, leaf_task)
                         leaf_task.iterations = count
                     if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
                         leaf_task.warmup_time_period = 0
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug(
-                                "Resetting warmup time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.warmup_time_period
-                            )
+                        LOG.debug("Resetting warmup time period for [%s] to [%d] seconds.", leaf_task, leaf_task.warmup_time_period)
                     if leaf_task.time_period is not None and leaf_task.time_period > 10:
                         leaf_task.time_period = 10
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug(
-                                "Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period
-                            )
+                        LOG.debug("Resetting measurement time period for [%s] to [%d] seconds.", leaf_task, leaf_task.time_period)
 
                     # Keep throttled to expose any errors but increase the target throughput for short execution times.
                     if leaf_task.target_throughput:
@@ -1121,7 +1104,6 @@ class TrackFileReader:
             build_flavor=self.build_flavor,
             serverless_operator=self.serverless_operator,
         )
-        self.logger = LOG
 
     def read(self, track_name, track_spec_file, mapping_dir):
         """
@@ -1133,7 +1115,7 @@ class TrackFileReader:
         :return: A corresponding track instance if the track file is valid.
         """
 
-        self.logger.info("Reading track specification file [%s].", track_spec_file)
+        LOG.info("Reading track specification file [%s].", track_spec_file)
         # render the track to a temporary file instead of dumping it into the logs. It is easier to check for error messages
         # involving lines numbers and it also does not bloat Rally's log file so much.
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
@@ -1147,18 +1129,18 @@ class TrackFileReader:
                 )
                 with open(tmp.name, "w", encoding="utf-8") as f:
                     f.write(rendered)
-                self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
+                LOG.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
                 track_spec = json.loads(rendered)
             except jinja2.exceptions.TemplateSyntaxError as te:
-                self.logger.exception("Could not load [%s] due to Jinja Syntax Exception.", track_spec_file)
+                LOG.exception("Could not load [%s] due to Jinja Syntax Exception.", track_spec_file)
                 msg = f"Could not load '{track_spec_file}' due to Jinja Syntax Exception. "
                 msg += f"The track file ({tmp.name}) likely hasn't been written."
                 raise TrackSyntaxError(msg, te)
             except jinja2.exceptions.TemplateNotFound:
-                self.logger.exception("Could not load [%s]", track_spec_file)
+                LOG.exception("Could not load [%s]", track_spec_file)
                 raise exceptions.SystemSetupError(f"Track {track_name} does not exist")
             except json.JSONDecodeError as e:
-                self.logger.exception("Could not load [%s].", track_spec_file)
+                LOG.exception("Could not load [%s].", track_spec_file)
                 msg = f"Could not load '{track_spec_file}': {str(e)}."
                 if e.doc and e.lineno > 0 and e.colno > 0:
                     line_idx = e.lineno - 1
@@ -1172,7 +1154,7 @@ class TrackFileReader:
                 msg += f"The complete track has been written to '{tmp.name}' for diagnosis."
                 raise TrackSyntaxError(msg)
             except Exception as e:
-                self.logger.exception("Could not load [%s].", track_spec_file)
+                LOG.exception("Could not load [%s].", track_spec_file)
                 msg = f"Could not load '{track_spec_file}'. The complete track has been written to '{tmp.name}' for diagnosis."
                 raise TrackSyntaxError(msg, e)
 
@@ -1210,7 +1192,7 @@ class TrackFileReader:
             params_list = ",".join(opts.double_quoted_list_of(sorted(internal_user_defined_track_params)))
             err_msg = f"Some of your track parameter(s) {params_list} are defined by Rally and cannot be modified.\n"
 
-            self.logger.critical(err_msg)
+            LOG.critical(err_msg)
             # also dump the message on the console
             console.println(err_msg)
             raise exceptions.TrackConfigError(f"Reserved track parameters {sorted(internal_user_defined_track_params)}.")
@@ -1238,7 +1220,7 @@ class TrackFileReader:
                 )
             )
 
-            self.logger.critical(err_msg)
+            LOG.critical(err_msg)
             # also dump the message on the console
             console.println(err_msg)
             raise exceptions.TrackConfigError(f"Unused track parameters {sorted(unused_user_defined_track_params)}.")
@@ -1318,7 +1300,6 @@ class TrackSpecificationReader:
         self.complete_track_params = complete_track_params
         self.selected_challenge = selected_challenge
         self.source = source
-        self.logger = LOG
 
     def __call__(self, track_name, track_specification, mapping_dir, spec_file=None):
         self.name = track_name
@@ -1438,7 +1419,7 @@ class TrackSpecificationReader:
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _load_template(self, contents, description):
-        self.logger.info("Loading template [%s].", description)
+        LOG.info("Loading template [%s].", description)
         register_all_params_in_track(contents, self.complete_track_params)
         try:
             rendered = render_template(
@@ -1448,7 +1429,7 @@ class TrackSpecificationReader:
             )
             return json.loads(rendered)
         except Exception as e:
-            self.logger.exception("Could not load file template for %s.", description)
+            LOG.exception("Could not load file template for %s.", description)
             raise TrackSyntaxError("Could not load file template for '%s'" % description, str(e))
 
     def _create_corpora(self, corpora_specs, indices, data_streams):
@@ -1835,9 +1816,9 @@ class TrackSpecificationReader:
             op = track.OperationType.from_hyphenated_string(op_type_name)
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
-            self.logger.debug("Using built-in operation type [%s] for operation [%s].", op_type_name, op_name)
+            LOG.debug("Using built-in operation type [%s] for operation [%s].", op_type_name, op_name)
         except KeyError:
-            self.logger.info("Using user-provided operation type [%s] for operation [%s].", op_type_name, op_name)
+            LOG.info("Using user-provided operation type [%s] for operation [%s].", op_type_name, op_name)
 
         try:
             return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type_name, params=params, param_source=param_source)
