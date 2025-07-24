@@ -20,7 +20,7 @@ import json
 import logging
 from collections.abc import Mapping, MutableMapping
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any, Self
 
 import requests
 import requests.adapters
@@ -66,8 +66,6 @@ _CONTENT_RANGE_PREFIX = "bytes "
 _AMZ_CHECKSUM_PREFIX = "x-amz-checksum-"
 _GOOG_HASH_KEY = "X-Goog-Hash"
 
-A = TypeVar("A", "HTTPAdapter", "HTTPAdapter")
-
 
 class HTTPAdapter(Adapter):
     """It implements the `Adapter` interface for http(s) protocols using the requests library."""
@@ -77,12 +75,12 @@ class HTTPAdapter(Adapter):
         return url.startswith("http://") or url.startswith("https://")
 
     @classmethod
-    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
+    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
         assert issubclass(cls, HTTPAdapter)
         chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
-        kwargs.setdefault("chunk_size", chunk_size)  # type: ignore
+        kwargs.setdefault("chunk_size", chunk_size)
         session = Session.from_config(cfg)
-        kwargs.setdefault("session", session)  # type: ignore
+        kwargs.setdefault("session", session)
         return super().from_config(cfg, **kwargs)
 
     def __init__(self, session: requests.Session | None = None, chunk_size: int = CHUNK_SIZE):

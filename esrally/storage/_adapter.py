@@ -23,7 +23,7 @@ import threading
 from abc import ABC, abstractmethod
 from collections.abc import Container, Iterable, Iterator
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.types import Config
@@ -78,9 +78,6 @@ def _all_specified(*objs: Any) -> bool:
     return all(o or o is False for o in objs)
 
 
-A = TypeVar("A", "Adapter", "Adapter")
-
-
 class Adapter(ABC):
     """Base class for storage class client implementation"""
 
@@ -90,7 +87,7 @@ class Adapter(ABC):
         raise NotImplementedError
 
     @classmethod
-    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
+    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
         """Default `Adapter` objects factory method used to create adapters from `esrally` client.
 
         Default implementation will ignore `cfg` parameter. It can be overridden from `Adapter` implementations that

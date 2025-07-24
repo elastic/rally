@@ -21,12 +21,12 @@ import os
 import urllib.parse
 from collections.abc import MutableMapping
 from datetime import datetime
-from typing import Any, NamedTuple, TypeVar
+from typing import Any, NamedTuple
 
 import boto3
 import requests
 
-from esrally.storage._adapter import Head, Readable, Writable
+from esrally.storage._adapter import Head, Readable, Self, Writable
 from esrally.storage._http import CHUNK_SIZE, HTTPAdapter
 from esrally.types import Config
 
@@ -34,15 +34,12 @@ LOG = logging.getLogger(__name__)
 
 AWS_PROFILE: str | None = None
 
-A = TypeVar("A", "S3Adapter", "S3Adapter")
-
 
 class S3Adapter(HTTPAdapter):
     """Adapter class for s3:// scheme protocol"""
 
     @classmethod
-    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
-        assert issubclass(cls, S3Adapter)
+    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
         aws_profile = cfg.opts("storage", "storage.aws.profile", default_value=AWS_PROFILE, mandatory=False)
         return super().from_config(cfg, aws_profile=aws_profile)
 
