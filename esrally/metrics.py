@@ -233,24 +233,46 @@ class EsClientFactory:
         port = self._config.opts("reporting", "datastore.port")
         hosts = [{"host": host, "port": port}]
         secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
-        user = self._config.opts("reporting", "datastore.user")
+
+        user = self._config.opts("reporting", "datastore.user", default_value=None, mandatory=False)
         distribution_version = None
         distribution_flavor = None
+        password = None
+        api_key = None
+        # Try to get password if user is set
+        if user:
+            try:
+                password = os.environ["RALLY_REPORTING_DATASTORE_PASSWORD"]
+            except KeyError:
+                try:
+                    password = self._config.opts("reporting", "datastore.password", default_value=None, mandatory=False)
+                except exceptions.ConfigError:
+                    password = None
+        # Try to get api_key
         try:
-            password = os.environ["RALLY_REPORTING_DATASTORE_PASSWORD"]
+            api_key = os.environ["RALLY_REPORTING_DATASTORE_API_KEY"]
         except KeyError:
             try:
-                password = self._config.opts("reporting", "datastore.password")
+                api_key = self._config.opts("reporting", "datastore.api_key", default_value=None, mandatory=False)
             except exceptions.ConfigError:
-                raise exceptions.ConfigError(
-                    "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
-                ) from None
+                api_key = None
+
+        # Enforce that either (user and password) or api_key is provided, but not both or neither
+        if (user and password) and api_key:
+            raise exceptions.ConfigError(
+                "Both basic authentication (username/password) and API key are provided. Please provide only one authentication method."
+            )
+        if not ((user and password) or api_key):
+            raise exceptions.ConfigError(
+                "You must provide either basic authentication (username and password) or an API key for the metrics store."
+            )
 
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
         self.probe_version = self._config.opts("reporting", "datastore.probe.cluster_version", default_value=True, mandatory=False)
 
         # Instead of duplicating code, we're just adapting the metrics store specific properties to match the regular client options.
+
         client_options = {
             "use_ssl": secure,
             "verify_certs": verify,
@@ -261,6 +283,8 @@ class EsClientFactory:
         if user and password:
             client_options["basic_auth_user"] = user
             client_options["basic_auth_password"] = password
+        elif api_key:
+            client_options["api_key"] = api_key
 
         # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
         if self.probe_version:
