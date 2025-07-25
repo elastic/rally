@@ -27,9 +27,9 @@ import pytest
 from esrally.config import Config
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._client import Client
-from esrally.storage._executor import DummyExecutor
 from esrally.storage._range import rangeset
 from esrally.storage._transfer import MAX_CONNECTIONS, Transfer
+from esrally.storage.testing import DummyExecutor
 from esrally.utils.cases import cases
 
 URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
@@ -42,7 +42,7 @@ MISMATCH_CRC32C = "invalid-crc32c-checksum"
 class DummyClient(Client):
 
     def head(self, url: str, ttl: float | None = None) -> Head:
-        return Head.create(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
+        return Head(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
 
     def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         data = DATA
@@ -50,7 +50,7 @@ class DummyClient(Client):
             data = data[head.ranges.start : head.ranges.end]
         if data:
             stream.write(data)
-        return Head.create(url, ranges=head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
+        return Head(url, ranges=head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
 
 
 @pytest.fixture
