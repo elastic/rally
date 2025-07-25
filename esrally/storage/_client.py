@@ -17,15 +17,15 @@
 from __future__ import annotations
 
 import logging
-import os
 import threading
 import time
 import urllib.parse
 from collections import defaultdict, deque
 from collections.abc import Iterator
-from datetime import datetime
 from random import Random
 from typing import NamedTuple
+
+from typing_extensions import Self
 
 from esrally import types
 from esrally.storage._adapter import (
@@ -51,7 +51,7 @@ class Client:
     @classmethod
     def from_config(
         cls, cfg: types.Config, adapters: AdapterRegistry | None = None, mirrors: MirrorList | None = None, random: Random | None = None
-    ) -> Client:
+    ) -> Self:
         if adapters is None:
             adapters = AdapterRegistry.from_config(cfg)
         if mirrors is None:
@@ -115,9 +115,6 @@ class Client:
             self._cached_heads[url] = value, start_time
 
         return _head_or_raise(value)
-
-    def list(self, url: str) -> Iterator[Head]:
-        yield from self._adapters.get(url).list(url)
 
     def resolve(self, url: str, check: Head | None, ttl: float = 60.0) -> Iterator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
@@ -200,30 +197,6 @@ class Client:
                 connections.done()
 
         raise ServiceUnavailableError(f"no service available for getting URL '{url}'")
-
-    def put(self, path: str, url: str, head: Head | None = None) -> Head:
-        if head is not None:
-            st = os.stat(path)
-            if head.date is None:
-                head.date = datetime.fromtimestamp(st.st_mtime)
-            file_size = st.st_size
-            if head.ranges:
-                if len(head.ranges) > 1:
-                    raise NotImplementedError("multiple ranges is not supported")
-                if head.ranges.end >= file_size:
-                    raise ValueError(f"ranges end must not exceed file size: {head.ranges.end} > {file_size}")
-            else:
-                if head.content_length is None:
-                    head.content_length = file_size
-                elif head.content_length != file_size:
-                    raise ValueError(f"unexpected file size: {file_size} != {head.document_length}, file '{path}'")
-
-        adapter = self._adapters.get(url)
-        with open(path, "rb") as stream:
-            if head is not None:
-                for r in head.ranges:
-                    stream.seek(r.start)
-            return adapter.put(stream, url, head=head)
 
     def _server_connections(self, url: str) -> WaitGroup:
         with self._lock:

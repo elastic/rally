@@ -18,23 +18,22 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import Any
 from unittest import mock
 
 import pytest
+from typing_extensions import Self
 
 import esrally.config
 from esrally.storage._adapter import Adapter, AdapterRegistry
 from esrally.types import Config
 from esrally.utils.cases import cases
 
-A = TypeVar("A", "MockAdapter", "MockAdapter")
-
 
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
+    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 

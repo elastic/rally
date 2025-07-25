@@ -21,9 +21,11 @@ import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Container, Iterable, Iterator
+from collections.abc import Container, Iterable
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
+
+from typing_extensions import Self
 
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.types import Config
@@ -39,13 +41,6 @@ class ServiceUnavailableError(Exception):
 class Writable(Protocol):
 
     def write(self, data: bytes) -> None:
-        pass
-
-
-@runtime_checkable
-class Readable(Protocol):
-
-    def read(self, size: int = -1) -> bytes:
         pass
 
 
@@ -78,9 +73,6 @@ def _all_specified(*objs: Any) -> bool:
     return all(o or o is False for o in objs)
 
 
-A = TypeVar("A", "Adapter", "Adapter")
-
-
 class Adapter(ABC):
     """Base class for storage class client implementation"""
 
@@ -90,7 +82,7 @@ class Adapter(ABC):
         raise NotImplementedError
 
     @classmethod
-    def from_config(cls: type[A], cfg: Config, **kwargs: dict[str, Any]) -> A:
+    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
         """Default `Adapter` objects factory method used to create adapters from `esrally` client.
 
         Default implementation will ignore `cfg` parameter. It can be overridden from `Adapter` implementations that
@@ -108,13 +100,6 @@ class Adapter(ABC):
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
 
-    def list(self, url: str) -> Iterator[Head]:
-        """It gets list of file headers.
-        :return: the Head of the remote file.
-        :raises ServiceUnavailableError: in case on temporary service failure.
-        """
-        raise NotImplementedError(f"{type(self).__name__} adapter does not implement list method.")
-
     def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
         """It downloads a remote bucket object to a local file path.
 
@@ -125,20 +110,6 @@ class Adapter(ABC):
             - document_length: the number of bytes to transfer.
             - crc32c the CRC32C checksum of the file.
             - date: the date the file has been modified.
-        :raises ServiceUnavailableError: in case on temporary service failure.
-        """
-        raise NotImplementedError(f"{type(self).__name__} adapter does not implement get method.")
-
-    def put(self, stream: Readable, url: str, head: Head | None = None) -> Head:
-        """It uploads a local file object to a remote bucket.
-
-        :param stream: it represents the local file stream where to read data from.
-        :param url: it represents the URL of the remote file object.
-        :param head: it allows to specify optional parameters:
-            - range: the portion of the file to transfer (it must be empty or a continuous range).
-            - document_length: the number of bytes to transfer.
-            - crc32c the CRC32C checksum of the file.
-            - date: the date the file was modified.
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
         raise NotImplementedError(f"{type(self).__name__} adapter does not implement get method.")
@@ -160,7 +131,7 @@ class AdapterRegistry:
         self._cfg = cfg
 
     @classmethod
-    def from_config(cls, cfg: Config) -> AdapterRegistry:
+    def from_config(cls, cfg: Config) -> Self:
         registry = cls(cfg)
         adapter_names: Iterable[str] = cfg.opts(
             section="storage", key="storage.adapters", default_value=ADAPTER_CLASS_NAMES, mandatory=False
