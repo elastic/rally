@@ -25,7 +25,7 @@ import boto3
 import pytest
 
 from esrally.config import Config, Scope
-from esrally.storage._adapter import Head, Readable, Writable
+from esrally.storage._adapter import Head, Writable
 from esrally.storage._aws import S3Adapter, S3Client, head_from_response
 from esrally.storage._http import CHUNK_SIZE
 from esrally.storage._range import rangeset
@@ -136,24 +136,6 @@ class PutCase:
     want_bucket: str = SOME_BUCKET
     want_key: str = SOME_KEY
     want_range: str = ""
-
-
-@cases(
-    empty=PutCase({}, Head(SOME_URL)),
-    accept_ranges=PutCase(ACCEPT_RANGES_HEADERS, Head(SOME_URL, accept_ranges=True)),
-    content_length=PutCase(CONTENT_LENGTH_HEADERS, Head(SOME_URL, content_length=512)),
-    read_data=PutCase(SOME_DATA_HEADERS, Head(SOME_URL, content_length=len(SOME_DATA))),
-)
-def test_put(case: PutCase, s3_client):
-    s3_client.head_object.return_value = case.response
-    adapter = S3Adapter(s3_client=s3_client)
-    stream = create_autospec(Readable, spec_set=True, instance=True)
-    got = adapter.put(stream, case.url, head=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
-    kwargs = {}
-    assert got == case.want
-    if case.want_range:
-        kwargs["Range"] = f"bytes={case.ranges}"
-    s3_client.upload_fileobj.assert_called_once_with(stream, case.want_bucket, case.want_key)
 
 
 @dataclass()

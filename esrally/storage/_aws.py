@@ -19,15 +19,14 @@ from __future__ import annotations
 import logging
 import os
 import urllib.parse
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 import boto3
-from boto3.s3.transfer import TransferConfig
 from botocore.response import StreamingBody
 from typing_extensions import Self
 
-from esrally.storage._adapter import Adapter, Head, Readable, Writable
+from esrally.storage._adapter import Adapter, Head, Writable
 from esrally.storage._http import (
     CHUNK_SIZE,
     head_to_headers,
@@ -87,20 +86,6 @@ class S3Adapter(Adapter):
         for chunk in body.iter_chunks(self.chunk_size):
             if chunk:
                 stream.write(chunk)
-        return ret
-
-    def put(self, stream: Readable, url: str, head: Head | None = None) -> Head:
-        if head is not None and head.ranges:
-            raise NotImplementedError("Range headers is not supported.")
-
-        address = S3Address.from_url(url)
-        LOG.info("Uploading file to '%s'...", url)
-        self._s3.upload_fileobj(Fileobj=stream, Bucket=address.bucket, Key=address.key)
-        LOG.info("File uploaded: '%s'.", url)
-
-        ret = self.head(url)
-        if head is not None:
-            head.check(ret)
         return ret
 
     _s3_client = None
@@ -187,15 +172,4 @@ class S3Client(Protocol):
         raise NotImplementedError()
 
     def get_object(self, Bucket: str, Key: str, **kwargs: Any) -> Mapping[str, Any]:
-        raise NotImplementedError()
-
-    def upload_fileobj(
-        self,
-        Fileobj: Readable,
-        Bucket: str,
-        Key: str,
-        ExtraArgs: Mapping[str, Any] | None = None,
-        Callback: Callable[[int], Any] | None = None,
-        Config: TransferConfig | None = None,
-    ) -> None:
         raise NotImplementedError()
