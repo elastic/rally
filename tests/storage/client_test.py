@@ -39,19 +39,19 @@ BASE_URL = "https://example.com"
 
 SOME_URL = f"{BASE_URL}/some/file.json"
 SOME_BODY = b"<!doctype html>\n<html>\n<head>\n"
-SOME_HEAD = Head.create(url=SOME_URL, content_length=len(SOME_BODY), accept_ranges=True)
+SOME_HEAD = Head(url=SOME_URL, content_length=len(SOME_BODY), accept_ranges=True)
 NO_RANGES_URL = f"{BASE_URL}/no/ranges.json.bz2"
-NO_RANGE_HEAD = Head.create(url=NO_RANGES_URL, content_length=len(SOME_BODY), accept_ranges=False)
+NO_RANGE_HEAD = Head(url=NO_RANGES_URL, content_length=len(SOME_BODY), accept_ranges=False)
 MIRRORING_BASE_URL = f"{BASE_URL}/mirroring"
 MIRRORING_URL = f"{MIRRORING_BASE_URL}/apm/span.json.bz2"
-MIRRORING_HEAD = Head.create(url=MIRRORING_URL, content_length=len(SOME_BODY), accept_ranges=True)
+MIRRORING_HEAD = Head(url=MIRRORING_URL, content_length=len(SOME_BODY), accept_ranges=True)
 MIRRORED_BASE_URL = f"{BASE_URL}/mirrored"
 MIRRORED_URL = f"{MIRRORED_BASE_URL}/apm/span.json.bz2"
-MIRRORED_HEAD = Head.create(url=MIRRORED_URL, content_length=len(SOME_BODY), accept_ranges=True)
+MIRRORED_HEAD = Head(url=MIRRORED_URL, content_length=len(SOME_BODY), accept_ranges=True)
 
 MIRRORED_NO_RANGE_BASE_URL = f"{BASE_URL}/mirrored-no-range"
 MIRRORED_NO_RANGE_URL = f"{MIRRORED_NO_RANGE_BASE_URL}/apm/span.json.bz2"
-MIRRORED_NO_RANGE_HEAD = Head.create(url=MIRRORED_NO_RANGE_URL, content_length=len(SOME_BODY), accept_ranges=False)
+MIRRORED_NO_RANGE_HEAD = Head(url=MIRRORED_NO_RANGE_URL, content_length=len(SOME_BODY), accept_ranges=False)
 
 NOT_FOUND_BASE_URL = "https://example.com/not-found"
 
@@ -150,7 +150,7 @@ def test_head(case: HeadCase, client: Client) -> None:
 class ResolveCase:
     url: str
     want: list[Head]
-    document_length: int | None = None
+    content_length: int | None = None
     accept_ranges: bool | None = None
     ttl: float = 60.0
 
@@ -159,15 +159,15 @@ class ResolveCase:
     unmirrored=ResolveCase(url=SOME_URL, want=[SOME_HEAD]),
     mirrored=ResolveCase(url=MIRRORING_URL, want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]),
     document_length=ResolveCase(
-        url=MIRRORING_URL, document_length=len(SOME_BODY), want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]
+        url=MIRRORING_URL, content_length=len(SOME_BODY), want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]
     ),
-    mismatching_document_length=ResolveCase(url=MIRRORING_URL, document_length=10, want=[]),
+    mismatching_document_length=ResolveCase(url=MIRRORING_URL, content_length=10, want=[]),
     accept_ranges=ResolveCase(url=MIRRORING_URL, accept_ranges=True, want=[MIRRORING_HEAD, MIRRORED_HEAD]),
     reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=[]),
     zero_ttl=ResolveCase(url=SOME_URL, ttl=0.0, want=[SOME_HEAD]),
 )
 def test_resolve(case: ResolveCase, client: Client) -> None:
-    check = Head(document_length=case.document_length, accept_ranges=case.accept_ranges)
+    check = Head(content_length=case.content_length, accept_ranges=case.accept_ranges)
     got = sorted(client.resolve(case.url, check=check, ttl=case.ttl), key=lambda h: str(h.url))
     want = sorted(case.want, key=lambda h: str(h.url))
     assert got == want, "unexpected resolve result"

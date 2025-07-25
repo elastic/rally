@@ -20,6 +20,7 @@ import json
 import os
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
+from typing import Self
 
 from esrally.types import Config
 
@@ -29,7 +30,7 @@ MIRRORS_FILES = ""
 class MirrorList:
 
     @classmethod
-    def from_config(cls, cfg: Config) -> MirrorList:
+    def from_config(cls, cfg: Config) -> Self:
         mirror_files = []
         for filename in cfg.opts(section="storage", key="storage.mirrors_files", default_value=MIRRORS_FILES, mandatory=False).split(","):
             filename = filename.strip()
