@@ -25,8 +25,9 @@ from typing import Any, NamedTuple, Protocol, runtime_checkable
 import boto3
 from boto3.s3.transfer import TransferConfig
 from botocore.response import StreamingBody
+from typing_extensions import Self
 
-from esrally.storage._adapter import Adapter, Head, Readable, Self, Writable
+from esrally.storage._adapter import Adapter, Head, Readable, Writable
 from esrally.storage._http import (
     CHUNK_SIZE,
     head_to_headers,

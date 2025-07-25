@@ -17,7 +17,9 @@
 from __future__ import annotations
 
 import concurrent.futures
-from typing import Protocol, Self, runtime_checkable
+from typing import Protocol, runtime_checkable
+
+from typing_extensions import Self
 
 from esrally.types import Config
 

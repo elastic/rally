@@ -20,12 +20,13 @@ import json
 import logging
 from collections.abc import Mapping, MutableMapping
 from datetime import datetime
-from typing import Any, Self
+from typing import Any
 
 import requests
 import requests.adapters
 import urllib3
 from requests.structures import CaseInsensitiveDict
+from typing_extensions import Self
 
 from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset

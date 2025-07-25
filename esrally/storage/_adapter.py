@@ -23,7 +23,9 @@ import threading
 from abc import ABC, abstractmethod
 from collections.abc import Container, Iterable, Iterator
 from dataclasses import dataclass
-from typing import Any, Protocol, Self, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
+
+from typing_extensions import Self
 
 from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.types import Config

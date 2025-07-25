@@ -18,10 +18,11 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Any
 from unittest import mock
 
 import pytest
+from typing_extensions import Self
 
 import esrally.config
 from esrally.storage._adapter import Adapter, AdapterRegistry

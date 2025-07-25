@@ -25,7 +25,9 @@ from collections import defaultdict, deque
 from collections.abc import Iterator
 from datetime import datetime
 from random import Random
-from typing import NamedTuple, Self
+from typing import NamedTuple
+
+from typing_extensions import Self
 
 from esrally import types
 from esrally.storage._adapter import (

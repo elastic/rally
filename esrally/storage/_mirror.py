@@ -20,7 +20,8 @@ import json
 import os
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from typing import Self
+
+from typing_extensions import Self
 
 from esrally.types import Config
 

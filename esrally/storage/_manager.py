@@ -20,7 +20,8 @@ import atexit
 import logging
 import os
 import threading
-from typing import Self
+
+from typing_extensions import Self
 
 from esrally import types
 from esrally.storage._client import MAX_CONNECTIONS, Client
