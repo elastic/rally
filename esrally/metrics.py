@@ -228,8 +228,8 @@ class EsClientFactory:
     """
 
     def __init__(self, cfg: types.Config):
-        DATASTORE_API_KEY: str = os.environ.get("RALLY_REPORTING_DATASTORE_API_KEY", None)
-        DATASTORE_PASSWORD: str = os.environ.get("RALLY_REPORTING_DATASTORE_PASSWORD", None)
+        DATASTORE_API_KEY: str = os.environ.get("RALLY_REPORTING_DATASTORE_API_KEY", "")
+        DATASTORE_PASSWORD: str = os.environ.get("RALLY_REPORTING_DATASTORE_PASSWORD", "")
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
