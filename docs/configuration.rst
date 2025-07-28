@@ -133,7 +133,12 @@ advantages of this downloader implementation are:
   interruption. It can also resume file downloading between consecutive rally executions.
 
 *NOTE*: This transfers manager implementation is still experimental and under active development. It is not used yet by
-default and it will require some additional works before final delivery.
+default and it will require some additional works before final delivery. To use this downloader for track downloading
+it has to be enable ad in the following example::
+
+  [track]
+  track.downloader.multipart_enabled = true
+
 
 Configuration options are:
 
@@ -220,14 +225,6 @@ This adapter can be used only to download files from public HTTP or HTTPS server
 
   .. _urllib3.Retry: https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html
 
-track
-~~~~~
-
-This section specifies how tracks corpora files has to be fetched. Available options are:
-
-* ``track.downloader.multipart_enabled`` if true, it will enable the use the new multipart `storage` module for
-  downloading corpora files. For more configuration options please have a look to the `storage` configuration section.
-  NOTE: the storage module is still experimental and its use should be limited for now.
 
 S3 Adapter
 **********
@@ -262,6 +259,17 @@ Configuration options:
   it will use credentials detected from the environment as specified by 'boto3' client.
 
   .. _S3 cloud storage service: https://aws.amazon.com/es/s3/
+
+
+track
+~~~~~
+
+This section specifies how tracks corpora files has to be fetched. Available options are:
+
+* ``track.downloader.multipart_enabled`` if true, it will enable the use the new multipart `storage` module for
+  downloading corpora files. For more configuration options please have a look to the `storage` configuration section.
+  NOTE: the storage module is still experimental and its use should be limited for now.
+
 
 tracks
 ~~~~~~
