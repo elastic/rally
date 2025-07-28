@@ -540,7 +540,7 @@ class Downloader:
 
         # It joins manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
         data_url = f"{base_url.rstrip('/')}/{file_name}"
-        if self.use_transfer_manager or True:  # pylint: disable=condition-evals-to-constant
+        if self.use_transfer_manager:
             LOG.info("Downloading data from [%s] to [%s] using transfer manager...", data_url, target_path)
             try:
                 tr = transfer_manager().get(data_url, target_path, size_in_bytes)
