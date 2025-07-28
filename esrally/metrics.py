@@ -228,6 +228,8 @@ class EsClientFactory:
     """
 
     def __init__(self, cfg: types.Config):
+        DATASTORE_API_KEY: str = os.environ.get("RALLY_REPORTING_DATASTORE_API_KEY", None)
+        DATASTORE_PASSWORD: str = os.environ.get("RALLY_REPORTING_DATASTORE_PASSWORD", None)
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
@@ -237,34 +239,20 @@ class EsClientFactory:
         user = self._config.opts("reporting", "datastore.user", mandatory=False)
         distribution_version = None
         distribution_flavor = None
-        password = None
-        api_key = None
-        # Try to get password if user is set
-        if user:
-            try:
-                password = os.environ["RALLY_REPORTING_DATASTORE_PASSWORD"]
-            except KeyError:
-                try:
-                    password = self._config.opts("reporting", "datastore.password")
-                except exceptions.ConfigError:
-                    raise exceptions.ConfigError(
-                        "No password configured through [reporting] configuration or "
-                        "RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
-                    )
-        # Try to get api_key
-        try:
-            api_key = os.environ["RALLY_REPORTING_DATASTORE_API_KEY"]
-        except KeyError:
-            try:
-                api_key = self._config.opts("reporting", "datastore.api_key", mandatory=False)
-            except exceptions.ConfigError:
-                api_key = None
+        api_key: str = DATASTORE_API_KEY or self._config.opts("reporting", "datastore.api_key", mandatory=False)
+        password: str = DATASTORE_PASSWORD or self._config.opts("reporting", "datastore.password", mandatory=False)
 
-        # Enforce that one of (user and password) or api_key is provided, but not both
-        if (user and password) and api_key:
-            raise exceptions.ConfigError(
-                "Both basic authentication (username/password) and API key are provided. Please provide only one authentication method."
-            )
+        # Resolve the authentication method.
+        if user:
+            if api_key:
+                raise exceptions.ConfigError(
+                    "Both basic authentication (username/password) and API key are provided. Please provide only one authentication method."
+                )
+            if not password:
+                raise exceptions.ConfigError(
+                    "No password configured through [reporting] configuration or "
+                    "RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+                )
 
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
@@ -279,7 +267,7 @@ class EsClientFactory:
         }
         if ca_path:
             client_options["ca_certs"] = ca_path
-        if user and password:
+        if user:
             client_options["basic_auth_user"] = user
             client_options["basic_auth_password"] = password
         elif api_key:
