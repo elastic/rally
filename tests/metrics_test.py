@@ -162,11 +162,11 @@ class TestEsClient:
     def test_config_opts_parsing_basic(self, client_esclientfactory, password_configuration, monkeypatch):
         cfg = config.Config()
 
-        _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
-        _datastore_port = random.randint(1024, 65535)
-        _datastore_secure = random.choice(["True", "true"])
-        _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
-        _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
+        _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
+        _datastore_port = 443
+        _datastore_secure = True
+        _datastore_user = "metricsuser"
+        _datastore_password = "metricspassword"
         _datastore_verify_certs = random.choice([True, False])
         _datastore_probe_version = False
 
@@ -216,11 +216,11 @@ class TestEsClient:
     def test_config_opts_parsing_apikey(self, client_esclientfactory, apikey_configuration, monkeypatch):
         cfg = config.Config()
 
-        _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
-        _datastore_port = random.randint(1024, 65535)
-        _datastore_secure = random.choice(["True", "true"])
-        _datastore_apikey = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(60)])
-        _datastore_verify_certs = random.choice([True, False])
+        _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
+        _datastore_port = 443
+        _datastore_secure = True
+        _datastore_apikey = "METRICSAPIKEYTEST=="
+        _datastore_verify_certs = False
         _datastore_probe_version = False
 
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
@@ -265,13 +265,15 @@ class TestEsClient:
     def test_config_opts_parsing_both_password_apikey(self, client_esclientfactory, monkeypatch):
         cfg = config.Config()
 
-        _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
-        _datastore_port = random.randint(1024, 65535)
-        _datastore_secure = random.choice(["True", "true"])
-        _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
-        _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
-        _datastore_apikey = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(60)])
-        _datastore_verify_certs = random.choice([True, False])
+        _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
+        _datastore_port = 443
+        _datastore_secure = True
+        _datastore_user = "metricsuser"
+        _datastore_password = "metricspassword"
+        _datastore_apikey = "METRICSAPIKEYTEST=="
+        _datastore_verify_certs = False
+        _datastore_probe_version = False
+        _datastore_verify_certs = False
         _datastore_probe_version = False
 
         cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
