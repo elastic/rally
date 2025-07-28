@@ -119,8 +119,23 @@ Define a secure connection to an Elastic Cloud cluster::
 storage
 ~~~~~~~
 
-This section defines how client is configured to transfer big files (I.E. track files) from
-remote servers. Available options are:
+This section defines how client is configured to transfer big files (I.E. track files) from remote servers. The main
+advantages of this downloader implementation are:
+
+* It supports configuring mirrors servers to download files from there instead of the original source URL. There could
+  be multiple services from where download files. The client will load balance between these services giving priority
+  to those servers with the lower latency. In case of failures reaching the mirrors services it will download files
+  from the original source server.
+* It supports multipart downloading of pieces of files from multiple servers at the same time, increasing the impact of
+  a failing network infrastructure. Those parts that experience errors downloading will be eventually re-downloaded from
+  another server of from the original source.
+* It supports local caching of files, and file downloading resuming from previous status in case of connection
+  interruption. It can also resume file downloading between consecutive rally executions.
+
+*NOTE*: This transfers manager implementation is still experimental and under active development. It is not used yet by
+default and it will require some additional works before final delivery.
+
+Configuration options are:
 
 * ``storage.adapters`` is a comma-separated list of storage adapter implementations specified using the following
   format:
@@ -187,6 +202,8 @@ remote servers. Available options are:
 HTTP Adapter
 ************
 
+This adapter can be used only to download files from public HTTP or HTTPS servers.
+
 * ``storage.http.chunk_size`` is used to specify the size of the buffer is being used for transferring chunk of files.
 
 * ``storage.http.max_retries`` is used to configure the maximum number of retries for making HTTP adapter requests.
@@ -203,6 +220,40 @@ HTTP Adapter
 
   .. _urllib3.Retry: https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html
 
+
+S3 Adapter
+**********
+
+This adapter can be used only to download files from `S3 cloud storage service`_. It requires 'boto3' client library to be
+installed and it accepts only URLs with the following format ``s3://<bucket-name>/<object-key>``. It is intended to be
+used to configure S3 buckets as mirror for track file downloads. Example of ``rally.ini`` configuration::
+
+    [storage]
+    storage.mirror_files = ~/.rally/storage-mirrors.json
+
+Example of ``~/.rally/storage-mirrors.json`` file::
+
+    {
+        "mirrors": [
+            {
+                "sources": [
+                    "https://rally-tracks.elastic.co/"
+                ],
+                "destinations": [
+                  "s3://rally-tracks-eu-central-1",
+                  "s3://rally-tracks-us-west-1/"
+                ]
+              }
+            ]
+          }
+    }
+
+Configuration options:
+
+* ``storage.aws.profile`` is used to specify the profile name to be used for connecting to the S3 service. By default
+  it will use credentials detected from the environment as specified by 'boto3' client.
+
+  .. _S3 cloud storage service: https://aws.amazon.com/es/s3/
 
 tracks
 ~~~~~~
