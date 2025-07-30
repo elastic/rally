@@ -127,18 +127,6 @@ def test_get(case: GetCase, s3_client) -> None:
 
 
 @dataclass()
-class PutCase:
-    response: dict[str, Any]
-    want: Head
-    url: str = SOME_URL
-    ranges: str = ""
-    content_length: int | None = None
-    want_bucket: str = SOME_BUCKET
-    want_key: str = SOME_KEY
-    want_range: str = ""
-
-
-@dataclass()
 class HeadFromResponseCase:
     response: dict[str, Any]
     want_head: Head | None = None
