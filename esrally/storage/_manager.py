@@ -26,7 +26,7 @@ from typing_extensions import Self
 from esrally import types
 from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._executor import MAX_WORKERS, Executor, ThreadPoolExecutor
-from esrally.storage._transfer import Transfer
+from esrally.storage._transfer import MULTIPART_SIZE, Transfer
 from esrally.utils.threads import ContinuousTimer
 
 LOG = logging.getLogger(__name__)
@@ -34,7 +34,6 @@ LOG = logging.getLogger(__name__)
 LOCAL_DIR = "~/.rally/storage"
 MONITOR_INTERVAL = 2.0  # Seconds
 THREAD_NAME_PREFIX = "esrally.storage.transfer-worker"
-MULTIPART_SIZE = 8 * 1024 * 1024
 
 
 class TransferManager:
