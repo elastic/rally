@@ -154,7 +154,10 @@ Configuration options are:
 * ``storage.local_dir`` indicates the default directory where to store local files when no path has been specified.
 
 * ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
-  bucket. The default value is 8.
+  bucket for each transfer. The default value is 4. In case there will be more unfinished transfers in progress at the
+  same time, this value would be dynamically limited by the following formula::
+
+    transfer.max_connections = min(storage.max_connections, (storage.max_workers / number_of_unfinished_transfers) + 1)
 
 * ``storage.max_workers`` indicates the maximum number of worker threads used for making storage files transfers.
 
