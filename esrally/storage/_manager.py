@@ -158,7 +158,7 @@ class TransferManager:
         self._client.monitor()
 
     def _update_transfers(self):
-        available_workers = max(1, int(self._max_workers * 0.8))
+        available_workers = max(1, int(self._max_workers))
         self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
         if transfers:
             max_connections = min(self._max_connections, max(1, available_workers // len(transfers)))
