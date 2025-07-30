@@ -18,64 +18,58 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
+from typing import Any
 from unittest import mock
 
 import pytest
+from typing_extensions import Self
 
-from esrally import types
-from esrally.config import Config, Scope
+import esrally.config
 from esrally.storage._adapter import Adapter, AdapterRegistry
+from esrally.types import Config
 from esrally.utils.cases import cases
 
 
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_config(cls, cfg: types.Config) -> Adapter:
+    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 
 class HTTPAdapter(MockAdapter, ABC):
 
     @classmethod
-    def match_url(cls, url: str) -> str:
-        if url.startswith("http://"):
-            return url
-        raise NotImplementedError()
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("http://")
 
 
 class HTTPSAdapter(MockAdapter, ABC):
 
     @classmethod
-    def match_url(cls, url: str) -> str:
-        if url.startswith("https://"):
-            return url
-        raise NotImplementedError()
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("https://")
 
 
 class ExampleAdapter(MockAdapter, ABC):
 
     @classmethod
-    def match_url(cls, url: str) -> str:
-        if url.startswith("https://example.com/"):
-            return url
-        raise NotImplementedError()
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("https://example.com/")
 
 
 class ExampleAdapterWithPath(MockAdapter, ABC):
 
     @classmethod
-    def match_url(cls, url: str) -> str:
-        if url.startswith("https://example.com/some/path/"):
-            return url
-        raise NotImplementedError()
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("https://example.com/some/path/")
 
 
 @pytest.fixture()
 def cfg() -> Config:
-    cfg = Config()
+    cfg = esrally.config.Config()
     cfg.add(
-        Scope.application,
+        esrally.config.Scope.application,
         "storage",
         "storage.adapters",
         f"{__name__}:ExampleAdapterWithPath,{__name__}:ExampleAdapter,{__name__}:HTTPSAdapter,{__name__}:HTTPAdapter",
@@ -105,18 +99,16 @@ class RegistryCase:
 )
 def test_adapter_registry_get(case: RegistryCase, registry: AdapterRegistry) -> None:
     try:
-        adapter, url = registry.get(case.url)
+        adapter = registry.get(case.url)
         error = None
     except Exception as ex:
-        adapter, url = None, None
+        adapter = None, None
         error = ex
 
     if case.want_type is not None:
         assert isinstance(adapter, case.want_type)
-        assert url == case.url
-        adapter2, url = registry.get(case.url)
+        adapter2 = registry.get(case.url)
         assert adapter2 is adapter
-        assert url == case.url
 
     if case.want_error is not None:
         assert isinstance(error, case.want_error)

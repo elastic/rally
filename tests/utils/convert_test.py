@@ -167,6 +167,7 @@ DAY = 24 * HOUR
     hour=DurationCase(3600, HOUR, "1h"),
     day=DurationCase(86400, DAY, "1d"),
     milions=DurationCase(1e6, 1000000 * 1000000000, "11d 13h 46m 40s"),
+    negative=DurationCase(-1.23456789, -1234567890, "-1.23s", convert.Duration.Unit.S),
 )
 def test_duration(case: DurationCase):
     got = convert.duration(case.value, case.unit)

@@ -17,7 +17,7 @@ ACTION="$1"
 
 # login to docker registry
 DOCKER_PASSWORD=$(retry 5 vault kv get -field token /secret/ci/elastic-rally/release/docker-hub-rally)
-retry 5 docker login -u elasticmachine -p $DOCKER_PASSWORD
+retry 5 docker login -u elasticmachine -p "${DOCKER_PASSWORD}"
 unset DOCKER_PASSWORD
 
 build_docker_image() {
@@ -27,8 +27,18 @@ build_docker_image() {
     pushd rally
 
     # checkout the latest version, to make sure we get the latest docker security fixes
-    if [[ ! -z "${BUILDKITE_BRANCH}" ]]; then
-        git checkout "${BUILDKITE_BRANCH}"
+    if [[ -n "${BUILDKITE_BRANCH}" ]]; then
+        # If the branch is a pull request, it will be in the format "refs/pull/123/head".
+        # Strip off the "refs/" prefix to get the branch name, and check it out to a temporary branch.
+        # This is not necessary for a release version, so we only need it in this branch.
+        if [[ "${BUILDKITE_BRANCH}" =~ refs\/.* ]]; then
+          local branch_name
+          branch_name=$(echo "${BUILDKITE_BRANCH}" | sed 's/refs\///')
+          git fetch origin "${branch_name}:_temp"
+          git checkout "_temp"
+        else
+          git checkout "${BUILDKITE_BRANCH}"
+        fi
     else
         git checkout "${RELEASE_VERSION}"
     fi

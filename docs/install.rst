@@ -22,19 +22,7 @@ Python
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 
-If you need multiple Python versions, consider using `pyenv <https://github.com/pyenv/pyenv>`_. For details refer to their `installation instructions <https://github.com/pyenv/pyenv#installation>`_ and **ensure that all** `prerequisites for pyenv <https://github.com/pyenv/pyenv/wiki/common-build-problems#prerequisites>`_ are installed.
-
-Once ``pyenv`` is installed, install a compatible Python version::
-
-    # Install Python
-    pyenv install {MIN_PY_VER}
-
-    # select that version for the current user
-    # see https://github.com/pyenv/pyenv/blob/master/COMMANDS.md#pyenv-global for details
-    pyenv global {MIN_PY_VER}
-
-    # Upgrade pip
-    python3 -m pip install --user --upgrade pip
+If you need multiple Python versions, consider using `uv <https://github.com/astral-sh/uv>`_. For details refer to their `installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_.
 
 git
 ~~~

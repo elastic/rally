@@ -19,7 +19,7 @@
 
 set -e
 
-readonly MIN_DOCKER_MEM_BYTES=$(expr 6 \* 1024 \* 1024 \* 1024)
+readonly MIN_DOCKER_MEM_BYTES=$((6 * 1024 * 1024 * 1024))
 readonly RALLY_DOCKER_IMAGE="${RALLY_DOCKER_IMAGE:-elastic/rally}"
 
 function check_prerequisites {
@@ -39,7 +39,8 @@ function check_prerequisites {
 }
 
 function log {
-    local ts=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+    local ts
+    ts=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
     echo "[${ts}] [${1}] ${2}"
 }
 
@@ -56,8 +57,8 @@ function error {
 }
 
 function stop_and_clean_docker_container {
-    docker stop ${1} > /dev/null || true
-    docker rm ${1} > /dev/null || true
+    docker stop "${1}" > /dev/null || true
+    docker rm "${1}" > /dev/null || true
 }
 
 function kill_related_es_processes {
@@ -65,10 +66,10 @@ function kill_related_es_processes {
     set +e
     # kill all lingering Elasticsearch Docker containers launched by Rally
     RUNNING_DOCKER_CONTAINERS=$(docker ps --filter "label=io.rally.description" --format "{{.ID}}")
-    if [ -n "${RUNNING_DOCKER_CONTAINERS}" ]; then
-        for container in "${RUNNING_DOCKER_CONTAINERS}"
+    if [[ -n "${RUNNING_DOCKER_CONTAINERS}" ]]; then
+        for container in ${RUNNING_DOCKER_CONTAINERS}
         do
-            stop_and_clean_docker_container ${container}
+            stop_and_clean_docker_container "${container}"
         done
     fi
     set -e
@@ -105,23 +106,23 @@ function test_docker_release_image {
     if [[ "${DEVELOPMENT}" == "YES" ]]; then
         actual_version=${RALLY_VERSION}
     else
-        actual_version=$(docker run --rm ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG} esrally --version | cut -d ' ' -f 2,2)
+        actual_version=$(docker run --rm "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" esrally --version | cut -d ' ' -f 2,2)
     fi
-    if [[ ${actual_version} != ${RALLY_VERSION} ]]; then
+    if [[ "${actual_version}" != "${RALLY_VERSION}" ]]; then
         echo "Rally version in Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
         exit 1
     fi
 
     info "Testing Rally docker image version label is correct"
-    actual_version=$(docker inspect --format '{{ index .Config.Labels "org.label-schema.version"}}' ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG})
-    if [[ ${actual_version} != ${RALLY_VERSION} ]]; then
+    actual_version=$(docker inspect --format '{{ index .Config.Labels "org.label-schema.version"}}' "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}")
+    if [[ "${actual_version}" != "${RALLY_VERSION}" ]]; then
         echo "org.label-schema.version label in Rally Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
         exit 1
     fi
 
     info "Testing Rally docker image license label is correct"
-    actual_license=$(docker inspect --format '{{ index .Config.Labels "license"}}' ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG})
-    if [[ ${actual_license} != ${RALLY_LICENSE} ]]; then
+    actual_license=$(docker inspect --format '{{ index .Config.Labels "license"}}' "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}")
+    if [[ "${actual_license}" != "${RALLY_LICENSE}" ]]; then
         echo "license label in Rally Docker image: [${actual_license}] doesn't match the expected license [${RALLY_LICENSE}]"
         exit 1
     fi
@@ -164,7 +165,7 @@ function tear_down {
 
 trap "tear_down" EXIT
 
-if [[ $# -gt 0 && $1 -eq "dev" ]] ; then
+if [[ $# -gt 0 && "$1" = "dev" ]] ; then
     export DEVELOPMENT="YES"
 else 
     export DEVELOPMENT="NO"

@@ -2,11 +2,12 @@
 
 set -eo pipefail
 
+# shellcheck source=.buildkite/retry.sh
 source .buildkite/retry.sh
 
 set +x
 
-BUILD_FROM_BRANCH="$(buildkite-agent meta-data get BUILD_FROM_BRANCH --default ${BUILDKITE_BRANCH})"
+BUILD_FROM_BRANCH="$(buildkite-agent meta-data get BUILD_FROM_BRANCH --default "${BUILDKITE_BRANCH}")"
 PUSH_LATEST="$(buildkite-agent meta-data get PUSH_LATEST --default true)"
 # SCHEDULED_PUBLIC_REPO is set by the "Daily Public" schedule in catalog-info.yaml
 PUBLIC_DOCKER_REPO="${SCHEDULED_PUBLIC_REPO:-$(buildkite-agent meta-data get PUBLIC_DOCKER_REPO --default false)}"
@@ -31,7 +32,7 @@ fi
 
 DOCKER_USERNAME=$(retry 5 vault kv get -field username "${VAULT_PATH}")
 DOCKER_PASSWORD=$(retry 5 vault kv get -field "${PASSWORD_FIELD}" "${VAULT_PATH}")
-retry 5 docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" ${DOCKER_REGISTRY}
+retry 5 docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" "${DOCKER_REGISTRY}"
 unset DOCKER_PASSWORD
 unset DOCKER_USERNAME
 
@@ -41,10 +42,22 @@ build_docker_image() {
     git clone https://github.com/elastic/rally
     pushd rally
     # checkout the version from the buildkite branch, but build it from the branch we specified
-    if [[ ! -z "${BUILDKITE_BRANCH}" ]]; then
-        git checkout "${BUILDKITE_BRANCH}"
+    local checkout_branch
+    if [[ -n "${BUILDKITE_BRANCH}" ]]; then
+      checkout_branch="${BUILDKITE_BRANCH}"
     else
-        git checkout "${BUILD_FROM_BRANCH}"
+      checkout_branch="${BUILD_FROM_BRANCH}"
+    fi
+
+    # If the branch is a pull request, it will be in the format "refs/pull/123/head".
+    # Strip off the "refs/" prefix to get the branch name, and check it out to a temporary branch.
+    if [[ "${checkout_branch}" =~ refs\/.* ]]; then
+      local branch_name
+      branch_name=$(echo "${checkout_branch}" | sed 's/refs\///')
+      git fetch origin "${branch_name}:_temp"
+      git checkout "_temp"
+    else
+      git checkout "${checkout_branch}"
     fi
     echo "Docker commit: $(git --no-pager log --oneline -n1)"
 

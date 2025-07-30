@@ -16,10 +16,10 @@
 # under the License.
 from __future__ import annotations
 
-import copy
 import json
 import os
 import random
+from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
 from os import PathLike
@@ -28,9 +28,10 @@ from unittest.mock import create_autospec
 import pytest
 
 from esrally.config import Config, Scope
-from esrally.storage._adapter import Adapter, Head, Readable, Writable
+from esrally.storage._adapter import Head, Writable
 from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
+from esrally.storage.testing import DummyAdapter
 from esrally.types import Key
 from esrally.utils.cases import cases
 
@@ -38,29 +39,29 @@ BASE_URL = "https://example.com"
 
 SOME_URL = f"{BASE_URL}/some/file.json"
 SOME_BODY = b"<!doctype html>\n<html>\n<head>\n"
-SOME_HEAD = Head.create(url=SOME_URL, content_length=len(SOME_BODY), accept_ranges=True)
+SOME_HEAD = Head(url=SOME_URL, content_length=len(SOME_BODY), accept_ranges=True)
 NO_RANGES_URL = f"{BASE_URL}/no/ranges.json.bz2"
-NO_RANGE_HEAD = Head.create(url=NO_RANGES_URL, content_length=len(SOME_BODY), accept_ranges=False)
+NO_RANGE_HEAD = Head(url=NO_RANGES_URL, content_length=len(SOME_BODY), accept_ranges=False)
 MIRRORING_BASE_URL = f"{BASE_URL}/mirroring"
 MIRRORING_URL = f"{MIRRORING_BASE_URL}/apm/span.json.bz2"
-MIRRORING_HEAD = Head.create(url=MIRRORING_URL, content_length=len(SOME_BODY), accept_ranges=True)
+MIRRORING_HEAD = Head(url=MIRRORING_URL, content_length=len(SOME_BODY), accept_ranges=True)
 MIRRORED_BASE_URL = f"{BASE_URL}/mirrored"
 MIRRORED_URL = f"{MIRRORED_BASE_URL}/apm/span.json.bz2"
-MIRRORED_HEAD = Head.create(url=MIRRORED_URL, content_length=len(SOME_BODY), accept_ranges=True)
+MIRRORED_HEAD = Head(url=MIRRORED_URL, content_length=len(SOME_BODY), accept_ranges=True)
 
 MIRRORED_NO_RANGE_BASE_URL = f"{BASE_URL}/mirrored-no-range"
 MIRRORED_NO_RANGE_URL = f"{MIRRORED_NO_RANGE_BASE_URL}/apm/span.json.bz2"
-MIRRORED_NO_RANGE_HEAD = Head.create(url=MIRRORED_NO_RANGE_URL, content_length=len(SOME_BODY), accept_ranges=False)
+MIRRORED_NO_RANGE_HEAD = Head(url=MIRRORED_NO_RANGE_URL, content_length=len(SOME_BODY), accept_ranges=False)
 
 NOT_FOUND_BASE_URL = "https://example.com/not-found"
 
-HEADS = {
-    SOME_URL: SOME_HEAD,
-    NO_RANGES_URL: NO_RANGE_HEAD,
-    MIRRORING_URL: MIRRORING_HEAD,
-    MIRRORED_URL: MIRRORED_HEAD,
-    MIRRORED_NO_RANGE_URL: MIRRORED_NO_RANGE_HEAD,
-}
+HEADS = (
+    SOME_HEAD,
+    NO_RANGE_HEAD,
+    MIRRORING_HEAD,
+    MIRRORED_HEAD,
+    MIRRORED_NO_RANGE_HEAD,
+)
 
 MIRROR_FILES = os.path.join(os.path.dirname(__file__), "mirrors.json")
 MIRRORS = {
@@ -77,38 +78,9 @@ MIRRORS = {
 }
 
 
-class HTTPSAdapter(Adapter):
-
-    @classmethod
-    def match_url(cls, url: str) -> str:
-        """It returns a canonical URL in case this adapter accepts the URL, None otherwise."""
-        return url
-
-    def head(self, url: str) -> Head:
-        head = HEADS.get(url)
-        if head is None:
-            raise FileNotFoundError
-        return copy.copy(head)
-
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
-        if url not in HEADS:
-            raise FileNotFoundError
-        if head is None or not head.ranges:
-            stream.write(SOME_BODY)
-            accept_ranges = None
-            if head is not None:
-                accept_ranges = head.accept_ranges
-            return Head(url=url, content_length=len(SOME_BODY), document_length=len(SOME_BODY), accept_ranges=accept_ranges)
-
-        for r in head.ranges:
-            stream.write(SOME_BODY[r.start : r.end])
-        return Head(url=url, content_length=head.ranges.size, ranges=head.ranges, document_length=len(SOME_BODY), accept_ranges=True)
-
-    def put(self, stream: Readable, url: str, head: Head | None = None) -> Head:
-        raise NotImplementedError
-
-    def list(self, url: str) -> Iterator[Head]:
-        raise NotImplementedError
+class StorageAdapter(DummyAdapter):
+    HEADS = HEADS
+    DATA: dict[str, bytes] = defaultdict(lambda: SOME_BODY)
 
 
 @pytest.fixture(scope="function")
@@ -125,8 +97,8 @@ def mirror_files(tmpdir: PathLike) -> Iterator[str]:
 def cfg(mirror_files: str) -> Config:
     cfg = Config()
     cfg.add(Scope.application, "storage", "storage.mirrors_files", mirror_files)
-    cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:HTTPSAdapter")
     cfg.add(Scope.application, "storage", "storage.random_seed", 42)
+    cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
     return cfg
 
 
@@ -178,7 +150,7 @@ def test_head(case: HeadCase, client: Client) -> None:
 class ResolveCase:
     url: str
     want: list[Head]
-    document_length: int | None = None
+    content_length: int | None = None
     accept_ranges: bool | None = None
     ttl: float = 60.0
 
@@ -187,15 +159,15 @@ class ResolveCase:
     unmirrored=ResolveCase(url=SOME_URL, want=[SOME_HEAD]),
     mirrored=ResolveCase(url=MIRRORING_URL, want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]),
     document_length=ResolveCase(
-        url=MIRRORING_URL, document_length=len(SOME_BODY), want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]
+        url=MIRRORING_URL, content_length=len(SOME_BODY), want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]
     ),
-    mismatching_document_length=ResolveCase(url=MIRRORING_URL, document_length=10, want=[]),
+    mismatching_document_length=ResolveCase(url=MIRRORING_URL, content_length=10, want=[]),
     accept_ranges=ResolveCase(url=MIRRORING_URL, accept_ranges=True, want=[MIRRORING_HEAD, MIRRORED_HEAD]),
     reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=[]),
     zero_ttl=ResolveCase(url=SOME_URL, ttl=0.0, want=[SOME_HEAD]),
 )
 def test_resolve(case: ResolveCase, client: Client) -> None:
-    check = Head(document_length=case.document_length, accept_ranges=case.accept_ranges)
+    check = Head(content_length=case.content_length, accept_ranges=case.accept_ranges)
     got = sorted(client.resolve(case.url, check=check, ttl=case.ttl), key=lambda h: str(h.url))
     want = sorted(case.want, key=lambda h: str(h.url))
     assert got == want, "unexpected resolve result"

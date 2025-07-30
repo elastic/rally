@@ -20,13 +20,19 @@ import os
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
 from esrally import config, types
-from esrally.storage._adapter import Adapter, Head, Readable, Writable
-from esrally.storage._executor import DummyExecutor, Executor
-from esrally.storage._manager import TransferManager
+from esrally.storage._adapter import Head
+from esrally.storage._manager import (
+    TransferManager,
+    init_transfer_manager,
+    quit_transfer_manager,
+    transfer_manager,
+)
+from esrally.storage.testing import DummyAdapter, DummyExecutor
 from esrally.utils.cases import cases
 
 
@@ -37,7 +43,7 @@ def cfg(tmpdir: os.PathLike) -> types.Config:
         config.Scope.application,
         "storage",
         "storage.adapters",
-        f"{__name__}:HTTPAdapter",
+        f"{__name__}:StorageAdapter",
     )
     cfg.add(config.Scope.application, "storage", "storage.local_dir", str(tmpdir))
     return cfg
@@ -53,7 +59,7 @@ def executor() -> Iterator[DummyExecutor]:
 
 
 @pytest.fixture
-def manager(cfg: types.Config, executor: Executor) -> Iterator[TransferManager]:
+def manager(cfg: types.Config, executor: DummyExecutor) -> Iterator[TransferManager]:
     manager = TransferManager.from_config(cfg, executor=executor)
     try:
         yield manager
@@ -66,37 +72,12 @@ SIMPLE_DATA = b"example document"
 SIMPLE_HEAD = Head(url=SIMPLE_URL, content_length=len(SIMPLE_DATA))
 
 
-class HTTPAdapter(Adapter):
+class StorageAdapter(DummyAdapter):
 
-    @classmethod
-    def match_url(cls, url: str) -> str:
-        return url
-
-    HEADS: dict[str, Head] = {SIMPLE_URL: SIMPLE_HEAD}
-
-    def head(self, url: str) -> Head:
-        try:
-            return self.HEADS[url]
-        except KeyError:
-            raise FileNotFoundError(f"No such URL: {url}")
-
-    def list(self, url: str) -> Iterator[Head]:
-        raise NotImplementedError()
-
+    HEADS = (SIMPLE_HEAD,)
     DATA = {
         SIMPLE_URL: SIMPLE_DATA,
     }
-
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
-        try:
-            data = self.DATA[url]
-        except KeyError:
-            raise FileNotFoundError(f"No such URL: {url}")
-        stream.write(data)
-        return self.HEADS[url]
-
-    def put(self, stream: Readable, url: str, head: Head | None = None) -> Head:
-        raise NotImplementedError()
 
 
 @dataclass
@@ -145,3 +126,31 @@ def test_get(case: GetCase, manager: TransferManager, executor: DummyExecutor, t
                 assert f.read() == SIMPLE_DATA
     if case.document_length is not None:
         assert os.path.getsize(tr.path) == case.document_length
+
+
+@patch("esrally.storage._manager._MANAGER", None)
+def test_global_transfer_manager(cfg: types.Config, tmpdir: os.PathLike) -> None:
+    with pytest.raises(RuntimeError) as excinfo:
+        assert transfer_manager() is None
+    assert str(excinfo.value) == "Transfer manager not initialized."
+
+    init_transfer_manager(cfg)
+    got = transfer_manager()
+    assert isinstance(got, TransferManager)
+
+    tr = got.get(url=SIMPLE_URL, document_length=len(SIMPLE_DATA))
+    assert tr.wait(timeout=60.0)
+    assert os.path.exists(tr.path)
+
+    init_transfer_manager(cfg)
+    assert got is transfer_manager()
+
+    quit_transfer_manager()
+    with pytest.raises(RuntimeError) as excinfo:
+        assert transfer_manager() is None
+    assert str(excinfo.value) == "Transfer manager not initialized."
+
+    quit_transfer_manager()
+    with pytest.raises(RuntimeError) as excinfo:
+        assert transfer_manager() is None
+    assert str(excinfo.value) == "Transfer manager not initialized."
