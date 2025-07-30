@@ -4,15 +4,14 @@ ARG RALLY_LICENSE
 
 ENV RALLY_RUNNING_IN_DOCKER=True
 
-
 USER root
 
-RUN apk update 
-RUN apk add curl git gcc jq pigz bash zstd bzip2 gzip openssh procps
+RUN apk update
+RUN for i in 1 2 3; do \
+      apk add --no-cache bash bzip2 bzip2-dev curl git gcc gzip jq make openssh pigz procps zstd && break || sleep 5; \
+    done
 
 # pbzip2 doesn't have a package for wolfi, so we build it from source
-RUN apk add bzip2-dev make wget 
-
 RUN cd /tmp && \
   wget -q https://launchpad.net/pbzip2/1.1/1.1.13/+download/pbzip2-1.1.13.tar.gz && \
   tar -xzf pbzip2-1.1.13.tar.gz && \
