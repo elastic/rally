@@ -8,7 +8,7 @@ USER root
 
 RUN apk update
 RUN for i in 1 2 3; do \
-      apk add --no-cache bash bzip2 bzip2-dev curl git gcc gzip jq make openssh pigz procps zstd && break || sleep 5; \
+      apk add --no-cache bash bzip2 bzip2-dev curl git gcc gzip jq make openssh pigz procps wget zstd && break || sleep 5; \
     done
 
 # pbzip2 doesn't have a package for wolfi, so we build it from source
