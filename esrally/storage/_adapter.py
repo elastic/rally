@@ -100,14 +100,14 @@ class Adapter(ABC):
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
         """It downloads a remote bucket object to a local file path.
 
         :param url: it represents the URL of the remote file object.
         :param stream: it represents the local file stream where to write data to.
-        :param head: it allows to specify optional parameters:
+        :param want: it allows to specify optional parameters:
             - range: portion of the file to transfer (it must be empty or a continuous range).
-            - document_length: the number of bytes to transfer.
+            - content_length: the number of bytes to transfer.
             - crc32c the CRC32C checksum of the file.
             - date: the date the file has been modified.
         :raises ServiceUnavailableError: in case on temporary service failure.

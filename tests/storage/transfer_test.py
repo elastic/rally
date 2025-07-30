@@ -44,13 +44,13 @@ class DummyClient(Client):
     def head(self, url: str, ttl: float | None = None) -> Head:
         return Head(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
         data = DATA
-        if head is not None and head.ranges:
-            data = data[head.ranges.start : head.ranges.end]
+        if want is not None and want.ranges:
+            data = data[want.ranges.start : want.ranges.end]
         if data:
             stream.write(data)
-        return Head(url, ranges=head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
+        return Head(url, ranges=want.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
 
 
 @pytest.fixture

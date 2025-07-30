@@ -71,22 +71,22 @@ class S3Adapter(Adapter):
         res = self._s3.head_object(Bucket=address.bucket, Key=address.key)
         return head_from_response(url, res)
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
         headers: dict[str, Any] = {}
-        head_to_headers(head, headers)
+        head_to_headers(want, headers)
 
         address = S3Address.from_url(url)
         res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
-        ret = head_from_response(url, res)
-        if head is not None:
-            head.check(ret)
+        got = head_from_response(url, res)
+        if want is not None:
+            want.check(got)
         body: StreamingBody | None = res.get("Body")
         if body is None:
             raise RuntimeError("S3 client returned no body.")
         for chunk in body.iter_chunks(self.chunk_size):
             if chunk:
                 stream.write(chunk)
-        return ret
+        return got
 
     _s3_client = None
 

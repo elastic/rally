@@ -91,17 +91,17 @@ class HTTPAdapter(Adapter):
             res.raise_for_status()
         return head_from_headers(url, res.headers)
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
         headers: MutableMapping[str, str] = CaseInsensitiveDict()
-        head_to_headers(head, headers)
+        head_to_headers(want, headers)
         with self.session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
             if res.status_code == 503:
                 raise ServiceUnavailableError()
             res.raise_for_status()
 
             got = head_from_headers(url, res.headers)
-            if head is not None:
-                head.check(got)
+            if want is not None:
+                want.check(got)
 
             for chunk in res.iter_content(self.chunk_size):
                 if chunk:
