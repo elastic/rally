@@ -128,8 +128,9 @@ advantages of this downloader implementation are:
   another server of from the original source.
 * It supports local caching of files and can resume downloads when connections are interrupted. The download state is preserved between Rally executions, allowing downloads to continue from where they left off rather than starting over.
 
-*NOTE*: This transfers manager implementation is still experimental and under active development. It is not used yet by
-default and it will require some additional works before final delivery.
+.. warning::
+
+    This transfers manager implementation is experimental and under active development.
 
 Configuration options are:
 
