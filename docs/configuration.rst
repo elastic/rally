@@ -119,8 +119,23 @@ Define a secure connection to an Elastic Cloud cluster::
 storage
 ~~~~~~~
 
-This section defines how client is configured to transfer big files (I.E. track files) from
-remote servers. Available options are:
+This section defines how client is configured to transfer corpus files. The main
+advantages of this downloader implementation are:
+
+* It supports configuring multiple mirror URLs. The client will load balance between these URLs giving priority to
+  those with the lower latency. In case of failures the client will download files from the original URL.
+* It supports multipart downloading of pieces of files from multiple servers at the same time, mitigating the impact of
+  network failures. Those file parts that experience errors downloading will be eventually re-downloaded from
+  another server or, as the very last resource, from the original source.
+* It supports local caching of files and it can resume downloads when connections are interrupted. The download state
+  is preserved between Rally executions, allowing downloads to continue from where they left off rather than starting
+  over.
+
+.. warning::
+
+    This transfers manager implementation is experimental and under active development.
+
+Configuration options are:
 
 * ``storage.adapters`` is a comma-separated list of storage adapter implementations specified using the following
   format:
@@ -136,8 +151,13 @@ remote servers. Available options are:
   At this point in time `esrally.storage._http:HTTPAdapter` is the only existing `Adapter` implementations intended
   for public use and that is already the default one. So it is required to edit this option for special customizations.
 
+* ``storage.local_dir`` indicates the default directory where to store local files when no path has been specified.
+
 * ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
-  bucket. The default value is 8.
+  bucket for each transfer. The default value is 4. In case there will be more unfinished transfers in progress at the
+  same time, this value would be dynamically limited by the following formula::
+
+    transfer.max_connections = min(storage.max_connections, (storage.max_workers / number_of_unfinished_transfers) + 1)
 
 * ``storage.max_workers`` indicates the maximum number of worker threads used for making storage files transfers.
 
@@ -169,12 +189,24 @@ remote servers. Available options are:
   are not mirrored or they have a different size from the source one. The client will prefer endpoints with the lower
   latency fetching the head of the file.
 
+* ``storage.monitor_interval`` represents the time interval (in seconds) `TransferManager` should wait for consecutive
+  monitor operations (log transfer and connections statistics, adjust the maximum number of connections, etc.).
+
+* ``storage.multipart_size`` When the file size measured in bytes is greater than this value the file is split in chunk
+  of this size plus the last one ()that could be smaller). Each part will be downloaded separately and in parallel using
+  a dedicated connection by a worker thread and eventually from a different mirror server to load balance the network
+  traffic between multiple servers. If the resulting number of parts is greater than ``storage.max_workers`` and
+  ``storage.max_connections`` options, then the transfer of those parts exceeding these limits will be performed as
+  soon as a worker thread gets available or a HTTP connection get released by another thread.
+
 * ``storage.random_seed`` a string used to initialize the client random number generator. This could be used to make
   problems easier to reproduce in continuous integration. In most of the cases it should be left empty.
 
 
 HTTP Adapter
 ************
+
+This adapter can be used only to download files from public HTTP or HTTPS servers.
 
 * ``storage.http.chunk_size`` is used to specify the size of the buffer is being used for transferring chunk of files.
 
@@ -184,7 +216,7 @@ HTTP Adapter
     [storage]
     storage.http.max_retries = 3
 
-  For a more complex uses it accepts a dictionary of parameters (defined in yaml/json format) to be passed to the
+  For a more complex uses it accepts a dictionary of parameters (defined in JSON format) to be passed to the
   `urllib3.Retry`_ class constructor. Example::
 
     [storage]
@@ -192,6 +224,54 @@ HTTP Adapter
 
   .. _urllib3.Retry: https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html
 
+
+S3 Adapter
+**********
+
+This adapter can be used only to download files from `S3 Cloud Storage Service`_. It is intended to be used to configure
+S3 buckets as mirror for track file downloads.
+
+It requires `Boto3 Client`_ to be installed and it accepts only URLs with the following format::
+
+  s3://<bucket-name>/[<object-key-prefix>]
+
+In the case the boto3 client is not installed, and S3 buckets are publicly readable without authentication, you can use
+the HTTP adapter instead, for example by using the following URL format::
+
+  https://<bucket-name>.s3.<region-name>.amazonaws.com/[<object-key-prefix>]
+
+Please look at the `S3 Service Documentation`_ for more details.
+
+Example of ``rally.ini`` configuration::
+
+    [storage]
+    storage.mirror_files = ~/.rally/storage-mirrors.json
+
+Example of ``~/.rally/storage-mirrors.json`` file::
+
+    {
+        "mirrors": [
+            {
+                "sources": [
+                    "https://rally-tracks.elastic.co/"
+                ],
+                "destinations": [
+                    "s3://rally-tracks-eu-central-1/",
+                    "s3://rally-tracks-us-west-1/"
+                ]
+              }
+            ]
+          }
+    }
+
+Configuration options:
+
+* ``storage.aws.profile`` is used to specify the profile name to be used for connecting to the S3 service. By default
+  it will use credentials detected from the environment as specified by 'boto3' client.
+
+  .. _S3 Cloud Storage Service: https://aws.amazon.com/es/s3/
+  .. _Boto3 Client: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
+  .. _S3 Service Documentation: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistS3AndCustomOrigins.html#concept_S3Origin
 
 tracks
 ~~~~~~
