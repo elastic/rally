@@ -168,8 +168,6 @@ def head_from_response(url: str, response: Mapping[str, Any]) -> Head:
 @runtime_checkable
 class S3Client(Protocol):
 
-    def head_object(self, Bucket: str, Key: str) -> Mapping[str, Any]:
-        raise NotImplementedError()
+    def head_object(self, Bucket: str, Key: str) -> Mapping[str, Any]: ...
 
-    def get_object(self, Bucket: str, Key: str, **kwargs: Any) -> Mapping[str, Any]:
-        raise NotImplementedError()
+    def get_object(self, Bucket: str, Key: str, **kwargs: Any) -> Mapping[str, Any]: ...

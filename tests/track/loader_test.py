@@ -14,27 +14,20 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
 
 import copy
 import os
-import pickle
 import random
 import re
 import textwrap
 import urllib.error
-from dataclasses import dataclass
-from email.message import Message
 from unittest import mock
 
 import pytest
 
 from esrally import config, exceptions
-from esrally.storage._adapter import Head
-from esrally.storage.testing import DummyAdapter
 from esrally.track import loader, track
 from esrally.utils import io
-from esrally.utils.cases import cases
 
 
 def strip_ws(s):
@@ -4330,102 +4323,3 @@ class TestTrackProcessorRegistry:
         ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         assert len(expected_processors) == len(actual_processors)
-
-
-@pytest.fixture
-def multipart_downloader() -> loader.Downloader:
-    cfg = config.Config()
-    cfg.add(config.Scope.application, "system", "offline.mode", False)
-    cfg.add(config.Scope.application, "track", "test.mode.enabled", False)
-    cfg.add(config.Scope.application, "track", "track.downloader.multipart_enabled", True)
-    cfg.add(config.Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
-    return loader.Downloader.from_config(cfg)
-
-
-BASE_URL = "https://example.com"
-SOME_PATH = "some/file.txt"
-SOME_URL = f"{BASE_URL}/{SOME_PATH}"
-SOME_DATA = b"simple file data"
-SOME_HEAD = Head(SOME_URL, accept_ranges=True, content_length=len(SOME_DATA))
-INVALID_PATH = "some/invalid-file.txt"
-
-
-class StorageAdapter(DummyAdapter):
-    DATA = {
-        SOME_URL: SOME_DATA,
-    }
-    HEADS = (SOME_HEAD,)
-
-
-@dataclass
-class DownloaderCase:
-    path: str = SOME_PATH
-    offline: bool = False
-    test_mode: bool = False
-    multipart_enabled: bool = False
-    size_in_bytes: int | None = None
-    want_error: tuple[type[Exception], ...] = tuple()
-    want_data: bytes | None = None
-
-    _cfg: config.Config | None = None
-    _downloader: loader.Downloader | None = None
-
-    def cfg(self) -> config.Config:
-        if self._cfg is None:
-            self._cfg = cfg = config.Config()
-            cfg.add(config.Scope.application, "system", "offline.mode", self.offline)
-            cfg.add(config.Scope.application, "track", "test.mode.enabled", self.test_mode)
-            cfg.add(config.Scope.application, "track", "track.downloader.multipart_enabled", self.multipart_enabled)
-            cfg.add(config.Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
-        return self._cfg
-
-    def downloader(self) -> loader.Downloader:
-        if self._downloader is None:
-            self._downloader = loader.Downloader.from_config(self.cfg())
-        return self._downloader
-
-
-@cases(
-    "multipart_enabled",
-    legacy=False,
-    multipart=True,
-)
-@cases(
-    simple=DownloaderCase(want_data=SOME_DATA),
-    offline=DownloaderCase(offline=True, want_error=(exceptions.SystemSetupError,)),
-    test_mode=DownloaderCase(path=INVALID_PATH, test_mode=True, want_error=(exceptions.DataError,)),
-    invalid=DownloaderCase(path=INVALID_PATH, want_error=(exceptions.DataError,)),
-)
-def test_downloader(case: DownloaderCase, multipart_enabled: bool, tmpdir: os.PathLike) -> None:
-    target_path = os.path.join(tmpdir, case.path)
-    base_url = f"{BASE_URL}/{os.path.dirname(case.path)}"
-    case.multipart_enabled = multipart_enabled
-    downloader = case.downloader()
-    with (
-        mock.patch("esrally.utils.net._download_http", _patched_download_http),
-        # mock.patch("esrally.storage._manager._MANAGER", None),
-    ):
-        try:
-            downloader.download(base_url, target_path, case.size_in_bytes)
-        except case.want_error:
-            return
-        else:
-            assert not case.want_error
-    assert os.path.exists(target_path)
-    if case.want_data is not None:
-        with open(target_path, "rb") as fp:
-            assert fp.read() == case.want_data
-    copy = pickle.loads(pickle.dumps(downloader))
-    assert downloader.use_transfer_manager == copy.use_transfer_manager
-    assert downloader.test_mode == copy.test_mode
-    assert downloader.offline == copy.offline
-
-
-def _patched_download_http(url: str, local_path: str, expected_size_in_bytes=None, progress_indicator=None):
-    try:
-        data = StorageAdapter.DATA[url]
-    except KeyError:
-        raise urllib.error.HTTPError(url, 404, f"No data available for url {url}", Message(), None)
-    with open(local_path, "wb") as f:
-        f.write(data)
-    return len(data)

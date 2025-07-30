@@ -96,6 +96,8 @@ Key = Literal[
     "list.from_date",
     "list.max_results",
     "list.races.benchmark_name",
+    "list.races.format",
+    "list.races.user_tags",
     "list.to_date",
     "load_driver_hosts",
     "local.dataset.cache",

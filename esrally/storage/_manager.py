@@ -26,7 +26,7 @@ from typing_extensions import Self
 from esrally import types
 from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._executor import MAX_WORKERS, Executor, ThreadPoolExecutor
-from esrally.storage._transfer import Transfer
+from esrally.storage._transfer import MULTIPART_SIZE, Transfer
 from esrally.utils.threads import ContinuousTimer
 
 LOG = logging.getLogger(__name__)
@@ -34,7 +34,6 @@ LOG = logging.getLogger(__name__)
 LOCAL_DIR = "~/.rally/storage"
 MONITOR_INTERVAL = 2.0  # Seconds
 THREAD_NAME_PREFIX = "esrally.storage.transfer-worker"
-MULTIPART_SIZE = 8 * 1024 * 1024
 
 
 class TransferManager:
@@ -83,19 +82,31 @@ class TransferManager:
         :param max_workers: max number of connections per remote server when working with multipart.
         """
         self._client = client
+        self._executor = executor
         self._lock = threading.Lock()
 
         local_dir = os.path.expanduser(local_dir)
         if not os.path.isdir(local_dir):
             os.makedirs(local_dir)
+
         self._local_dir = local_dir
         if monitor_interval <= 0:
-            raise ValueError(f"invalid monitor interval: {monitor_interval}")
+            raise ValueError(f"invalid monitor interval: {monitor_interval} <= 0")
+
         self._transfers: list[Transfer] = []
-        self._max_workers = max(1, max_workers)
-        self._max_connections = max(1, min(max_connections, max_workers))
+
+        if max_workers < 1:
+            raise ValueError(f"invalid max_workers: {max_workers} < 1")
+        self._max_workers = max_workers
+
+        if max_connections < 1:
+            raise ValueError(f"invalid max_connections: {max_connections} < 1")
+        self._max_connections = max_connections
+
+        if multipart_size < 1024 * 1024:
+            raise ValueError(f"invalid multipart_size: {multipart_size} < {1024 * 1024}")
         self._multipart_size = multipart_size
-        self._executor = executor
+
         self._monitor_timer = ContinuousTimer(interval=monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
         self._monitor_timer.start()
 
@@ -131,41 +142,61 @@ class TransferManager:
         head = self._client.head(url)
         if document_length is not None and head.content_length != document_length:
             raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
-        # This also ensures the path is a string
         tr = Transfer(
             client=self._client,
             url=url,
             path=path,
             document_length=head.content_length,
             executor=self._executor,
-            max_connections=self._max_connections,
             multipart_size=self._multipart_size,
             crc32c=head.crc32c,
         )
+
+        # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
+        # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
+        # the allowed per-transfer connections.
         with self._lock:
             self._transfers.append(tr)
-            self._update_transfers()
+        self._update_transfers()
         tr.start()
         return tr
 
     def monitor(self):
-        with self._lock:
-            transfers = self._transfers
-            # It removes finished transfers and update max connections
-            self._update_transfers()
-        if transfers:
-            LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
+        self._update_transfers()
         self._client.monitor()
 
-    def _update_transfers(self):
-        available_workers = max(1, int(self._max_workers * 0.8))
-        self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
-        if transfers:
-            max_connections = min(self._max_connections, max(1, available_workers // len(transfers)))
-            for tr in transfers:
-                tr.max_connections = max_connections
-                tr.save_status()
-                tr.start()
+    @property
+    def max_connections(self) -> int:
+        with self._lock:
+            max_connections = self._max_connections
+            number_of_transfers = len(self._transfers)
+            if number_of_transfers > 0:
+                max_connections = min(max_connections, (self._max_workers // number_of_transfers) + 1)
+        return max_connections
+
+    def _update_transfers(self) -> None:
+        """It executes periodic update operations on every unfinished transfer."""
+        with self._lock:
+            # It first removes finished transfers.
+            self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
+            if not transfers:
+                return
+
+        # It updates max_connections value for each transfer
+        max_connections = self.max_connections
+        for tr in transfers:
+            # It updates the limit of the number of connections for every transfer because it varies in function of
+            # the number of transfers in progress.
+            tr.max_connections = max_connections
+            # It periodically save transfer status to ensure it will be eventually restored from the current state
+            # if required.
+            tr.save_status()
+            # It ensures every unfinished transfer will periodically receive attention from a worker thread as soon
+            # it becomes available to prevent it to get stalled forever.
+            tr.start()
+
+        # It logs updated statistics for every transfer.
+        LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
 
 
 _LOCK = threading.Lock()

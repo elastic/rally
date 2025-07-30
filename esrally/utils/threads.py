@@ -20,6 +20,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from typing import Any
 
 
 class ContinuousTimer(threading.Thread):
@@ -34,8 +35,10 @@ class ContinuousTimer(threading.Thread):
         - the function is called periodically until the timer is cancelled.
     """
 
-    def __init__(self, interval: float, function: Callable[[], None], name: str | None = None, daemon: bool = True):
+    def __init__(self, interval: float, function: Callable[[], Any], name: str | None = None, daemon: bool = True):
         super().__init__(name=name, daemon=daemon)
+        if interval <= 0:
+            raise ValueError("interval must be strictly positive")
         self.interval = interval
         self._function = function
         self._finished = threading.Event()
