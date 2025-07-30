@@ -122,10 +122,7 @@ storage
 This section defines how client is configured to transfer corpus files. The main
 advantages of this downloader implementation are:
 
-* It supports configuring mirrors servers to download files from there instead of the original source URL. There could
-  be multiple services from where download files. The client will load balance between these services giving priority
-  to those servers with the lower latency. In case of failures reaching the mirrors services it will download files
-  from the original source server.
+* It supports configuring multiple mirror URLs. The client will load balance between these URLs giving priority to those with the lower latency. In case of failures the client will download files from the original URL.
 * It supports multipart downloading of pieces of files from multiple servers at the same time, increasing the impact of
   a failing network infrastructure. Those parts that experience errors downloading will be eventually re-downloaded from
   another server of from the original source.
