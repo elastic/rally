@@ -117,7 +117,7 @@ def test_get(case: GetCase, s3_client) -> None:
     s3_client.get_object.return_value = case.response
     adapter = S3Adapter(s3_client=s3_client)
     stream = create_autospec(Writable, spec_set=True, instance=True)
-    head = adapter.get(case.url, stream, head=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
+    head = adapter.get(case.url, stream, want=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
     assert head == case.want
     kwargs = {}
     if case.want_range:

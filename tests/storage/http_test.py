@@ -120,7 +120,7 @@ def test_get(case: GetCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
     session.get.return_value = case.response
     stream = create_autospec(Writable, spec_set=True, instance=True)
-    head = adapter.get(case.url, stream, head=Head(ranges=rangeset(case.ranges)))
+    head = adapter.get(case.url, stream, want=Head(ranges=rangeset(case.ranges)))
     assert head == case.want
     if case.want_data:
         stream.write.assert_called_once_with(case.want_data)
@@ -147,7 +147,6 @@ class RangesToHeadersCase:
     multipart=RangesToHeadersCase("1-5,7-10", want_errors=(NotImplementedError,)),
 )
 def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
-    # pylint: disable=protected-access
     got: dict[str, Any] = {}
     try:
         ranges_to_headers(rangeset(case.ranges), got)
@@ -176,7 +175,6 @@ class HeadFromHeadersCase:
     x_amz_checksum=HeadFromHeadersCase(X_AMZ_CHECKSUM_CRC32C_HEADER, Head(URL, crc32c="some-checksum")),
 )
 def test_head_from_headers(case: HeadFromHeadersCase):
-    # pylint: disable=protected-access
     try:
         got = head_from_headers(url=case.url, headers=case.headers)
     except Exception as ex:
