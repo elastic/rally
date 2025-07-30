@@ -142,20 +142,22 @@ class TransferManager:
         head = self._client.head(url)
         if document_length is not None and head.content_length != document_length:
             raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
-        # This also ensures the path is a string
         tr = Transfer(
             client=self._client,
             url=url,
             path=path,
             document_length=head.content_length,
             executor=self._executor,
-            max_connections=self.max_connections,
             multipart_size=self._multipart_size,
             crc32c=head.crc32c,
         )
+
+        # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
+        # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
+        # the allowed per-transfer connections.
         with self._lock:
             self._transfers.append(tr)
-            self._update_transfers()
+        self._update_transfers()
         tr.start()
         return tr
 
@@ -166,27 +168,35 @@ class TransferManager:
     @property
     def max_connections(self) -> int:
         with self._lock:
-            return min(self._max_connections, (self._max_workers // len(self._transfers) + 1))
+            max_connections = self._max_connections
+            number_of_transfers = len(self._transfers)
+            if number_of_transfers > 0:
+                max_connections = min(max_connections, (self._max_workers // number_of_transfers) + 1)
+        return max_connections
 
-    def _update_transfers(self):
-        # It executes periodic update operations on every unfinished transfer.
+    def _update_transfers(self) -> None:
+        """It executes periodic update operations on every unfinished transfer."""
         with self._lock:
-            # It removes finished transfers.
+            # It first removes finished transfers.
             self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
-            max_connections = self.max_connections
-        if transfers:
-            # It updates unfinished transfers.
-            for tr in transfers:
-                # It updates the limit of the number of connections for every transfer because it varies in function of
-                # the number of transfers in progress.
-                tr.max_connections = max_connections
-                # It periodically save transfer status to ensure it will be eventually restored from the current state
-                # if required.
-                tr.save_status()
-                # It ensures every unfinished transfer will periodically receive attention from a worker thread as soon
-                # it becomes available to prevent it to get stalled forever.
-                tr.start()
-            LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
+            if not transfers:
+                return
+
+        # It updates max_connections value for each transfer
+        max_connections = self.max_connections
+        for tr in transfers:
+            # It updates the limit of the number of connections for every transfer because it varies in function of
+            # the number of transfers in progress.
+            tr.max_connections = max_connections
+            # It periodically save transfer status to ensure it will be eventually restored from the current state
+            # if required.
+            tr.save_status()
+            # It ensures every unfinished transfer will periodically receive attention from a worker thread as soon
+            # it becomes available to prevent it to get stalled forever.
+            tr.start()
+
+        # It logs updated statistics for every transfer.
+        LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
 
 
 _LOCK = threading.Lock()
