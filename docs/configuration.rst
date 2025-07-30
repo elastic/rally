@@ -119,7 +119,7 @@ Define a secure connection to an Elastic Cloud cluster::
 storage
 ~~~~~~~
 
-This section defines how client is configured to transfer big files (I.E. track files) from remote servers. The main
+This section defines how client is configured to transfer corpus files. The main
 advantages of this downloader implementation are:
 
 * It supports configuring mirrors servers to download files from there instead of the original source URL. There could
