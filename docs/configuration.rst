@@ -126,8 +126,7 @@ advantages of this downloader implementation are:
 * It supports multipart downloading of pieces of files from multiple servers at the same time, increasing the impact of
   a failing network infrastructure. Those parts that experience errors downloading will be eventually re-downloaded from
   another server of from the original source.
-* It supports local caching of files, and file downloading resuming from previous status in case of connection
-  interruption. It can also resume file downloading between consecutive rally executions.
+* It supports local caching of files and can resume downloads when connections are interrupted. The download state is preserved between Rally executions, allowing downloads to continue from where they left off rather than starting over.
 
 *NOTE*: This transfers manager implementation is still experimental and under active development. It is not used yet by
 default and it will require some additional works before final delivery.
