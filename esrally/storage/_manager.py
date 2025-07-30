@@ -93,7 +93,7 @@ class TransferManager:
             raise ValueError(f"invalid monitor interval: {monitor_interval}")
         self._transfers: list[Transfer] = []
         self._max_workers = max(1, max_workers)
-        self._max_connections = max(1, min(max_connections, max_workers))
+        self._max_connections = max(1, max_connections)
         self._multipart_size = multipart_size
         self._executor = executor
         self._monitor_timer = ContinuousTimer(interval=monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
@@ -138,7 +138,7 @@ class TransferManager:
             path=path,
             document_length=head.content_length,
             executor=self._executor,
-            max_connections=self._max_connections,
+            max_connections=self.max_connections,
             multipart_size=self._multipart_size,
             crc32c=head.crc32c,
         )
@@ -149,23 +149,30 @@ class TransferManager:
         return tr
 
     def monitor(self):
-        with self._lock:
-            transfers = self._transfers
-            # It removes finished transfers and update max connections
-            self._update_transfers()
-        if transfers:
-            LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
+        self._update_transfers()
         self._client.monitor()
 
+    @property
+    def max_connections(self):
+        return min(self._max_connections, max(1, self._max_workers // len(self._transfers)))
+
     def _update_transfers(self):
-        available_workers = max(1, int(self._max_workers))
-        self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
+        with self._lock:
+            # It removes finished transfers.
+            self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
         if transfers:
-            max_connections = min(self._max_connections, max(1, available_workers // len(transfers)))
+            # It executes periodic update operations on every unfinished operations.
             for tr in transfers:
-                tr.max_connections = max_connections
+                # It updates the limit of the number of connections for every transfer because it varies in function of
+                # the number of transfers in progress.
+                tr.max_connections = self.max_connections
+                # It periodically save transfer status to ensure it will be eventually restored from the current state
+                # if required.
                 tr.save_status()
+                # It ensures every unfinished transfer will periodically receive attention from a worker thread as soon
+                # it becomes available to prevent it to get stalled forever.
                 tr.start()
+            LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
 
 
 _LOCK = threading.Lock()
