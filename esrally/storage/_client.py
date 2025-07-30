@@ -187,7 +187,7 @@ class Client:
                 continue
             adapter = self._adapters.get(got.url)
             try:
-                return adapter.get(url, stream, head=head)
+                return adapter.get(got.url, stream, head=head)
             except ServiceUnavailableError as ex:
                 LOG.debug("service unavailable error received: url='%s' %s", url, ex)
                 with self._lock:
