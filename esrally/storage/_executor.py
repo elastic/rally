@@ -19,6 +19,8 @@ from __future__ import annotations
 import concurrent.futures
 from typing import Protocol, runtime_checkable
 
+from typing_extensions import Self
+
 from esrally.types import Config
 
 MAX_WORKERS = 32
@@ -26,8 +28,9 @@ MAX_WORKERS = 32
 
 @runtime_checkable
 class Executor(Protocol):
-    """Executor protocol is used by Transfer class to submit tasks execution.
+    """This is a protocol class for concrete asynchronous executors.
 
+    Executor protocol is used by Transfer class to submit tasks execution.
     Notable implementation of this protocol is concurrent.futures.ThreadPoolExecutor[1] class.
 
     [1] https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
@@ -48,33 +51,6 @@ class Executor(Protocol):
 class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor, Executor):
 
     @classmethod
-    def from_config(cls, cfg: Config) -> concurrent.futures.Executor:
+    def from_config(cls, cfg: Config) -> Self:
         max_workers = int(cfg.opts("storage", "storage.max_workers", MAX_WORKERS, mandatory=False))
-        executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="esrally.storage.executor")
-        assert isinstance(executor, Executor)
-        return executor
-
-
-class DummyExecutor(Executor):
-
-    def __init__(self):
-        self.tasks: list[tuple] | None = []
-
-    def submit(self, fn, /, *args, **kwargs):
-        """Submits a callable to be executed with the given arguments.
-
-        Schedules the callable to be executed as fn(*args, **kwargs).
-        """
-        if self.tasks is None:
-            raise RuntimeError("Executor already closed")
-        self.tasks.append((fn, args, kwargs))
-
-    def execute_tasks(self):
-        if self.tasks is None:
-            raise RuntimeError("Executor already closed")
-        tasks, self.tasks = self.tasks, []
-        for fn, args, kwargs in tasks:
-            fn(*args, **kwargs)
-
-    def shutdown(self):
-        self.tasks = None
+        return cls(max_workers=max_workers, thread_name_prefix="esrally.storage.executor")

@@ -25,6 +25,8 @@ from collections.abc import Iterator
 from random import Random
 from typing import NamedTuple
 
+from typing_extensions import Self
+
 from esrally import types
 from esrally.storage._adapter import (
     AdapterRegistry,
@@ -39,7 +41,7 @@ from esrally.utils.threads import WaitGroup, WaitGroupLimitError
 LOG = logging.getLogger(__name__)
 
 MIRRORS_FILES = "~/.rally/storage-mirrors.json"
-MAX_CONNECTIONS = 8
+MAX_CONNECTIONS = 4
 RANDOM = Random(time.monotonic_ns())
 
 
@@ -49,7 +51,7 @@ class Client:
     @classmethod
     def from_config(
         cls, cfg: types.Config, adapters: AdapterRegistry | None = None, mirrors: MirrorList | None = None, random: Random | None = None
-    ) -> Client:
+    ) -> Self:
         if adapters is None:
             adapters = AdapterRegistry.from_config(cfg)
         if mirrors is None:
@@ -77,6 +79,10 @@ class Client:
         self._mirrors: MirrorList = mirrors
         self._random: Random = random
         self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
+
+    @property
+    def adapters(self):
+        return self._adapters
 
     def head(self, url: str, ttl: float | None = None) -> Head:
         """It gets remote file headers."""
