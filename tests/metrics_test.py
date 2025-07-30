@@ -1329,7 +1329,9 @@ class TestEsRaceStore:
     def test_filter_race(self):
         self.es_mock.search.return_value = {"hits": {"total": 0}}
         self.cfg.add(config.Scope.application, "system", "admin.track", "unittest")
+        self.cfg.add(config.Scope.application, "system", "list.challenge", "unittest-challenge")
         self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
+        self.cfg.add(config.Scope.application, "system", "list.races.user_tags", {"env-id": "123", "name": "unittest-test2"})
         self.cfg.add(config.Scope.application, "system", "list.to_date", "20160131")
         self.cfg.add(config.Scope.application, "system", "list.from_date", "20160230")
         self.race_store.list()
@@ -1348,6 +1350,9 @@ class TestEsRaceStore:
                                 ]
                             }
                         },
+                        {"term": {"challenge": "unittest-challenge"}},
+                        {"term": {"user-tags.env-id": "123"}},
+                        {"term": {"user-tags.name": "unittest-test2"}},
                     ]
                 }
             },
@@ -2002,7 +2007,7 @@ class TestFileRaceStore:
             race_id=self.RACE_ID,
             race_timestamp=self.RACE_TIMESTAMP,
             pipeline="from-sources",
-            user_tags={"name": "unittest-test"},
+            user_tags={"name": "unittest-test", "env-id": "123"},
             track=t,
             track_params={"clients": 12},
             challenge=t.default_challenge,
@@ -2020,6 +2025,10 @@ class TestFileRaceStore:
         self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test-2")
         assert len(self.race_store.list()) == 0
         self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
+        assert len(self.race_store.list()) == 1
+        self.cfg.add(config.Scope.application, "system", "list.races.user_tags", {"env-id": "321", "name": "unittest-test"})
+        assert len(self.race_store.list()) == 0
+        self.cfg.add(config.Scope.application, "system", "list.races.user_tags", {"env-id": "123", "name": "unittest-test"})
         assert len(self.race_store.list()) == 1
         self.cfg.add(config.Scope.application, "system", "list.to_date", "20160129")
         assert len(self.race_store.list()) == 0

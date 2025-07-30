@@ -965,6 +965,15 @@ When you run ``esrally list races``, this will show up again::
 
 This will help you recognize a specific race when running ``esrally compare``.
 
+You can also filter races with user tags.
+
+**Example**
+
+ ::
+
+   esrally list races --track=pmc --user-tags="intention:github-issue-1234-baseline,gc:cms"
+
+
 .. note::
    This option used to be named `--user-tag` without an s, which was confusing as multiple tags are supported. While users are now encouraged to use `--user-tags` for clarity, Rally will continue to honor `--user-tag` in the future to avoid breaking backwards-compatibility.
 

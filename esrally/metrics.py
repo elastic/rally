@@ -1345,47 +1345,56 @@ def list_races(cfg: types.Config):
         else:
             return None
 
-    races = []
-    for race in race_store(cfg).list():
-        races.append(
-            [
-                race.race_id,
-                time.to_iso8601(race.race_timestamp),
-                race.track,
-                race.challenge_name,
-                race.car_name,
-                race.distribution_version,
-                race.revision,
-                race.rally_version,
-                race.track_revision,
-                race.team_revision,
-                format_dict(race.user_tags),
-            ]
-        )
-
-    if len(races) > 0:
-        console.println("\nRecent races:\n")
-        console.println(
-            tabulate.tabulate(
-                races,
-                headers=[
-                    "Race ID",
-                    "Race Timestamp",
-                    "Track",
-                    "Challenge",
-                    "Car",
-                    "ES Version",
-                    "Revision",
-                    "Rally Version",
-                    "Track Revision",
-                    "Team Revision",
-                    "User Tags",
-                ],
+    output_format: str = cfg.opts("system", "list.races.format")
+    if output_format == "text":
+        races = []
+        for race in race_store(cfg).list():
+            races.append(
+                [
+                    race.race_id,
+                    time.to_iso8601(race.race_timestamp),
+                    race.track,
+                    race.challenge_name,
+                    race.car_name,
+                    race.distribution_version,
+                    race.revision,
+                    race.rally_version,
+                    race.track_revision,
+                    race.team_revision,
+                    format_dict(race.user_tags),
+                ]
             )
-        )
+
+        if len(races) > 0:
+            console.println("\nRecent races:\n")
+            console.println(
+                tabulate.tabulate(
+                    races,
+                    headers=[
+                        "Race ID",
+                        "Race Timestamp",
+                        "Track",
+                        "Challenge",
+                        "Car",
+                        "ES Version",
+                        "Revision",
+                        "Rally Version",
+                        "Track Revision",
+                        "Team Revision",
+                        "User Tags",
+                    ],
+                )
+            )
+        else:
+            console.println("")
+            console.println("No recent races found.")
+
+    elif output_format == "json":
+        d = {"races": [race.as_dict() for race in race_store(cfg).list()]}
+        console.println(json.dumps(d, indent=2))
+
     else:
-        console.println("")
-        console.println("No recent races found.")
+        raise exceptions.RallyAssertionError(f"Unknown output format [{output_format}]")
 
 
 def create_race(cfg: types.Config, track, challenge, track_revision=None):
@@ -1510,11 +1519,15 @@ class Race:
             },
         }
         if self.results:
-            d["results"] = self.results.as_dict()
+            if hasattr(self.results, "as_dict"):
+                d["results"] = self.results.as_dict()
+            else:
+                d["results"] = self.results
         if self.track_revision:
             d["track-revision"] = self.track_revision
-        if not self.challenge.auto_generated:
-            d["challenge"] = self.challenge_name
+        if self.challenge:
+            if not hasattr(self.challenge, "auto_generated") or not self.challenge.auto_generated:
+                d["challenge"] = self.challenge_name
         if self.track_params:
             d["track-params"] = self.track_params
         if self.car_params:
@@ -1630,6 +1643,9 @@ class RaceStore:
     def _benchmark_name(self):
         return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
 
+    def _user_tags(self) -> dict:
+        return self.cfg.opts("system", "list.races.user_tags", default_value={}, mandatory=False)
+
     def _race_timestamp(self):
         return self.cfg.opts("system", "add.race_timestamp")
 
@@ -1736,6 +1752,9 @@ class FileRaceStore(RaceStore):
         pattern = "%Y%m%d"
         from_date = self._from_date()
         to_date = self._to_date()
+        challenge = self._challenge()
+        user_tags = self._user_tags()
+
         for result in results:
             # noinspection PyBroadException
             try:
@@ -1754,6 +1773,10 @@ class FileRaceStore(RaceStore):
             races = filter(lambda r: r.race_timestamp.date() >= datetime.datetime.strptime(from_date, pattern).date(), races)
         if to_date:
             races = filter(lambda r: r.race_timestamp.date() <= datetime.datetime.strptime(to_date, pattern).date(), races)
+        if challenge:
+            races = filter(lambda r: r.challenge == challenge, races)
+        if user_tags:
+            races = filter(lambda r: all(r.user_tags.get(k) == v for k, v in user_tags.items()), races)
 
         return sorted(races, key=lambda r: r.race_timestamp, reverse=True)
 
@@ -1915,6 +1938,7 @@ class EsRaceStore(RaceStore):
         from_date = self._from_date()
         to_date = self._to_date()
         challenge = self._challenge()
+        user_tags = self._user_tags()
 
         filters = [
             {
@@ -1947,8 +1971,9 @@ class EsRaceStore(RaceStore):
                 {"bool": {"should": [{"term": {"user-tags.benchmark-name": name}}, {"term": {"user-tags.name": name}}]}}
             )
         if challenge:
-            query["query"]["bool"]["filter"].append({"bool": {"should": [{"term": {"challenge": challenge}}]}})
-
+            query["query"]["bool"]["filter"].append({"term": {"challenge": challenge}})
+        if user_tags:
+            query["query"]["bool"]["filter"].extend([{"term": {f"user-tags.{k}": v}} for k, v in user_tags.items()])
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
