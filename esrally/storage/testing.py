@@ -56,10 +56,13 @@ class DummyAdapter(Adapter):
         data = self.data[url]
         if ranges:
             stream.write(data[ranges.start : ranges.end])
-            return Head(url, content_length=ranges.size, ranges=ranges, document_length=len(data))
-
-        stream.write(data)
-        return Head(url, content_length=len(data))
+            got = Head(url, content_length=ranges.size, ranges=ranges, document_length=len(data))
+        else:
+            stream.write(data)
+            got = Head(url, content_length=len(data))
+        if want is not None:
+            want.check_get_response(got)
+        return got
 
 
 class DummyExecutor(Executor):

@@ -16,13 +16,13 @@
 # under the License.
 from __future__ import annotations
 
-import datetime
+import dataclasses
 import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Container, Iterable
-from dataclasses import dataclass
+from collections.abc import Iterable
+from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from typing_extensions import Self
@@ -44,28 +44,37 @@ class Writable(Protocol):
         pass
 
 
-_HEAD_CHECK_IGNORE = frozenset(["url"])
+class InvalidHeadError(ValueError):
+    pass
 
 
-@dataclass
+@dataclasses.dataclass
 class Head:
     url: str | None = None
-    content_length: int | None = None
     accept_ranges: bool | None = None
+    content_length: int | None = None
     ranges: RangeSet = NO_RANGE
     document_length: int | None = None
     crc32c: str | None = None
-    date: datetime.datetime | None = None
+    date: datetime | None = None
 
-    def check(self, other: Head, ignore: Container[str] = _HEAD_CHECK_IGNORE) -> None:
-        for field in ("url", "content_length", "accept_ranges", "ranges", "document_length", "crc32c", "date"):
-            if ignore is not None and field in ignore:
-                continue
-            want = getattr(self, field)
-            got = getattr(other, field)
-            if _all_specified(got, want) and got != want:
-                # If both got and want are specified, then they have to match.
-                raise ValueError(f"unexpected '{field}': got {got}, want {want}")
+    def check_head_response(self, res: Head) -> None:
+        _check_head_fields(self, res, "accept_ranges", "content_length", "crc32c", "date")
+
+    def check_get_response(self, res: Head) -> None:
+        _check_head_fields(self, res, "content_length", "document_length", "crc32c", "date")
+
+
+def _check_head_fields(want: Head, got: Head, *fields: str) -> None:
+    for field in fields or dataclasses.fields(want):
+        if isinstance(field, dataclasses.Field):
+            field = field.name
+        assert isinstance(field, str)
+        w = getattr(want, field)
+        g = getattr(got, field)
+        if _all_specified(w, g) and w != g:
+            # If both g and w are specified, then they have to match.
+            raise InvalidHeadError(f"unexpected '{field}': got {g}, want {w}")
 
 
 def _all_specified(*objs: Any) -> bool:
@@ -108,6 +117,7 @@ class Adapter(ABC):
         :param want: it allows to specify optional parameters:
             - range: portion of the file to transfer (it must be empty or a continuous range).
             - content_length: the number of bytes to transfer.
+            - document_length: the number of bytes of the original file (in case range is specified).
             - crc32c the CRC32C checksum of the file.
             - date: the date the file has been modified.
         :raises ServiceUnavailableError: in case on temporary service failure.

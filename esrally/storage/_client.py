@@ -32,6 +32,7 @@ from esrally import types
 from esrally.storage._adapter import (
     AdapterRegistry,
     Head,
+    InvalidHeadError,
     ServiceUnavailableError,
     Writable,
 )
@@ -157,9 +158,10 @@ class Client:
         """It looks up mirror list for given URL and yield mirror heads.
         :param url: the remote file URL at its mirrored source location.
         :param want: extra parameters to mach remote heads.
-            - document_length: if not none it will filter out mirrors which file has an unexpected document lengths.
-            - crc32c: if not none it will filter out mirrors which file has an unexpected crc32c checksum.
             - accept_ranges: if True it will filter out mirrors that are not supporting ranges.
+            - content_length: if not none it will filter out mirrors which file has an unexpected document lengths.
+            - crc32c: if not none it will filter out mirrors which file has an unexpected crc32c checksum.
+            - date: if not none it will filter out mirrors which file has an unexpected date.
         :param ttl: the time to live value (in seconds) to use for cached heads retrieval.
         :return: iterator over mirror URLs
         """
@@ -187,7 +189,7 @@ class Client:
             try:
                 got = self.head(u, ttl=ttl)
                 if want is not None:
-                    want.check(got)
+                    want.check_head_response(got)
             except CachedHeadError:
                 # The error was previously cached, therefore it has been already logged.
                 pass
@@ -227,13 +229,13 @@ class Client:
                 continue
             try:
                 return adapter.get(got.url, stream, want=want)
+            except InvalidHeadError as ex:
+                LOG.warning("Invalid head from remote url '%s': %s", url, ex)
             except ServiceUnavailableError as ex:
-                LOG.warning("service unavailable error received: url='%s' %s", url, ex)
-                with self._lock:
-                    # It corrects the maximum number of connections for this server.
-                    connections.max_count = max(1, connections.count)
+                LOG.warning("Service unavailable error received: url='%s' %s", url, ex)
             finally:
                 connections.done()
+
         raise ServiceUnavailableError(f"no connections available for getting URL '{url}'")
 
     def _server_connections(self, url: str) -> WaitGroup:

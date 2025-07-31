@@ -24,11 +24,14 @@ import threading
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from datetime import datetime
+from email.utils import format_datetime
 from typing import BinaryIO
 
 from esrally.storage._adapter import Head, ServiceUnavailableError
 from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._executor import Executor
+from esrally.storage._http import parse_date_from_headers
 from esrally.storage._range import (
     MAX_LENGTH,
     NO_RANGE,
@@ -85,6 +88,7 @@ class Transfer:
         multipart_size: int | None = None,
         max_connections: int = MAX_CONNECTIONS,
         resume: bool = True,
+        date: datetime | None = None,
         crc32c: str | None = None,
     ):
         """
@@ -131,6 +135,7 @@ class Transfer:
         self._errors: list[Exception] = []
         self._lock = threading.Lock()
         self._resumed_size = 0
+        self._date = date
         self._crc32c = crc32c
         if resume and os.path.isfile(self.path + ".status"):
             try:
@@ -143,22 +148,6 @@ class Transfer:
     @property
     def document_length(self) -> int | None:
         return self._document_length
-
-    @document_length.setter
-    def document_length(self, value: int) -> None:
-        """It sets the document length.
-
-        It allows to set the documents length only when it is None.
-        """
-        if self._document_length == value:
-            return
-        if self._document_length is not None:
-            raise RuntimeError(f"mismatching document length: got {value}, want {self._document_length}")
-        with self._lock:
-            self._document_length = value
-            # It ensures to finish requesting file parts as soon it reaches the expected document length.
-            self._todo = self._todo & Range(0, value)
-            self._done = self._done & Range(0, value)
 
     @property
     def max_connections(self) -> int:
@@ -219,16 +208,26 @@ class Transfer:
         if url != self.url:
             raise ValueError(f"mismatching url in status file: '{status_filename}', got '{url}', want '{self.url}'")
 
-        # It checks the document length to ensure the file was the same version.
-        document_length = document.get("document_length")
-        if document_length is None:
-            raise ValueError(f"document_length field not found in status file: {status_filename}")
-        self.document_length = document_length
+        if self._document_length is not None:
+            # It checks the document length to ensure the file was the same version.
+            document_length = document.get("document_length")
+            if document_length is not None and document_length != self.document_length:
+                raise ValueError(
+                    f"mismatching document length in status file: '{status_filename}', got '{document_length}', want "
+                    f"'{self._document_length}'"
+                )
 
-        # It checks the crc32c checksum to ensure the file was the same version.
-        crc32c = document.get("crc32c", None)
-        if crc32c is not None:
-            self.crc32c = crc32c
+        if self._date is not None:
+            # It checks the date to ensure resuming the same file version.
+            date = parse_date_from_headers(document.get("date", ""))
+            if date is not None and date != self.date:
+                raise ValueError(f"mismatching date in status file: '{status_filename}', got '{date}', want '{self._date}'")
+
+        if self._crc32c is not None:
+            # It checks the crc32c checksum to ensure resuming the same file version.
+            crc32c = document.get("crc32c", None)
+            if crc32c is not None and crc32c != self._crc32c:
+                raise ValueError(f"mismatching crc32c in status file: '{status_filename}', got '{crc32c}', want '{self._crc32c}'")
 
         # It skips the parts that has been already downloaded.
         done_text = document.get("done")
@@ -242,7 +241,8 @@ class Transfer:
 
             self._done = self.done | done
             self._todo = self._todo - done
-        # Update the resumed size so that it will compute download speed only on the new parts.
+
+        # It updates the resumed size so that it will compute download speed only on the new parts.
         self._resumed_size = done.size
         if not self._todo:
             # There is nothing more to do.
@@ -250,10 +250,12 @@ class Transfer:
 
     def save_status(self):
         """It updates the status file."""
+        date = format_datetime(self.date) if self.date is not None else None
         document = {
             "url": self.url,
-            "document_length": self.document_length,
             "done": str(self.done),
+            "document_length": self.document_length,
+            "date": date,
             "crc32c": self.crc32c,
         }
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
@@ -283,16 +285,16 @@ class Transfer:
                 assert isinstance(fd, FileWriter)
                 # It downloads the part of the file from a remote location.
                 if fd.ranges:
-                    want = Head(ranges=fd.ranges, content_length=fd.ranges.size, document_length=self._document_length, crc32c=self._crc32c)
+                    want = Head(
+                        ranges=fd.ranges,
+                        content_length=fd.ranges.size,
+                        document_length=self._document_length,
+                        crc32c=self._crc32c,
+                        date=self._date,
+                    )
                 else:
-                    want = Head(content_length=self._document_length, crc32c=self._crc32c)
-                got = self.client.get(self.url, fd, want=want)
-                if got.document_length is not None:
-                    # It checks the size of the file it downloaded the data from.
-                    self.document_length = got.document_length
-                if got.crc32c is not None:
-                    # It checks the crc32c check sum of the file it downloaded the data from.
-                    self.crc32c = got.crc32c
+                    want = Head(content_length=self._document_length, crc32c=self._crc32c, date=self._date)
+                self.client.get(self.url, fd, want=want)
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
             cancelled = True
@@ -494,19 +496,12 @@ class Transfer:
         return bool(self._finished)
 
     @property
+    def date(self) -> datetime | None:
+        return self._date
+
+    @property
     def crc32c(self) -> str | None:
         return self._crc32c
-
-    @crc32c.setter
-    def crc32c(self, value: str) -> None:
-        if not value:
-            raise ValueError("crc32c value can't be empty")
-        with self._lock:
-            if value == self._crc32c:
-                return
-            if self._crc32c is not None:
-                raise ValueError(f"mismatching crc32c checksum: got: {value!r}, want: {self._crc32c}")
-            self._crc32c = value
 
 
 class StreamClosedError(Exception):

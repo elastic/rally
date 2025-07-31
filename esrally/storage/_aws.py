@@ -79,7 +79,7 @@ class S3Adapter(Adapter):
         res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
         got = head_from_response(url, res)
         if want is not None:
-            want.check(got)
+            want.check_get_response(got)
         body: StreamingBody | None = res.get("Body")
         if body is None:
             raise RuntimeError("S3 client returned no body.")
@@ -148,12 +148,14 @@ _CONTENT_LENGTH_HEADER = "ContentLength"
 _CONTENT_RANGE_HEADER = "ContentRange"
 _CRC32C_HEADER = "Crc32c"
 _RANGE_HEADER = "Range"
+_DATE_HEADER = "LastModified"
 
 
 def head_from_response(url: str, response: Mapping[str, Any]) -> Head:
     accept_ranges = parse_accept_ranges(response.get(_ACCEPT_RANGES_HEADER, ""))
     content_length = response.get(_CONTENT_LENGTH_HEADER)
     ranges, document_length = parse_content_range(response.get(_CONTENT_RANGE_HEADER, ""))
+    date = response.get(_DATE_HEADER, "")
     crc32 = parse_hashes_from_headers(response).get(_CRC32C_HEADER)
     return Head(
         url=url,
@@ -161,6 +163,7 @@ def head_from_response(url: str, response: Mapping[str, Any]) -> Head:
         content_length=content_length,
         ranges=ranges,
         document_length=document_length,
+        date=date,
         crc32c=crc32,
     )
 

@@ -20,6 +20,7 @@ import json
 import logging
 from collections.abc import Mapping, MutableMapping
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import requests
@@ -101,7 +102,7 @@ class HTTPAdapter(Adapter):
 
             got = head_from_headers(url, res.headers)
             if want is not None:
-                want.check(got)
+                want.check_get_response(got)
 
             for chunk in res.iter_content(self.chunk_size):
                 if chunk:
@@ -112,12 +113,14 @@ class HTTPAdapter(Adapter):
 _ACCEPT_RANGES_HEADER = "Accept-Ranges"
 _CONTENT_RANGE_HEADER = "Content-Range"
 _CONTENT_LENGTH_HEADER = "Content-Length"
+_DATE_HEADER = "Date"
 
 
 def head_from_headers(url: str, headers: Mapping[str, Any]) -> Head:
     accept_ranges = parse_accept_ranges(headers.get(_ACCEPT_RANGES_HEADER, ""))
     content_length = parse_content_length(headers.get(_CONTENT_LENGTH_HEADER, ""))
     ranges, document_length = parse_content_range(headers.get(_CONTENT_RANGE_HEADER, ""))
+    date = parse_date_from_headers(headers.get(_DATE_HEADER, ""))
     crc32c = parse_hashes_from_headers(headers).get("crc32c")
     return Head(
         url=url,
@@ -125,19 +128,14 @@ def head_from_headers(url: str, headers: Mapping[str, Any]) -> Head:
         accept_ranges=accept_ranges,
         ranges=ranges,
         document_length=document_length,
+        date=date,
         crc32c=crc32c,
     )
 
 
 def head_to_headers(head: Head | None, headers: MutableMapping[str, str]) -> None:
     if head is not None:
-        date_to_headers(head.date, headers)
         ranges_to_headers(head.ranges, headers)
-
-
-def date_to_headers(date: datetime | None, headers: MutableMapping[str, str]) -> None:
-    if date is not None:
-        raise NotImplementedError("date is not implemented yet")
 
 
 _RANGE_HEADER = "Range"
@@ -167,6 +165,13 @@ def parse_content_length(text: str) -> int | None:
         return int(text)
     except (ValueError, TypeError):
         raise ValueError(f"invalid content length value: {text}") from None
+
+
+def parse_date_from_headers(text: str) -> datetime | None:
+    text = text.strip()
+    if not text:
+        return None
+    return parsedate_to_datetime(text)
 
 
 _CONTENT_RANGE_PREFIX = "bytes "

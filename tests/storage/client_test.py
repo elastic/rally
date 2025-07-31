@@ -28,7 +28,7 @@ from unittest.mock import create_autospec
 import pytest
 
 from esrally.config import Config, Scope
-from esrally.storage._adapter import Head, Writable
+from esrally.storage._adapter import Head, InvalidHeadError, Writable
 from esrally.storage._client import MAX_CONNECTIONS, CachedHeadError, Client
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 from esrally.storage.testing import DummyAdapter
@@ -234,8 +234,8 @@ def check_any(head: Head, any_head: list[Head]) -> list[Head]:
     ret: list[Head] = []
     for h in any_head:
         try:
-            h.check(head)
-        except ValueError:
+            h.check_get_response(head)
+        except InvalidHeadError:
             continue
         ret.append(h)
     return ret

@@ -27,6 +27,7 @@ from esrally import types
 from esrally.storage._client import MAX_CONNECTIONS, Client
 from esrally.storage._executor import MAX_WORKERS, Executor, ThreadPoolExecutor
 from esrally.storage._transfer import MULTIPART_SIZE, Transfer
+from esrally.utils.convert import to_bool
 from esrally.utils.threads import ContinuousTimer
 
 LOG = logging.getLogger(__name__)
@@ -47,6 +48,11 @@ class TransferManager:
         max_connections = cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False)
         max_workers = cfg.opts(section="storage", key="storage.max_workers", default_value=MAX_WORKERS, mandatory=False)
         multipart_size = cfg.opts(section="storage", key="storage.multipart_size", default_value=MULTIPART_SIZE, mandatory=False)
+        check_document_length = to_bool(
+            cfg.opts(section="storage", key="storage.check_document_length", default_value=True, mandatory=False)
+        )
+        check_date = to_bool(cfg.opts(section="storage", key="storage.check_date", default_value=False, mandatory=False))
+        check_crc32c = to_bool(cfg.opts(section="storage", key="storage.check_crc32c", default_value=False, mandatory=False))
         if client is None:
             client = Client.from_config(cfg)
         if executor is None:
@@ -59,6 +65,9 @@ class TransferManager:
             multipart_size=multipart_size,
             max_connections=int(max_connections),
             max_workers=int(max_workers),
+            check_document_length=check_document_length,
+            check_date=check_date,
+            check_crc32c=check_crc32c,
         )
 
     def __init__(
@@ -70,6 +79,9 @@ class TransferManager:
         max_connections: int = MAX_CONNECTIONS,
         max_workers: int = MAX_WORKERS,
         multipart_size: int = MULTIPART_SIZE,
+        check_date: bool = False,
+        check_document_length: bool = True,
+        check_crc32c: bool = True,
     ):
         """It manages files transfers.
 
@@ -80,6 +92,7 @@ class TransferManager:
         :param client: _client.Client instance used to allocate/reuse storage adapters.
         :param multipart_size: length of every part when working with multipart.
         :param max_workers: max number of connections per remote server when working with multipart.
+        :param check_date: it checks file modification date of remote server when working with multipart.
         """
         self._client = client
         self._executor = executor
@@ -109,6 +122,9 @@ class TransferManager:
 
         self._monitor_timer = ContinuousTimer(interval=monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
         self._monitor_timer.start()
+        self._check_document_length = check_document_length
+        self._check_date = check_date
+        self._check_crc32c = check_crc32c
 
     def shutdown(self):
         with self._lock:
@@ -126,14 +142,7 @@ class TransferManager:
         :param document_length: the expected file size in bytes.
         :return: started transfer object.
         """
-        return self._transfer(url=url, path=path, document_length=document_length)
 
-    def _transfer(
-        self,
-        url: str,
-        path: os.PathLike | str | None = None,
-        document_length: int | None = None,
-    ) -> Transfer:
         if path is None:
             path = os.path.join(self._local_dir, url)
         # This also ensures the path is a string
@@ -142,14 +151,16 @@ class TransferManager:
         head = self._client.head(url)
         if document_length is not None and head.content_length != document_length:
             raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
+
         tr = Transfer(
             client=self._client,
             url=url,
             path=path,
-            document_length=head.content_length,
             executor=self._executor,
             multipart_size=self._multipart_size,
-            crc32c=head.crc32c,
+            document_length=head.content_length if self._check_document_length else None,
+            date=head.date if self._check_date else None,
+            crc32c=head.crc32c if self._check_crc32c else None,
         )
 
         # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
