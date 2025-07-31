@@ -55,14 +55,15 @@ class Head:
     content_length: int | None = None
     ranges: RangeSet = NO_RANGE
     document_length: int | None = None
-    crc32c: str | None = None
     date: datetime | None = None
+    crc32c: str | None = None
+    md5: str | None = None
 
     def check_head_response(self, res: Head) -> None:
-        _check_head_fields(self, res, "accept_ranges", "content_length", "crc32c", "date")
+        _check_head_fields(self, res, "accept_ranges", "content_length", "date", "crc32c", "md5")
 
     def check_get_response(self, res: Head) -> None:
-        _check_head_fields(self, res, "content_length", "document_length", "crc32c", "date")
+        _check_head_fields(self, res, "content_length", "document_length", "date", "crc32c", "md5")
 
 
 def _check_head_fields(want: Head, got: Head, *fields: str) -> None:

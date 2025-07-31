@@ -53,6 +53,7 @@ class TransferManager:
         )
         check_date = to_bool(cfg.opts(section="storage", key="storage.check_date", default_value=False, mandatory=False))
         check_crc32c = to_bool(cfg.opts(section="storage", key="storage.check_crc32c", default_value=False, mandatory=False))
+        check_md5 = to_bool(cfg.opts(section="storage", key="storage.check_md5", default_value=False, mandatory=False))
         if client is None:
             client = Client.from_config(cfg)
         if executor is None:
@@ -68,6 +69,7 @@ class TransferManager:
             check_document_length=check_document_length,
             check_date=check_date,
             check_crc32c=check_crc32c,
+            check_md5=check_md5,
         )
 
     def __init__(
@@ -82,6 +84,7 @@ class TransferManager:
         check_date: bool = False,
         check_document_length: bool = True,
         check_crc32c: bool = True,
+        check_md5: bool = True,
     ):
         """It manages files transfers.
 
@@ -125,6 +128,7 @@ class TransferManager:
         self._check_document_length = check_document_length
         self._check_date = check_date
         self._check_crc32c = check_crc32c
+        self._check_md5 = check_md5
 
     def shutdown(self):
         with self._lock:
@@ -161,6 +165,7 @@ class TransferManager:
             document_length=head.content_length if self._check_document_length else None,
             date=head.date if self._check_date else None,
             crc32c=head.crc32c if self._check_crc32c else None,
+            md5=head.md5 if self._check_md5 else None,
         )
 
         # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before

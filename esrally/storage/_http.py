@@ -121,7 +121,9 @@ def head_from_headers(url: str, headers: Mapping[str, Any]) -> Head:
     content_length = parse_content_length(headers.get(_CONTENT_LENGTH_HEADER, ""))
     ranges, document_length = parse_content_range(headers.get(_CONTENT_RANGE_HEADER, ""))
     date = parse_date_from_headers(headers.get(_DATE_HEADER, ""))
-    crc32c = parse_hashes_from_headers(headers).get("crc32c")
+    hashes = parse_hashes_from_headers(headers)
+    crc32c = hashes.get("crc32c")
+    md5 = hashes.get("md5")
     return Head(
         url=url,
         content_length=content_length,
@@ -130,6 +132,7 @@ def head_from_headers(url: str, headers: Mapping[str, Any]) -> Head:
         document_length=document_length,
         date=date,
         crc32c=crc32c,
+        md5=md5,
     )
 
 

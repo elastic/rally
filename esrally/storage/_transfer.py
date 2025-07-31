@@ -90,6 +90,7 @@ class Transfer:
         resume: bool = True,
         date: datetime | None = None,
         crc32c: str | None = None,
+        md5: str | None = None,
     ):
         """
         :param client: The client to use to download file parts from a remote service.
@@ -137,6 +138,7 @@ class Transfer:
         self._resumed_size = 0
         self._date = date
         self._crc32c = crc32c
+        self._md5 = md5
         if resume and os.path.isfile(self.path + ".status"):
             try:
                 self._resume_status()
@@ -229,6 +231,12 @@ class Transfer:
             if crc32c is not None and crc32c != self._crc32c:
                 raise ValueError(f"mismatching crc32c in status file: '{status_filename}', got '{crc32c}', want '{self._crc32c}'")
 
+        if self._md5 is not None:
+            # It checks the crc32c checksum to ensure resuming the same file version.
+            md5 = document.get("md5", None)
+            if md5 is not None and md5 != self._crc32c:
+                raise ValueError(f"mismatching md5 in status file: '{status_filename}', got '{md5}', want '{self._md5}'")
+
         # It skips the parts that has been already downloaded.
         done_text = document.get("done")
         if done_text is None:
@@ -250,13 +258,13 @@ class Transfer:
 
     def save_status(self):
         """It updates the status file."""
-        date = format_datetime(self.date) if self.date is not None else None
         document = {
             "url": self.url,
             "done": str(self.done),
             "document_length": self.document_length,
-            "date": date,
-            "crc32c": self.crc32c,
+            "date": format_datetime(self._date) if self._date is not None else None,
+            "crc32c": self._crc32c,
+            "md5": self._md5,
         }
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
         with open(self.path + ".status", "w") as fd:
@@ -289,11 +297,12 @@ class Transfer:
                         ranges=fd.ranges,
                         content_length=fd.ranges.size,
                         document_length=self._document_length,
-                        crc32c=self._crc32c,
                         date=self._date,
+                        crc32c=self._crc32c,
+                        md5=self._md5,
                     )
                 else:
-                    want = Head(content_length=self._document_length, crc32c=self._crc32c, date=self._date)
+                    want = Head(content_length=self._document_length, date=self._date, crc32c=self._crc32c, md5=self._md5)
                 self.client.get(self.url, fd, want=want)
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
@@ -502,6 +511,10 @@ class Transfer:
     @property
     def crc32c(self) -> str | None:
         return self._crc32c
+
+    @property
+    def md5(self) -> str | None:
+        return self._md5
 
 
 class StreamClosedError(Exception):

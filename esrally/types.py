@@ -155,6 +155,7 @@ Key = Literal[
     "storage.check_crc32c",
     "storage.check_date",
     "storage.check_document_length",
+    "storage.check_md5",
     "storage.http.chunk_size",
     "storage.http.max_retries",
     "storage.local_dir",
