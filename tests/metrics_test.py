@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import datetime
+import importlib
 import json
 import logging
 import os
@@ -179,6 +180,7 @@ class TestEsClient:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
         elif password_configuration == "environment":
             monkeypatch.setenv("RALLY_REPORTING_DATASTORE_PASSWORD", _datastore_password)
+            importlib.reload(metrics)  # reload to pick up the set environment variable
 
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
@@ -231,6 +233,7 @@ class TestEsClient:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.api_key", _datastore_apikey)
         elif apikey_configuration == "environment":
             monkeypatch.setenv("RALLY_REPORTING_DATASTORE_API_KEY", _datastore_apikey)
+            importlib.reload(metrics)  # reload to pick up the set environment variable
 
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")

@@ -222,25 +222,27 @@ class EsClient:
                 raise exceptions.RallyError(msg)
 
 
+DATASTORE_API_KEY: str = os.environ.get("RALLY_REPORTING_DATASTORE_API_KEY", "")
+DATASTORE_USER: str = os.environ.get("RALLY_REPORTING_DATASTORE_USER", "")
+DATASTORE_PASSWORD: str = os.environ.get("RALLY_REPORTING_DATASTORE_PASSWORD", "")
+
+
 class EsClientFactory:
     """
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
 
     def __init__(self, cfg: types.Config):
-        DATASTORE_API_KEY: str = os.environ.get("RALLY_REPORTING_DATASTORE_API_KEY", "")
-        DATASTORE_PASSWORD: str = os.environ.get("RALLY_REPORTING_DATASTORE_PASSWORD", "")
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
         hosts = [{"host": host, "port": port}]
         secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
-
-        user = self._config.opts("reporting", "datastore.user", mandatory=False)
+        user: str = DATASTORE_USER or self._config.opts("reporting", "datastore.user", default_value="", mandatory=False)
+        api_key: str = DATASTORE_API_KEY or self._config.opts("reporting", "datastore.api_key", default_value="", mandatory=False)
+        password: str = DATASTORE_PASSWORD or self._config.opts("reporting", "datastore.password", default_value="", mandatory=False)
         distribution_version = None
         distribution_flavor = None
-        api_key: str = DATASTORE_API_KEY or self._config.opts("reporting", "datastore.api_key", mandatory=False)
-        password: str = DATASTORE_PASSWORD or self._config.opts("reporting", "datastore.password", mandatory=False)
 
         # Resolve the authentication method.
         if user:
