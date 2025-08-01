@@ -16,72 +16,168 @@
 # under the License.
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
-from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Set
+from typing import Any
 
 from typing_extensions import Self
 
 from esrally.types import Config
 
-MIRRORS_FILES = ""
+
+@dataclasses.dataclass
+class MirrorEntry:
+    source: str
+    destination: str
+    labels: Set[tuple[str, Any]]
+
+
+@dataclasses.dataclass
+class MirrorFileEntry:
+    sources: Set[str]
+    destinations: Set[str]
+    labels: Set[tuple[str, Any]]
 
 
 class MirrorList:
 
     @classmethod
     def from_config(cls, cfg: Config) -> Self:
-        mirror_files = []
-        for filename in cfg.opts(section="storage", key="storage.mirrors_files", default_value=MIRRORS_FILES, mandatory=False).split(","):
-            filename = filename.strip()
-            if filename:
-                mirror_files.append(filename)
-        return cls(mirror_files=mirror_files)
+        files: list[str] = [
+            os.path.expanduser(f)
+            for f in (
+                os.environ.get("ESRALLY_MIRROR_FILES")
+                or cfg.opts(section="storage", key="storage.mirror_files", default_value="", mandatory=False)
+            ).split(",")
+        ]
+        labels: set[tuple[str, str]] = _extract_key_value_set(
+            json.loads(
+                os.environ.get("ESRALLY_MIRROR_LABELS")
+                or cfg.opts(section="storage", key="storage.mirror_labels", default_value="[]", mandatory=False)
+            )
+        )
+        return cls(files=files, labels=labels)
 
     def __init__(
         self,
-        urls: Mapping[str, Iterable[str]] | None = None,
-        mirror_files: Iterable[str] = tuple(),
+        mirrors: Iterable[MirrorEntry] | None = None,
+        files: Iterable[str] | None = None,
+        labels: Iterable[tuple[str, Any]] | None = None,
     ):
-        self._urls: dict[str, set] = defaultdict(set)
-        self._mirror_files = tuple(mirror_files or [])
-        for path in self._mirror_files:
-            self._update(_load_file(path))
-        if urls is not None:
-            self._update(urls)
+        self.labels = frozenset(labels or [])
+        self.mirrors: dict[tuple[str, str], MirrorEntry] = {}
+        if mirrors is not None:
+            self._update(mirrors)
+        if files is not None:
+            for path in files:
+                if os.path.isfile(path):
+                    self._update(load_mirror_file(path))
 
-    def _update(self, urls: Mapping[str, Iterable[str]]) -> None:
-        for src, dsts in urls.items():
-            self._urls[_normalize_base_url(src)].update(_normalize_base_url(dst) for dst in dsts)
+    def _update(self, mirrors: Iterable[MirrorFileEntry | MirrorEntry]) -> None:
+        todo = list(mirrors)
+        while todo:
+            m = todo.pop()
+            if isinstance(m, MirrorFileEntry):
+                if self.labels and len(self.labels - m.labels):
+                    continue
+                sources = {_normalize_base_url(s) for s in m.sources}
+                destinations = {_normalize_base_url(s) for s in m.destinations}
+                for s in sources:
+                    for d in destinations:
+                        todo.append(MirrorEntry(s, d, m.labels))
+                continue
 
-    def resolve(self, url: str) -> list[str]:
-        # There couldn't be URLs duplication in resulting output because there can't be repeated entries.
-        for base_url, mirror_urls in self._urls.items():
-            if url.startswith(base_url):
-                ret = set()
-                path = _normalize_path(url[len(base_url) :])
-                for u in mirror_urls:
-                    ret.add(u + path)
-                return list(ret)
-        raise ValueError(f"No mirror url found for URL '{url}'")
+            if isinstance(m, MirrorEntry):
+                if self.labels and len(self.labels - m.labels):
+                    continue
+                source = _normalize_base_url(m.source)
+                destination = _normalize_base_url(m.destination)
+                key = (source, destination)
+                entry = self.mirrors.get(key)
+                if entry is None:
+                    self.mirrors[key] = MirrorEntry(source, destination, frozenset(m.labels))
+                else:
+                    entry.labels = frozenset(entry.labels | m.labels)
+                continue
+
+            raise TypeError(f"Unsupported entry type {type(m)}")
+
+    def resolve(self, url: str, labels: Iterable[tuple[str, str]] = tuple()) -> Iterator[MirrorEntry]:
+        _labels = frozenset(labels or [])
+        # There can't be URLs duplications in resulting output because there can't be repeated (source, destination) pairs.
+        for m in self.mirrors.values():
+            if not url.startswith(m.source):
+                continue
+
+            if _labels and _labels - m.labels:
+                continue
+
+            path = _normalize_path(url[len(m.source) :])
+            yield MirrorEntry(url, m.destination + path, m.labels)
 
 
-def _load_file(path: str) -> Mapping[str, Iterable[str]]:
-    ret: dict[str, set[str]] = defaultdict(set)
-    with open(os.path.expanduser(path)) as file:
+def load_mirror_file(path: str) -> Iterator[MirrorFileEntry]:
+    with open(path) as file:
         document = json.load(file)
-    for mirror in document.get("mirrors", []):
-        if not isinstance(mirror, Mapping):
-            raise ValueError(f"invalid mirrors value: got {document.get('mirrors')}, want list of objects")
-        sources = mirror.get("sources", None)
-        if not isinstance(sources, list) or not sources:
-            raise ValueError(f"invalid source value: got {sources}, want non empty list of urls")
-        destinations = mirror.get("destinations", None)
-        if not isinstance(destinations, list) or not destinations:
-            raise ValueError(f"invalid destinations value: got {destinations}, want non empty list of urls")
-        for s in sources:
-            ret[s].update(destinations)
+    try:
+        return _extract_mirrors(document)
+    except ValueError as ex:
+        raise ValueError(f"invalid mirrors file {path}: {ex}")
+
+
+def _extract_mirrors(document: Any) -> Iterator[MirrorFileEntry]:
+    if not isinstance(document, dict):
+        raise ValueError(f"expected a dict but got {type(document)}")
+    try:
+        mirrors = _extract_object_list(document.get("mirrors", []))
+    except ValueError as ex:
+        raise ValueError(f"invalid 'mirrors' value: {ex}")
+
+    for mirror in mirrors:
+        try:
+            sources = _extract_string_set(mirror.get("sources", []))
+        except ValueError as ex:
+            raise ValueError(f"invalid 'sources' value: {ex}")
+        if not sources:
+            raise ValueError("'sources' list is empty")
+
+        try:
+            destinations = _extract_string_set(mirror.get("destinations", []))
+        except ValueError as ex:
+            raise ValueError(f"invalid 'destinations' value: {ex}")
+        if not destinations:
+            raise ValueError("'destinations' list is empty")
+
+        try:
+            labels = _extract_key_value_set(mirror.get("labels", []))
+        except ValueError as ex:
+            raise ValueError(f"invalid 'labels' value: {ex}")
+
+        yield MirrorFileEntry(sources, destinations, labels)
+
+
+def _extract_object_list(objects: Any) -> list[dict[str, Any]]:
+    if isinstance(objects, dict):
+        objects = [objects]
+    if not isinstance(objects, list) or not all(isinstance(o, dict) and all(isinstance(k, str) for k in o) for o in objects):
+        raise ValueError(f"expected dict or list of dicts with string keys, got {objects}")
+    return objects
+
+
+def _extract_string_set(values: list[str]) -> set[str]:
+    if not isinstance(values, list) or not values or not all(isinstance(s, str) for s in values):
+        raise ValueError(f"expected list of strings, got {values}")
+    return set(values)
+
+
+def _extract_key_value_set(objects: Any) -> set[tuple[str, Any]]:
+    objects = _extract_object_list(objects)
+    ret: set[tuple[str, Any]] = set()
+    for o in objects:
+        for k, v in o.items():
+            ret.add((k, v))
     return ret
 
 

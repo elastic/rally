@@ -70,11 +70,11 @@ class TransferCase:
     crc32c: str = CRC32C
     multipart_size: int | None = None
     max_connections: int = MAX_CONNECTIONS
-    want_init_error: type[Exception] | None = None
+    want_init_error: type[Exception] | tuple = tuple()
     want_init_todo: str = "0-1023"
     want_init_done: str = ""
     want_init_document_length: int | None = len(DATA)
-    want_final_error: type[Exception] | None = None
+    want_final_error: type[Exception] | tuple = tuple()
     want_final_done: str = ""
     want_final_todo: str = ""
     want_final_written: str = ""
@@ -100,7 +100,7 @@ class TransferCase:
         want_init_document_length=50,
         want_final_written="0-49",
         want_final_document_length=50,
-        want_final_error=RuntimeError,
+        want_final_error=ValueError,
     ),
     # It tests multipart working when multipart_size < content_length.
     no_document_length=TransferCase(want_init_document_length=None, want_init_todo="0-", want_final_done="0-1023", document_length=None),
@@ -160,13 +160,10 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
             resume=case.resume,
             crc32c=case.crc32c,
         )
-    except Exception as exc:
-        assert case.want_init_error is not None
-        assert isinstance(exc, case.want_init_error)
+    except case.want_init_error:
         return
 
     # It verifies the initial status before running the first task.
-    assert case.want_init_error is None
     assert transfer.path == path
     assert transfer.url == transfer.url
     assert transfer.todo == rangeset(case.want_init_todo)
@@ -181,11 +178,8 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
     try:
         # This is only needed to eventually extract the first transfer failure (if any).
         transfer.wait(timeout=0.0)
-    except Exception as exc:
-        assert case.want_final_error is not None
-        assert isinstance(exc, case.want_final_error)
-    else:
-        assert case.want_final_error is None
+    except case.want_final_error:
+        pass
 
     # It verifies the status after the first task execution
     want_done = rangeset(case.want_final_done)

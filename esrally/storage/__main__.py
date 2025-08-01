@@ -13,7 +13,7 @@ GET_FILES = [
 def main():
     logging.basicConfig(level=logging.INFO)
     cfg = config.Config()
-    cfg.add(config.Scope.application, "storage", "storage.mirrors_files", MIRRORS_FILES)
+    cfg.add(config.Scope.application, "storage", "storage.mirror_files", MIRRORS_FILES)
     manager = esrally.storage.TransferManager.from_config(cfg)
     trs = []
     for url in GET_FILES:

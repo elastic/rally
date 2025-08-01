@@ -173,13 +173,14 @@ Configuration options are:
       {
         "mirrors": [
           {
-            "sources": [
-              "https://rally-tracks.elastic.co/"
-            ],
-            "destinations": [
-              "https://rally-tracks-eu-central-1.s3.eu-central-1.amazonaws.com/",
-              "https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/"
-            ]
+            "sources": ["https://rally-tracks.elastic.co/"]
+            "destinations": ["https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/"],
+            "labels": {"provider": "aws", "region": "us-west"}
+          }
+          {
+            "sources": ["https://rally-tracks.elastic.co/"]
+            "destinations": ["https://rally-tracks-eu-west-1.s3.eu-west-1.amazonaws.com/"],
+            "labels": {"provider": "aws", "region": "eu-west"}
           }
         ]
       }
@@ -250,18 +251,16 @@ Example of ``rally.ini`` configuration::
 Example of ``~/.rally/storage-mirrors.json`` file::
 
     {
-        "mirrors": [
-            {
-                "sources": [
-                    "https://rally-tracks.elastic.co/"
-                ],
-                "destinations": [
-                    "s3://rally-tracks-eu-central-1/",
-                    "s3://rally-tracks-us-west-1/"
-                ]
-              }
-            ]
-          }
+      "mirrors": [
+        {
+          "sources": ["https://rally-tracks.elastic.co/"]
+          "destinations": [
+            "https://rally-tracks-us-west-1.s3.us-west-1.amazonaws.com/",
+            "s3://rally-tracks-us-west-1/"
+          ],
+          "labels": {"provider": "aws", "region": "us-west"}
+        }
+      ]
     }
 
 Configuration options:

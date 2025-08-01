@@ -210,10 +210,14 @@ class Transfer:
         if url != self.url:
             raise ValueError(f"mismatching url in status file: '{status_filename}', got '{url}', want '{self.url}'")
 
-        if self._document_length is not None:
-            # It checks the document length to ensure the file was the same version.
-            document_length = document.get("document_length")
-            if document_length is not None and document_length != self.document_length:
+        # It checks the document length to ensure the file was the same version.
+        document_length = document.get("document_length")
+        if document_length is not None:
+            if self._document_length is None:
+                self._document_length = document_length
+                self._todo &= Range(0, document_length)
+                self._done &= Range(0, document_length)
+            elif document_length != self._document_length:
                 raise ValueError(
                     f"mismatching document length in status file: '{status_filename}', got '{document_length}', want "
                     f"'{self._document_length}'"
@@ -239,19 +243,20 @@ class Transfer:
 
         # It skips the parts that has been already downloaded.
         done_text = document.get("done")
-        if done_text is None:
-            raise ValueError(f"done field not found in status file: {status_filename}")
-        done = rangeset(done_text)
-        if done:
-            file_size = os.path.getsize(self.path)
-            if done.end > file_size:
-                raise ValueError(f"corrupted file size is smaller than completed part: {done.end} > {file_size} (path='{self.path}')")
+        if done_text is not None:
+            done = rangeset(done_text)
+            if self._document_length is not None:
+                done &= Range(0, self._document_length)
+            if done:
+                file_size = os.path.getsize(self.path)
+                if done.end > file_size:
+                    raise ValueError(f"corrupted file size is smaller than completed part: {done.end} > {file_size} (path='{self.path}')")
 
-            self._done = self.done | done
-            self._todo = self._todo - done
+                self._done |= done
+                self._todo -= done
+            # It updates the resumed size so that it will compute download speed only on the new parts.
+            self._resumed_size = done.size
 
-        # It updates the resumed size so that it will compute download speed only on the new parts.
-        self._resumed_size = done.size
         if not self._todo:
             # There is nothing more to do.
             self._finished.set()
@@ -303,7 +308,19 @@ class Transfer:
                     )
                 else:
                     want = Head(content_length=self._document_length, date=self._date, crc32c=self._crc32c, md5=self._md5)
-                self.client.get(self.url, fd, want=want)
+                got = self.client.get(self.url, fd, want=want)
+                if got.ranges:
+                    document_length = got.document_length
+                else:
+                    document_length = got.document_length or got.content_length
+                if document_length is not None:
+                    with self._lock:
+                        if self._document_length is None:
+                            self._document_length = document_length
+                            self._todo &= Range(0, document_length)
+                            self._done &= Range(0, document_length)
+                        elif self._document_length != document_length:
+                            raise ValueError(f"mismatching document length: {document_length} != {self._document_length}")
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
             cancelled = True

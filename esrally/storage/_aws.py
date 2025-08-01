@@ -155,7 +155,7 @@ def head_from_response(url: str, response: Mapping[str, Any]) -> Head:
     accept_ranges = parse_accept_ranges(response.get(_ACCEPT_RANGES_HEADER, ""))
     content_length = response.get(_CONTENT_LENGTH_HEADER)
     ranges, document_length = parse_content_range(response.get(_CONTENT_RANGE_HEADER, ""))
-    date = response.get(_DATE_HEADER, "")
+    date = response.get(_DATE_HEADER)
     crc32 = parse_hashes_from_headers(response).get(_CRC32C_HEADER)
     return Head(
         url=url,

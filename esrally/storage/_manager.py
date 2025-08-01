@@ -48,9 +48,6 @@ class TransferManager:
         max_connections = cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False)
         max_workers = cfg.opts(section="storage", key="storage.max_workers", default_value=MAX_WORKERS, mandatory=False)
         multipart_size = cfg.opts(section="storage", key="storage.multipart_size", default_value=MULTIPART_SIZE, mandatory=False)
-        check_document_length = to_bool(
-            cfg.opts(section="storage", key="storage.check_document_length", default_value=True, mandatory=False)
-        )
         check_date = to_bool(cfg.opts(section="storage", key="storage.check_date", default_value=False, mandatory=False))
         check_crc32c = to_bool(cfg.opts(section="storage", key="storage.check_crc32c", default_value=False, mandatory=False))
         check_md5 = to_bool(cfg.opts(section="storage", key="storage.check_md5", default_value=False, mandatory=False))
@@ -66,7 +63,6 @@ class TransferManager:
             multipart_size=multipart_size,
             max_connections=int(max_connections),
             max_workers=int(max_workers),
-            check_document_length=check_document_length,
             check_date=check_date,
             check_crc32c=check_crc32c,
             check_md5=check_md5,
@@ -82,7 +78,6 @@ class TransferManager:
         max_workers: int = MAX_WORKERS,
         multipart_size: int = MULTIPART_SIZE,
         check_date: bool = False,
-        check_document_length: bool = True,
         check_crc32c: bool = True,
         check_md5: bool = True,
     ):
@@ -125,7 +120,6 @@ class TransferManager:
 
         self._monitor_timer = ContinuousTimer(interval=monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
         self._monitor_timer.start()
-        self._check_document_length = check_document_length
         self._check_date = check_date
         self._check_crc32c = check_crc32c
         self._check_md5 = check_md5
@@ -162,7 +156,7 @@ class TransferManager:
             path=path,
             executor=self._executor,
             multipart_size=self._multipart_size,
-            document_length=head.content_length if self._check_document_length else None,
+            document_length=head.content_length,
             date=head.date if self._check_date else None,
             crc32c=head.crc32c if self._check_crc32c else None,
             md5=head.md5 if self._check_md5 else None,

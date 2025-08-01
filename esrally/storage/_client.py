@@ -42,7 +42,6 @@ from esrally.utils.threads import WaitGroup, WaitGroupLimitError
 
 LOG = logging.getLogger(__name__)
 
-MIRRORS_FILES = "~/.rally/storage-mirrors.json"
 MAX_CONNECTIONS = 4
 RANDOM = Random(time.monotonic_ns())
 
@@ -166,8 +165,9 @@ class Client:
         :return: iterator over mirror URLs
         """
 
+        mirrors = list(self._mirrors.resolve(url))
         try:
-            urls = self._mirrors.resolve(url)
+            urls = [m.destination for m in mirrors]
         except ValueError:
             urls = [url]
         else:

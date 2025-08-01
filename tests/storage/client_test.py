@@ -96,7 +96,7 @@ def mirror_files(tmpdir: PathLike) -> Iterator[str]:
 @pytest.fixture
 def cfg(mirror_files: str) -> Config:
     cfg = Config()
-    cfg.add(Scope.application, "storage", "storage.mirrors_files", mirror_files)
+    cfg.add(Scope.application, "storage", "storage.mirror_files", mirror_files)
     cfg.add(Scope.application, "storage", "storage.random_seed", 42)
     cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
     return cfg
