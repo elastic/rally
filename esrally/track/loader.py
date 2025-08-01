@@ -520,7 +520,7 @@ class Downloader:
         offline: bool = convert.to_bool(cfg.opts("system", "offline.mode", mandatory=False, default_value=False))
         test_mode: bool = convert.to_bool(cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False))
         use_transfer_manager: bool = convert.to_bool(
-            cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=True)
+            cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=False)
         )
         if use_transfer_manager:
             init_transfer_manager(cfg)  # TODO: It should call this at a higher level.
