@@ -232,7 +232,7 @@ class EsClientFactory:
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
 
-    def __init__(self, cfg: types.Config):
+    def __init__(self, cfg: types.Config, client_factory=client.EsClientFactory):
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
@@ -282,7 +282,7 @@ class EsClientFactory:
             )
             self._cluster_version = distribution_version
 
-        factory = client.EsClientFactory(
+        factory = client_factory(
             hosts=hosts,
             client_options=client_options,
             distribution_version=distribution_version,

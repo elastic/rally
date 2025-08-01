@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import datetime
-import importlib
 import json
 import logging
 import os
@@ -33,7 +32,7 @@ import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
 
-from esrally import config, exceptions, metrics, paths, track
+from esrally import client, config, exceptions, metrics, paths, track
 from esrally.metrics import GlobalStatsCalculator
 from esrally.track import Challenge, Operation, Task, Track
 from esrally.utils import cases, opts, pretty
@@ -158,8 +157,7 @@ class TestEsClient:
             self.transport = TestEsClient.TransportMock(hosts)
 
     @pytest.mark.parametrize("password_configuration", [None, "config", "environment"])
-    @mock.patch("esrally.client.EsClientFactory")
-    def test_config_opts_parsing_basic(self, client_esclientfactory, password_configuration, monkeypatch):
+    def test_config_opts_parsing_basic(self, password_configuration, monkeypatch):
         cfg = config.Config()
 
         _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
@@ -179,14 +177,14 @@ class TestEsClient:
         if password_configuration == "config":
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
         elif password_configuration == "environment":
-            monkeypatch.setenv("RALLY_REPORTING_DATASTORE_PASSWORD", _datastore_password)
-            importlib.reload(metrics)  # reload to pick up the set environment variable
+            monkeypatch.setattr(metrics, "DATASTORE_PASSWORD", _datastore_password)
 
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
 
+        client_factory = mock.create_autospec(client.EsClientFactory)
         try:
-            metrics.EsClientFactory(cfg)
+            metrics.EsClientFactory(cfg, client_factory=client_factory)
         except exceptions.ConfigError as e:
             if password_configuration is not None:
                 raise
@@ -205,7 +203,7 @@ class TestEsClient:
             "verify_certs": _datastore_verify_certs,
         }
 
-        client_esclientfactory.assert_called_with(
+        client_factory.assert_called_with(
             hosts=[{"host": _datastore_host, "port": _datastore_port}],
             client_options=expected_client_options,
             distribution_version=None,
@@ -213,8 +211,7 @@ class TestEsClient:
         )
 
     @pytest.mark.parametrize("apikey_configuration", ["config", "environment"])
-    @mock.patch("esrally.client.EsClientFactory")
-    def test_config_opts_parsing_apikey(self, client_esclientfactory, apikey_configuration, monkeypatch):
+    def test_config_opts_parsing_apikey(self, apikey_configuration, monkeypatch):
         cfg = config.Config()
 
         _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
@@ -232,14 +229,14 @@ class TestEsClient:
         if apikey_configuration == "config":
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.api_key", _datastore_apikey)
         elif apikey_configuration == "environment":
-            monkeypatch.setenv("RALLY_REPORTING_DATASTORE_API_KEY", _datastore_apikey)
-            importlib.reload(metrics)  # reload to pick up the set environment variable
+            monkeypatch.setattr(metrics, "DATASTORE_API_KEY", _datastore_apikey)
 
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
 
+        client_factory = mock.create_autospec(client.EsClientFactory)
         try:
-            metrics.EsClientFactory(cfg)
+            metrics.EsClientFactory(cfg, client_factory=client_factory)
         except exceptions.ConfigError as e:
             if apikey_configuration is not None:
                 raise
@@ -256,15 +253,14 @@ class TestEsClient:
             "api_key": _datastore_apikey,
         }
 
-        client_esclientfactory.assert_called_with(
+        client_factory.assert_called_with(
             hosts=[{"host": _datastore_host, "port": _datastore_port}],
             client_options=expected_client_options,
             distribution_version=None,
             distribution_flavor=None,
         )
 
-    @mock.patch("esrally.client.EsClientFactory")
-    def test_config_opts_parsing_both_password_apikey(self, client_esclientfactory, monkeypatch):
+    def test_config_opts_parsing_both_password_apikey(self, monkeypatch):
         cfg = config.Config()
 
         _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
@@ -289,8 +285,9 @@ class TestEsClient:
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
 
+        client_factory = mock.create_autospec(client.EsClientFactory)
         try:
-            metrics.EsClientFactory(cfg)
+            metrics.EsClientFactory(cfg, client_factory=client_factory)
         except exceptions.ConfigError as e:
             assert (
                 e.message
@@ -305,7 +302,7 @@ class TestEsClient:
             "api_key": _datastore_apikey,
         }
 
-        client_esclientfactory.assert_called_with(
+        client_factory.assert_called_with(
             hosts=[{"host": _datastore_host, "port": _datastore_port}],
             client_options=expected_client_options,
             distribution_version=None,
