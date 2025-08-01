@@ -222,35 +222,46 @@ class EsClient:
                 raise exceptions.RallyError(msg)
 
 
+DATASTORE_API_KEY: str = os.environ.get("RALLY_REPORTING_DATASTORE_API_KEY", "")
+DATASTORE_USER: str = os.environ.get("RALLY_REPORTING_DATASTORE_USER", "")
+DATASTORE_PASSWORD: str = os.environ.get("RALLY_REPORTING_DATASTORE_PASSWORD", "")
+
+
 class EsClientFactory:
     """
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
 
-    def __init__(self, cfg: types.Config):
+    def __init__(self, cfg: types.Config, client_factory=client.EsClientFactory):
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
         hosts = [{"host": host, "port": port}]
         secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
-        user = self._config.opts("reporting", "datastore.user")
+        user: str = DATASTORE_USER or self._config.opts("reporting", "datastore.user", default_value="", mandatory=False)
+        api_key: str = DATASTORE_API_KEY or self._config.opts("reporting", "datastore.api_key", default_value="", mandatory=False)
+        password: str = DATASTORE_PASSWORD or self._config.opts("reporting", "datastore.password", default_value="", mandatory=False)
         distribution_version = None
         distribution_flavor = None
-        try:
-            password = os.environ["RALLY_REPORTING_DATASTORE_PASSWORD"]
-        except KeyError:
-            try:
-                password = self._config.opts("reporting", "datastore.password")
-            except exceptions.ConfigError:
+
+        # Resolve the authentication method.
+        if user:
+            if api_key:
                 raise exceptions.ConfigError(
-                    "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
-                ) from None
+                    "Both basic authentication (username/password) and API key are provided. Please provide only one authentication method."
+                )
+            if not password:
+                raise exceptions.ConfigError(
+                    "No password configured through [reporting] configuration or "
+                    "RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+                )
 
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
         self.probe_version = self._config.opts("reporting", "datastore.probe.cluster_version", default_value=True, mandatory=False)
 
         # Instead of duplicating code, we're just adapting the metrics store specific properties to match the regular client options.
+
         client_options = {
             "use_ssl": secure,
             "verify_certs": verify,
@@ -258,9 +269,11 @@ class EsClientFactory:
         }
         if ca_path:
             client_options["ca_certs"] = ca_path
-        if user and password:
+        if user:
             client_options["basic_auth_user"] = user
             client_options["basic_auth_password"] = password
+        elif api_key:
+            client_options["api_key"] = api_key
 
         # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
         if self.probe_version:
@@ -269,7 +282,7 @@ class EsClientFactory:
             )
             self._cluster_version = distribution_version
 
-        factory = client.EsClientFactory(
+        factory = client_factory(
             hosts=hosts,
             client_options=client_options,
             distribution_version=distribution_version,
