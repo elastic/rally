@@ -47,10 +47,10 @@ class DummyAdapter(Adapter):
         except KeyError:
             raise FileNotFoundError from None
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
         ranges: RangeSet = NO_RANGE
-        if head is not None:
-            ranges = head.ranges
+        if want is not None:
+            ranges = want.ranges
             if len(ranges) > 1:
                 raise NotImplementedError("len(head.ranges) > 1")
         data = self.data[url]

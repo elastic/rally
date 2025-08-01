@@ -170,6 +170,7 @@ Key = Literal[
     "team.repository.dir",
     "test.mode.enabled",
     "time.start",
+    "track.downloader.multipart_enabled",
     "track.name",
     "track.path",
     "track.repository.dir",

@@ -282,15 +282,17 @@ class Transfer:
                     self.start()
                 assert isinstance(fd, FileWriter)
                 # It downloads the part of the file from a remote location.
-                head = self.client.get(
-                    self.url, fd, head=Head(ranges=fd.ranges, document_length=self._document_length, crc32c=self._crc32c)
-                )
-                if head.document_length is not None:
+                if fd.ranges:
+                    want = Head(ranges=fd.ranges, content_length=fd.ranges.size, document_length=self._document_length, crc32c=self._crc32c)
+                else:
+                    want = Head(content_length=self._document_length, crc32c=self._crc32c)
+                got = self.client.get(self.url, fd, want=want)
+                if got.document_length is not None:
                     # It checks the size of the file it downloaded the data from.
-                    self.document_length = head.document_length
-                if head.crc32c is not None:
+                    self.document_length = got.document_length
+                if got.crc32c is not None:
                     # It checks the crc32c check sum of the file it downloaded the data from.
-                    self.crc32c = head.crc32c
+                    self.crc32c = got.crc32c
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
             cancelled = True
