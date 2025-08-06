@@ -279,7 +279,7 @@ def load_track_plugins(
     repo = track_repo(cfg, fetch=force_update, update=force_update)
     track_plugin_path = repo.track_dir(track_name)
     logging.getLogger(__name__).debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
-    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
+    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor, cfg)
 
     if plugin_reader.can_load():
         plugin_reader.load()
@@ -1222,11 +1222,12 @@ class TrackPluginReader:
     Loads track plugins
     """
 
-    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None):
+    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None, config=None):
         self.runner_registry = runner_registry
         self.scheduler_registry = scheduler_registry
         self.track_processor_registry = track_processor_registry
         self.loader = modules.ComponentLoader(root_path=track_plugin_path, component_entry_point="track")
+        self.config = config
 
     def can_load(self):
         return self.loader.can_load()
