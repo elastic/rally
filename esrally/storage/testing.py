@@ -17,9 +17,12 @@
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+
+from typing_extensions import Self
 
 from esrally.storage._adapter import Adapter, Head, Writable
+from esrally.storage._config import AnyConfig
 from esrally.storage._executor import Executor
 from esrally.storage._range import NO_RANGE, RangeSet
 
@@ -27,19 +30,23 @@ from esrally.storage._range import NO_RANGE, RangeSet
 class DummyAdapter(Adapter):
 
     HEADS: Iterable[Head] = tuple()
-    DATA: dict[str, bytes] = {}
+    DATA: Mapping[str, bytes] = {}
 
     @classmethod
     def match_url(cls, url: str) -> bool:
         return True
 
-    def __init__(self, heads: Iterable[Head] | None = None, data: dict[str, bytes] | None = None) -> None:
+    @classmethod
+    def from_config(cls, cfg: AnyConfig = None) -> Self:
+        return cls()
+
+    def __init__(self, heads: Iterable[Head] | None = None, data: Mapping[str, bytes] | None = None) -> None:
         if heads is None:
             heads = self.HEADS
         if data is None:
             data = self.DATA
-        self.heads: dict[str, Head] = {h.url: h for h in heads if h.url is not None}
-        self.data: dict[str, bytes] = copy.deepcopy(data)
+        self.heads: Mapping[str, Head] = {h.url: h for h in heads if h.url is not None}
+        self.data: Mapping[str, bytes] = copy.deepcopy(data)
 
     def head(self, url: str) -> Head:
         try:

@@ -18,22 +18,21 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Any
 from unittest import mock
 
 import pytest
 from typing_extensions import Self
 
-import esrally.config
+from esrally import config, types
 from esrally.storage._adapter import Adapter, AdapterRegistry
-from esrally.types import Config
+from esrally.storage._config import AnyConfig
 from esrally.utils.cases import cases
 
 
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
+    def from_config(cls, cfg: AnyConfig) -> Self:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 
@@ -66,10 +65,10 @@ class ExampleAdapterWithPath(MockAdapter, ABC):
 
 
 @pytest.fixture()
-def cfg() -> Config:
-    cfg = esrally.config.Config()
+def cfg() -> types.Config:
+    cfg = config.Config()
     cfg.add(
-        esrally.config.Scope.application,
+        config.Scope.application,
         "storage",
         "storage.adapters",
         f"{__name__}:ExampleAdapterWithPath,{__name__}:ExampleAdapter,{__name__}:HTTPSAdapter,{__name__}:HTTPAdapter",
@@ -79,7 +78,7 @@ def cfg() -> Config:
 
 # Initialize default registry
 @pytest.fixture()
-def registry(cfg: Config) -> AdapterRegistry:
+def registry(cfg: types.Config) -> AdapterRegistry:
     return AdapterRegistry.from_config(cfg)
 
 

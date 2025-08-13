@@ -29,7 +29,8 @@ import pytest
 
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
-from esrally.storage._client import MAX_CONNECTIONS, CachedHeadError, Client
+from esrally.storage._client import CachedHeadError, Client
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 from esrally.storage.testing import DummyAdapter
 from esrally.types import Key
@@ -80,7 +81,7 @@ MIRRORS = {
 
 class StorageAdapter(DummyAdapter):
     HEADS = HEADS
-    DATA: dict[str, bytes] = defaultdict(lambda: SOME_BODY)
+    DATA: tuple[str, bytes] = defaultdict(lambda: SOME_BODY)
 
 
 @pytest.fixture(scope="function")
@@ -96,7 +97,7 @@ def mirror_files(tmpdir: PathLike) -> Iterator[str]:
 @pytest.fixture
 def cfg(mirror_files: str) -> Config:
     cfg = Config()
-    cfg.add(Scope.application, "storage", "storage.mirrors_files", mirror_files)
+    cfg.add(Scope.application, "storage", "storage.mirror_files", mirror_files)
     cfg.add(Scope.application, "storage", "storage.random_seed", 42)
     cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
     return cfg
@@ -110,7 +111,7 @@ def client(cfg: Config) -> Client:
 @dataclass()
 class FromConfigCase:
     opts: dict[Key, str]
-    want_max_connections: int = MAX_CONNECTIONS
+    want_max_connections: int = DEFAULT_STORAGE_CONFIG.max_connections
     want_random: random.Random | None = None
 
 

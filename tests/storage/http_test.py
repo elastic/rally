@@ -27,13 +27,8 @@ from requests.structures import CaseInsensitiveDict
 
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
-from esrally.storage._http import (
-    CHUNK_SIZE,
-    MAX_RETRIES,
-    HTTPAdapter,
-    head_from_headers,
-    ranges_to_headers,
-)
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG
+from esrally.storage._http import HTTPAdapter, head_from_headers, ranges_to_headers
 from esrally.storage._range import rangeset
 from esrally.types import Key
 from esrally.utils.cases import cases
@@ -188,8 +183,8 @@ def test_head_from_headers(case: HeadFromHeadersCase):
 @dataclass()
 class FromConfigCase:
     opts: dict[Key, str]
-    want_chunk_size: int = CHUNK_SIZE
-    want_max_retries: int = MAX_RETRIES
+    want_chunk_size: int = DEFAULT_STORAGE_CONFIG.chunk_size
+    want_max_retries: int = DEFAULT_STORAGE_CONFIG.max_retries
     want_backoff_factor: int = 0
 
 

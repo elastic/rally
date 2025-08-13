@@ -29,33 +29,20 @@ from requests.structures import CaseInsensitiveDict
 from typing_extensions import Self
 
 from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, AnyConfig, StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
-from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
-
-
-# Size of the buffers used for file transfer content.
-CHUNK_SIZE = 1 * 1024 * 1024
-
-# It limits the maximum number of connection retries.
-MAX_RETRIES = 10
 
 
 class Session(requests.Session):
 
     @classmethod
-    def from_config(cls, cfg: Config) -> Self:
-        max_retries: urllib3.Retry | int | None = 0
-        max_retries_text = cfg.opts("storage", "storage.http.max_retries", MAX_RETRIES, mandatory=False)
-        if max_retries_text:
-            try:
-                max_retries = int(max_retries_text)
-            except ValueError:
-                max_retries = urllib3.Retry(**json.loads(max_retries_text))
-        return cls(max_retries=max_retries)
+    def from_config(cls, cfg: AnyConfig = None) -> Self:
+        cfg = StorageConfig.from_config(cfg)
+        return cls(max_retries=parse_max_retries(cfg.max_retries))
 
-    def __init__(self, max_retries: urllib3.Retry | int | None = 0) -> None:
+    def __init__(self, max_retries: urllib3.Retry | int | None = None) -> None:
         super().__init__()
         if max_retries:
             adapter = requests.adapters.HTTPAdapter(max_retries=max_retries)
@@ -71,14 +58,12 @@ class HTTPAdapter(Adapter):
         return url.startswith("http://") or url.startswith("https://")
 
     @classmethod
-    def from_config(cls, cfg: Config, session: requests.Session | None = None, chunk_size: int | None = None, **kwargs: Any) -> Self:
-        if session is None:
-            session = Session.from_config(cfg)
-        if chunk_size is None:
-            chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
-        return super().from_config(cfg, session=session, chunk_size=chunk_size, **kwargs)
+    def from_config(cls, cfg: AnyConfig = None) -> Self:
+        cfg = StorageConfig.from_config(cfg)
+        session = Session.from_config(cfg)
+        return cls(session=session, chunk_size=cfg.chunk_size)
 
-    def __init__(self, session: requests.Session | None = None, chunk_size: int = CHUNK_SIZE):
+    def __init__(self, session: requests.Session | None = None, chunk_size: int = DEFAULT_STORAGE_CONFIG.chunk_size):
         if session is None:
             session = requests.Session()
         self.chunk_size = chunk_size
@@ -228,3 +213,19 @@ def parse_hashes_from_headers(headers: Mapping[str, Any]) -> dict[str, str]:
                 continue
             hashes[name] = value
     return hashes
+
+
+def parse_max_retries(max_retries: str | int | urllib3.Retry) -> urllib3.Retry | int:
+    if isinstance(max_retries, str):
+        max_retries = max_retries.strip()
+        if not max_retries:
+            max_retries = DEFAULT_STORAGE_CONFIG.max_retries
+        try:
+            max_retries = int(max_retries)
+        except ValueError:
+            assert isinstance(max_retries, str)
+            max_retries = urllib3.Retry(**json.loads(max_retries))
+    if isinstance(max_retries, int):
+        if max_retries <= 0:
+            raise ValueError("max_retries must be a positive integer")
+    return max_retries

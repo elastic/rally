@@ -14,8 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-from typing import Any, Literal, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
 
 Section = Literal[
     "benchmarks",
@@ -159,7 +160,7 @@ Key = Literal[
     "storage.local_dir",
     "storage.max_connections",
     "storage.max_workers",
-    "storage.mirrors_files",
+    "storage.mirror_files",
     "storage.monitor_interval",
     "storage.multipart_size",
     "storage.random_seed",
@@ -179,7 +180,11 @@ Key = Literal[
 _Config = TypeVar("_Config", bound="Config")
 
 
+@runtime_checkable
 class Config(Protocol):
+
+    name: str | None = None
+
     def add(self, scope, section: Section, key: Key, value: Any) -> None: ...
 
     def add_all(self, source: _Config, section: Section) -> None: ...

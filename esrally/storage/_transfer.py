@@ -27,7 +27,8 @@ from contextlib import contextmanager
 from typing import BinaryIO
 
 from esrally.storage._adapter import Head, ServiceUnavailableError
-from esrally.storage._client import MAX_CONNECTIONS, Client
+from esrally.storage._client import Client
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG
 from esrally.storage._executor import Executor
 from esrally.storage._range import (
     MAX_LENGTH,
@@ -83,7 +84,7 @@ class Transfer:
         todo: RangeSet = NO_RANGE,
         done: RangeSet = NO_RANGE,
         multipart_size: int | None = None,
-        max_connections: int = MAX_CONNECTIONS,
+        max_connections: int = DEFAULT_STORAGE_CONFIG.max_connections,
         resume: bool = True,
         crc32c: str | None = None,
     ):

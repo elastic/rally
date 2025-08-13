@@ -25,20 +25,21 @@ from unittest.mock import patch
 import pytest
 
 from esrally import config, types
+from esrally.storage import _manager
 from esrally.storage._adapter import Head
 from esrally.storage._manager import (
     TransferManager,
     init_transfer_manager,
-    quit_transfer_manager,
+    shutdown_transfer_manager,
     transfer_manager,
 )
 from esrally.storage.testing import DummyAdapter, DummyExecutor
 from esrally.utils.cases import cases
 
 
-@pytest.fixture
-def cfg(tmpdir: os.PathLike) -> types.Config:
-    cfg = config.Config()
+@pytest.fixture(scope="function", params=[None, "some-name"])
+def cfg(request, tmpdir: os.PathLike) -> types.Config:
+    cfg = config.Config(config_name=request.param)
     cfg.add(
         config.Scope.application,
         "storage",
@@ -49,9 +50,10 @@ def cfg(tmpdir: os.PathLike) -> types.Config:
     return cfg
 
 
-@pytest.fixture
-def executor() -> Iterator[DummyExecutor]:
+@pytest.fixture(scope="function")
+def dummy_executor(monkeypatch: pytest.MonkeyPatch) -> Iterator[DummyExecutor]:
     executor = DummyExecutor()
+    monkeypatch.setattr(_manager, "executor_from_config", lambda cfg: executor)
     try:
         yield executor
     finally:
@@ -59,8 +61,8 @@ def executor() -> Iterator[DummyExecutor]:
 
 
 @pytest.fixture
-def manager(cfg: types.Config, executor: DummyExecutor) -> Iterator[TransferManager]:
-    manager = TransferManager.from_config(cfg, executor=executor)
+def manager(cfg: types.Config, dummy_executor: DummyExecutor) -> Iterator[TransferManager]:
+    manager = TransferManager.from_config(cfg)
     try:
         yield manager
     finally:
@@ -95,7 +97,7 @@ class GetCase:
     document_length=GetCase(url=SIMPLE_URL, want_data=SIMPLE_DATA, document_length=len(SIMPLE_DATA)),
     mismach_document_length=GetCase(url=SIMPLE_URL, want_error=(ValueError,), document_length=len(SIMPLE_DATA) - 1),
 )
-def test_get(case: GetCase, manager: TransferManager, executor: DummyExecutor, tmpdir: os.PathLike) -> None:
+def test_get(case: GetCase, manager: TransferManager, dummy_executor: DummyExecutor, tmpdir: os.PathLike) -> None:
     kwargs: dict[str, Any] = {}
     if case.path is not None:
         kwargs["path"] = os.path.join(tmpdir, case.path)
@@ -115,7 +117,7 @@ def test_get(case: GetCase, manager: TransferManager, executor: DummyExecutor, t
     if case.path is not None:
         assert os.path.join(tmpdir, case.path) == tr.path
 
-    executor.execute_tasks()
+    dummy_executor.execute_tasks()
     got = tr.wait(timeout=0.0)
     assert got
 
@@ -128,29 +130,32 @@ def test_get(case: GetCase, manager: TransferManager, executor: DummyExecutor, t
         assert os.path.getsize(tr.path) == case.document_length
 
 
-@patch("esrally.storage._manager._MANAGER", None)
-def test_global_transfer_manager(cfg: types.Config, tmpdir: os.PathLike) -> None:
-    with pytest.raises(RuntimeError) as excinfo:
-        assert transfer_manager() is None
-    assert str(excinfo.value) == "Transfer manager not initialized."
+@pytest.fixture(scope="function")
+def managers() -> Iterator[dict[str | None, TransferManager]]:
+    with patch("esrally.storage._manager._MANAGERS", {}) as managers:
+        yield managers
 
-    init_transfer_manager(cfg)
-    got = transfer_manager()
+
+def test_global_transfer_manager(cfg: types.Config, tmpdir: os.PathLike, managers: dict[str | None, TransferManager]) -> None:
+    assert cfg.name not in managers
+
+    assert init_transfer_manager(cfg)
+    assert cfg.name in managers
+
+    got = transfer_manager(cfg.name)
     assert isinstance(got, TransferManager)
+    assert got is managers[cfg.name]
 
     tr = got.get(url=SIMPLE_URL, document_length=len(SIMPLE_DATA))
     assert tr.wait(timeout=60.0)
     assert os.path.exists(tr.path)
 
-    init_transfer_manager(cfg)
-    assert got is transfer_manager()
+    assert not init_transfer_manager(cfg)
+    assert got is transfer_manager(cfg.name)
+    assert got is managers[cfg.name]
 
-    quit_transfer_manager()
-    with pytest.raises(RuntimeError) as excinfo:
-        assert transfer_manager() is None
-    assert str(excinfo.value) == "Transfer manager not initialized."
+    assert shutdown_transfer_manager(cfg.name)
+    assert managers.get(cfg.name) is None
 
-    quit_transfer_manager()
-    with pytest.raises(RuntimeError) as excinfo:
-        assert transfer_manager() is None
-    assert str(excinfo.value) == "Transfer manager not initialized."
+    assert not shutdown_transfer_manager(cfg.name)
+    assert managers.get(cfg.name) is None

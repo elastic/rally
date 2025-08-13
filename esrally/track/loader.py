@@ -35,7 +35,7 @@ import tabulate
 from jinja2 import meta
 
 from esrally import PROGRAM_NAME, config, exceptions, paths, time, types, version
-from esrally.storage import init_transfer_manager, transfer_manager
+from esrally.storage import StorageConfig, init_transfer_manager
 from esrally.track import params, track
 from esrally.track.track import Parallel
 from esrally.utils import (
@@ -522,14 +522,15 @@ class Downloader:
         use_transfer_manager: bool = convert.to_bool(
             cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=False)
         )
+        storage_config: StorageConfig | None = None
         if use_transfer_manager:
-            init_transfer_manager(cfg)  # TODO: It should call this at a higher level.
-        return cls(offline=offline, test_mode=test_mode, use_transfer_manager=use_transfer_manager)
+            storage_config = StorageConfig.from_config(cfg)
+        return cls(offline=offline, test_mode=test_mode, storage_config=storage_config)
 
-    def __init__(self, offline: bool, test_mode: bool, use_transfer_manager: bool = False):
+    def __init__(self, offline: bool, test_mode: bool, storage_config: StorageConfig | None = None):
         self.offline = offline
         self.test_mode = test_mode
-        self.use_transfer_manager = use_transfer_manager
+        self.storage_config = storage_config
 
     def download(self, base_url: str, target_path: str, size_in_bytes: int | None = None) -> None:
         file_name = os.path.basename(target_path)
@@ -540,11 +541,11 @@ class Downloader:
 
         # It joins manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
         data_url = f"{base_url.rstrip('/')}/{file_name}"
-        if self.use_transfer_manager:
+        if self.storage_config is not None:
+            manager = init_transfer_manager(self.storage_config.config_name)
             LOG.info("Downloading data from [%s] to [%s] using transfer manager...", data_url, target_path)
             try:
-                tr = transfer_manager().get(data_url, target_path, size_in_bytes)
-                tr.wait()
+                manager.get(data_url, target_path, size_in_bytes).wait()
                 LOG.info("Downloaded data from [%s] to [%s] using transfer manager.", data_url, target_path)
                 return
             except FileNotFoundError as ex:

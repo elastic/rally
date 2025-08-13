@@ -28,22 +28,18 @@ from typing import NamedTuple
 
 from typing_extensions import Self
 
-from esrally import types
 from esrally.storage._adapter import (
     AdapterRegistry,
     Head,
     ServiceUnavailableError,
     Writable,
 )
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, AnyConfig, StorageConfig
 from esrally.storage._mirror import MirrorList
 from esrally.utils import pretty
 from esrally.utils.threads import WaitGroup, WaitGroupLimitError
 
 LOG = logging.getLogger(__name__)
-
-MIRRORS_FILES = "~/.rally/storage-mirrors.json"
-MAX_CONNECTIONS = 4
-RANDOM = Random(time.monotonic_ns())
 
 
 class CachedHeadError(Exception):
@@ -84,28 +80,19 @@ class Client:
     """It handles client instances allocation allowing reusing pre-allocated instances from the same thread."""
 
     @classmethod
-    def from_config(
-        cls, cfg: types.Config, adapters: AdapterRegistry | None = None, mirrors: MirrorList | None = None, random: Random | None = None
-    ) -> Self:
-        if adapters is None:
-            adapters = AdapterRegistry.from_config(cfg)
-        if mirrors is None:
-            mirrors = MirrorList.from_config(cfg)
-        if random is None:
-            random_seed = cfg.opts(section="storage", key="storage.random_seed", default_value=None, mandatory=False)
-            if random_seed is None:
-                random = RANDOM
-            else:
-                random = Random(random_seed)
-        max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
-        return cls(adapters=adapters, mirrors=mirrors, random=random, max_connections=max_connections)
+    def from_config(cls, cfg: AnyConfig = None) -> Self:
+        cfg = StorageConfig.from_config(cfg)
+        adapters = AdapterRegistry.from_config(cfg)
+        mirrors = MirrorList.from_config(cfg)
+        random = Random(cfg.random_seed)
+        return cls(adapters=adapters, mirrors=mirrors, random=random, max_connections=cfg.max_connections)
 
     def __init__(
         self,
         adapters: AdapterRegistry,
         mirrors: MirrorList,
         random: Random,
-        max_connections: int = MAX_CONNECTIONS,
+        max_connections: int = DEFAULT_STORAGE_CONFIG.max_connections,
     ):
         self._adapters: AdapterRegistry = adapters
         self._cached_heads: dict[str, CachedHead] = {}
