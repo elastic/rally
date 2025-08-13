@@ -65,6 +65,7 @@ Key = Literal[
     "cluster.name",
     "config.version",
     "data_streams",
+    "datastore.api_key",
     "datastore.host",
     "datastore.number_of_replicas",
     "datastore.number_of_shards",

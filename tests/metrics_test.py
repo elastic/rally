@@ -22,7 +22,6 @@ import json
 import logging
 import os
 import random
-import string
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -33,7 +32,7 @@ import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
 
-from esrally import config, exceptions, metrics, paths, track
+from esrally import client, config, exceptions, metrics, paths, track
 from esrally.metrics import GlobalStatsCalculator
 from esrally.track import Challenge, Operation, Task, Track
 from esrally.utils import cases, opts, pretty
@@ -158,15 +157,14 @@ class TestEsClient:
             self.transport = TestEsClient.TransportMock(hosts)
 
     @pytest.mark.parametrize("password_configuration", [None, "config", "environment"])
-    @mock.patch("esrally.client.EsClientFactory")
-    def test_config_opts_parsing(self, client_esclientfactory, password_configuration, monkeypatch):
+    def test_config_opts_parsing_basic(self, password_configuration, monkeypatch):
         cfg = config.Config()
 
-        _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
-        _datastore_port = random.randint(1024, 65535)
-        _datastore_secure = random.choice(["True", "true"])
-        _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
-        _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
+        _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
+        _datastore_port = 443
+        _datastore_secure = True
+        _datastore_user = "metricsuser"
+        _datastore_password = "metricspassword"
         _datastore_verify_certs = random.choice([True, False])
         _datastore_probe_version = False
 
@@ -179,13 +177,14 @@ class TestEsClient:
         if password_configuration == "config":
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
         elif password_configuration == "environment":
-            monkeypatch.setenv("RALLY_REPORTING_DATASTORE_PASSWORD", _datastore_password)
+            monkeypatch.setattr(metrics, "DATASTORE_PASSWORD", _datastore_password)
 
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
 
+        client_factory = mock.create_autospec(client.EsClientFactory)
         try:
-            metrics.EsClientFactory(cfg)
+            metrics.EsClientFactory(cfg, client_factory=client_factory)
         except exceptions.ConfigError as e:
             if password_configuration is not None:
                 raise
@@ -204,7 +203,106 @@ class TestEsClient:
             "verify_certs": _datastore_verify_certs,
         }
 
-        client_esclientfactory.assert_called_with(
+        client_factory.assert_called_with(
+            hosts=[{"host": _datastore_host, "port": _datastore_port}],
+            client_options=expected_client_options,
+            distribution_version=None,
+            distribution_flavor=None,
+        )
+
+    @pytest.mark.parametrize("apikey_configuration", ["config", "environment"])
+    def test_config_opts_parsing_apikey(self, apikey_configuration, monkeypatch):
+        cfg = config.Config()
+
+        _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
+        _datastore_port = 443
+        _datastore_secure = True
+        _datastore_apikey = "METRICSAPIKEYTEST=="
+        _datastore_verify_certs = False
+        _datastore_probe_version = False
+
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.probe.cluster_version", _datastore_probe_version)
+
+        if apikey_configuration == "config":
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.api_key", _datastore_apikey)
+        elif apikey_configuration == "environment":
+            monkeypatch.setattr(metrics, "DATASTORE_API_KEY", _datastore_apikey)
+
+        if not _datastore_verify_certs:
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
+
+        client_factory = mock.create_autospec(client.EsClientFactory)
+        try:
+            metrics.EsClientFactory(cfg, client_factory=client_factory)
+        except exceptions.ConfigError as e:
+            if apikey_configuration is not None:
+                raise
+
+            assert (
+                e.message == "Either basic authentication (username and password) or an API key is required in the reporting configuration."
+            )
+            return
+
+        expected_client_options = {
+            "use_ssl": True,
+            "timeout": 120,
+            "verify_certs": _datastore_verify_certs,
+            "api_key": _datastore_apikey,
+        }
+
+        client_factory.assert_called_with(
+            hosts=[{"host": _datastore_host, "port": _datastore_port}],
+            client_options=expected_client_options,
+            distribution_version=None,
+            distribution_flavor=None,
+        )
+
+    def test_config_opts_parsing_both_password_apikey(self, monkeypatch):
+        cfg = config.Config()
+
+        _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
+        _datastore_port = 443
+        _datastore_secure = True
+        _datastore_user = "metricsuser"
+        _datastore_password = "metricspassword"
+        _datastore_apikey = "METRICSAPIKEYTEST=="
+        _datastore_verify_certs = False
+        _datastore_probe_version = False
+        _datastore_verify_certs = False
+        _datastore_probe_version = False
+
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", _datastore_user)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.probe.cluster_version", _datastore_probe_version)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.api_key", _datastore_apikey)
+
+        if not _datastore_verify_certs:
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
+
+        client_factory = mock.create_autospec(client.EsClientFactory)
+        try:
+            metrics.EsClientFactory(cfg, client_factory=client_factory)
+        except exceptions.ConfigError as e:
+            assert (
+                e.message
+                == "Both basic authentication (username/password) and API key are provided. Please provide only one authentication method."
+            )
+            return
+
+        expected_client_options = {
+            "use_ssl": True,
+            "timeout": 120,
+            "verify_certs": _datastore_verify_certs,
+            "api_key": _datastore_apikey,
+        }
+
+        client_factory.assert_called_with(
             hosts=[{"host": _datastore_host, "port": _datastore_port}],
             client_options=expected_client_options,
             distribution_version=None,

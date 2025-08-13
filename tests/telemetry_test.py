@@ -4253,22 +4253,24 @@ class TestIndexStats:
 
 
 class TestMlBucketProcessingTime:
+
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_put_doc):
-        es.search.side_effect = elasticsearch.TransportError("unit test error")
+    @mock.patch("elasticsearch.Elasticsearch.search")
+    def test_error_on_retrieval_does_not_store_metrics(self, search, metrics_store_put_doc):
+        search.side_effect = elasticsearch.TransportError("unit test error")
+
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.MlBucketProcessingTime(es, metrics_store)
+        device = telemetry.MlBucketProcessingTime(elasticsearch.Elasticsearch, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_stop()
 
         assert metrics_store_put_doc.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_empty_result_does_not_store_metrics(self, es, metrics_store_put_doc):
-        es.search.return_value = {
+    @mock.patch("elasticsearch.Elasticsearch.search")
+    def test_empty_result_does_not_store_metrics(self, search, metrics_store_put_doc):
+        search.return_value = {
             "aggregations": {
                 "jobs": {
                     "buckets": [],
@@ -4277,16 +4279,16 @@ class TestMlBucketProcessingTime:
         }
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.MlBucketProcessingTime(es, metrics_store)
+        device = telemetry.MlBucketProcessingTime(elasticsearch.Elasticsearch, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_stop()
 
         assert metrics_store_put_doc.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_result_is_stored(self, es, metrics_store_put_doc):
-        es.search.return_value = {
+    @mock.patch("elasticsearch.Elasticsearch.search")
+    def test_result_is_stored(self, search, metrics_store_put_doc):
+        search.return_value = {
             "aggregations": {
                 "jobs": {
                     "buckets": [
@@ -4313,7 +4315,7 @@ class TestMlBucketProcessingTime:
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.MlBucketProcessingTime(es, metrics_store)
+        device = telemetry.MlBucketProcessingTime(elasticsearch.Elasticsearch, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_stop()
 
