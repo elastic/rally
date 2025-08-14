@@ -233,7 +233,7 @@ class ProcessLauncher:
         pid_path = io.escape_path(os.path.join(".", "pid"))
         output_path = io.escape_path(os.path.join(".", "output.txt"))
         cmd.extend(["-d", "-p", pid_path])
-        with open(output_path, "x+") as output:
+        with open(output_path, "w+") as output:
             ret = ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env, stdout=output, stderr=output)
             if ret != 0:
                 msg = f"Daemon startup failed with exit code [{ret}]"

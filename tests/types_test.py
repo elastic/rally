@@ -16,72 +16,88 @@
 # under the License.
 
 import builtins
+import itertools
 from configparser import ConfigParser
 from importlib import import_module
 from inspect import getsourcelines, isclass, signature
-from os.path import sep
-from pathlib import Path as _Path
-from types import FunctionType
+from pathlib import Path
+from types import FunctionType, ModuleType
 from typing import Optional, get_args
 
+import pytest
+
+import esrally
 from esrally import types
 
+ESRALLY_ROOT_DIR = Path(esrally.__file__).parent.parent.absolute()
 
-class Path(_Path):
-    # needs to populate _flavour manually because Path.__new__() doesn't for subclasses
-    _flavour = _Path()._flavour  # pylint: disable=W0212
-
-    def glob_modules(self, pattern, *args, **kwargs):
-        for file in self.glob(pattern, *args, **kwargs):
-            if not file.match("*.py"):
-                continue
-            pyfile = file.relative_to(self)
-            modpath = pyfile.parent if pyfile.name == "__init__.py" else pyfile.with_suffix("")
-            yield import_module(str(modpath).replace(sep, "."))
+ESRALLY_PYTHON_FILES = [f.relative_to(ESRALLY_ROOT_DIR) for f in ESRALLY_ROOT_DIR.glob("esrally/**/*.py") if f.match("*.py")]
+TESTS_PYTHON_FILES = [f.relative_to(ESRALLY_ROOT_DIR) for f in ESRALLY_ROOT_DIR.glob("tests/**/*.py") if f.match("*.py")]
 
 
-project_root = Path(__file__).parent / ".."
+@pytest.fixture(scope="session", params=["Section", "Key"])
+def literal_name(request) -> str:
+    return request.param
 
 
-class TestLiteralArgs:
-    def test_order_of_literal_args(self):
-        for literal in (types.Section, types.Key):
-            args = get_args(literal)
-            assert tuple(args) == tuple(sorted(args)), "Literal args are not sorted"
+@pytest.fixture(scope="session")
+def literal_values(literal_name: str) -> list[str]:
+    lines, _ = getsourcelines(types)
+    start = lines.index(f"{literal_name} = Literal[\n")
+    end = lines.index("]\n", start + 1)
+    lines = [l.strip().replace(" ", "").rstrip(",").replace('"', "") for l in lines[start + 1 : end]]
+    return lines
 
-    def test_uniqueness_of_literal_args(self):
-        def _excerpt(lines, start, stop):
-            """Yields lines between start and stop markers not including both ends"""
-            started = False
-            for line in lines:
-                if not started and start in line:
-                    started = True
-                elif started and stop in line:
-                    break
-                elif started:
-                    yield line
 
-        sourcelines, _ = getsourcelines(types)
-        for name in ("Section", "Key"):
-            args = tuple(sorted(_excerpt(sourcelines, f"{name} = Literal[", "]")))
-            assert args == tuple(sorted(set(args))), "Literal args are duplicate"
+def test_literal_values(literal_values: list[str]):
+    assert literal_values == sorted(literal_values), "literals are not sorted"
+    assert literal_values == sorted(set(literal_values)), "literals have duplicate entries"
 
-    def test_appearance_of_literal_args(self):
-        args = {f'"{arg}"' for arg in get_args(types.Section) + get_args(types.Key)}
 
-        for pyfile in project_root.glob("[!.]*/**/*.py"):
-            if pyfile == project_root / "esrally/types.py":
-                continue  # Should skip esrally.types module
+@pytest.fixture(scope="session")
+def esrally_source_code() -> str:
+    source_files = sorted(f for f in itertools.chain(ESRALLY_PYTHON_FILES, TESTS_PYTHON_FILES) if str(f) != "esrally/types.py")
+    source_text = "\n".join((ESRALLY_ROOT_DIR / f).read_text(encoding="utf-8", errors="replace") for f in source_files)
+    return source_text
 
-            source = pyfile.read_text(encoding="utf-8", errors="replace")  # No need to be so strict
-            for arg in args.copy():
-                if arg in source:
-                    args.remove(arg)  # Keep only args that have not been found in any .py files
 
-            if not args:
-                break  # No need to look at more .py files because all args are already found
+@pytest.fixture(scope="session", params=get_args(types.Key))
+def key_name(request) -> str:
+    return request.param
 
-        assert not args, "literal args are not found in any .py files"
+
+def test_key_name(esrally_source_code: str, key_name: str):
+    assert f'"{key_name}"' in esrally_source_code or f"'{key_name}'" in esrally_source_code, "unused key name"
+
+
+@pytest.fixture(scope="session", params=get_args(types.Section))
+def section_name(request) -> str:
+    return request.param
+
+
+def test_section_name(esrally_source_code: str, section_name: str):
+    assert f'"{section_name}"' in esrally_source_code or f"'{section_name}'" in esrally_source_code, "unused session name"
+
+
+def module_name(path: Path) -> str:
+    if path.match("*/__init__.py"):
+        path = path.parent
+    else:
+        path = path.with_suffix("")
+    return path.as_posix().replace("/", ".")
+
+
+ESRALLY_MODULE_NAMES = [module_name(f) for f in ESRALLY_PYTHON_FILES]
+
+
+@pytest.fixture(scope="session", params=ESRALLY_MODULE_NAMES)
+def module(request) -> ModuleType:
+    return import_module(request.param)
+
+
+def test_module_annotations(module: ModuleType):
+    assert_annotations(module, "cfg", types.Config, "types.Config", "AnyConfig")
+    assert_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)
 
 
 def assert_fn_param_annotations(fn, ident, *expects):
@@ -114,17 +130,10 @@ def assert_annotations(obj, ident, *expects):
             pass
         else:
             if attr_path and not attr_path.startswith(obj_path):
-                continue  # the attribute is brought from outside of the object
+                continue  # the attribute is brought from outside the object
 
         if isclass(attr):
             assert_annotations(attr, ident, *expects)
         elif isinstance(attr, FunctionType):
             assert_fn_param_annotations(attr, ident, *expects)
             assert_fn_return_annotation(attr, ident, *expects)
-
-
-class TestConfigTypeHint:
-    def test_esrally_module_annotations(self):
-        for module in project_root.glob_modules("esrally/**/*.py"):
-            assert_annotations(module, "cfg", types.Config, "types.Config")
-            assert_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)

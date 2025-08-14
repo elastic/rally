@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 from esrally.storage._adapter import Adapter, AdapterRegistry, Head
-from esrally.storage._config import StorageConfig
+from esrally.storage._config import AnyConfig, StorageConfig
 from esrally.storage._manager import (
     TransferManager,
     init_transfer_manager,
