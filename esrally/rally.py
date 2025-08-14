@@ -962,14 +962,15 @@ def race(cfg: types.Config, kill_running_processes=False):
 
 def with_actor_system(runnable, cfg: types.Config):
     logger = logging.getLogger(__name__)
-    already_running = actor.actor_system_already_running()
-    logger.info("Actor system already running locally? [%s]", str(already_running))
+    already_running = False
     try:
-        actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
+        actors = actor.bootstrap_actor_system(try_join=True)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
+        coordinator_ip = actors.capabilities.get("Convention Address.IPv4")
+        already_running = coordinator_ip not in [None, "127.0.0.1"] and actor.actor_system_already_running(coordinator_ip)
         cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
-    # This happens when the admin process could not be started, e.g. because it could not open a socket.
     except thespian.actors.InvalidActorAddress:
+        # This happens when the admin process could not be started, e.g. because it could not open a socket.
         logger.info("Falling back to offline actor system.")
         actor.use_offline_actor_system()
         actors = actor.bootstrap_actor_system(try_join=True)

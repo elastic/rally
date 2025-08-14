@@ -199,7 +199,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             return self.status == expected_status
 
 
-def actor_system_already_running(system_base: str, ip: str = "127.0.0.1", port: int = 1900) -> bool:
+def actor_system_already_running(ip: str = "127.0.0.1", port: int = 1900, system_base: str = "multiprocTCPBase") -> bool:
     """It determines whether an actor system is already running by opening a socket connection.
 
     Note: It may be possible that another system is running on the same port.
@@ -236,7 +236,7 @@ def bootstrap_actor_system(
     elif not coordinator_ip:
         coordinator_ip = local_ip
     if try_join:
-        if actor_system_already_running(system_base, coordinator_ip):
+        if actor_system_already_running(coordinator_ip, system_base=system_base):
             LOG.debug("Joining already running actor system with system base [%s].", system_base)
             try:
                 return thespian.actors.ActorSystem(system_base)
