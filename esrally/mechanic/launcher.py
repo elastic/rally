@@ -14,26 +14,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
-import collections
-import errno
 import logging
 import os
 import shlex
-import socket
 import subprocess
-import typing
 
 import psutil
 
 from esrally import exceptions, telemetry, time, types
 from esrally.mechanic import cluster, java_resolver
 from esrally.utils import io, opts, process
-
-LOG = logging.getLogger(__name__)
-DEFAULT_ELASTICSEARCH_PORT = 39300
-DEFAULT_ELASTICSEARCH_HOST = ""
 
 
 class DockerLauncher:
@@ -43,6 +33,7 @@ class DockerLauncher:
     def __init__(self, cfg: types.Config, clock=time.Clock):
         self.cfg = cfg
         self.clock = clock
+        self.logger = logging.getLogger(__name__)
 
     def start(self, node_configurations):
         nodes = []
@@ -50,7 +41,7 @@ class DockerLauncher:
             node_name = node_configuration.node_name
             host_name = node_configuration.ip
             binary_path = node_configuration.binary_path
-            LOG.info("Starting node [%s] in Docker.", node_name)
+            self.logger.info("Starting node [%s] in Docker.", node_name)
             self._start_process(binary_path)
             node_telemetry = [
                 # Don't attach any telemetry devices for now but keep the infrastructure in place
@@ -67,7 +58,7 @@ class DockerLauncher:
         ret = process.run_subprocess_with_logging(compose_cmd)
         if ret != 0:
             msg = f"Docker daemon startup failed with exit code [{ret}]"
-            LOG.error(msg)
+            logging.error(msg)
             raise exceptions.LaunchError(msg)
 
         container_id = self._get_container_id(binary_path)
@@ -90,13 +81,13 @@ class DockerLauncher:
                 return
             time.sleep(0.5)
         msg = f"No healthy running container after {timeout} seconds!"
-        LOG.error(msg)
+        logging.error(msg)
         raise exceptions.LaunchError(msg)
 
     def stop(self, nodes, metrics_store=None):
-        LOG.info("Shutting down [%d] nodes running in Docker on this host.", len(nodes))
+        self.logger.info("Shutting down [%d] nodes running in Docker on this host.", len(nodes))
         for node in nodes:
-            LOG.info("Stopping node [%s].", node.node_name)
+            self.logger.info("Stopping node [%s].", node.node_name)
             if metrics_store is not None:
                 telemetry.add_metadata_for_node(metrics_store, node.node_name, node.host_name)
                 node.telemetry.detach_from_node(node, running=True)
@@ -121,7 +112,7 @@ def wait_for_pidfile(pidfilename, timeout=60, clock=time.Clock):
             time.sleep(0.5)
 
     msg = f"pid file not available after {timeout} seconds!"
-    LOG.error(msg)
+    logging.error(msg)
     raise exceptions.LaunchError(msg)
 
 
@@ -135,6 +126,7 @@ class ProcessLauncher:
     def __init__(self, cfg: types.Config, clock=time.Clock):
         self.cfg = cfg
         self._clock = clock
+        self.logger = logging.getLogger(__name__)
         self.pass_env_vars = opts.csv_to_list(self.cfg.opts("system", "passenv", mandatory=False, default_value="PATH"))
 
     def start(self, node_configurations):
@@ -152,7 +144,7 @@ class ProcessLauncher:
             node_configuration.car_runtime_jdks, self.cfg.opts("mechanic", "runtime.jdk"), node_configuration.car_provides_bundled_jdk
         )
 
-        LOG.info("Starting node [%s].", node_name)
+        self.logger.info("Starting node [%s].", node_name)
 
         enabled_devices = self.cfg.opts("telemetry", "devices")
         telemetry_params = self.cfg.opts("telemetry", "params")
@@ -170,14 +162,10 @@ class ProcessLauncher:
         env = self._prepare_env(node_name, java_home, t)
         t.on_pre_node_start(node_name)
         node_pid = self._start_process(binary_path, env)
-        if node_pid is None:
-            LOG.info("Node already running [%s] with PID [%s].", node_name, node_pid)
-        else:
-            LOG.info("Successfully started node [%s] with PID [%s].", node_name, node_pid)
-
+        self.logger.info("Successfully started node [%s] with PID [%s].", node_name, node_pid)
         node = cluster.Node(node_pid, binary_path, host_name, node_name, t)
 
-        LOG.info("Attaching telemetry devices to node [%s].", node_name)
+        self.logger.info("Attaching telemetry devices to node [%s].", node_name)
         t.attach_to_node(node)
 
         return node
@@ -197,7 +185,7 @@ class ProcessLauncher:
         for v in t.instrument_candidate_java_opts():
             self._set_env(env, "ES_JAVA_OPTS", v)
 
-        LOG.debug("env for [%s]: %s", node_name, str(env))
+        self.logger.debug("env for [%s]: %s", node_name, str(env))
         return env
 
     def _set_env(self, env, k, v, separator=" ", prepend=False):
@@ -210,49 +198,34 @@ class ProcessLauncher:
                 env[k] = env[k] + separator + v
 
     @staticmethod
-    def _run_subprocess(command_line, env, stdout: int | typing.IO = subprocess.DEVNULL, stderr: int | typing.IO = subprocess.DEVNULL):
+    def _run_subprocess(command_line, env):
         command_line_args = shlex.split(command_line)
-        with subprocess.Popen(command_line_args, stdout=stdout, stderr=stderr, env=env, start_new_session=True) as command_line_process:
+
+        with subprocess.Popen(
+            command_line_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, start_new_session=True
+        ) as command_line_process:
             # wait for it to finish
             command_line_process.wait()
         return command_line_process.returncode
 
     @staticmethod
-    def _start_process(binary_path, env) -> int | None:
-        # It checks the process is already running
-        pid = find_local_running_service()
-        if pid is not None:
-            LOG.info("Found running service with PID: %d", pid)
-            return pid
-
+    def _start_process(binary_path, env):
         if os.name == "posix" and os.geteuid() == 0:
             raise exceptions.LaunchError("Cannot launch Elasticsearch as root. Please run Rally as a non-root user.")
-
         os.chdir(binary_path)
         cmd = [io.escape_path(os.path.join(".", "bin", "elasticsearch"))]
         pid_path = io.escape_path(os.path.join(".", "pid"))
-        output_path = io.escape_path(os.path.join(".", "output.txt"))
         cmd.extend(["-d", "-p", pid_path])
-        with open(output_path, "w+") as output:
-            ret = ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env, stdout=output, stderr=output)
-            if ret != 0:
-                msg = f"Daemon startup failed with exit code [{ret}]"
-
-                # It prevents to read the whole file if it is bigger than 1MB
-                read_pos = max(0, output.tell() - (1024 * 1024))
-                output.seek(read_pos, os.SEEK_SET)
-                # It appends at most the last 50 lines
-                lines = collections.deque(output, maxlen=50)
-                if lines:
-                    msg += "\n\noutput:\n" + "".join(f"  {line!s}" for line in lines)
-
-                LOG.error(msg)
-                raise exceptions.LaunchError(msg)
+        ret = ProcessLauncher._run_subprocess(command_line=" ".join(cmd), env=env)
+        if ret != 0:
+            msg = f"Daemon startup failed with exit code [{ret}]"
+            logging.error(msg)
+            raise exceptions.LaunchError(msg)
 
         return wait_for_pidfile(pid_path)
 
     def stop(self, nodes, metrics_store=None):
-        LOG.info("Shutting down [%d] nodes on this host.", len(nodes))
+        self.logger.info("Shutting down [%d] nodes on this host.", len(nodes))
         stopped_nodes = []
         for node in nodes:
             node_name = node.node_name
@@ -262,7 +235,7 @@ class ProcessLauncher:
             try:
                 es = psutil.Process(pid=node.pid)
             except psutil.NoSuchProcess:
-                LOG.warning("No process found with PID [%s] for node [%s].", node.pid, node_name)
+                self.logger.warning("No process found with PID [%s] for node [%s].", node.pid, node_name)
                 es = None
 
             if es:
@@ -273,62 +246,19 @@ class ProcessLauncher:
                     es.wait(10)
                     stopped_nodes.append(node)
                 except psutil.NoSuchProcess:
-                    LOG.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
+                    self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
                 except psutil.TimeoutExpired:
-                    LOG.info("kill -KILL node [%s]", node_name)
+                    self.logger.info("kill -KILL node [%s]", node_name)
                     try:
                         # kill -9
                         es.kill()
                         stopped_nodes.append(node)
                     except psutil.NoSuchProcess:
-                        LOG.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
-                LOG.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
+                        self.logger.warning("No process found with PID [%s] for node [%s].", es.pid, node_name)
+                self.logger.info("Done shutting down node [%s] in [%.1f] s.", node_name, stop_watch.split_time())
                 if metrics_store is not None:
                     node.telemetry.detach_from_node(node, running=False)
             # store system metrics in any case (telemetry devices may derive system metrics while the node is running)
             if metrics_store is not None:
                 node.telemetry.store_system_metrics(node, metrics_store)
         return stopped_nodes
-
-
-def find_local_running_service(host: str = DEFAULT_ELASTICSEARCH_HOST, port: int = DEFAULT_ELASTICSEARCH_PORT) -> int | None:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    with sock:
-        try:
-            sock.bind((host, port))
-            return None
-        except OSError as ex:
-            if ex.errno != errno.EADDRINUSE:
-                raise
-
-    try:
-        # Run lsof command to find the process using the port
-        result = subprocess.run(["lsof", "-i", f"{host}:{port}"], capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as ex:
-        if ex.stderr:
-            LOG.error("lsof returned an error:\n  %s", "  ".join(ex.stderr.splitlines()))
-        return None
-
-    if not result.stdout.strip():
-        # No output => no PID.
-        return None
-
-    try:
-        header, *lines = result.stdout.splitlines()
-        pid_pos = header.lower().split().index("pid")
-    except ValueError:
-        LOG.error("unexpected lsof output:\n  %s", "  ".join(result.stdout.splitlines()))
-        return None
-
-    # Parse output for the PID
-    for line in lines:
-        line = line.strip()
-        if not line or "LISTEN" not in line:
-            continue
-
-        try:
-            return int(line.split()[pid_pos])
-        except (ValueError, IndexError) as ex:
-            LOG.error("unexpected lsof line:\n  %s", line)
-
-    return None
