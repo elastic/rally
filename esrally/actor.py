@@ -219,7 +219,7 @@ def actor_system_already_running(
     if system_base is None:
         system_base = __SYSTEM_BASE
     if system_base != "multiprocTCPBase":
-        return False
+        return True
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:

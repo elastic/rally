@@ -246,20 +246,23 @@ class ActorSystemAlreadyRunningCase:
     port: int | None = None
     system_base: actor.SystemBase | None = None
     want: bool = False
-    want_connect: tuple[str, int] | None = ("127.0.0.1", 1900)
+    want_connect: tuple[str, int] | None = None
 
 
 @cases.cases(
-    default=ActorSystemAlreadyRunningCase(),
+    default=ActorSystemAlreadyRunningCase(want_connect=("127.0.0.1", 1900)),
     ip_and_port=ActorSystemAlreadyRunningCase(ip="10.0.0.1", port=1000, want_connect=("10.0.0.1", 1000)),
-    already_running=ActorSystemAlreadyRunningCase(already_running=True, want=True),
+    already_running=ActorSystemAlreadyRunningCase(already_running=True, want_connect=("127.0.0.1", 1900), want=True),
     ip_and_port_already_running=ActorSystemAlreadyRunningCase(
         ip="10.0.0.1", port=1000, already_running=True, want=True, want_connect=("10.0.0.1", 1000)
     ),
-    system_base_queue=ActorSystemAlreadyRunningCase(already_running=False, want=False, system_base="multiprocQueueBase", want_connect=None),
-    system_base_tcp=ActorSystemAlreadyRunningCase(already_running=False, want=False, system_base="multiprocTCPBase"),
-    system_base_tcp_already_running=ActorSystemAlreadyRunningCase(already_running=True, want=True, system_base="multiprocTCPBase"),
-    system_base_udp=ActorSystemAlreadyRunningCase(already_running=False, want=False, system_base="multiprocUDPBase", want_connect=None),
+    system_base_simple=ActorSystemAlreadyRunningCase(want=True, system_base="simpleSystemBase"),
+    system_base_queue=ActorSystemAlreadyRunningCase(want=True, system_base="multiprocQueueBase"),
+    system_base_tcp=ActorSystemAlreadyRunningCase(want=False, system_base="multiprocTCPBase", want_connect=("127.0.0.1", 1900)),
+    system_base_tcp_already_running=ActorSystemAlreadyRunningCase(
+        already_running=True, want=True, system_base="multiprocTCPBase", want_connect=("127.0.0.1", 1900)
+    ),
+    system_base_udp=ActorSystemAlreadyRunningCase(want=True, system_base="multiprocUDPBase"),
 )
 def test_actor_system_already_running(
     case: ActorSystemAlreadyRunningCase,
