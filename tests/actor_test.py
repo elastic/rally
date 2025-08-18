@@ -24,7 +24,7 @@ from unittest import mock
 import pytest
 import thespian.actors
 
-from esrally import actor, exceptions
+from esrally import actor, exceptions, log
 from esrally.utils import cases, net
 
 
@@ -59,6 +59,11 @@ def resolve(ip: str):
 @pytest.fixture(autouse=True)
 def mock_net_resolve(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(net, "resolve", mock.create_autospec(net.resolve, side_effect=resolve))
+
+
+@pytest.fixture(autouse=True)
+def mock_load_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(log, "load_configuration", lambda: {"some": "config"})
 
 
 @dataclasses.dataclass
