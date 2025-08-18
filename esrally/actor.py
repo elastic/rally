@@ -16,10 +16,10 @@
 # under the License.
 from __future__ import annotations
 
-import enum
 import logging
 import socket
 import traceback
+import typing
 from typing import Any
 
 import thespian.actors  # type: ignore[import-untyped]
@@ -199,13 +199,10 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             return self.status == expected_status
 
 
-class SystemBase(enum.Enum):
-    MULTIPROC_TCP = "multiprocTCPBase"
-    MULTIPROC_UDP = "multiprocUDPBase"
-    MULTIPROC_QUEUE = "multiprocQueueBase"
+SystemBase = typing.Literal["multiprocQueueBase", "multiprocTCPBase", "multiprocUDPBase"]
 
 
-__SYSTEM_BASE: SystemBase = SystemBase.MULTIPROC_TCP
+__SYSTEM_BASE: SystemBase = "multiprocTCPBase"
 
 
 def actor_system_already_running(
@@ -221,7 +218,7 @@ def actor_system_already_running(
     """
     if system_base is None:
         system_base = __SYSTEM_BASE
-    if system_base != SystemBase.MULTIPROC_TCP:
+    if system_base != "multiprocTCPBase":
         return False
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -239,13 +236,14 @@ def actor_system_already_running(
 
 def use_offline_actor_system() -> None:
     global __SYSTEM_BASE
-    __SYSTEM_BASE = SystemBase.MULTIPROC_QUEUE
+    __SYSTEM_BASE = "multiprocQueueBase"
 
 
-class ProcessStartupMethod(enum.StrEnum):
-    FORK = "fork"
-    FORK_SERVER = "forkserver"
-    SPAWN = "spawn"
+ProcessStartupMethod = typing.Literal[
+    "fork",
+    "forkserver",
+    "spawn",
+]
 
 
 __PROCESS_STARTUP_METHOD: ProcessStartupMethod | None = None
@@ -262,12 +260,8 @@ def bootstrap_actor_system(
     local_ip: str | None = None,
     coordinator_ip: str | None = None,
     coordinator_port: int | None = None,
-    system_base: SystemBase | None = None,
-    transient_unique: bool = False,
 ) -> thespian.actors.ActorSystem:
-    if system_base is None:
-        system_base = __SYSTEM_BASE
-
+    system_base = __SYSTEM_BASE
     process_startup_method: ProcessStartupMethod | None = __PROCESS_STARTUP_METHOD
     try:
         if try_join:
@@ -275,23 +269,23 @@ def bootstrap_actor_system(
                 LOG.debug("Joining already running actor system with system base [%s].", system_base)
                 return thespian.actors.ActorSystem(system_base)
         elif prefer_local_only:
-            if system_base in (SystemBase.MULTIPROC_TCP, SystemBase.MULTIPROC_UDP):
+            if system_base in ("multiprocTCPBase", "multiprocUDPBase"):
                 local_ip = coordinator_ip = "127.0.0.1"
             else:
                 local_ip = coordinator_ip = None
         else:
-            if system_base not in (SystemBase.MULTIPROC_TCP, SystemBase.MULTIPROC_UDP):
-                raise exceptions.SystemSetupError("Rally requires a network-capable system base but got '%s'." % system_base)
+            if str(system_base) not in ("multiprocTCPBase", "multiprocUDPBase"):
+                raise exceptions.SystemSetupError("Rally requires a network-capable system base but got [%s]." % system_base)
             if not coordinator_ip:
-                raise exceptions.SystemSetupError("Coordinator IP is required")
+                raise exceptions.SystemSetupError("coordinator IP is required")
             if not local_ip:
-                raise exceptions.SystemSetupError("Local IP is required")
+                raise exceptions.SystemSetupError("local IP is required")
             # always resolve the public IP here, even if a DNS name is given, otherwise Thespian will be unhappy
 
         # if we try to join we can only run on the coordinator...
         capabilities: dict[str, Any] = {}
-        if process_startup_method is not None:
-            capabilities["Process Startup Method"] = process_startup_method.value
+        if process_startup_method:
+            capabilities["Process Startup Method"] = process_startup_method
         if local_ip:
             # just needed to determine whether to run benchmarks locally
             local_ip = net.resolve(local_ip)
@@ -301,14 +295,12 @@ def bootstrap_actor_system(
             coordinator_ip = net.resolve(coordinator_ip)
             coordinator_port = coordinator_port or 1900
             capabilities["Convention Address.IPv4"] = f"{coordinator_ip}:{coordinator_port}"
-        coordinator = local_ip == coordinator_ip
-        capabilities["coordinator"] = coordinator
+        capabilities["coordinator"] = local_ip == coordinator_ip
         LOG.info("Starting actor system with system base [%s] and capabilities [%s].", system_base, capabilities)
         return thespian.actors.ActorSystem(
-            systemBase=system_base.value,
+            systemBase=system_base,
             capabilities=capabilities,
             logDefs=log.load_configuration(),
-            transientUnique=transient_unique,
         )
     except thespian.actors.ActorSystemException:
         LOG.exception("Could not initialize internal actor system.")
