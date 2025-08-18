@@ -126,6 +126,15 @@ class BootstrapActorSystemCase:
         already_running=True,
         want_connect=("127.0.0.1", 1900),
     ),
+    try_join_already_running_coordinator_ip_and_port=BootstrapActorSystemCase(
+        try_join=True,
+        already_running=True,
+        coordinator_ip="10.0.0.1",
+        coordinator_port=900,
+        local_ip="10.0.0.2",
+        want_capabilities={"Convention Address.IPv4": f"{resolve("10.0.0.1")}:900"},
+        want_connect=("10.0.0.1", 900),
+    ),
     try_join_process_startup_method=BootstrapActorSystemCase(
         try_join=True,
         process_startup_method="spawn",
@@ -253,6 +262,7 @@ class ActorSystemAlreadyRunningCase:
     port: int | None = None
     system_base: actor.SystemBase | None = None
     want: bool = None
+    want_error: Exception | None = None
     want_connect: tuple[str, int] | None = None
 
 
@@ -263,13 +273,19 @@ class ActorSystemAlreadyRunningCase:
     ip_and_port_already_running=ActorSystemAlreadyRunningCase(
         ip="10.0.0.1", port=1000, already_running=True, want=True, want_connect=("10.0.0.1", 1000)
     ),
-    system_base_simple=ActorSystemAlreadyRunningCase(system_base="simpleSystemBase"),
-    system_base_queue=ActorSystemAlreadyRunningCase(system_base="multiprocQueueBase"),
+    system_base_simple=ActorSystemAlreadyRunningCase(
+        system_base="simpleSystemBase", want_error=ValueError("unsupported system base: simpleSystemBase")
+    ),
+    system_base_queue=ActorSystemAlreadyRunningCase(
+        system_base="multiprocQueueBase", want_error=ValueError("unsupported system base: multiprocQueueBase")
+    ),
     system_base_tcp=ActorSystemAlreadyRunningCase(system_base="multiprocTCPBase", want=False, want_connect=("127.0.0.1", 1900)),
     system_base_tcp_already_running=ActorSystemAlreadyRunningCase(
         already_running=True, system_base="multiprocTCPBase", want=True, want_connect=("127.0.0.1", 1900)
     ),
-    system_base_udp=ActorSystemAlreadyRunningCase(system_base="multiprocUDPBase"),
+    system_base_udp=ActorSystemAlreadyRunningCase(
+        system_base="multiprocUDPBase", want_error=ValueError("unsupported system base: multiprocUDPBase")
+    ),
 )
 def test_actor_system_already_running(
     case: ActorSystemAlreadyRunningCase,
@@ -278,7 +294,11 @@ def test_actor_system_already_running(
     if not case.already_running:
         mock_socket.connect.side_effect = socket.error
 
-    got = actor.actor_system_already_running(ip=case.ip, port=case.port, system_base=case.system_base)
+    try:
+        got = actor.actor_system_already_running(ip=case.ip, port=case.port, system_base=case.system_base)
+    except type(case.want_error) if case.want_error else tuple() as ex:
+        assert str(ex) == str(case.want_error)
+        return
     assert got is case.want
     if case.want_connect:
         mock_socket.connect.assert_called_once_with(case.want_connect)

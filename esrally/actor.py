@@ -209,7 +209,7 @@ def actor_system_already_running(
     ip: str | None = None,
     port: int | None = None,
     system_base: SystemBase | None = None,
-) -> bool | None:
+) -> bool:
     """It determines whether an actor system is already running by opening a socket connection.
 
     Notes:
@@ -219,7 +219,7 @@ def actor_system_already_running(
     if system_base is None:
         system_base = __SYSTEM_BASE
     if system_base != "multiprocTCPBase":
-        return None
+        raise ValueError(f"unsupported system base: {system_base}")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
@@ -263,11 +263,18 @@ def bootstrap_actor_system(
 ) -> thespian.actors.ActorSystem:
     system_base = __SYSTEM_BASE
     process_startup_method: ProcessStartupMethod | None = __PROCESS_STARTUP_METHOD
+    capabilities: dict[str, Any] = {}
     try:
         if try_join:
-            if actor_system_already_running(ip=coordinator_ip, port=coordinator_port, system_base=system_base):
+            if system_base == "multiprocTCPBase" and actor_system_already_running(
+                ip=coordinator_ip, port=coordinator_port, system_base=system_base
+            ):
+                if coordinator_ip:
+                    coordinator_ip = net.resolve(coordinator_ip)
+                    coordinator_port = coordinator_port or 1900
+                    capabilities["Convention Address.IPv4"] = f"{coordinator_ip}:{coordinator_port}"
                 LOG.debug("Joining already running actor system with system base [%s].", system_base)
-                return thespian.actors.ActorSystem(system_base)
+                return thespian.actors.ActorSystem(systemBase=system_base, capabilities=capabilities or None)
         elif prefer_local_only:
             if system_base in ("multiprocTCPBase", "multiprocUDPBase"):
                 local_ip = coordinator_ip = "127.0.0.1"
@@ -283,7 +290,6 @@ def bootstrap_actor_system(
             # always resolve the public IP here, even if a DNS name is given, otherwise Thespian will be unhappy
 
         # if we try to join we can only run on the coordinator...
-        capabilities: dict[str, Any] = {}
         if process_startup_method:
             capabilities["Process Startup Method"] = process_startup_method
         if local_ip:
