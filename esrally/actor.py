@@ -199,7 +199,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             return self.status == expected_status
 
 
-SystemBase = typing.Literal["multiprocQueueBase", "multiprocTCPBase", "multiprocUDPBase"]
+SystemBase = typing.Literal["simpleSystemBase", "multiprocQueueBase", "multiprocTCPBase", "multiprocUDPBase"]
 
 
 __SYSTEM_BASE: SystemBase = "multiprocTCPBase"

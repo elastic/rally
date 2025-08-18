@@ -189,3 +189,40 @@ def test_bootstrap_actor_system(
         mock_socket.connect.assert_called_once_with(case.want_connect)
     else:
         mock_socket.connect.assert_not_called()
+
+
+@dataclasses.dataclass
+class ActorSystemAlreadyRunningCase:
+    already_running: bool = False
+    ip: str | None = None
+    port: int | None = None
+    system_base: actor.SystemBase | None = None
+    want: bool = False
+    want_connect: tuple[str, int] | None = ("127.0.0.1", 1900)
+
+
+@cases.cases(
+    default=ActorSystemAlreadyRunningCase(),
+    ip_and_port=ActorSystemAlreadyRunningCase(ip="10.0.0.1", port=1000, want_connect=("10.0.0.1", 1000)),
+    already_running=ActorSystemAlreadyRunningCase(already_running=True, want=True),
+    ip_and_port_already_running=ActorSystemAlreadyRunningCase(
+        ip="10.0.0.1", port=1000, already_running=True, want=True, want_connect=("10.0.0.1", 1000)
+    ),
+    system_base_queue=ActorSystemAlreadyRunningCase(already_running=False, want=False, system_base="multiprocQueueBase", want_connect=None),
+    system_base_tcp=ActorSystemAlreadyRunningCase(already_running=False, want=False, system_base="multiprocTCPBase"),
+    system_base_tcp_already_running=ActorSystemAlreadyRunningCase(already_running=True, want=True, system_base="multiprocTCPBase"),
+    system_base_udp=ActorSystemAlreadyRunningCase(already_running=False, want=False, system_base="multiprocUDPBase", want_connect=None),
+)
+def test_actor_system_already_running(
+    case: ActorSystemAlreadyRunningCase,
+    mock_socket: socket.socket,
+):
+    if not case.already_running:
+        mock_socket.connect.side_effect = socket.error
+
+    got = actor.actor_system_already_running(ip=case.ip, port=case.port, system_base=case.system_base)
+    assert got is case.want
+    if case.want_connect:
+        mock_socket.connect.assert_called_once_with(case.want_connect)
+    else:
+        mock_socket.connect.assert_not_called()
