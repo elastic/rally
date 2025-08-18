@@ -10,6 +10,17 @@ Rally stores its configuration in the file ``~/.rally/rally.ini`` which is autom
     The configuration file can use `${CONFIG_DIR}` to refer to the directory where Rally stores its configuration files. This is useful for configuring Rally in a portable way.
     This defaults to `~/.rally`, but can be overridden by setting the `RALLY_HOME` environment variable in your shell.
 
+
+actor
+~~~~~
+
+This section allows to configure how thespian actor library is being used from rally.
+
+* ``actor.process.startup.method``: It allows to configure how `thespian` actors library should specify how
+  `subprocessing` library should create processes for new actors. This can be used to prevent from using `fork` method
+  on Linux or OSX with the purpose, for instance, to use threads in some rally component.
+
+
 meta
 ~~~~
 
@@ -283,14 +294,30 @@ Configuration options:
   .. _Boto3 Client: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
   .. _S3 Service Documentation: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistS3AndCustomOrigins.html#concept_S3Origin
 
+
 track
 ~~~~~
 
 This section specifies how tracks corpora files has to be fetched. Available options are:
 
-* ``track.downloader.multipart_enabled`` if true, it will enable the use the new multipart `storage` module for
-  downloading corpora files. For more configuration options please have a look to the `storage` configuration section.
-  NOTE: the storage module is still experimental and its use should be limited for now.
+* ``track.downloader.multipart_enabled`` if `true`, it will enable the use the new multipart `esrally.storage` package for
+  downloading corpora files. For more configuration options please have a look to the `[storage]` configuration section.
+
+  NOTES:
+
+  * The storage module is still experimental and its use should be limited for now.
+
+  * There are know issues of compatibility of this implementation with thespian actor library on Linux and OSX because
+    it uses by default `fork` as process startup method. To workaround this issue please use this option as in the
+    following example.
+
+  Example::
+
+      [actor]
+      actor.process.startup.method = spawn
+
+      [track]
+      track.downloader.multipart_enabled = true
 
 
 tracks
