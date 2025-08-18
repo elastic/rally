@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import argparse
 import datetime
@@ -23,6 +24,7 @@ import platform
 import shutil
 import sys
 import time
+import typing
 import uuid
 from enum import Enum
 
@@ -961,9 +963,22 @@ def race(cfg: types.Config, kill_running_processes=False):
     with_actor_system(racecontrol.run, cfg)
 
 
+def actor_system_already_running() -> bool:
+    try:
+        return actor.actor_system_already_running()
+    except ValueError:
+        return False
+
+
 def with_actor_system(runnable, cfg: types.Config):
     logger = logging.getLogger(__name__)
-    already_running = actor.actor_system_already_running()
+    already_running = actor_system_already_running()
+    process_startup_method: actor.ProcessStartupMethod | None = cfg.opts("actor", "actor.process.startup.method", None, mandatory=False)
+    if process_startup_method is not None:
+        if process_startup_method not in typing.get_args(actor.ProcessStartupMethod):
+            raise ValueError("invalid value for 'actor.process.startup.method' option")
+        actor.set_startup_method(process_startup_method)
+
     logger.info("Actor system already running locally? [%s]", str(already_running))
     try:
         actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
@@ -990,7 +1005,7 @@ def with_actor_system(runnable, cfg: types.Config):
     try:
         runnable(cfg)
     finally:
-        # We only shutdown the actor system if it was not already running before
+        # We only shut down the actor system if it was not already running before
         if not already_running:
             shutdown_complete = False
             times_interrupted = 0
@@ -1002,7 +1017,7 @@ def with_actor_system(runnable, cfg: types.Config):
                     actors.shutdown()
                     # note that this check will only evaluate to True for a TCP-based actor system.
                     timeout = 15
-                    while actor.actor_system_already_running() and timeout > 0:
+                    while actor_system_already_running() and timeout > 0:
                         logger.info("Actor system is still running. Waiting...")
                         time.sleep(1)
                         timeout -= 1

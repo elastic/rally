@@ -17,12 +17,13 @@
 from __future__ import annotations
 
 import logging
-import os
 import socket
 import traceback
+import typing
+from typing import Any
 
-import thespian.actors
-import thespian.system.messages.status
+import thespian.actors  # type: ignore[import-untyped]
+import thespian.system.messages.status  # type: ignore[import-untyped]
 
 from esrally import exceptions, log
 from esrally.utils import console, net
@@ -96,7 +97,7 @@ def no_retry(f, actor_name):
             return f(self, msg, sender)
         except BaseException:
             # log here as the full trace might get lost.
-            LOG.exception("Error in %s", actor_name)
+            logging.getLogger(__name__).exception("Error in %s", actor_name)
             # don't forward the exception as is because the main process might not have this class available on the load path
             # and will fail then while deserializing the cause.
             self.send(sender, BenchmarkFailure(traceback.format_exc()))
@@ -107,7 +108,7 @@ def no_retry(f, actor_name):
 class RallyActor(thespian.actors.ActorTypeDispatcher):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
-        self.children = []
+        self.children: list[thespian.actors.ActorAddress] = []
         self.received_responses = []
         self.status = None
         log.post_configure_actor_logging()
@@ -179,8 +180,9 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         if self.is_current_status_expected(expected_status):
             self.logger.debug("Transitioning from [%s] to [%s].", self.status, new_status)
             self.status = new_status
-            for m in filter(None, self.children):
-                self.send(m, msg)
+            child: thespian.actors.ActorAddress
+            for child in filter(None, self.children):
+                self.send(child, msg)
         else:
             raise exceptions.RallyAssertionError(
                 "Received [%s] from [%s] but we are in status [%s] instead of [%s]." % (type(msg), sender, self.status, expected_status)
@@ -197,72 +199,115 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             return self.status == expected_status
 
 
-def actor_system_already_running(ip: str = "127.0.0.1", port: int = 1900) -> bool:
-    """
-    Determines whether an actor system is already running by opening a socket connection.
+SystemBase = typing.Literal["simpleSystemBase", "multiprocQueueBase", "multiprocTCPBase", "multiprocUDPBase"]
 
-    Note: It may be possible that another system is running on the same port.
+
+__SYSTEM_BASE: SystemBase = "multiprocTCPBase"
+
+
+def actor_system_already_running(
+    ip: str | None = None,
+    port: int | None = None,
+    system_base: SystemBase | None = None,
+) -> bool:
+    """It determines whether an actor system is already running by opening a socket connection.
+
+    Notes:
+        - It may be possible that another system is running on the same port.
+        - This is working only when system base is "multiprocTCPBase"
     """
+    if system_base is None:
+        system_base = __SYSTEM_BASE
+    if system_base != "multiprocTCPBase":
+        raise ValueError(f"unsupported system base: {system_base}")
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
+            ip = ip or "127.0.0.1"
+            port = port or 1900
+            LOG.info("Looking for an already running actor system (ip='%s', port=%d)...", ip, port)
             sock.connect((ip, port))
             return True
-        except ConnectionRefusedError:
-            return False
+        except Exception as ex:
+            LOG.info("Failed to connect to already running actor system (ip='%s', port=%d): %s", ip, port, ex)
+
+    return False
 
 
-DEFAULT_SYSTEM_BASE: str = os.getenv("ESRALLY_ACTOR_SYSTEM_BASE", "").strip() or "multiprocTCPBase"
-DEFAULT_PROCESS_STARTUP_METHOD: str = os.getenv("ESRALLY_ACTOR_PROCESS_STARTUP_METHOD", "").strip() or "spawn"
+def use_offline_actor_system() -> None:
+    global __SYSTEM_BASE
+    __SYSTEM_BASE = "multiprocQueueBase"
 
 
-def use_offline_actor_system():
-    global DEFAULT_SYSTEM_BASE
-    DEFAULT_SYSTEM_BASE = "multiprocQueueBase"
+ProcessStartupMethod = typing.Literal[
+    "fork",
+    "forkserver",
+    "spawn",
+]
+
+
+__PROCESS_STARTUP_METHOD: ProcessStartupMethod | None = None
+
+
+def set_startup_method(method: ProcessStartupMethod) -> None:
+    global __PROCESS_STARTUP_METHOD
+    __PROCESS_STARTUP_METHOD = method
 
 
 def bootstrap_actor_system(
     try_join: bool = False,
     prefer_local_only: bool = False,
-    local_ip: str = "127.0.0.1",
+    local_ip: str | None = None,
     coordinator_ip: str | None = None,
-    system_base: str = DEFAULT_SYSTEM_BASE,
-    process_startup_method: str = DEFAULT_PROCESS_STARTUP_METHOD,
-):
-    if prefer_local_only:
-        coordinator_ip = local_ip = "127.0.0.1"
-    elif not coordinator_ip:
-        coordinator_ip = local_ip
-    if try_join:
-        if system_base != "multiprocTCPBase" or actor_system_already_running(coordinator_ip):
-            LOG.debug("Joining already running actor system with system base [%s].", system_base)
-            try:
-                return thespian.actors.ActorSystem(system_base)
-            except thespian.actors.ActorSystemException:
-                LOG.exception("Failed to join actor system [%s]", system_base)
-
-    capabilities = {}
-    if system_base in ("multiprocTCPBase", "multiprocUDPBase"):
-        if not local_ip:
-            raise exceptions.SystemSetupError("local IP is required")
-        if not coordinator_ip:
-            raise exceptions.SystemSetupError("coordinator IP is required")
-        # It always resolves the public IP here, even if a DNS name is given, otherwise Thespian will be unhappy.
-        coordinator = local_ip == coordinator_ip
-        if coordinator:
-            local_ip = coordinator_ip = net.resolve(local_ip)
-        else:
-            local_ip = net.resolve(local_ip)
-            coordinator_ip = net.resolve(coordinator_ip)
-        capabilities["coordinator"] = coordinator
-        capabilities["ip"] = local_ip
-        capabilities["Convention Address.IPv4"] = f"{coordinator_ip}:1900"
-
-    if system_base != "simpleSystemBase" and process_startup_method:
-        capabilities["Process Startup Method"] = process_startup_method
-
-    LOG.info("Starting actor system with system base [%s] and capabilities [%s].", system_base, capabilities)
+    coordinator_port: int | None = None,
+) -> thespian.actors.ActorSystem:
+    system_base = __SYSTEM_BASE
+    process_startup_method: ProcessStartupMethod | None = __PROCESS_STARTUP_METHOD
+    capabilities: dict[str, Any] = {}
     try:
-        return thespian.actors.ActorSystem(system_base, logDefs=log.load_configuration(), capabilities=capabilities)
+        if try_join:
+            if system_base == "multiprocTCPBase" and actor_system_already_running(
+                ip=coordinator_ip, port=coordinator_port, system_base=system_base
+            ):
+                if coordinator_ip:
+                    coordinator_ip = net.resolve(coordinator_ip)
+                    coordinator_port = coordinator_port or 1900
+                    capabilities["Convention Address.IPv4"] = f"{coordinator_ip}:{coordinator_port}"
+                LOG.debug("Joining already running actor system with system base [%s].", system_base)
+                return thespian.actors.ActorSystem(systemBase=system_base, capabilities=capabilities or None)
+        elif prefer_local_only:
+            if system_base in ("multiprocTCPBase", "multiprocUDPBase"):
+                local_ip = coordinator_ip = "127.0.0.1"
+            else:
+                local_ip = coordinator_ip = None
+        else:
+            if str(system_base) not in ("multiprocTCPBase", "multiprocUDPBase"):
+                raise exceptions.SystemSetupError("Rally requires a network-capable system base but got [%s]." % system_base)
+            if not coordinator_ip:
+                raise exceptions.SystemSetupError("coordinator IP is required")
+            if not local_ip:
+                raise exceptions.SystemSetupError("local IP is required")
+            # always resolve the public IP here, even if a DNS name is given, otherwise Thespian will be unhappy
+
+        # if we try to join we can only run on the coordinator...
+        if process_startup_method:
+            capabilities["Process Startup Method"] = process_startup_method
+        if local_ip:
+            # just needed to determine whether to run benchmarks locally
+            local_ip = net.resolve(local_ip)
+            capabilities["ip"] = local_ip
+        if coordinator_ip:
+            # Make the coordinator node the convention leader
+            coordinator_ip = net.resolve(coordinator_ip)
+            coordinator_port = coordinator_port or 1900
+            capabilities["Convention Address.IPv4"] = f"{coordinator_ip}:{coordinator_port}"
+        capabilities["coordinator"] = local_ip == coordinator_ip
+        LOG.info("Starting actor system with system base [%s] and capabilities [%s].", system_base, capabilities)
+        return thespian.actors.ActorSystem(
+            systemBase=system_base,
+            capabilities=capabilities,
+            logDefs=log.load_configuration(),
+        )
     except thespian.actors.ActorSystemException:
         LOG.exception("Could not initialize internal actor system.")
         raise
