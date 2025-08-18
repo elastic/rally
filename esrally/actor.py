@@ -178,7 +178,6 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
             self.status = new_status
             child: thespian.actors.ActorAddress
             for child in filter(None, self.children):
-                assert isinstance(child, thespian.actors.ActorAddress)
                 self.send(child, msg)
         else:
             raise exceptions.RallyAssertionError(
