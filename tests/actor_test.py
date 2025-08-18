@@ -63,7 +63,7 @@ def mock_net_resolve(monkeypatch: pytest.MonkeyPatch):
 
 @dataclasses.dataclass
 class BootstrapActorSystemCase:
-    system_base: str = "multiprocTCPBase"
+    system_base: actor.SystemBase = "multiprocTCPBase"
     offline: bool = False
     process_startup_method: actor.ProcessStartupMethod | None = None
     already_running: bool = False
@@ -74,7 +74,7 @@ class BootstrapActorSystemCase:
     coordinator_port: int | None = None
     want_error: tuple[Exception, ...] = tuple()
     want_connect: tuple[str, int] | None = None
-    want_system_base: str = "multiprocTCPBase"
+    want_system_base: actor.SystemBase = "multiprocTCPBase"
     want_capabilities: dict[str, typing.Any] | None = None
     want_log_defs: bool = False
 
@@ -113,6 +113,11 @@ class BootstrapActorSystemCase:
         want_capabilities={"coordinator": True},
         want_log_defs=True,
         want_connect=("127.0.0.1", 1900),
+    ),
+    try_join_offline=BootstrapActorSystemCase(
+        try_join=True,
+        offline=True,
+        want_system_base="multiprocQueueBase",
     ),
     try_join_already_running=BootstrapActorSystemCase(
         try_join=True,
