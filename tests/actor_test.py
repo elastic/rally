@@ -65,6 +65,7 @@ def mock_net_resolve(monkeypatch: pytest.MonkeyPatch):
 class BootstrapActorSystemCase:
     system_base: str = "multiprocTCPBase"
     offline: bool = False
+    process_startup_method: actor.ProcessStartupMethod | None = None
     already_running: bool = False
     try_join: bool = False
     prefer_local_only: bool = False
@@ -118,6 +119,13 @@ class BootstrapActorSystemCase:
         already_running=True,
         want_connect=("127.0.0.1", 1900),
     ),
+    try_join_process_startup_method=BootstrapActorSystemCase(
+        try_join=True,
+        process_startup_method="spawn",
+        want_connect=("127.0.0.1", 1900),
+        want_capabilities={"coordinator": True, "Process Startup Method": "spawn"},
+        want_log_defs=True,
+    ),
     prefer_local_only=BootstrapActorSystemCase(
         prefer_local_only=True,
         want_capabilities={"Convention Address.IPv4": f"{resolve('127.0.0.1')}:1900", "coordinator": True, "ip": resolve("127.0.0.1")},
@@ -157,6 +165,42 @@ class BootstrapActorSystemCase:
         want_capabilities={"Convention Address.IPv4": f"{resolve('192.168.0.1')}:1234", "coordinator": False, "ip": resolve("192.168.0.2")},
         want_log_defs=True,
     ),
+    process_startup_method_fork=BootstrapActorSystemCase(
+        process_startup_method="fork",
+        local_ip="192.168.0.2",
+        coordinator_ip="192.168.0.1",
+        want_capabilities={
+            "Convention Address.IPv4": f"{resolve('192.168.0.1')}:1900",
+            "Process Startup Method": "fork",
+            "coordinator": False,
+            "ip": resolve("192.168.0.2"),
+        },
+        want_log_defs=True,
+    ),
+    process_startup_method_spawn=BootstrapActorSystemCase(
+        process_startup_method="spawn",
+        local_ip="192.168.0.2",
+        coordinator_ip="192.168.0.1",
+        want_capabilities={
+            "Convention Address.IPv4": f"{resolve('192.168.0.1')}:1900",
+            "Process Startup Method": "spawn",
+            "coordinator": False,
+            "ip": resolve("192.168.0.2"),
+        },
+        want_log_defs=True,
+    ),
+    process_startup_method_forkserver=BootstrapActorSystemCase(
+        process_startup_method="forkserver",
+        local_ip="192.168.0.2",
+        coordinator_ip="192.168.0.1",
+        want_capabilities={
+            "Convention Address.IPv4": f"{resolve('192.168.0.1')}:1900",
+            "Process Startup Method": "forkserver",
+            "coordinator": False,
+            "ip": resolve("192.168.0.2"),
+        },
+        want_log_defs=True,
+    ),
 )
 def test_bootstrap_actor_system(
     monkeypatch: pytest.MonkeyPatch,
@@ -167,9 +211,13 @@ def test_bootstrap_actor_system(
         mock_socket.connect.side_effect = socket.error
 
     monkeypatch.setattr(actor, "__SYSTEM_BASE", case.system_base)
-
     if case.offline:
         actor.use_offline_actor_system()
+
+    monkeypatch.setattr(actor, "__PROCESS_STARTUP_METHOD", None)
+    if case.process_startup_method:
+        actor.set_startup_method(case.process_startup_method)
+
     try:
         got = actor.bootstrap_actor_system(
             try_join=case.try_join,

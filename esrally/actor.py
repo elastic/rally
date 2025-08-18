@@ -249,7 +249,7 @@ ProcessStartupMethod = typing.Literal[
 __PROCESS_STARTUP_METHOD: ProcessStartupMethod | None = None
 
 
-def use_startup_method(method: ProcessStartupMethod) -> None:
+def set_startup_method(method: ProcessStartupMethod) -> None:
     global __PROCESS_STARTUP_METHOD
     __PROCESS_STARTUP_METHOD = method
 
