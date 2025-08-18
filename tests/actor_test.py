@@ -117,6 +117,8 @@ class BootstrapActorSystemCase:
     try_join_offline=BootstrapActorSystemCase(
         try_join=True,
         offline=True,
+        want_capabilities={"coordinator": True},
+        want_log_defs=True,
         want_system_base="multiprocQueueBase",
     ),
     try_join_already_running=BootstrapActorSystemCase(
@@ -250,24 +252,24 @@ class ActorSystemAlreadyRunningCase:
     ip: str | None = None
     port: int | None = None
     system_base: actor.SystemBase | None = None
-    want: bool = False
+    want: bool = None
     want_connect: tuple[str, int] | None = None
 
 
 @cases.cases(
-    default=ActorSystemAlreadyRunningCase(want_connect=("127.0.0.1", 1900)),
-    ip_and_port=ActorSystemAlreadyRunningCase(ip="10.0.0.1", port=1000, want_connect=("10.0.0.1", 1000)),
+    default=ActorSystemAlreadyRunningCase(want_connect=("127.0.0.1", 1900), want=False),
+    ip_and_port=ActorSystemAlreadyRunningCase(ip="10.0.0.1", port=1000, want_connect=("10.0.0.1", 1000), want=False),
     already_running=ActorSystemAlreadyRunningCase(already_running=True, want_connect=("127.0.0.1", 1900), want=True),
     ip_and_port_already_running=ActorSystemAlreadyRunningCase(
         ip="10.0.0.1", port=1000, already_running=True, want=True, want_connect=("10.0.0.1", 1000)
     ),
-    system_base_simple=ActorSystemAlreadyRunningCase(want=True, system_base="simpleSystemBase"),
-    system_base_queue=ActorSystemAlreadyRunningCase(want=True, system_base="multiprocQueueBase"),
-    system_base_tcp=ActorSystemAlreadyRunningCase(want=False, system_base="multiprocTCPBase", want_connect=("127.0.0.1", 1900)),
+    system_base_simple=ActorSystemAlreadyRunningCase(system_base="simpleSystemBase"),
+    system_base_queue=ActorSystemAlreadyRunningCase(system_base="multiprocQueueBase"),
+    system_base_tcp=ActorSystemAlreadyRunningCase(system_base="multiprocTCPBase", want=False, want_connect=("127.0.0.1", 1900)),
     system_base_tcp_already_running=ActorSystemAlreadyRunningCase(
-        already_running=True, want=True, system_base="multiprocTCPBase", want_connect=("127.0.0.1", 1900)
+        already_running=True, system_base="multiprocTCPBase", want=True, want_connect=("127.0.0.1", 1900)
     ),
-    system_base_udp=ActorSystemAlreadyRunningCase(want=True, system_base="multiprocUDPBase"),
+    system_base_udp=ActorSystemAlreadyRunningCase(system_base="multiprocUDPBase"),
 )
 def test_actor_system_already_running(
     case: ActorSystemAlreadyRunningCase,
