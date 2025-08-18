@@ -176,9 +176,8 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         if self.is_current_status_expected(expected_status):
             self.logger.debug("Transitioning from [%s] to [%s].", self.status, new_status)
             self.status = new_status
-            for child in self.children:
-                if not child:
-                    continue
+            child: thespian.actors.ActorAddress
+            for child in filter(None, self.children):
                 assert isinstance(child, thespian.actors.ActorAddress)
                 self.send(child, msg)
         else:
