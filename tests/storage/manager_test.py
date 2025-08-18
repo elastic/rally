@@ -150,7 +150,7 @@ def test_global_transfer_manager(cfg: types.Config, tmpdir: os.PathLike, manager
     assert tr.wait(timeout=60.0)
     assert os.path.exists(tr.path)
 
-    assert not init_transfer_manager(cfg)
+    assert got is init_transfer_manager(cfg)
     assert got is transfer_manager(cfg.name)
     assert got is managers[cfg.name]
 
