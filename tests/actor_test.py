@@ -132,7 +132,7 @@ class BootstrapActorSystemCase:
         coordinator_ip="10.0.0.1",
         coordinator_port=900,
         local_ip="10.0.0.2",
-        want_capabilities={"Convention Address.IPv4": f"{resolve("10.0.0.1")}:900"},
+        want_capabilities={"Convention Address.IPv4": f"{resolve('10.0.0.1')}:900"},
         want_connect=("10.0.0.1", 900),
     ),
     try_join_process_startup_method=BootstrapActorSystemCase(
