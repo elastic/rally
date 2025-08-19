@@ -24,8 +24,8 @@ from unittest import mock
 import pytest
 import thespian.actors
 
-from esrally import actor, exceptions, log
-from esrally.utils import cases, net
+from esrally import actor, log
+from esrally.utils import cases
 
 
 @pytest.fixture(autouse=True)
@@ -52,13 +52,13 @@ def dummy_actor_system(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(thespian.actors, "ActorSystem", DummyActorSystem)
 
 
-def resolve(ip: str):
-    return f"{ip}!r"
+def resolve(host: str, port: int | None = None):
+    return f"{host}!r", port or None
 
 
 @pytest.fixture(autouse=True)
-def mock_net_resolve(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(net, "resolve", mock.create_autospec(net.resolve, side_effect=resolve))
+def mock_resolve(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(actor, "resolve", mock.create_autospec(actor.resolve, side_effect=resolve))
 
 
 @pytest.fixture(autouse=True)
@@ -75,6 +75,7 @@ class BootstrapActorSystemCase:
     try_join: bool = False
     prefer_local_only: bool = False
     local_ip: str | None = None
+    admin_port: int | None = None
     coordinator_ip: str | None = None
     coordinator_port: int | None = None
     want_error: tuple[Exception, ...] = tuple()
@@ -86,32 +87,64 @@ class BootstrapActorSystemCase:
 
 @cases.cases(
     default=BootstrapActorSystemCase(
-        want_error=(
-            exceptions.SystemSetupError("coordinator IP is required"),
-            exceptions.SystemSetupError("local IP is required"),
-        )
+        want_capabilities={"coordinator": True},
+        want_log_defs=True,
     ),
     tcp=BootstrapActorSystemCase(
         system_base="multiprocTCPBase",
-        want_error=(
-            exceptions.SystemSetupError("coordinator IP is required"),
-            exceptions.SystemSetupError("local IP is required"),
-        ),
+        want_capabilities={"coordinator": True},
+        want_log_defs=True,
     ),
     udp=BootstrapActorSystemCase(
         system_base="multiprocUDPBase",
-        want_error=(
-            exceptions.SystemSetupError("coordinator IP is required"),
-            exceptions.SystemSetupError("local IP is required"),
-        ),
+        want_capabilities={"coordinator": True},
+        want_log_defs=True,
+        want_system_base="multiprocUDPBase",
     ),
-    no_local_ip=BootstrapActorSystemCase(coordinator_ip="127.0.0.1", want_error=(exceptions.SystemSetupError("local IP is required"),)),
-    no_coordinator_ip=BootstrapActorSystemCase(
-        local_ip="127.0.0.1", want_error=(exceptions.SystemSetupError("coordinator IP is required"),)
+    queue=BootstrapActorSystemCase(
+        system_base="multiprocQueueBase",
+        want_capabilities={"coordinator": True},
+        want_log_defs=True,
+        want_system_base="multiprocQueueBase",
+    ),
+    local_ip=BootstrapActorSystemCase(
+        local_ip="127.0.0.1",
+        want_capabilities={"coordinator": True, "ip": "127.0.0.1!r"},
+        want_log_defs=True,
+    ),
+    admin_port=BootstrapActorSystemCase(
+        admin_port=1024,
+        want_capabilities={"coordinator": True, "Admin Port": 1024},
+        want_log_defs=True,
+    ),
+    coordinator_ip=BootstrapActorSystemCase(
+        coordinator_ip="192.168.0.1",
+        want_capabilities={"Convention Address.IPv4": "192.168.0.1!r", "coordinator": True},
+        want_log_defs=True,
+    ),
+    coordinator_ip_and_port=BootstrapActorSystemCase(
+        coordinator_ip="192.168.0.1",
+        coordinator_port=2000,
+        want_capabilities={"Convention Address.IPv4": "192.168.0.1!r:2000", "coordinator": True},
+        want_log_defs=True,
+    ),
+    local_ip_is_coordinator_ip=BootstrapActorSystemCase(
+        coordinator_ip="192.168.0.1",
+        local_ip="192.168.0.1",
+        want_capabilities={"Convention Address.IPv4": "192.168.0.1!r", "coordinator": True, "ip": "192.168.0.1!r"},
+        want_log_defs=True,
+    ),
+    local_ip_is_not_coordinator_ip=BootstrapActorSystemCase(
+        coordinator_ip="192.168.0.1",
+        local_ip="192.168.0.2",
+        want_capabilities={"Convention Address.IPv4": "192.168.0.1!r", "coordinator": False, "ip": "192.168.0.2!r"},
+        want_log_defs=True,
     ),
     offline=BootstrapActorSystemCase(
         offline=True,
-        want_error=(exceptions.SystemSetupError("Rally requires a network-capable system base but got [multiprocQueueBase]."),),
+        want_system_base="multiprocQueueBase",
+        want_capabilities={"coordinator": True},
+        want_log_defs=True,
     ),
     try_join=BootstrapActorSystemCase(
         try_join=True,
@@ -122,8 +155,6 @@ class BootstrapActorSystemCase:
     try_join_offline=BootstrapActorSystemCase(
         try_join=True,
         offline=True,
-        want_capabilities={"coordinator": True},
-        want_log_defs=True,
         want_system_base="multiprocQueueBase",
     ),
     try_join_already_running=BootstrapActorSystemCase(
@@ -131,14 +162,18 @@ class BootstrapActorSystemCase:
         already_running=True,
         want_connect=("127.0.0.1", 1900),
     ),
-    try_join_already_running_coordinator_ip_and_port=BootstrapActorSystemCase(
+    try_join_offline_already_running=BootstrapActorSystemCase(
+        try_join=True,
+        offline=True,
+        already_running=True,
+        want_system_base="multiprocQueueBase",
+    ),
+    try_join_already_running_with_ip_and_port=BootstrapActorSystemCase(
         try_join=True,
         already_running=True,
-        coordinator_ip="10.0.0.1",
-        coordinator_port=900,
         local_ip="10.0.0.2",
-        want_capabilities={"Convention Address.IPv4": f"{resolve('10.0.0.1')}:900"},
-        want_connect=("10.0.0.1", 900),
+        admin_port=2000,
+        want_connect=("10.0.0.2", 2000),
     ),
     try_join_process_startup_method=BootstrapActorSystemCase(
         try_join=True,
@@ -149,7 +184,7 @@ class BootstrapActorSystemCase:
     ),
     prefer_local_only=BootstrapActorSystemCase(
         prefer_local_only=True,
-        want_capabilities={"Convention Address.IPv4": f"{resolve('127.0.0.1')}:1900", "coordinator": True, "ip": resolve("127.0.0.1")},
+        want_capabilities={"Convention Address.IPv4": "127.0.0.1!r", "coordinator": True, "ip": "127.0.0.1!r"},
         want_log_defs=True,
     ),
     prefer_local_only_offline=BootstrapActorSystemCase(
@@ -163,9 +198,9 @@ class BootstrapActorSystemCase:
         local_ip="192.168.0.41",
         coordinator_ip="192.168.0.41",
         want_capabilities={
-            "Convention Address.IPv4": f"{resolve('192.168.0.41')}:1900",
+            "Convention Address.IPv4": "192.168.0.41!r",
             "coordinator": True,
-            "ip": resolve("192.168.0.41"),
+            "ip": "192.168.0.41!r",
         },
         want_log_defs=True,
     ),
@@ -173,9 +208,9 @@ class BootstrapActorSystemCase:
         local_ip="192.168.0.42",
         coordinator_ip="192.168.0.41",
         want_capabilities={
-            "Convention Address.IPv4": f"{resolve('192.168.0.41')}:1900",
+            "Convention Address.IPv4": "192.168.0.41!r",
             "coordinator": False,
-            "ip": resolve("192.168.0.42"),
+            "ip": "192.168.0.42!r",
         },
         want_log_defs=True,
     ),
@@ -183,42 +218,30 @@ class BootstrapActorSystemCase:
         coordinator_ip="192.168.0.1",
         coordinator_port=1234,
         local_ip="192.168.0.2",
-        want_capabilities={"Convention Address.IPv4": f"{resolve('192.168.0.1')}:1234", "coordinator": False, "ip": resolve("192.168.0.2")},
+        want_capabilities={"Convention Address.IPv4": "192.168.0.1!r:1234", "coordinator": False, "ip": "192.168.0.2!r"},
         want_log_defs=True,
     ),
     process_startup_method_fork=BootstrapActorSystemCase(
         process_startup_method="fork",
-        local_ip="192.168.0.2",
-        coordinator_ip="192.168.0.1",
         want_capabilities={
-            "Convention Address.IPv4": f"{resolve('192.168.0.1')}:1900",
             "Process Startup Method": "fork",
-            "coordinator": False,
-            "ip": resolve("192.168.0.2"),
+            "coordinator": True,
         },
         want_log_defs=True,
     ),
     process_startup_method_spawn=BootstrapActorSystemCase(
         process_startup_method="spawn",
-        local_ip="192.168.0.2",
-        coordinator_ip="192.168.0.1",
         want_capabilities={
-            "Convention Address.IPv4": f"{resolve('192.168.0.1')}:1900",
             "Process Startup Method": "spawn",
-            "coordinator": False,
-            "ip": resolve("192.168.0.2"),
+            "coordinator": True,
         },
         want_log_defs=True,
     ),
     process_startup_method_forkserver=BootstrapActorSystemCase(
         process_startup_method="forkserver",
-        local_ip="192.168.0.2",
-        coordinator_ip="192.168.0.1",
         want_capabilities={
-            "Convention Address.IPv4": f"{resolve('192.168.0.1')}:1900",
             "Process Startup Method": "forkserver",
-            "coordinator": False,
-            "ip": resolve("192.168.0.2"),
+            "coordinator": True,
         },
         want_log_defs=True,
     ),
@@ -244,6 +267,7 @@ def test_bootstrap_actor_system(
             try_join=case.try_join,
             prefer_local_only=case.prefer_local_only,
             local_ip=case.local_ip,
+            admin_port=case.admin_port,
             coordinator_ip=case.coordinator_ip,
             coordinator_port=case.coordinator_port,
         )
@@ -252,7 +276,7 @@ def test_bootstrap_actor_system(
         return
     assert got is not None
     assert got.systemBase == case.want_system_base
-    assert got.capabilities == case.want_capabilities
+    assert (got.capabilities or {}) == (case.want_capabilities or {})
     assert bool(got.logDefs) == case.want_log_defs
     if case.want_connect:
         mock_socket.connect.assert_called_once_with(case.want_connect)
@@ -304,6 +328,8 @@ def test_actor_system_already_running(
     except type(case.want_error) if case.want_error else tuple() as ex:
         assert str(ex) == str(case.want_error)
         return
+    else:
+        assert case.want_error is None
     assert got is case.want
     if case.want_connect:
         mock_socket.connect.assert_called_once_with(case.want_connect)
