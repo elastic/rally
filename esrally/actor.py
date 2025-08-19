@@ -209,7 +209,7 @@ def actor_system_already_running(
     ip: str | None = None,
     port: int | None = None,
     system_base: SystemBase | None = None,
-) -> bool:
+) -> bool | None:
     """It determines whether an actor system is already running by opening a socket connection.
 
     Notes:
@@ -219,7 +219,8 @@ def actor_system_already_running(
     if system_base is None:
         system_base = __SYSTEM_BASE
     if system_base != "multiprocTCPBase":
-        raise ValueError(f"unsupported system base: {system_base}")
+        # This system is not supported yet.
+        return None
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
