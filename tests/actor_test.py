@@ -302,18 +302,14 @@ class ActorSystemAlreadyRunningCase:
     ip_and_port_already_running=ActorSystemAlreadyRunningCase(
         ip="10.0.0.1", port=1000, already_running=True, want=True, want_connect=("10.0.0.1", 1000)
     ),
-    system_base_simple=ActorSystemAlreadyRunningCase(
-        system_base="simpleSystemBase", want_error=ValueError("unsupported system base: simpleSystemBase")
-    ),
-    system_base_queue=ActorSystemAlreadyRunningCase(
-        system_base="multiprocQueueBase", want_error=ValueError("unsupported system base: multiprocQueueBase")
-    ),
+    system_base_simple=ActorSystemAlreadyRunningCase(system_base="simpleSystemBase"),
+    system_base_queue=ActorSystemAlreadyRunningCase(system_base="multiprocQueueBase"),
     system_base_tcp=ActorSystemAlreadyRunningCase(system_base="multiprocTCPBase", want=False, want_connect=("127.0.0.1", 1900)),
     system_base_tcp_already_running=ActorSystemAlreadyRunningCase(
         already_running=True, system_base="multiprocTCPBase", want=True, want_connect=("127.0.0.1", 1900)
     ),
     system_base_udp=ActorSystemAlreadyRunningCase(
-        system_base="multiprocUDPBase", want_error=ValueError("unsupported system base: multiprocUDPBase")
+        system_base="multiprocUDPBase",
     ),
 )
 def test_actor_system_already_running(

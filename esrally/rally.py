@@ -965,13 +965,6 @@ def race(cfg: types.Config, kill_running_processes=False):
     with_actor_system(racecontrol.run, cfg)
 
 
-def actor_system_already_running() -> bool:
-    try:
-        return actor.actor_system_already_running()
-    except ValueError:
-        return False
-
-
 def with_actor_system(runnable, cfg: types.Config):
     process_startup_method: actor.ProcessStartupMethod | None = cfg.opts("actor", "actor.process.startup.method", None, mandatory=False)
     if process_startup_method is not None:
@@ -982,10 +975,10 @@ def with_actor_system(runnable, cfg: types.Config):
             )
         actor.set_startup_method(process_startup_method)
 
-    already_running = actor_system_already_running()
-    LOG.info("Actor system already running locally? [%s]", str(already_running))
+    already_running = actor.actor_system_already_running()
+    LOG.info("Actor system already running locally? [%s]", already_running)
     try:
-        actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
+        actors = actor.bootstrap_actor_system(try_join=bool(already_running), prefer_local_only=not already_running)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
         cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
     # This happens when the admin process could not be started, e.g. because it could not open a socket.
@@ -1021,7 +1014,7 @@ def with_actor_system(runnable, cfg: types.Config):
                     actors.shutdown()
                     # note that this check will only evaluate to True for a TCP-based actor system.
                     timeout = 15
-                    while actor_system_already_running() and timeout > 0:
+                    while actor.actor_system_already_running() and timeout > 0:
                         LOG.info("Actor system is still running. Waiting...")
                         time.sleep(1)
                         timeout -= 1

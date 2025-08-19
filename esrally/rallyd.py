@@ -34,15 +34,8 @@ from esrally import (
 from esrally.utils import console, process
 
 
-def actor_system_already_running() -> bool:
-    try:
-        return actor.actor_system_already_running()
-    except ValueError:
-        return False
-
-
 def start(args):
-    if actor_system_already_running():
+    if actor.actor_system_already_running():
         raise exceptions.RallyError("An actor system appears to be already running.")
     actor.bootstrap_actor_system(local_ip=args.node_ip, coordinator_ip=args.coordinator_ip)
     console.info(f"Successfully started actor system on node [{args.node_ip}] with coordinator node IP [{args.coordinator_ip}].")
@@ -58,7 +51,7 @@ def start(args):
 
 
 def stop(raise_errors=True):
-    if actor_system_already_running():
+    if actor.actor_system_already_running():
         # noinspection PyBroadException
         try:
             # TheSpian writes the following warning upon start (at least) on Mac OS X:
@@ -72,7 +65,7 @@ def stop(raise_errors=True):
             running_system.shutdown()
             # await termination...
             console.info("Shutting down actor system.", end="", flush=True)
-            while actor_system_already_running():
+            while actor.actor_system_already_running():
                 console.println(".", end="", flush=True)
                 time.sleep(1)
             console.println(" [OK]")
@@ -87,7 +80,7 @@ def stop(raise_errors=True):
 
 
 def status():
-    if actor_system_already_running():
+    if actor.actor_system_already_running():
         console.println("Running")
     else:
         console.println("Stopped")
