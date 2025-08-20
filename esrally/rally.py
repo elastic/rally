@@ -45,7 +45,6 @@ from esrally import (
     paths,
     racecontrol,
     reporter,
-    storage,
     telemetry,
     track,
     types,
@@ -1302,10 +1301,8 @@ def main():
     logger.info("Python [%s]", str(sys.implementation))
     logger.info("Rally version [%s]", version.version())
     logger.debug("Command line arguments: %s", args)
-
     # Configure networking
     net.init()
-    storage.init_transfer_manager(cfg=cfg)
 
     def _trap_exc(function, path, exc_info):
         if isinstance(exc_info, FileNotFoundError):
