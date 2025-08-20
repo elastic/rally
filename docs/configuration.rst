@@ -172,6 +172,9 @@ Configuration options are:
   At this point in time `esrally.storage._http:HTTPAdapter` is the only existing `Adapter` implementations intended
   for public use and that is already the default one. So it is required to edit this option for special customizations.
 
+* ``storage.head_ttl`` indicates the default time to live in seconds replies from head requests has to be considered
+  valid. In case this value is zero, the caching mechanism is disabled.
+
 * ``storage.local_dir`` indicates the default directory where to store local files when no path has been specified.
 
 * ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
@@ -222,6 +225,9 @@ Configuration options are:
 
 * ``storage.random_seed`` a string used to initialize the client random number generator. This could be used to make
   problems easier to reproduce in continuous integration. In most of the cases it should be left empty.
+
+* ``storage.resolve_ttl`` indicates the default time to live in seconds replies from resolve requests has to be
+  considered valid. In case this value is zero, the caching mechanism is disabled.
 
 
 HTTP Adapter

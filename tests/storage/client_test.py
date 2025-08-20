@@ -136,28 +136,39 @@ def test_from_config(case: FromConfigCase) -> None:
 class HeadCase:
     url: str
     want: Head | None = None
-    want_error: type[Exception] | tuple[type[Exception], ...] = tuple()
+    want_error: type[Exception] | None = None
     ttl: float | None = None
+    want_cached: bool | None = None
 
 
 @cases(
     default=HeadCase(SOME_URL, SOME_HEAD),
-    ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=300.0),
+    ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=300.0, want_cached=True),
+    zero_ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=0.0, want_cached=False),
+    negative_ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=-1.0, want_cached=False),
     error=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError),
-    error_ttl=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError, ttl=300.0),
+    error_ttl=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError, ttl=300.0, want_cached=True),
+    error_zero_ttl=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError, ttl=0.0, want_cached=False),
 )
 def test_head(case: HeadCase, client: Client) -> None:
+    # pylint: disable=catching-non-exception
+    err: Exception | None = None
+    want_error = tuple(filter(None, [case.want_error]))
     try:
         got = client.head(url=case.url, ttl=case.ttl)
-    except case.want_error:
+    except want_error as e:
         got = None
+        err = e
     else:
         assert got == case.want
-    if case.ttl is not None:
+    if case.want_cached is not None:
         try:
-            assert got is client.head(url=case.url, ttl=case.ttl)
+            assert (got is client.head(url=case.url, ttl=case.ttl)) == case.want_cached
         except CachedHeadError as ex:
-            assert isinstance(ex.__cause__, case.want_error)
+            assert case.want_cached
+            assert err is ex.__cause__
+        except want_error:
+            assert not case.want_cached
 
 
 @dataclass()

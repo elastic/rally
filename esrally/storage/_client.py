@@ -85,7 +85,14 @@ class Client:
         adapters = AdapterRegistry.from_config(cfg)
         mirrors = MirrorList.from_config(cfg)
         random = Random(cfg.random_seed)
-        return cls(adapters=adapters, mirrors=mirrors, random=random, max_connections=cfg.max_connections)
+        return cls(
+            adapters=adapters,
+            mirrors=mirrors,
+            random=random,
+            max_connections=cfg.max_connections,
+            head_ttl=cfg.head_ttl,
+            resolve_ttl=cfg.resolve_ttl,
+        )
 
     def __init__(
         self,
@@ -93,6 +100,8 @@ class Client:
         mirrors: MirrorList,
         random: Random,
         max_connections: int = DEFAULT_STORAGE_CONFIG.max_connections,
+        head_ttl: float = DEFAULT_STORAGE_CONFIG.head_ttl,
+        resolve_ttl: float = DEFAULT_STORAGE_CONFIG.resolve_ttl,
     ):
         self._adapters: AdapterRegistry = adapters
         self._cached_heads: dict[str, CachedHead] = {}
@@ -101,6 +110,8 @@ class Client:
         self._mirrors: MirrorList = mirrors
         self._random: Random = random
         self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
+        self._head_ttl: float = head_ttl
+        self._resolve_ttl: float = resolve_ttl
 
     @property
     def adapters(self):
@@ -109,7 +120,10 @@ class Client:
     def head(self, url: str, ttl: float | None = None) -> Head:
         """It gets remote file headers."""
 
-        if ttl is not None:
+        if ttl is None:
+            ttl = self._head_ttl
+        ttl = max(0.0, ttl)
+        if ttl:
             # when time-to-leave is given, it looks up for pre-cached head first
             try:
                 return self._cached_heads[url].get(ttl)
@@ -140,7 +154,7 @@ class Client:
         assert head is not None
         return head
 
-    def resolve(self, url: str, want: Head | None, ttl: float = 60.0) -> Iterator[Head]:
+    def resolve(self, url: str, want: Head | None, ttl: float | None = None) -> Iterator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
         :param url: the remote file URL at its mirrored source location.
         :param want: extra parameters to mach remote heads.
@@ -169,6 +183,9 @@ class Client:
         if url not in urls:
             # It ensures source URL is in the list so that it will be used as fall back when any mirror works.
             urls.append(url)
+
+        if ttl is None:
+            ttl = self._resolve_ttl
 
         for u in urls:
             try:

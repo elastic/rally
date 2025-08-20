@@ -48,6 +48,8 @@ class StorageConfig:
     monitor_interval: float = 2.0  # number of seconds
     multipart_size: int = 8 * 1024 * 1024  # number of bytes
     random_seed: Any = None
+    head_ttl: float = 60.0
+    resolve_ttl: float = 60.0
     thread_name_prefix: str = "esrally.storage.transfer-worker"
 
     @classmethod
@@ -102,6 +104,12 @@ class StorageConfig:
             ),
             random_seed=cfg.opts(
                 section="storage", key="storage.random_seed", default_value=DEFAULT_STORAGE_CONFIG.random_seed, mandatory=False
+            ),
+            head_ttl=float(
+                cfg.opts(section="storage", key="storage.head_ttl", default_value=DEFAULT_STORAGE_CONFIG.head_ttl, mandatory=False)
+            ),
+            resolve_ttl=float(
+                cfg.opts(section="storage", key="storage.resolve_ttl", default_value=DEFAULT_STORAGE_CONFIG.head_ttl, mandatory=False)
             ),
         )
 
