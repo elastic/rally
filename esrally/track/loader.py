@@ -34,8 +34,16 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import PROGRAM_NAME, config, exceptions, paths, time, types, version
-from esrally.storage import StorageConfig, init_transfer_manager
+from esrally import (
+    PROGRAM_NAME,
+    config,
+    exceptions,
+    paths,
+    storage,
+    time,
+    types,
+    version,
+)
 from esrally.track import params, track
 from esrally.track.track import Parallel
 from esrally.utils import (
@@ -522,12 +530,12 @@ class Downloader:
         use_transfer_manager: bool = convert.to_bool(
             cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=False)
         )
-        storage_config: StorageConfig | None = None
+        storage_config: storage.StorageConfig | None = None
         if use_transfer_manager:
-            storage_config = StorageConfig.from_config(cfg)
+            storage_config = storage.StorageConfig.from_config(cfg)
         return cls(offline=offline, test_mode=test_mode, storage_config=storage_config)
 
-    def __init__(self, offline: bool, test_mode: bool, storage_config: StorageConfig | None = None):
+    def __init__(self, offline: bool, test_mode: bool, storage_config: storage.StorageConfig | None = None):
         self.offline = offline
         self.test_mode = test_mode
         self.storage_config = storage_config
@@ -542,7 +550,7 @@ class Downloader:
         # It joins manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
         data_url = f"{base_url.rstrip('/')}/{file_name}"
         if self.storage_config is not None:
-            manager = init_transfer_manager(self.storage_config.config_name)
+            manager = storage.transfer_manager(self.storage_config)
             LOG.info("Downloading data from [%s] to [%s] using transfer manager...", data_url, target_path)
             try:
                 manager.get(data_url, target_path, size_in_bytes).wait()

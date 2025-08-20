@@ -94,25 +94,20 @@ class TransferManager:
             transfers = self._transfers
             self._transfers = []
         for tr in transfers:
-            tr.close()
+            try:
+                tr.close()
+            except Exception as ex:
+                LOG.error("error closing transfer: %s, %s", tr.url, ex)
         self._monitor_timer.cancel()
 
     def get(self, url: str, path: os.PathLike | str | None = None, document_length: int | None = None) -> Transfer:
-        """It starts a new transfer of a file from local path to a remote url.
+        """It starts a new transfer of a file from a remote url to a local path.
 
         :param url: remote file address.
         :param path: local file address.
         :param document_length: the expected file size in bytes.
         :return: started transfer object.
         """
-        return self._transfer(url=url, path=path, document_length=document_length)
-
-    def _transfer(
-        self,
-        url: str,
-        path: os.PathLike | str | None = None,
-        document_length: int | None = None,
-    ) -> Transfer:
         if path is None:
             path = os.path.join(self.cfg.local_dir, url)
         # This also ensures the path is a string
@@ -178,41 +173,42 @@ class TransferManager:
         LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
 
 
+def config_and_name(cfg: AnyConfig = None) -> tuple[AnyConfig, str | None]:
+    if cfg is None:
+        return cfg, None
+    if isinstance(cfg, str):
+        return cfg, cfg.strip() or None
+    cfg = StorageConfig.from_config(cfg)
+    return cfg, cfg.config_name
+
+
 _MANAGERS_LOCK = threading.Lock()
 _MANAGERS: dict[str | None, TransferManager] = {}
 
 
-def init_transfer_manager(cfg: AnyConfig = None) -> TransferManager:
+def transfer_manager(cfg: AnyConfig = None) -> TransferManager:
     with _MANAGERS_LOCK:
-        cfg = StorageConfig.from_config(cfg)
-        assert isinstance(cfg, StorageConfig)
-        manager = _MANAGERS.get(cfg.config_name)
+        cfg, name = config_and_name(cfg)
+        manager = _MANAGERS.get(name)
         if manager is None:
-            _MANAGERS[cfg.config_name] = manager = TransferManager.from_config(cfg)
+            cfg = StorageConfig.from_config(cfg)
+            manager = TransferManager.from_config(cfg)
+            _MANAGERS[cfg.config_name] = manager
             atexit.register(manager.shutdown)
             LOG.debug("transfer manager initialized: cfg=%s", cfg)
-        elif manager.cfg != cfg:
+        elif (cfg := StorageConfig.from_config(cfg)) != manager.cfg:
             manager.cfg = cfg
             LOG.debug("transfer manager configuration updated: cfg=%s", cfg)
         return manager
 
 
-def shutdown_transfer_manager(config_name: str | None = None) -> bool:
+def shutdown_transfer_manager(cfg: AnyConfig = None) -> bool:
     with _MANAGERS_LOCK:
-        manager = _MANAGERS.pop(config_name, None)
+        cfg, name = config_and_name(cfg)
+        manager = _MANAGERS.pop(name, None)
         if manager is None:
-            LOG.debug("transfer manager not initialized: %s", config_name)
+            LOG.debug("transfer manager not initialized: %s", name)
             return False
-        LOG.debug("shutdown transfer manager: %s", config_name)
+        LOG.debug("shutting down transfer manager: %s", name)
         manager.shutdown()
         return True
-
-
-def transfer_manager(config_name: str | None = None) -> TransferManager:
-    manager = _MANAGERS.get(config_name)
-    if manager is None:
-        init_transfer_manager(config_name)
-        manager = _MANAGERS.get(config_name)
-        if manager is None:
-            raise RuntimeError(f"Transfer manager not initialized for {config_name}")
-    return manager

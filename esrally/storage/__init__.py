@@ -18,7 +18,6 @@ from esrally.storage._adapter import Adapter, AdapterRegistry, Head
 from esrally.storage._config import AnyConfig, StorageConfig
 from esrally.storage._manager import (
     TransferManager,
-    init_transfer_manager,
     shutdown_transfer_manager,
     transfer_manager,
 )

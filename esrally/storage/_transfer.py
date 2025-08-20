@@ -349,7 +349,7 @@ class Transfer:
                 # cancelled.
                 fd.close()
             except Exception as ex:
-                LOG.warning("error closing file descriptor %r: %s", fd.path, ex)
+                LOG.error("error closing file descriptor %r: %s", fd.path, ex)
 
     @contextmanager
     def _open(self) -> Iterator[FileDescriptor | None]:
