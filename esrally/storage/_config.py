@@ -17,12 +17,15 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from typing import Any, Union
 
 from typing_extensions import Self
 
 from esrally import config, types
 from esrally.utils import convert
+
+LOG = logging.getLogger(__name__)
 
 AnyConfig = Union["StorageConfig", types.Config, str, None]
 
@@ -54,7 +57,10 @@ class StorageConfig:
 
         if cfg is None or isinstance(cfg, str):
             cfg = config.Config(cfg)
-            cfg.load_config(auto_upgrade=True)
+            try:
+                cfg.load_config(auto_upgrade=True)
+            except FileNotFoundError as ex:
+                LOG.warning("failed to load storage config from file (name='%s'): %s", cfg.name, ex)
 
         if not isinstance(cfg, config.Config):
             raise TypeError(f"invalid config type: '{type(cfg)}', want '{types.Config}'")

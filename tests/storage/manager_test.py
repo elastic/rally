@@ -29,7 +29,6 @@ from esrally.storage import _manager
 from esrally.storage._adapter import Head
 from esrally.storage._manager import (
     TransferManager,
-    init_transfer_manager,
     shutdown_transfer_manager,
     transfer_manager,
 )
@@ -136,26 +135,24 @@ def managers() -> Iterator[dict[str | None, TransferManager]]:
         yield managers
 
 
-def test_global_transfer_manager(cfg: types.Config, tmpdir: os.PathLike, managers: dict[str | None, TransferManager]) -> None:
+def test_transfer_manager(cfg: types.Config, tmpdir: os.PathLike, managers: dict[str | None, TransferManager]) -> None:
     assert cfg.name not in managers
 
-    assert init_transfer_manager(cfg)
-    assert cfg.name in managers
-
-    got = transfer_manager(cfg.name)
+    got = transfer_manager(cfg)
     assert isinstance(got, TransferManager)
     assert got is managers[cfg.name]
 
     tr = got.get(url=SIMPLE_URL, document_length=len(SIMPLE_DATA))
     assert tr.wait(timeout=60.0)
     assert os.path.exists(tr.path)
+    assert os.path.getsize(tr.path) == len(SIMPLE_DATA)
 
-    assert got is init_transfer_manager(cfg)
+    assert got is transfer_manager(cfg)
     assert got is transfer_manager(cfg.name)
     assert got is managers[cfg.name]
 
     assert shutdown_transfer_manager(cfg.name)
-    assert managers.get(cfg.name) is None
+    assert cfg.name not in managers
 
     assert not shutdown_transfer_manager(cfg.name)
-    assert managers.get(cfg.name) is None
+    assert cfg.name not in managers
