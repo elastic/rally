@@ -44,6 +44,7 @@ Section = Literal[
     "unit-test",
 ]
 Key = Literal[
+    "actor.system.base",
     "actor.process.startup.method",
     "add.chart_name",
     "add.chart_type",
@@ -162,6 +163,7 @@ Key = Literal[
     "storage.http.chunk_size",
     "storage.http.max_retries",
     "storage.local_dir",
+    "storage.log.actor.name",
     "storage.max_connections",
     "storage.max_workers",
     "storage.mirror_files",
@@ -169,6 +171,7 @@ Key = Literal[
     "storage.multipart_size",
     "storage.random_seed",
     "storage.resolve_ttl",
+    "storage.subprocess.log.level",
     "target.arch",
     "target.os",
     "team.path",

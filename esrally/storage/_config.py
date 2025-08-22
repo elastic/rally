@@ -32,7 +32,6 @@ AnyConfig = Union["StorageConfig", types.Config, str, None]
 
 @dataclasses.dataclass
 class StorageConfig:
-
     config_name: str | None = None
     adapters: tuple[str, ...] = (
         "esrally.storage._aws:S3Adapter",
@@ -40,17 +39,22 @@ class StorageConfig:
     )
     aws_profile: str = ""
     chunk_size: int = 64 * 1024
+    head_ttl: float = 60.0
     local_dir: str = "~/.rally/storage"
+    log_actor_name: str = "storage-log-forwarder"
+    subprocess_log_level: int = logging.NOTSET
+    actor_system_base: str | None = None
     max_connections: int = 4
     max_retries: int | str = 10
     max_workers: int = 32
     mirror_files: tuple[str, ...] = ("~/.rally/storage-mirrors.json",)
     monitor_interval: float = 2.0  # number of seconds
     multipart_size: int = 8 * 1024 * 1024  # number of bytes
+    process_startup_method: str | None = None
     random_seed: Any = None
-    head_ttl: float = 60.0
     resolve_ttl: float = 60.0
     thread_name_prefix: str = "esrally.storage.transfer-worker"
+    use_threads: bool = False
 
     @classmethod
     def from_config(cls, cfg: AnyConfig = None) -> Self:
@@ -69,48 +73,23 @@ class StorageConfig:
 
         return cls(
             config_name=cfg.name,
-            adapters=convert.to_strings(
-                cfg.opts(section="storage", key="storage.adapters", default_value=DEFAULT_STORAGE_CONFIG.adapters, mandatory=False)
-            ),
-            aws_profile=cfg.opts(
-                "storage", "storage.aws.profile", default_value=DEFAULT_STORAGE_CONFIG.aws_profile, mandatory=False
-            ).strip(),
+            actor_system_base=cfg.opts("actor", "actor.system.base", DEFAULT_STORAGE_CONFIG.actor_system_base, False),
+            adapters=convert.to_strings(cfg.opts("storage", "storage.adapters", DEFAULT_STORAGE_CONFIG.adapters, False)),
+            aws_profile=cfg.opts("storage", "storage.aws.profile", DEFAULT_STORAGE_CONFIG.aws_profile, False).strip(),
             chunk_size=int(cfg.opts("storage", "storage.http.chunk_size", DEFAULT_STORAGE_CONFIG.chunk_size, False)),
-            local_dir=cfg.opts(section="storage", key="storage.local_dir", default_value=DEFAULT_STORAGE_CONFIG.local_dir, mandatory=False),
-            max_connections=int(
-                cfg.opts(
-                    section="storage", key="storage.max_connections", default_value=DEFAULT_STORAGE_CONFIG.max_connections, mandatory=False
-                )
-            ),
-            max_retries=cfg.opts("storage", "storage.http.max_retries", DEFAULT_STORAGE_CONFIG.max_retries, mandatory=False),
-            max_workers=int(
-                cfg.opts(section="storage", key="storage.max_workers", default_value=DEFAULT_STORAGE_CONFIG.max_workers, mandatory=False)
-            ),
-            mirror_files=convert.to_strings(
-                cfg.opts(section="storage", key="storage.mirror_files", default_value=DEFAULT_STORAGE_CONFIG.mirror_files, mandatory=False)
-            ),
-            monitor_interval=float(
-                cfg.opts(
-                    section="storage",
-                    key="storage.monitor_interval",
-                    default_value=DEFAULT_STORAGE_CONFIG.monitor_interval,
-                    mandatory=False,
-                )
-            ),
-            multipart_size=int(
-                cfg.opts(
-                    section="storage", key="storage.multipart_size", default_value=DEFAULT_STORAGE_CONFIG.multipart_size, mandatory=False
-                )
-            ),
-            random_seed=cfg.opts(
-                section="storage", key="storage.random_seed", default_value=DEFAULT_STORAGE_CONFIG.random_seed, mandatory=False
-            ),
-            head_ttl=float(
-                cfg.opts(section="storage", key="storage.head_ttl", default_value=DEFAULT_STORAGE_CONFIG.head_ttl, mandatory=False)
-            ),
-            resolve_ttl=float(
-                cfg.opts(section="storage", key="storage.resolve_ttl", default_value=DEFAULT_STORAGE_CONFIG.head_ttl, mandatory=False)
-            ),
+            head_ttl=float(cfg.opts("storage", "storage.head_ttl", DEFAULT_STORAGE_CONFIG.head_ttl, False)),
+            local_dir=cfg.opts("storage", "storage.local_dir", DEFAULT_STORAGE_CONFIG.local_dir, False),
+            log_actor_name=cfg.opts("storage", "storage.log.actor.name", DEFAULT_STORAGE_CONFIG.log_actor_name, False),
+            max_connections=int(cfg.opts("storage", "storage.max_connections", DEFAULT_STORAGE_CONFIG.max_connections, False)),
+            max_retries=cfg.opts("storage", "storage.http.max_retries", DEFAULT_STORAGE_CONFIG.max_retries, False),
+            max_workers=int(cfg.opts("storage", "storage.max_workers", DEFAULT_STORAGE_CONFIG.max_workers, False)),
+            mirror_files=convert.to_strings(cfg.opts("storage", "storage.mirror_files", DEFAULT_STORAGE_CONFIG.mirror_files, False)),
+            monitor_interval=float(cfg.opts("storage", "storage.monitor_interval", DEFAULT_STORAGE_CONFIG.monitor_interval, False)),
+            multipart_size=int(cfg.opts("storage", "storage.multipart_size", DEFAULT_STORAGE_CONFIG.multipart_size, False)),
+            process_startup_method=cfg.opts("actor", "actor.process.startup.method", DEFAULT_STORAGE_CONFIG.process_startup_method, False),
+            random_seed=cfg.opts("storage", "storage.random_seed", DEFAULT_STORAGE_CONFIG.random_seed, False),
+            subprocess_log_level=cfg.opts("storage", "storage.subprocess.log.level", DEFAULT_STORAGE_CONFIG.subprocess_log_level, False),
+            resolve_ttl=float(cfg.opts("storage", "storage.resolve_ttl", DEFAULT_STORAGE_CONFIG.head_ttl, False)),
         )
 
 
