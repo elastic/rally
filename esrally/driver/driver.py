@@ -403,7 +403,6 @@ class TaskExecutionActor(actor.RallyActor):
         self.executor_future = None
         self.wakeup_interval = 5
         self.task_preparation_actor = None
-        self.logger = logging.getLogger(__name__)
         self.track_name = None
         self.cfg: Optional[types.Config] = None
 
@@ -427,17 +426,16 @@ class TaskExecutionActor(actor.RallyActor):
             )
             raise exceptions.RallyError(msg)
         task = msg.task
+        if self.executor_future is not None:
+            msg = f"TaskExecutionActor received DoTask message [{vars(msg)}], but was already busy"
+            raise exceptions.RallyError(msg)
         if task is None:
             self.send(self.task_preparation_actor, WorkerIdle())
-            return
-
-        if self.executor_future is not None:
-            raise exceptions.RallyError(f"TaskExecutionActor received DoTask message [{vars(msg)}], but was already busy")
-
-        # this is a potentially long-running operation so we offload it a background thread so we don't block
-        # the actor (e.g. logging works properly as log messages are forwarded timely).
-        self.executor_future = self.pool.submit(task.func, **task.params)
-        self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
+        else:
+            # this is a potentially long-running operation so we offload it a background thread so we don't block
+            # the actor (e.g. logging works properly as log messages are forwarded timely).
+            self.executor_future = self.pool.submit(task.func, **task.params)
+            self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     @actor.no_retry()
     def receiveMsg_WakeupMessage(self, msg, sender):
@@ -521,6 +519,12 @@ class TrackPreparationActor(actor.RallyActor):
         self.send_to_children_and_transition(
             self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING, self.Status.PROCESSOR_RUNNING
         )
+
+    @actor.no_retry()
+    def receiveMsg_WorkerBusy(self, msg, sender):
+        task = msg.task
+        if task is not None and task not in self.tasks:
+            self.tasks.append(task)
 
     def resume(self):
         assert self.cfg is not None

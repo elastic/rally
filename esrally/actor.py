@@ -57,11 +57,14 @@ class BaseActor(actors.ActorTypeDispatcher):
         self.logger = logging.getLogger(self.actor_name)
         self.logger.debug("Initializing actor: pid=%d, name='%s'.", os.getpid(), self.actor_name)
 
-    def receive_ActorExitRequest(self, msg: actors.ActorExitRequest, sender: actors.ActorAddress) -> None:
-        self.logger.info("Received exit request from '%s': %s (pid=%d)", sender, msg, os.getpid())
+    def receiveMsg_ActorExitRequest(self, msg: actors.ActorExitRequest, sender: actors.ActorAddress) -> None:
+        self.logger.debug("Received exit request from '%s': %s", sender, msg)
+
+    def receiveMsg_ChildActorExited(self, msg: actors.ActorExitRequest, sender: actors.ActorAddress) -> None:
+        self.logger.debug("Received child actor exited from '%s': %s", sender, msg)
 
     def receiveUnrecognizedMessage(self, msg: actors.PoisonMessage, sender: actors.ActorAddress) -> None:
-        self.logger.warning("Received unrecognized message from '%s': %s (pid=%d)", sender, msg, os.getpid())
+        self.logger.warning("Received unrecognized message from '%s': %s", sender, msg)
 
 
 M = typing.TypeVar("M")
@@ -101,6 +104,7 @@ def no_retry() -> Callable[[ActorMessageHandler[M]], ActorMessageHandler[M]]:
                 # It avoids sending the exception itself because the sender process might not have the class available on
                 # the load path, and it will fail while deserializing the cause.
                 self.send(sender, BenchmarkFailure(traceback.format_exc()))
+                return
 
         return wrapper
 
@@ -153,7 +157,7 @@ class RallyActor(BaseActor):
                 % (response_count, expected_count, self.status, new_status, self.received_responses)
             )
 
-        if response_count <= expected_count:
+        if response_count < expected_count:
             self.logger.debug(
                 "[%d] of [%d] child actors have responded for transition from [%s] to [%s].",
                 response_count,
@@ -161,6 +165,7 @@ class RallyActor(BaseActor):
                 self.status,
                 new_status,
             )
+            return
 
         self.logger.debug(
             "All [%d] child actors have responded. Transitioning now from [%s] to [%s].", expected_count, self.status, new_status
