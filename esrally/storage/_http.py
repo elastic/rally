@@ -28,8 +28,9 @@ import urllib3
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import Self
 
+from esrally import types
 from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG, AnyConfig, StorageConfig
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 
 LOG = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ LOG = logging.getLogger(__name__)
 class Session(requests.Session):
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
         return cls(max_retries=parse_max_retries(cfg.max_retries))
 
@@ -58,7 +59,7 @@ class HTTPAdapter(Adapter):
         return url.startswith("http://") or url.startswith("https://")
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
         session = Session.from_config(cfg)
         return cls(session=session, chunk_size=cfg.chunk_size)

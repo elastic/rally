@@ -25,15 +25,15 @@ from collections import abc
 import pytest
 from thespian import actors
 
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG, StorageConfig
-from esrally.storage._executor import executor_from_config
+from esrally import actor, config
+from esrally.utils import executors
 
 LOG = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="function", params=["fork", "spawn", "forkserver"])
 def process_startup_method(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str | None:
-    monkeypatch.setattr(DEFAULT_STORAGE_CONFIG, "process_startup_method", request.param)
+    monkeypatch.setattr(actor, "PROCESS_STARTUP_METHOD", request.param)
     return request.param
 
 
@@ -63,25 +63,29 @@ def multiproc_actor_system(multiproc_system_base: str, process_startup_method: s
 
 @dataclasses.dataclass
 class ExecutorCase:
-    cfg: StorageConfig
+    use_threading: bool = False
     want_same_pid: bool = True
     want_same_hostname: bool = True
 
 
 def test_executor_threading():
-    _test_executor(ExecutorCase(cfg=StorageConfig(use_threads=True)))
+    _test_executor(ExecutorCase(use_threading=True))
 
 
 def test_simple_executor(simple_actor_system: actors.ActorSystem):
-    _test_executor(ExecutorCase(cfg=StorageConfig(use_threads=False, subprocess_log_level=logging.DEBUG), want_same_pid=False))
+    _test_executor(ExecutorCase(want_same_pid=False))
 
 
 def test_multiproc_executor(multiproc_actor_system: actors.ActorSystem):
-    _test_executor(ExecutorCase(cfg=StorageConfig(use_threads=False, subprocess_log_level=logging.DEBUG), want_same_pid=False))
+    _test_executor(ExecutorCase(want_same_pid=False))
 
 
 def _test_executor(case: ExecutorCase):
-    executor = executor_from_config(case.cfg)
+    cfg = executors.ExecutorsConfig()
+    cfg.add(config.Scope.application, "executors", "executors.use_threading", case.use_threading)
+    cfg.add(config.Scope.application, "log", "executors.forwarder.log.level", logging.DEBUG)
+    executor = executors.Executor.from_config(cfg)
+
     got_hostname = executor.submit(socket.gethostname).result()
     assert (got_hostname == socket.gethostname()) is case.want_same_hostname
 

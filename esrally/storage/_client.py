@@ -28,13 +28,14 @@ from typing import NamedTuple
 
 from typing_extensions import Self
 
+from esrally import types
 from esrally.storage._adapter import (
     AdapterRegistry,
     Head,
     ServiceUnavailableError,
     Writable,
 )
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG, AnyConfig, StorageConfig
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, StorageConfig
 from esrally.storage._mirror import MirrorList
 from esrally.utils import pretty
 from esrally.utils.threads import WaitGroup, WaitGroupLimitError
@@ -80,7 +81,7 @@ class Client:
     """It handles client instances allocation allowing reusing pre-allocated instances from the same thread."""
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
         adapters = AdapterRegistry.from_config(cfg)
         mirrors = MirrorList.from_config(cfg)

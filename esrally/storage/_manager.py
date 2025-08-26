@@ -23,11 +23,11 @@ import threading
 
 from typing_extensions import Self
 
+from esrally import types
 from esrally.storage._client import Client
-from esrally.storage._config import AnyConfig, StorageConfig
-from esrally.storage._executor import Executor, executor_from_config
+from esrally.storage._config import StorageConfig
 from esrally.storage._transfer import Transfer
-from esrally.utils.threads import ContinuousTimer
+from esrally.utils import executors, threads
 
 LOG = logging.getLogger(__name__)
 
@@ -36,22 +36,20 @@ class TransferManager:
     """It creates and perform file transfer operations in background."""
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
         """It creates a TransferManager with initialization values taken from given configuration."""
-        cfg = StorageConfig.from_config(cfg)
-        client = Client.from_config(cfg)
-        executor = executor_from_config(cfg)
+
         return cls(
-            cfg=cfg,
-            client=client,
-            executor=executor,
+            cfg=StorageConfig.from_config(cfg),
+            client=Client.from_config(cfg),
+            executor=executors.Executor.from_config(cfg),
         )
 
     def __init__(
         self,
         cfg: StorageConfig,
         client: Client,
-        executor: Executor,
+        executor: executors.Executor,
     ):
         """It manages files transfers.
 
@@ -72,21 +70,17 @@ class TransferManager:
 
         self._transfers: list[Transfer] = []
 
-        if cfg.max_workers < 1:
-            raise ValueError(f"invalid max_workers: {cfg.max_workers} < 1")
-        # self._max_workers = cfg.max_workers
-
         if cfg.max_connections < 1:
             raise ValueError(f"invalid max_connections: {cfg.max_connections} < 1")
-        # self._max_connections = cfg.max_connections
 
         if cfg.multipart_size < 1024 * 1024:
             raise ValueError(f"invalid multipart_size: {cfg.multipart_size} < {1024 * 1024}")
-        # self._multipart_size = cfg.multipart_size
 
         if cfg.monitor_interval <= 0:
             raise ValueError(f"invalid monitor interval: {cfg.monitor_interval} <= 0")
-        self._monitor_timer = ContinuousTimer(interval=cfg.monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
+        self._monitor_timer = threads.ContinuousTimer(
+            interval=cfg.monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor"
+        )
         self._monitor_timer.start()
 
     def shutdown(self):
@@ -145,7 +139,7 @@ class TransferManager:
             max_connections = self.cfg.max_connections
             number_of_transfers = len(self._transfers)
             if number_of_transfers > 0:
-                max_connections = min(max_connections, (self.cfg.max_workers // number_of_transfers) + 1)
+                max_connections = min(max_connections, (self._executor.max_workers // number_of_transfers) + 1)
         return max_connections
 
     def _update_transfers(self) -> None:
@@ -173,27 +167,28 @@ class TransferManager:
         LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
 
 
-def config_and_name(cfg: AnyConfig = None) -> tuple[AnyConfig, str | None]:
+def config_and_name(cfg: types.AnyConfig = None) -> tuple[types.AnyConfig, str | None]:
     if cfg is None:
-        return cfg, None
+        return None, None
     if isinstance(cfg, str):
-        return cfg, cfg.strip() or None
+        cfg = cfg.strip() or None
+        return cfg, cfg
     cfg = StorageConfig.from_config(cfg)
-    return cfg, cfg.config_name
+    return cfg, cfg.name
 
 
 _MANAGERS_LOCK = threading.Lock()
 _MANAGERS: dict[str | None, TransferManager] = {}
 
 
-def transfer_manager(cfg: AnyConfig = None) -> TransferManager:
+def transfer_manager(cfg: types.AnyConfig = None) -> TransferManager:
     with _MANAGERS_LOCK:
         cfg, name = config_and_name(cfg)
         manager = _MANAGERS.get(name)
         if manager is None:
             cfg = StorageConfig.from_config(cfg)
             manager = TransferManager.from_config(cfg)
-            _MANAGERS[cfg.config_name] = manager
+            _MANAGERS[cfg.name] = manager
             atexit.register(manager.shutdown)
             LOG.debug("transfer manager initialized: cfg=%s", cfg)
         elif (cfg := StorageConfig.from_config(cfg)) != manager.cfg:
@@ -202,7 +197,7 @@ def transfer_manager(cfg: AnyConfig = None) -> TransferManager:
         return manager
 
 
-def shutdown_transfer_manager(cfg: AnyConfig = None) -> bool:
+def shutdown_transfer_manager(cfg: types.AnyConfig = None) -> bool:
     with _MANAGERS_LOCK:
         cfg, name = config_and_name(cfg)
         manager = _MANAGERS.pop(name, None)

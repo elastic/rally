@@ -25,7 +25,6 @@ from unittest.mock import patch
 import pytest
 
 from esrally import config, types
-from esrally.storage import _manager
 from esrally.storage._adapter import Head
 from esrally.storage._manager import (
     TransferManager,
@@ -33,6 +32,7 @@ from esrally.storage._manager import (
     transfer_manager,
 )
 from esrally.storage.testing import DummyAdapter, DummyExecutor
+from esrally.utils import executors
 from esrally.utils.cases import cases
 
 
@@ -52,7 +52,7 @@ def cfg(request, tmpdir: os.PathLike) -> types.Config:
 @pytest.fixture(scope="function")
 def dummy_executor(monkeypatch: pytest.MonkeyPatch) -> Iterator[DummyExecutor]:
     executor = DummyExecutor()
-    monkeypatch.setattr(_manager, "executor_from_config", lambda cfg: executor)
+    monkeypatch.setattr(executors.Executor, "from_config", lambda cfg: executor)
     try:
         yield executor
     finally:

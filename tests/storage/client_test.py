@@ -30,7 +30,7 @@ import pytest
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._client import CachedHeadError, Client
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 from esrally.storage.testing import DummyAdapter
 from esrally.types import Key
@@ -122,7 +122,7 @@ class FromConfigCase:
 )
 def test_from_config(case: FromConfigCase) -> None:
     # pylint: disable=protected-access
-    cfg = Config()
+    cfg = StorageConfig()
     for k, v in case.opts.items():
         cfg.add(Scope.application, "storage", k, v)
     client = Client.from_config(cfg)

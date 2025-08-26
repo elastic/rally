@@ -21,10 +21,10 @@ from collections.abc import Iterable, Mapping
 
 from typing_extensions import Self
 
+from esrally import types
 from esrally.storage._adapter import Adapter, Head, Writable
-from esrally.storage._config import AnyConfig
-from esrally.storage._executor import Executor
 from esrally.storage._range import NO_RANGE, RangeSet
+from esrally.utils import executors
 
 
 class DummyAdapter(Adapter):
@@ -37,7 +37,7 @@ class DummyAdapter(Adapter):
         return True
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
         return cls()
 
     def __init__(self, heads: Iterable[Head] | None = None, data: Mapping[str, bytes] | None = None) -> None:
@@ -69,7 +69,7 @@ class DummyAdapter(Adapter):
         return Head(url, content_length=len(data))
 
 
-class DummyExecutor(Executor):
+class DummyExecutor(executors.Executor):
 
     def __init__(self):
         self.tasks: list[tuple] | None = []

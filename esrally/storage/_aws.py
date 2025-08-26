@@ -26,8 +26,9 @@ import boto3
 from botocore.response import StreamingBody
 from typing_extensions import Self
 
+from esrally import types
 from esrally.storage._adapter import Adapter, Head, Writable
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG, AnyConfig, StorageConfig
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, StorageConfig
 from esrally.storage._http import (
     head_to_headers,
     parse_accept_ranges,
@@ -46,7 +47,7 @@ class S3Adapter(Adapter):
         return url.startswith("s3://")
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
         return cls(aws_profile=cfg.aws_profile, chunk_size=cfg.chunk_size)
 

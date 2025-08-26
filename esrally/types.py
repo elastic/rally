@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
 
+from typing_extensions import Self, TypeAlias
+
 Section = Literal[
     "actor",
     "benchmarks",
@@ -25,7 +27,9 @@ Section = Literal[
     "defaults",
     "distributions",
     "driver",
+    "executors",
     "generator",
+    "log",
     "mechanic",
     "meta",
     "no_copy",
@@ -44,8 +48,13 @@ Section = Literal[
     "unit-test",
 ]
 Key = Literal[
-    "actor.system.base",
+    "actor.admin.port",
+    "actor.coordinator.ip",
+    "actor.coordinator.port",
+    "actor.fallback.system.base",
+    "actor.ip",
     "actor.process.startup.method",
+    "actor.system.base",
     "add.chart_name",
     "add.chart_type",
     "add.config.option",
@@ -91,6 +100,9 @@ Key = Literal[
     "elasticsearch.src.subdir",
     "env.name",
     "exclude.tasks",
+    "executors.max_workers",
+    "executors.use_threading",
+    "executors.forwarder.log.level",
     "format",
     "hosts",
     "include.tasks",
@@ -199,6 +211,11 @@ class Config(Protocol):
 
     def opts(self, section: Section, key: Key, default_value=None, mandatory: bool = True) -> Any: ...
 
+    def all_sections(self) -> list[Section]: ...
+
     def all_opts(self, section: Section) -> dict: ...
 
     def exists(self, section: Section, key: Key) -> bool: ...
+
+
+AnyConfig: TypeAlias = Self | Config | str | None

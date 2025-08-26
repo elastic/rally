@@ -29,7 +29,6 @@ from typing import BinaryIO
 from esrally.storage._adapter import Head, ServiceUnavailableError
 from esrally.storage._client import Client
 from esrally.storage._config import DEFAULT_STORAGE_CONFIG
-from esrally.storage._executor import Executor
 from esrally.storage._range import (
     MAX_LENGTH,
     NO_RANGE,
@@ -38,7 +37,7 @@ from esrally.storage._range import (
     RangeSet,
     rangeset,
 )
-from esrally.utils import convert, pretty, threads
+from esrally.utils import convert, executors, pretty, threads
 
 LOG = logging.getLogger(__name__)
 
@@ -79,7 +78,7 @@ class Transfer:
         client: Client,
         url: str,
         path: str,
-        executor: Executor,
+        executor: executors.Executor,
         document_length: int | None,
         todo: RangeSet = NO_RANGE,
         done: RangeSet = NO_RANGE,

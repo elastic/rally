@@ -27,7 +27,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from typing_extensions import Self
 
-from esrally.storage._config import AnyConfig, StorageConfig
+from esrally import types
+from esrally.storage._config import StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet
 
 LOG = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ class Adapter(ABC):
 
     @classmethod
     @abstractmethod
-    def from_config(cls, cfg: AnyConfig) -> Self:
+    def from_config(cls, cfg: types.AnyConfig) -> Self:
         """Default `Adapter` objects factory method used to create adapters from `esrally` client.
 
         Default implementation will ignore `cfg` parameter. It can be overridden from `Adapter` implementations that
@@ -125,7 +126,7 @@ class AdapterRegistry:
     """AdapterClassRegistry allows to register classes of adapters to be selected according to the target URL."""
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig) -> Self:
+    def from_config(cls, cfg: types.AnyConfig) -> Self:
         return cls(StorageConfig.from_config(cfg))
 
     def __init__(self, cfg: StorageConfig | None = None) -> None:

@@ -25,14 +25,14 @@ from typing_extensions import Self
 
 from esrally import config, types
 from esrally.storage._adapter import Adapter, AdapterRegistry
-from esrally.storage._config import AnyConfig
+from esrally.storage._config import StorageConfig
 from esrally.utils.cases import cases
 
 
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig) -> Self:
+    def from_config(cls, cfg: types.AnyConfig) -> Self:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 
@@ -65,8 +65,8 @@ class ExampleAdapterWithPath(MockAdapter, ABC):
 
 
 @pytest.fixture()
-def cfg() -> types.Config:
-    cfg = config.Config()
+def cfg() -> StorageConfig:
+    cfg = StorageConfig()
     cfg.add(
         config.Scope.application,
         "storage",

@@ -24,10 +24,10 @@ from unittest.mock import call, create_autospec
 import boto3
 import pytest
 
-from esrally.config import Config, Scope
+from esrally.config import Scope
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._aws import S3Adapter, S3Client, head_from_response
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, StorageConfig
 from esrally.storage._range import rangeset
 from esrally.types import Key
 from esrally.utils.cases import cases
@@ -164,7 +164,7 @@ class FromConfigCase:
     aws_profile=FromConfigCase({"storage.aws.profile": "foo"}, want_aws_profile="foo"),
 )
 def test_from_config(case: FromConfigCase) -> None:
-    cfg = Config()
+    cfg = StorageConfig()
     for k, v in case.opts.items():
         cfg.add(Scope.application, "storage", k, v)
     adapter = S3Adapter.from_config(cfg)

@@ -22,8 +22,7 @@ import os.path
 import pytest
 
 from esrally import config, types
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG
-from esrally.storage._mirror import MirrorList
+from esrally.storage import _config, _mirror
 from esrally.utils import cases
 
 BASE_URL = "https://rally-tracks.elastic.co"
@@ -41,13 +40,13 @@ MIRROR_FILES = os.path.join(os.path.dirname(__file__), "mirrors.json")
 class FromConfigCase:
     opts: dict[types.Key, str]
     want_error: type[Exception] | None = None
-    want_mirror_files: set[str] = DEFAULT_STORAGE_CONFIG.mirror_files
+    want_mirror_files: set[str] = _config.MIRROR_FILES
     want_urls: dict[str, set[str]] | None = None
 
 
 @pytest.fixture(autouse=True)
 def patch_default_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(DEFAULT_STORAGE_CONFIG, "mirror_files", tuple())
+    monkeypatch.setattr(_config, "MIRROR_FILES", tuple())
 
 
 @cases.cases(
@@ -61,7 +60,7 @@ def test_from_config(case: FromConfigCase, monkeypatch):
         cfg.add(config.Scope.application, "storage", k, v)
 
     try:
-        got_mirrors = MirrorList.from_config(cfg)
+        got_mirrors = _mirror.MirrorList.from_config(cfg)
         got_error = None
     except Exception as ex:
         got_mirrors = None
@@ -88,7 +87,7 @@ class ResolveCase:
     normalized=ResolveCase("https://rally-tracks.elastic.co/", want=[f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"]),
 )
 def test_resolve(case: ResolveCase):
-    mirrors = MirrorList(urls=MIRRORS)
+    mirrors = _mirror.MirrorList(urls=MIRRORS)
     try:
         got = sorted(mirrors.resolve(case.url))
         got_error = None
