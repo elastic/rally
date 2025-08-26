@@ -374,7 +374,7 @@ class ActorConfig(config.Config):
         return self.opts("actor", "actor.process.startup.method", default_value="", mandatory=False).strip() or None
 
 
-def system_from_config(cfg: types.Config | str | None = None) -> actors.ActorSystem:
+def system_from_config(cfg: types.AnyConfig = None) -> actors.ActorSystem:
     cfg = ActorConfig.from_config(cfg)
 
     first_error: Exception | None = None

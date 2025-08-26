@@ -16,7 +16,7 @@
 # under the License.
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
+from typing import Any, Literal, Protocol, TypeVar, Union, runtime_checkable
 
 from typing_extensions import Self, TypeAlias
 
@@ -100,9 +100,9 @@ Key = Literal[
     "elasticsearch.src.subdir",
     "env.name",
     "exclude.tasks",
+    "executors.forwarder.log.level",
     "executors.max_workers",
     "executors.use_threading",
-    "executors.forwarder.log.level",
     "format",
     "hosts",
     "include.tasks",
@@ -175,15 +175,12 @@ Key = Literal[
     "storage.http.chunk_size",
     "storage.http.max_retries",
     "storage.local_dir",
-    "storage.log.actor.name",
     "storage.max_connections",
-    "storage.max_workers",
     "storage.mirror_files",
     "storage.monitor_interval",
     "storage.multipart_size",
     "storage.random_seed",
     "storage.resolve_ttl",
-    "storage.subprocess.log.level",
     "target.arch",
     "target.os",
     "team.path",
@@ -218,4 +215,4 @@ class Config(Protocol):
     def exists(self, section: Section, key: Key) -> bool: ...
 
 
-AnyConfig: TypeAlias = Self | Config | str | None
+AnyConfig: TypeAlias = Union[Config, Self, str, None]
