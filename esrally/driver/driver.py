@@ -427,16 +427,17 @@ class TaskExecutionActor(actor.RallyActor):
             )
             raise exceptions.RallyError(msg)
         task = msg.task
-        if self.executor_future is not None:
-            msg = f"TaskExecutionActor received DoTask message [{vars(msg)}], but was already busy"
-            raise exceptions.RallyError(msg)
         if task is None:
             self.send(self.task_preparation_actor, WorkerIdle())
-        else:
-            # this is a potentially long-running operation so we offload it a background thread so we don't block
-            # the actor (e.g. logging works properly as log messages are forwarded timely).
-            self.executor_future = self.pool.submit(task.func, **task.params)
-            self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
+            return
+
+        if self.executor_future is not None:
+            raise exceptions.RallyError(f"TaskExecutionActor received DoTask message [{vars(msg)}], but was already busy")
+
+        # this is a potentially long-running operation so we offload it a background thread so we don't block
+        # the actor (e.g. logging works properly as log messages are forwarded timely).
+        self.executor_future = self.pool.submit(task.func, **task.params)
+        self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
 
     @actor.no_retry()
     def receiveMsg_WakeupMessage(self, msg, sender):

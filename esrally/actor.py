@@ -112,7 +112,6 @@ class RallyActor(BaseActor):
     def __init__(self, *args: Any, **kw: Any):
         super().__init__(*args, **kw)
         self.children: list[actors.ActorAddress] = []
-        self.sent_requests: int = 0
         self.received_responses: list[typing.Any] = []
         self.status = None
 
@@ -146,7 +145,7 @@ class RallyActor(BaseActor):
 
         self.received_responses.append(msg)
         response_count = len(self.received_responses)
-        expected_count = self.sent_requests
+        expected_count = len(self.children)
 
         if response_count > expected_count:
             raise exceptions.RallyAssertionError(
@@ -177,7 +176,7 @@ class RallyActor(BaseActor):
 
         Sends the provided message to all child actors and immediately transitions to the new status.
 
-        :param sender: The actor from which we forward this message (in case it is message forwarding). Otherwise our own address.
+        :param sender: The actor from which we forward this message (in case it is message forwarding), otherwise our own address.
         :param msg: The message to send.
         :param expected_status: The status in which this actor should be upon calling this method.
         :param new_status: The new status.
@@ -190,9 +189,10 @@ class RallyActor(BaseActor):
         self.logger.debug("Transitioning from [%s] to [%s].", self.status, new_status)
         self.status = new_status
         child: actors.ActorAddress
-        for child in filter(None, self.children):
+        # It removes children that are None
+        self.children = list(filter(None, self.children))
+        for child in self.children:
             self.send(child, msg)
-            self.sent_requests += 1
 
     def is_current_status_expected(self, expected_status):
         # if we don't expect anything, we're always in the right status
