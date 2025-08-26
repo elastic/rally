@@ -10,17 +10,6 @@ Rally stores its configuration in the file ``~/.rally/rally.ini`` which is autom
     The configuration file can use `${CONFIG_DIR}` to refer to the directory where Rally stores its configuration files. This is useful for configuring Rally in a portable way.
     This defaults to `~/.rally`, but can be overridden by setting the `RALLY_HOME` environment variable in your shell.
 
-
-actor
-~~~~~
-
-This section allows to configure how thespian actor library is being used from rally.
-
-* ``actor.process.startup.method``: It allows to configure how `thespian` actors library should specify how
-  `subprocessing` library should create processes for new actors. This can be used to prevent from using `fork` method
-  on Linux or OSX with the purpose, for instance, to use threads in some rally component.
-
-
 meta
 ~~~~
 

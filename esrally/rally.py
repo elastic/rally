@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
 
 import argparse
 import datetime
@@ -24,7 +23,6 @@ import platform
 import shutil
 import sys
 import time
-import typing
 import uuid
 from enum import Enum
 
@@ -53,8 +51,6 @@ from esrally import (
 from esrally.mechanic import mechanic, team
 from esrally.tracker import tracker
 from esrally.utils import console, convert, io, net, opts, process, versions
-
-LOG = logging.getLogger(__name__)
 
 
 class ExitStatus(Enum):
@@ -965,35 +961,27 @@ def race(cfg: types.Config, kill_running_processes=False):
 
 
 def with_actor_system(runnable, cfg: types.Config):
-    process_startup_method: actor.ProcessStartupMethod | None = cfg.opts("actor", "actor.process.startup.method", None, mandatory=False)
-    if process_startup_method is not None:
-        if process_startup_method not in typing.get_args(actor.ProcessStartupMethod):
-            valid_options = ", ".join(str(v) for v in typing.get_args(actor.ProcessStartupMethod))
-            raise ValueError(
-                f"Invalid value '{process_startup_method}' for 'actor.process.startup.method' option. Valid values are: {valid_options}"
-            )
-        actor.set_startup_method(process_startup_method)
-
+    logger = logging.getLogger(__name__)
     already_running = actor.actor_system_already_running()
-    LOG.info("Actor system already running locally? [%s]", already_running)
+    logger.info("Actor system already running locally? [%s]", str(already_running))
     try:
-        actors = actor.bootstrap_actor_system(try_join=bool(already_running), prefer_local_only=not already_running)
+        actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
         cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
     # This happens when the admin process could not be started, e.g. because it could not open a socket.
     except thespian.actors.InvalidActorAddress:
-        LOG.info("Falling back to offline actor system.")
+        logger.info("Falling back to offline actor system.")
         actor.use_offline_actor_system()
         actors = actor.bootstrap_actor_system(try_join=True)
     except KeyboardInterrupt:
         raise exceptions.UserInterrupted("User has cancelled the benchmark (detected whilst bootstrapping actor system).") from None
     except Exception as e:
-        LOG.exception("Could not bootstrap actor system.")
+        logger.exception("Could not bootstrap actor system.")
         if str(e) == "Unable to determine valid external socket address.":
             console.warn(
-                "Could not determine a socket address. Are you running without any network? Switching to degraded mode.", logger=LOG
+                "Could not determine a socket address. Are you running without any network? Switching to degraded mode.", logger=logger
             )
-            LOG.info("Falling back to offline actor system.")
+            logger.info("Falling back to offline actor system.")
             actor.use_offline_actor_system()
             actors = actor.bootstrap_actor_system(try_join=True)
         else:
@@ -1001,7 +989,7 @@ def with_actor_system(runnable, cfg: types.Config):
     try:
         runnable(cfg)
     finally:
-        # We only shut down the actor system if it was not already running before
+        # We only shutdown the actor system if it was not already running before
         if not already_running:
             shutdown_complete = False
             times_interrupted = 0
@@ -1009,26 +997,26 @@ def with_actor_system(runnable, cfg: types.Config):
                 try:
                     # give some time for any outstanding messages to be delivered to the actor system
                     time.sleep(3)
-                    LOG.info("Attempting to shutdown internal actor system.")
+                    logger.info("Attempting to shutdown internal actor system.")
                     actors.shutdown()
                     # note that this check will only evaluate to True for a TCP-based actor system.
                     timeout = 15
                     while actor.actor_system_already_running() and timeout > 0:
-                        LOG.info("Actor system is still running. Waiting...")
+                        logger.info("Actor system is still running. Waiting...")
                         time.sleep(1)
                         timeout -= 1
                     if timeout > 0:
                         shutdown_complete = True
-                        LOG.info("Shutdown completed.")
+                        logger.info("Shutdown completed.")
                     else:
-                        LOG.warning("Shutdown timed out. Actor system is still running.")
+                        logger.warning("Shutdown timed out. Actor system is still running.")
                         break
                 except KeyboardInterrupt:
                     times_interrupted += 1
-                    LOG.warning("User interrupted shutdown of internal actor system.")
+                    logger.warning("User interrupted shutdown of internal actor system.")
                     console.info("Please wait a moment for Rally's internal components to shutdown.")
             if not shutdown_complete and times_interrupted > 0:
-                LOG.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.", times_interrupted)
+                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.", times_interrupted)
                 console.println("")
                 console.warn("Terminating now at the risk of leaving child processes behind.")
                 console.println("")
