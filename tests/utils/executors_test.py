@@ -31,14 +31,14 @@ from esrally.utils import executors
 LOG = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="function", params=["fork", "spawn", "forkserver"])
+@pytest.fixture(scope="function", params=[None, "fork", "spawn", "forkserver"])
 def process_startup_method(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str | None:
     monkeypatch.setattr(actor, "PROCESS_STARTUP_METHOD", request.param)
     return request.param
 
 
 @pytest.fixture(scope="function", params=["multiprocTCPBase", "multiprocQueueBase", "multiprocUDPBase"])
-def multiproc_system_base(request: pytest.FixtureRequest, process_startup_method: str) -> str:
+def multiproc_system_base(request: pytest.FixtureRequest) -> str:
     return request.param
 
 
@@ -64,8 +64,10 @@ def multiproc_actor_system(multiproc_system_base: str, process_startup_method: s
 @dataclasses.dataclass
 class ExecutorCase:
     use_threading: bool = False
+    process_startup_method: str | None = None
     want_same_pid: bool = True
     want_same_hostname: bool = True
+    system_base: str | None = None
 
 
 def test_executor_threading():
@@ -76,14 +78,17 @@ def test_simple_executor(simple_actor_system: actors.ActorSystem):
     _test_executor(ExecutorCase(want_same_pid=False))
 
 
-def test_multiproc_executor(multiproc_actor_system: actors.ActorSystem):
-    _test_executor(ExecutorCase(want_same_pid=False))
+def test_multiproc_executor(multiproc_actor_system: actors.ActorSystem, multiproc_system_base: str, process_startup_method: str | None):
+    _test_executor(ExecutorCase(want_same_pid=False, system_base=multiproc_system_base, process_startup_method=process_startup_method))
 
 
-def _test_executor(case: ExecutorCase):
+def _test_executor(case: ExecutorCase) -> None:
     cfg = executors.ExecutorsConfig()
     cfg.add(config.Scope.application, "executors", "executors.use_threading", case.use_threading)
-    cfg.add(config.Scope.application, "log", "executors.forwarder.log.level", logging.DEBUG)
+    cfg.add(config.Scope.application, "executors", "executors.forwarder.log.level", logging.DEBUG)
+    cfg.add(config.Scope.application, "actor", "actor.process.startup.method", case.process_startup_method or "")
+    if case.system_base:
+        cfg.add(config.Scope.application, "actor", "actor.system.base", case.system_base)
     executor = executors.Executor.from_config(cfg)
 
     got_hostname = executor.submit(socket.gethostname).result()

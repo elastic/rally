@@ -16,13 +16,14 @@
 # under the License.
 from __future__ import annotations
 
-import abc
 import concurrent.futures
 import copy
 import dataclasses
 import logging
 import multiprocessing
 import os
+import typing
+from collections.abc import Callable
 
 from thespian import actors
 from typing_extensions import Self
@@ -33,34 +34,9 @@ from esrally.utils import console, convert
 LOG = logging.getLogger(__name__)
 
 
-class Executor(abc.ABC):
-    """This is a protocol class for concrete asynchronous executors.
+@typing.runtime_checkable
+class ExecutorProtocol(typing.Protocol):
 
-    Executor protocol is used by Transfer class to submit tasks execution.
-    Notable implementation of this protocol is concurrent.futures.ThreadPoolExecutor[1] class.
-
-    [1] https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
-    """
-
-    _max_workers: int = 0
-
-    @property
-    def max_workers(self) -> int:
-        return self._max_workers
-
-    @classmethod
-    def from_config(cls, cfg: types.AnyConfig = None) -> Executor:
-        cfg = ExecutorsConfig.from_config(cfg)
-        if cfg.use_threading:
-            ret = ThreadPoolExecutor.from_config(cfg)
-        else:
-            ret = ProcessPoolExecutor.from_config(cfg)
-        return ret
-
-    def shutdown(self) -> None:
-        pass
-
-    @abc.abstractmethod
     def submit(self, fn, /, *args, **kwargs):
         """Submits a callable to be executed with the given arguments.
 
@@ -93,7 +69,69 @@ class ExecutorsConfig(actor.ActorConfig):
         return convert.to_bool(self.opts("executors", "executors.use_threading", USE_THREADING, False))
 
 
-class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor, Executor):
+@dataclasses.dataclass
+class Task:
+    func: typing.Callable
+    args: tuple[typing.Any, ...] = tuple()
+    kwargs: dict[str, typing.Any] | None = None
+
+    def __call__(self):
+        try:
+            result = self.func(*self.args, **(self.kwargs or {}))
+            self.handle_result(result, None)
+            return result
+        except Exception as ex:
+            self.handle_result(None, ex)
+            raise
+
+    def handle_result(self, result: typing.Any, error: Exception | None) -> None:
+        if error is not None:
+            LOG.exception("Unhandled exception: %s", error)
+
+
+@dataclasses.dataclass
+class Executor:
+    """This is a wrapper class for concrete asynchronous executors.
+
+    Executor protocol is used by Transfer class to submit tasks execution.
+    Notable implementation of this protocol is concurrent.futures.ThreadPoolExecutor[1] class.
+
+    [1] https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
+    """
+
+    executor: ExecutorProtocol
+    max_workers: int = 0
+
+    @classmethod
+    def from_config(cls, cfg: types.AnyConfig = None) -> Executor:
+        cfg = ExecutorsConfig.from_config(cfg)
+        if cfg.use_threading:
+            executor = ThreadPoolExecutor.from_config(cfg)
+        else:
+            executor = ProcessPoolExecutor.from_config(cfg)
+        return cls(executor=executor, max_workers=cfg.max_workers)
+
+    def shutdown(self) -> None:
+        if hasattr(self.executor, "shutdown"):
+            self.executor.shutdown()
+
+    def submit(self, fn, /, *args, **kwargs):
+        """Submits a callable to be executed with the given arguments.
+
+        Schedules the callable to be executed as fn(*args, **kwargs) and returns
+        a Future instance representing the execution of the callable.
+
+        Returns:
+            A Future representing the given call.
+        """
+        return self.executor.submit(self.task(fn, *args, **kwargs))
+
+    def task(self, fn, /, *args, **kwargs) -> Callable[[], typing.Any]:
+        """It allows wrapping user function to be executed with the given arguments."""
+        return Task(func=fn, args=args, kwargs=kwargs)
+
+
+class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
 
     @classmethod
     def from_config(cls, cfg: types.AnyConfig = None) -> Self:
@@ -102,7 +140,7 @@ class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor, Executor):
         return cls(max_workers=cfg.max_workers, thread_name_prefix=WORKERS_NAME_PREFIX)
 
 
-class ProcessPoolExecutor(concurrent.futures.ProcessPoolExecutor, Executor):
+class ProcessPoolExecutor(concurrent.futures.ProcessPoolExecutor):
 
     @classmethod
     def from_config(cls, cfg: types.AnyConfig = None) -> Self:
@@ -111,16 +149,24 @@ class ProcessPoolExecutor(concurrent.futures.ProcessPoolExecutor, Executor):
         return cls(
             max_workers=cfg.max_workers,
             mp_context=multiprocessing.get_context(cfg.process_startup_method),
-            initializer=LogForwarder.from_config(cfg).initialize_worker_subprocess,
+            initializer=ProcessPoolHelper.from_config(cfg).initialize_subprocess,
         )
 
 
-LOG_FORWARDER_GLOBAL_ACTOR_NAME = "esrally.log:LogForwarder"
+@dataclasses.dataclass
+class LogRecord:
+    record: logging.LogRecord
+
+
+class ProcessPoolHelperActor(actor.BaseActor):
+    def receiveMsg_LogRecord(self, msg: LogRecord, sender: actors.ActorAddress) -> None:
+        logging.root.handle(msg.record)
 
 
 @dataclasses.dataclass
-class LogForwarder:
+class ProcessPoolHelper:
 
+    cfg: ExecutorsConfig
     actor: actors.ActorAddress
     level: int = LOG_FORWARDER_LEVEL
 
@@ -128,41 +174,44 @@ class LogForwarder:
     def from_config(cls, cfg: types.AnyConfig = None) -> Self:
         cfg = ExecutorsConfig.from_config(cfg)
         actor_system = actor.system_from_config(cfg)
-        return cls(
-            actor=actor_system.createActor(LogForwarderActor, globalName=LOG_FORWARDER_GLOBAL_ACTOR_NAME), level=cfg.log_forwarder_level
+        helper = cls(
+            cfg=cfg,
+            actor=actor_system.createActor(ProcessPoolHelperActor, globalName=f"{__name__}:ProcessPoolHelperActor"),
+            level=cfg.log_forwarder_level,
         )
+        return helper
 
-    def initialize_worker_subprocess(self) -> None:
+    def initialize_subprocess(self) -> None:
+        """It prepares the new subprocess before taking tasks to execute."""
+
+        # Initialize logging system.
         if self.level:
             logging.root.setLevel(self.level)
-        logging.root.addHandler(LogForwarderHandler(self))
+        logging.root.addHandler(LogForwarderHandler(self.level, self.actor))
         log.post_configure_logging()
         console.set_assume_tty(assume_tty=False)
-        LOG.debug("Initialized worker logging: pid=%d.", os.getpid())
 
-    def emit(self, record: LogForwarderRecord) -> None:
-        assert isinstance(record, LogForwarderRecord)
-        actors.ActorSystem().tell(self.actor, record)
+        # Initialize actor system.
+        actor.system_from_config(cfg=self.cfg)
+
+        LOG.debug("Executor subprocess initialized: pid=%d.", os.getpid())
 
     def shutdown(self) -> None:
+        """It waits for all log records to be handled before shutting down the helper actor."""
+        LOG.debug("Send actor exit request.")
         actors.ActorSystem().ask(self.actor, actors.ActorExitRequest())
-
-
-@dataclasses.dataclass
-class LogForwarderRecord:
-    record: logging.LogRecord
 
 
 class LogForwarderHandler(logging.Handler):
 
-    def __init__(self, forwarder: LogForwarder):
-        super().__init__(forwarder.level)
-        self.forwarder = forwarder
+    def __init__(self, level: int, actor_addr: actors.ActorAddress) -> None:
+        super().__init__(level)
+        self.actor_addr = actor_addr
 
     def emit(self, record: logging.LogRecord) -> None:
-        self.forwarder.emit(self.prepare(record))
+        actors.ActorSystem().tell(self.actor_addr, self.prepare(record))
 
-    def prepare(self, record: logging.LogRecord) -> LogForwarderRecord:
+    def prepare(self, record: logging.LogRecord) -> LogRecord:
         """
         Prepare a record for queuing. The object returned by this method is
         enqueued.
@@ -193,10 +242,4 @@ class LogForwarderHandler(logging.Handler):
         record.exc_info = None
         record.exc_text = None
         record.stack_info = None
-        return LogForwarderRecord(record)
-
-
-class LogForwarderActor(actor.BaseActor):
-
-    def receive_LogForwarderRecord(self, msg: LogForwarderRecord, sender: actors.ActorAddress) -> None:
-        logging.root.handle(msg.record)
+        return LogRecord(record)
