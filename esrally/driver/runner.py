@@ -175,9 +175,11 @@ class Runner:
         self.logger = logging.getLogger(__name__)
         self.serverless_mode = False
         self.serverless_operator = False
+        self.test_mode = False
         if config:
             self.serverless_mode = convert.to_bool(config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
             self.serverless_operator = convert.to_bool(config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
+            self.test_mode = convert.to_bool(config.opts("track", "test.mode.enabled", mandatory=False, default_value=False))
 
     async def __aenter__(self):
         return self
