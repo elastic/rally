@@ -14,6 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import functools
 import logging
 import os
@@ -298,15 +300,12 @@ def _request(method, url, **kwargs):
     return manager.request(method, url, **kwargs)
 
 
-def resolve(hostname_or_ip):
-    if hostname_or_ip and hostname_or_ip.startswith("127"):
-        return hostname_or_ip
+def resolve(host: str, port: int | None = None, family: int = socket.AF_INET, proto: int = socket.IPPROTO_TCP) -> tuple[str, int | None]:
+    if host.startswith("127."):
+        return host, port
 
-    addrinfo = socket.getaddrinfo(hostname_or_ip, 22, 0, 0, socket.IPPROTO_TCP)
-    for family, _, _, _, sockaddr in addrinfo:
-        # we're interested in the IPv4 address
-        if family == socket.AddressFamily.AF_INET:
-            ip, _ = sockaddr
-            if ip[:3] != "127":
-                return ip
-    return None
+    for address_info in socket.getaddrinfo(host, port=port or None, family=family, proto=proto):
+        address = address_info[4]
+        if len(address) == 2 and isinstance(address[0], str) and isinstance(address[1], int):
+            host, port = address
+    return host, port or None

@@ -14,16 +14,22 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import configparser
 import logging
 import os.path
 import shutil
+import typing
 from enum import Enum
 from string import Template
 
+from typing_extensions import Self
+
 from esrally import PROGRAM_NAME, exceptions, paths, types
 from esrally.utils import io
+
+LOG = logging.getLogger(__name__)
 
 
 class Scope(Enum):
@@ -40,6 +46,7 @@ class Scope(Enum):
 
 
 class ConfigFile:
+
     def __init__(self, config_name=None, **kwargs):
         self.config_name = config_name
 
@@ -125,21 +132,49 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
 
 
 class Config:
-    EARLIEST_SUPPORTED_VERSION = 17
-
-    CURRENT_CONFIG_VERSION = 17
-
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
     different levels (e.g. a command line flag can override the same configuration property in the config file). These levels are
     transparently resolved when a property is retrieved and the value on the most specific level is returned.
     """
 
-    def __init__(self, config_name=None, config_file_class=ConfigFile, **kwargs):
+    EARLIEST_SUPPORTED_VERSION = 17
+
+    CURRENT_CONFIG_VERSION = 17
+
+    @classmethod
+    def from_config(cls, cfg: types.AnyConfig = None, load_config: bool = False) -> Self:
+        if isinstance(cfg, cls):
+            return cfg
+        if isinstance(cfg, types.Config):
+            return cls(copy_from=cfg)
+        if cfg is None or isinstance(cfg, str):
+            cfg = cls(cfg)
+            if load_config:
+                try:
+                    cfg.load_config(auto_upgrade=True)
+                except FileNotFoundError:
+                    LOG.warning("No config file found at [%s].", cfg)
+            return cfg
+        raise TypeError(f"unexpected cfg: got type {type(cfg).__name__}, expected Config, str or None")
+
+    def __init__(self, config_name: str | None = None, config_file_class=ConfigFile, copy_from: types.Config | None = None, **kwargs):
         self.name = config_name
         self.config_file = config_file_class(config_name, **kwargs)
         self._opts = {}
-        self._clear_config()
+        if copy_from is not None:
+            self.update(copy_from)
+        self._override_config()
+
+    def update(self, cfg: types.Config):
+        if isinstance(cfg, Config):
+            self.name = cfg.name
+            self.config_file = cfg.config_file
+            self._opts.update(cfg._opts)  # pylint: disable=protected-access
+            return
+        for section in cfg.all_sections():
+            for name, value in cfg.all_opts(section).items():
+                self.add(Scope.application, section, name, value)
 
     def add(self, scope, section: types.Section, key: types.Key, value):
         """
@@ -185,7 +220,11 @@ class Config:
             else:
                 raise exceptions.ConfigError(f"No value for mandatory configuration: section='{section}', key='{key}'")
 
-    def all_opts(self, section: types.Section):
+    @staticmethod
+    def all_sections() -> list[types.Section]:
+        return list(typing.get_args(types.Section))
+
+    def all_opts(self, section: types.Section) -> dict[str, typing.Any]:
         """
         Finds all options in a section and returns them in a dict.
 
@@ -233,21 +272,24 @@ class Config:
     def _do_load_config(self):
         config = self.config_file.load()
         # It's possible that we just reload the configuration
-        self._clear_config()
+        self._opts = {}
+        self._override_config()
         self._fill_from_config_file(config)
 
-    def _clear_config(self):
+    def _override_config(self):
         # This map contains default options that we don't want to sprinkle all over the source code but we don't want users to change
         # them either
-        self._opts = {
-            (Scope.application, "source", "distribution.dir"): "distributions",
-            (Scope.application, "benchmarks", "track.repository.dir"): "tracks",
-            (Scope.application, "benchmarks", "track.default.repository"): "default",
-            (Scope.application, "provisioning", "node.name.prefix"): "rally-node",
-            (Scope.application, "provisioning", "node.http.port"): 39200,
-            (Scope.application, "mechanic", "team.repository.dir"): "teams",
-            (Scope.application, "mechanic", "team.default.repository"): "default",
-        }
+        self._opts.update(
+            {
+                (Scope.application, "source", "distribution.dir"): "distributions",
+                (Scope.application, "benchmarks", "track.repository.dir"): "tracks",
+                (Scope.application, "benchmarks", "track.default.repository"): "default",
+                (Scope.application, "provisioning", "node.name.prefix"): "rally-node",
+                (Scope.application, "provisioning", "node.http.port"): 39200,
+                (Scope.application, "mechanic", "team.repository.dir"): "teams",
+                (Scope.application, "mechanic", "team.default.repository"): "default",
+            }
+        )
 
     def _fill_from_config_file(self, config):
         for section in config.sections():
