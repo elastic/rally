@@ -38,12 +38,10 @@ def pytest_addoption(parser):
 
 
 def pytest_cmdline_main(config):
-    # override the default track repository and revision if not provided by the user
+    # override the default track repository if not provided by the user
     repo = config.option.track_repository
     if repo is None:
         repo = config.option.track_repository = TRACK_REPO_PATH
-    if config.option.track_revision is None:
-        config.option.track_revision = "master"
     if not os.path.isdir(repo):
         # we're using the defaults, so perform an initial clone of rally-tracks
         if repo == TRACK_REPO_PATH:
