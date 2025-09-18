@@ -320,12 +320,12 @@ def test_config_context():
     with pytest.raises(exceptions.ConfigError):
         config.get_config()
     with pytest.raises(exceptions.ConfigError):
-        config.Config.from_context()
+        config.Config.from_config()
 
     cfg = config.Config()
     assert cfg is config.init_config(cfg)
     assert cfg is config.get_config()
-    assert cfg is config.Config.from_context()
+    assert cfg is config.Config.from_config()
     assert cfg is config.Config.from_config(cfg)
 
     with pytest.raises(exceptions.ConfigError):
@@ -334,8 +334,7 @@ def test_config_context():
     cfg2 = config.init_config(config.Config(), force=True)
     assert cfg2 is not cfg
     assert cfg2 is config.get_config()
-    assert cfg2 is config.Config.from_context()
-    assert cfg2 is config.Config.from_context()
+    assert cfg2 is config.Config.from_config()
     assert cfg is config.Config.from_config(cfg)
     assert cfg2 is config.Config.from_config(cfg2)
 

@@ -27,7 +27,7 @@ import pytest
 
 from esrally import actors, config, types
 from esrally.actors._config import (
-    DEFAULT_ADMIN_PORT,
+    DEFAULT_ADMIN_PORTS,
     DEFAULT_COORDINATOR_IP,
     DEFAULT_COORDINATOR_PORT,
     DEFAULT_FALLBACK_SYSTEM_BASE,
@@ -84,7 +84,7 @@ class SystemCase:
     system_base: str = DEFAULT_SYSTEM_BASE
     fallback_system_base: SystemBase | None = DEFAULT_FALLBACK_SYSTEM_BASE
     ip: str = DEFAULT_IP
-    admin_port: int = DEFAULT_ADMIN_PORT
+    admin_ports: int | range = DEFAULT_ADMIN_PORTS
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
     coordinator_port: int = DEFAULT_COORDINATOR_PORT
     process_startup_method: ProcessStartupMethod = DEFAULT_PROCESS_STARTUP_METHOD
@@ -111,7 +111,7 @@ class SystemCase:
         want_capabilities={"Thespian ActorSystem Name": "multiprocQueueBase"},
     ),
     ip=SystemCase(ip="0.0.0.0", want_capabilities={"ip": "0.0.0.0"}),
-    admin_port=SystemCase(admin_port=12345, want_capabilities={"Admin Port": 12345}),
+    admin_ports=SystemCase(admin_ports=12345, want_capabilities={"Admin Port": 12345}),
     coordinator_ip=SystemCase(
         coordinator_ip="192.168.0.1", want_capabilities={"coordinator": False, "Convention Address.IPv4": "192.168.0.1"}
     ),
@@ -146,8 +146,8 @@ def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None
         cfg.fallback_system_base = case.fallback_system_base
     if case.ip != DEFAULT_IP:
         cfg.ip = case.ip
-    if case.admin_port != DEFAULT_ADMIN_PORT:
-        cfg.admin_port = case.admin_port
+    if case.admin_ports != DEFAULT_ADMIN_PORTS:
+        cfg.admin_ports = case.admin_ports
     if case.coordinator_ip != DEFAULT_COORDINATOR_IP:
         cfg.coordinator_ip = case.coordinator_ip
     if case.coordinator_port != DEFAULT_COORDINATOR_PORT:

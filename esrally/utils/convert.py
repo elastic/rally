@@ -232,3 +232,29 @@ def to_bool(value: str | bool) -> bool:
     elif value in ["False", "false", "No", "no", "f", "n", "0", False]:
         return False
     raise ValueError(f"Cannot convert [{value}] to bool.")
+
+
+def to_range(value: str | range | int | None, *, min_value: int | None = None, max_value: int | None = None) -> range:
+    if value is None:
+        start, stop = None, None
+    elif isinstance(value, range):
+        start, stop = value.start, value.stop
+    elif isinstance(value, int):
+        start, stop = value, value + 1
+    elif isinstance(value, str):
+        value = value.replace(" ", "")
+        if "-" in value:
+            start, stop = (int(p) for p in value.split("-", 1))
+        else:
+            start, stop = int(value), int(value) + 1
+    else:
+        raise TypeError(f"Cannot convert [{value}] to range.")
+    start = max(int(v) for v in [start, min_value] if v is not None)
+    stop = min(int(v) for v in [stop, max_value] if v is not None)
+    if start >= stop:
+        raise ValueError("Invalid range: start value must be less than stop value.")
+    return range(start, stop)
+
+
+def to_port_range(value: str | range | int, *, min_value: int = 1, max_value: int = 65535) -> range:
+    return to_range(value, min_value=min_value, max_value=max_value)

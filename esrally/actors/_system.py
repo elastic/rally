@@ -40,7 +40,7 @@ def get_system() -> actors.ActorSystem:
     return get_system_context().system
 
 
-def init_system() -> actors.ActorSystem:
+def init_system(cfg: types.Config | None = None) -> actors.ActorSystem:
     try:
         ctx = get_system_context()
         LOG.warning("ActorSystem already initialized.")
@@ -49,7 +49,6 @@ def init_system() -> actors.ActorSystem:
         pass
 
     LOG.info("Initializing actor system...")
-    cfg = ActorConfig.from_context()
     ctx = SystemContext.from_config(cfg)
     set_context(ctx)
     LOG.info("Actor system initialized.")
@@ -67,26 +66,39 @@ def get_system_context() -> SystemContext:
 class SystemContext(Context):
 
     @classmethod
-    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
         cfg = ActorConfig.from_config(cfg)
-        first_error: Exception | None = None
         system_bases = [cfg.system_base]
         if cfg.fallback_system_base and cfg.fallback_system_base != cfg.system_base:
             system_bases.append(cfg.fallback_system_base)
-        for sb in system_bases:
-            try:
-                system = create_system(
-                    system_base=sb,
-                    ip=cfg.ip,
-                    admin_port=cfg.admin_port,
-                    coordinator_ip=cfg.coordinator_ip,
-                    coordinator_port=cfg.coordinator_port,
-                    process_startup_method=cfg.process_startup_method,
-                )
-                return cls(system)
-            except Exception as ex:
-                LOG.exception("Failed setting up actor system with system base '%s'", sb)
-                first_error = first_error or ex
+
+        first_error: Exception | None = None
+        for system_base in system_bases:
+            if system_base in ["multiprocTCPBase", "multiprocUDPBase"]:
+                admin_ports = cfg.admin_ports
+            else:
+                admin_ports = [None]
+            for admin_port in admin_ports:
+                try:
+                    system = create_system(
+                        system_base=system_base,
+                        ip=cfg.ip,
+                        admin_port=admin_port,
+                        coordinator_ip=cfg.coordinator_ip,
+                        coordinator_port=cfg.coordinator_port,
+                        process_startup_method=cfg.process_startup_method,
+                    )
+                    return cls(system)
+                except actors.InvalidActorAddress as ex:
+                    first_error = first_error or ex
+                    if admin_port is not None:
+                        LOG.exception("Failed setting up actor system with system base '%s' and admin port %s", system_base, admin_port)
+                        continue  # It tries the next port
+                    break  # It tries the next system base
+                except Exception as ex:
+                    LOG.exception("Failed setting up actor system with system base '%s'", system_base)
+                    first_error = first_error or ex
+                    break  # It tries the next system base
 
         raise first_error or RuntimeError(f"Could not initialize actor system with system base '{cfg.system_base}'")
 

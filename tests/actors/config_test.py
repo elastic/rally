@@ -20,7 +20,7 @@ import dataclasses
 from typing import get_args
 
 from esrally.actors._config import (
-    DEFAULT_ADMIN_PORT,
+    DEFAULT_ADMIN_PORTS,
     DEFAULT_COORDINATOR_IP,
     DEFAULT_COORDINATOR_PORT,
     DEFAULT_FALLBACK_SYSTEM_BASE,
@@ -30,7 +30,7 @@ from esrally.actors._config import (
     ActorConfig,
     SystemBase,
 )
-from esrally.utils import cases
+from esrally.utils import cases, convert
 
 
 @dataclasses.dataclass
@@ -39,7 +39,7 @@ class FromConfigCase:
     system_base: SystemBase = DEFAULT_SYSTEM_BASE
     fallback_system_base: SystemBase | None = DEFAULT_FALLBACK_SYSTEM_BASE
     ip: str = DEFAULT_IP
-    admin_port: int = DEFAULT_ADMIN_PORT
+    admin_ports: range | int = DEFAULT_ADMIN_PORTS
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
     coordinator_port: int = DEFAULT_COORDINATOR_PORT
     process_startup_method: str | None = DEFAULT_PROCESS_STARTUP_METHOD
@@ -53,7 +53,7 @@ class FromConfigCase:
     fallback_system_base=FromConfigCase(fallback_system_base="multiprocTCPBase"),
     fallback_system_base_none=FromConfigCase(fallback_system_base=None),
     ip=FromConfigCase(ip="some_ip"),
-    admin_port=FromConfigCase(admin_port=1234),
+    admin_ports=FromConfigCase(admin_ports=1234),
     coordinator_ip=FromConfigCase(coordinator_ip="some_ip"),
     coordinator_port=FromConfigCase(coordinator_port=4321),
     fork=FromConfigCase(process_startup_method="fork"),
@@ -61,26 +61,26 @@ class FromConfigCase:
     spawn=FromConfigCase(process_startup_method="spawn"),
 )
 def test_from_config(case: FromConfigCase) -> None:
-    got = ActorConfig(case.name)
+    cfg = ActorConfig(case.name)
     if case.system_base != DEFAULT_SYSTEM_BASE:
-        got.system_base = case.system_base
+        cfg.system_base = case.system_base
     if case.fallback_system_base != DEFAULT_FALLBACK_SYSTEM_BASE:
-        got.fallback_system_base = case.fallback_system_base
+        cfg.fallback_system_base = case.fallback_system_base
     if case.ip != DEFAULT_IP:
-        got.ip = case.ip
-    if case.admin_port != DEFAULT_ADMIN_PORT:
-        got.admin_port = case.admin_port
+        cfg.ip = case.ip
+    if case.admin_ports != DEFAULT_ADMIN_PORTS:
+        cfg.admin_ports = case.admin_ports
     if case.coordinator_ip != DEFAULT_COORDINATOR_IP:
-        got.coordinator_ip = case.coordinator_ip
+        cfg.coordinator_ip = case.coordinator_ip
     if case.coordinator_port != DEFAULT_COORDINATOR_PORT:
-        got.coordinator_port = case.coordinator_port
-    assert isinstance(got, ActorConfig)
-    assert got.name == case.want_name
-    assert got.system_base in get_args(SystemBase)
-    assert got.system_base == case.system_base
-    assert got.fallback_system_base in (get_args(SystemBase) + (None,))
-    assert got.fallback_system_base == case.fallback_system_base
-    assert got.ip == case.ip
-    assert got.admin_port == case.admin_port
-    assert got.coordinator_ip == case.coordinator_ip
-    assert got.coordinator_port == case.coordinator_port
+        cfg.coordinator_port = case.coordinator_port
+    assert isinstance(cfg, ActorConfig)
+    assert cfg.name == case.want_name
+    assert cfg.system_base in get_args(SystemBase)
+    assert cfg.system_base == case.system_base
+    assert cfg.fallback_system_base in (get_args(SystemBase) + (None,))
+    assert cfg.fallback_system_base == case.fallback_system_base
+    assert cfg.ip == case.ip
+    assert cfg.admin_ports == convert.to_range(case.admin_ports)
+    assert cfg.coordinator_ip == case.coordinator_ip
+    assert cfg.coordinator_port == case.coordinator_port

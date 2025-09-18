@@ -47,7 +47,8 @@ def system(request) -> Generator[actors.ActorSystem, None, None]:
     config.clear_config()
 
 
-def test_actor(system: actors.ActorSystem, event_loop: asyncio.AbstractEventLoop) -> None:
+@pytest.mark.asyncio
+async def test_actor(system: actors.ActorSystem, event_loop: asyncio.AbstractEventLoop) -> None:
     with pytest.raises(TypeError):
         assert actors.get_actor()
 
@@ -56,9 +57,7 @@ def test_actor(system: actors.ActorSystem, event_loop: asyncio.AbstractEventLoop
         assert actors.get_actor()
 
     value = random.random()
-    future = actors.request(address, SomeMessage(value))
-    event_loop.run_until_complete(future)
-    assert future.result() == value
+    assert value == await actors.request(address, SomeMessage(value))
 
     with pytest.raises(TypeError):
         assert actors.get_actor()

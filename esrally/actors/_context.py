@@ -37,7 +37,8 @@ def create(cls: type[actors.Actor], *, requirements: dict[str, Any] | None = Non
     ctx = get_context()
     address = ctx.create(cls, requirements=requirements)
     if hasattr(cls, "receiveMsg_ActorConfig"):
-        send(address, ActorConfig.from_context())
+        cfg = ActorConfig.from_config(cfg)
+        send(address, cfg)
     return address
 
 

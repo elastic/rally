@@ -46,7 +46,7 @@ Section = Literal[
 ]
 Key = Literal[
     "actor.process.startup.method",
-    "actors.admin_port",
+    "actors.admin_ports",
     "actors.coordinator_ip",
     "actors.coordinator_port",
     "actors.fallback_system_base",

@@ -166,11 +166,9 @@ class Config(types.Config):
     CURRENT_CONFIG_VERSION = 17
 
     @classmethod
-    def from_context(cls):
-        return cls.from_config(get_config())
-
-    @classmethod
-    def from_config(cls, cfg: types.Config) -> Self:
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
+        if cfg is None:
+            cfg = get_config()
         if isinstance(cfg, cls):
             return cfg
         if isinstance(cfg, types.Config):

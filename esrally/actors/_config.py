@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Literal
 
 from esrally import config
+from esrally.utils import convert
 
 SystemBase = Literal["multiprocQueueBase", "multiprocTCPBase", "multiprocUDPBase"]
 
@@ -26,7 +27,7 @@ DEFAULT_SYSTEM_BASE: SystemBase = "multiprocTCPBase"
 DEFAULT_FALLBACK_SYSTEM_BASE: SystemBase = "multiprocQueueBase"
 
 DEFAULT_IP: str = "127.0.0.1"
-DEFAULT_ADMIN_PORT: int = 0
+DEFAULT_ADMIN_PORTS: range = range(1900, 2000)
 DEFAULT_COORDINATOR_IP: str = ""
 DEFAULT_COORDINATOR_PORT: int = 0
 DEFAULT_ROUTER_ADDRESS: str | None = None
@@ -68,12 +69,12 @@ class ActorConfig(config.Config):
         self.add(config.Scope.applicationOverride, "actors", "actors.ip", value.strip())
 
     @property
-    def admin_port(self) -> int:
-        return int(self.opts("actors", "actors.admin_port", default_value=DEFAULT_ADMIN_PORT, mandatory=False))
+    def admin_ports(self) -> range:
+        return convert.to_port_range(self.opts("actors", "actors.admin_ports", default_value=DEFAULT_ADMIN_PORTS, mandatory=False))
 
-    @admin_port.setter
-    def admin_port(self, value: int) -> None:
-        self.add(config.Scope.applicationOverride, "actors", "actors.admin_port", int(value))
+    @admin_ports.setter
+    def admin_ports(self, value: int | str | range) -> None:
+        self.add(config.Scope.applicationOverride, "actors", "actors.admin_ports", convert.to_port_range(value))
 
     @property
     def coordinator_ip(self) -> str:
