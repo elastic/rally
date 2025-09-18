@@ -132,7 +132,7 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
     return cfg
 
 
-CONFIG = contextvars.ContextVar[types.Config | None](f"{__name__}.CONFIG", default=None)
+CONFIG = contextvars.ContextVar[typing.Optional[types.Config]](f"{__name__}.config", default=None)
 
 
 def get_config() -> types.Config:
@@ -142,19 +142,19 @@ def get_config() -> types.Config:
     return cfg
 
 
-def init_config(cfg: types.AnyConfig = None, force=False) -> types.Config:
-    if force or CONFIG.get() is None:
-        cfg = Config.from_config(cfg)
-        CONFIG.set(cfg)
-        return cfg
-    raise exceptions.ConfigError(f"Config already initialized: {cfg}")
+def init_config(cfg: types.Config, *, force=False) -> types.Config:
+    if not force and CONFIG.get():
+        raise exceptions.ConfigError(f"Config already set: {cfg}")
+    cfg = Config.from_config(cfg)
+    CONFIG.set(cfg)
+    return cfg
 
 
 def clear_config() -> None:
     CONFIG.set(None)
 
 
-class Config:
+class Config(types.Config):
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
     different levels (e.g. a command line flag can override the same configuration property in the config file). These levels are
@@ -166,14 +166,16 @@ class Config:
     CURRENT_CONFIG_VERSION = 17
 
     @classmethod
-    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
-        if cfg is None:
-            cfg = get_config()
+    def from_context(cls):
+        return cls.from_config(get_config())
+
+    @classmethod
+    def from_config(cls, cfg: types.Config) -> Self:
         if isinstance(cfg, cls):
             return cfg
         if isinstance(cfg, types.Config):
             return cls(opts_from=cfg)
-        raise TypeError(f"unexpected cfg: got type {type(cfg).__name__}, expected types.Config | str | None")
+        raise TypeError(f"unexpected cfg: got type {type(cfg).__name__}, expected types.Config")
 
     def __init__(self, config_name: str | None = None, config_file_class=ConfigFile, copy_from: types.Config | None = None, **kwargs):
         self.name = config_name
@@ -237,8 +239,7 @@ class Config:
             else:
                 raise exceptions.ConfigError(f"No value for mandatory configuration: section='{section}', key='{key}'")
 
-    @staticmethod
-    def all_sections() -> list[types.Section]:
+    def all_sections(self) -> list[types.Section]:
         return list(typing.get_args(types.Section))
 
     def all_opts(self, section: types.Section) -> dict[str, typing.Any]:

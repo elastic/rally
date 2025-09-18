@@ -16,9 +16,7 @@
 # under the License.
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol, TypeVar, Union, runtime_checkable
-
-from typing_extensions import Self, TypeAlias
+from typing import Any, Literal, Protocol, runtime_checkable
 
 Section = Literal[
     "actor",
@@ -196,7 +194,6 @@ Key = Literal[
     "user.tags",
     "values",
 ]
-_Config = TypeVar("_Config", bound="Config")
 
 
 @runtime_checkable
@@ -206,7 +203,7 @@ class Config(Protocol):
 
     def add(self, scope, section: Section, key: Key, value: Any) -> None: ...
 
-    def add_all(self, source: _Config, section: Section) -> None: ...
+    def add_all(self, source: Config, section: Section) -> None: ...
 
     def opts(self, section: Section, key: Key, default_value=None, mandatory: bool = True) -> Any: ...
 
@@ -215,6 +212,3 @@ class Config(Protocol):
     def all_opts(self, section: Section) -> dict: ...
 
     def exists(self, section: Section, key: Key) -> bool: ...
-
-
-AnyConfig: TypeAlias = Union[Config, Self, None]

@@ -24,14 +24,21 @@ from typing import Any, Optional, Protocol, runtime_checkable
 
 from thespian import actors
 
+from esrally import types
+from esrally.actors._config import ActorConfig
+
 LOG = logging.getLogger(__name__)
 
 
 CONTEXT = contextvars.ContextVar[Optional["Router"]]("actors.context", default=None)
 
 
-def create(cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None) -> actors.ActorAddress:
-    return get_context().create(cls, requirements=requirements)
+def create(cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None) -> actors.ActorAddress:
+    ctx = get_context()
+    address = ctx.create(cls, requirements=requirements)
+    if hasattr(cls, "receiveMsg_ActorConfig"):
+        send(address, ActorConfig.from_context())
+    return address
 
 
 def send(destination: actors.ActorAddress, message: Any) -> None:
