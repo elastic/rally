@@ -21,6 +21,7 @@ from typing import Any, Literal, Protocol, TypeVar, Union, runtime_checkable
 from typing_extensions import Self, TypeAlias
 
 Section = Literal[
+    "actor",
     "actors",
     "benchmarks",
     "client",
@@ -47,6 +48,7 @@ Section = Literal[
     "unit-test",
 ]
 Key = Literal[
+    "actor.process.startup.method",
     "actors.admin_port",
     "actors.coordinator_ip",
     "actors.coordinator_port",
