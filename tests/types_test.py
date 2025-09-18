@@ -126,5 +126,5 @@ def assert_annotations(obj, ident, *expects):
 class TestConfigTypeHint:
     def test_esrally_module_annotations(self):
         for module in project_root.glob_modules("esrally/**/*.py"):
-            assert_annotations(module, "cfg", types.Config, "types.Config")
+            assert_annotations(module, "cfg", types.Config, "types.Config", "AnyConfig")
             assert_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)

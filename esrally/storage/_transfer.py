@@ -27,7 +27,8 @@ from contextlib import contextmanager
 from typing import BinaryIO
 
 from esrally.storage._adapter import Head, ServiceUnavailableError
-from esrally.storage._client import MAX_CONNECTIONS, Client
+from esrally.storage._client import Client
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG
 from esrally.storage._executor import Executor
 from esrally.storage._range import (
     MAX_LENGTH,
@@ -83,7 +84,7 @@ class Transfer:
         todo: RangeSet = NO_RANGE,
         done: RangeSet = NO_RANGE,
         multipart_size: int | None = None,
-        max_connections: int = MAX_CONNECTIONS,
+        max_connections: int = DEFAULT_STORAGE_CONFIG.max_connections,
         resume: bool = True,
         crc32c: str | None = None,
     ):
@@ -282,15 +283,17 @@ class Transfer:
                     self.start()
                 assert isinstance(fd, FileWriter)
                 # It downloads the part of the file from a remote location.
-                head = self.client.get(
-                    self.url, fd, head=Head(ranges=fd.ranges, document_length=self._document_length, crc32c=self._crc32c)
-                )
-                if head.document_length is not None:
+                if fd.ranges:
+                    want = Head(ranges=fd.ranges, content_length=fd.ranges.size, document_length=self._document_length, crc32c=self._crc32c)
+                else:
+                    want = Head(content_length=self._document_length, crc32c=self._crc32c)
+                got = self.client.get(self.url, fd, want=want)
+                if got.document_length is not None:
                     # It checks the size of the file it downloaded the data from.
-                    self.document_length = head.document_length
-                if head.crc32c is not None:
+                    self.document_length = got.document_length
+                if got.crc32c is not None:
                     # It checks the crc32c check sum of the file it downloaded the data from.
-                    self.crc32c = head.crc32c
+                    self.crc32c = got.crc32c
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
             cancelled = True
@@ -346,7 +349,7 @@ class Transfer:
                 # cancelled.
                 fd.close()
             except Exception as ex:
-                LOG.warning("error closing file descriptor %r: %s", fd.path, ex)
+                LOG.error("error closing file descriptor %r: %s", fd.path, ex)
 
     @contextmanager
     def _open(self) -> Iterator[FileDescriptor | None]:
