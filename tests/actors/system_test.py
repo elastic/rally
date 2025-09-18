@@ -136,7 +136,7 @@ def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None
     with pytest.raises(actors.ContextError):
         actors.get_system()
 
-    system = actors.init_system(cfg)
+    system = actors.init_system()
 
     assert isinstance(system, actors.ActorSystem)
     assert system is actors.get_system()

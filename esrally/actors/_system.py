@@ -40,7 +40,7 @@ def get_system() -> actors.ActorSystem:
     return get_system_context().system
 
 
-def init_system(cfg: types.AnyConfig = None) -> actors.ActorSystem:
+def init_system() -> actors.ActorSystem:
     try:
         ctx = get_system_context()
         LOG.warning("ActorSystem already initialized.")
@@ -49,6 +49,7 @@ def init_system(cfg: types.AnyConfig = None) -> actors.ActorSystem:
         pass
 
     LOG.info("Initializing actor system...")
+    cfg = ActorConfig.from_context()
     ctx = SystemContext.from_config(cfg)
     set_context(ctx)
     LOG.info("Actor system initialized.")

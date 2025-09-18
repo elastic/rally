@@ -24,7 +24,7 @@ from typing import Any, get_args
 
 import pytest
 
-from esrally import actors
+from esrally import actors, config
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -40,9 +40,11 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, Any, None]:
 def system(request) -> Generator[actors.ActorSystem, None, None]:
     cfg = actors.ActorConfig()
     cfg.system_base = request.param
-    system = actors.init_system(cfg)
+    config.init_config(cfg)
+    system = actors.init_system()
     yield system
     actors.shutdown()
+    config.clear_config()
 
 
 def test_actor(system: actors.ActorSystem, event_loop: asyncio.AbstractEventLoop) -> None:
