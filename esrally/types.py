@@ -53,6 +53,7 @@ Key = Literal[
     "actors.fallback_system_base",
     "actors.ip",
     "actors.process_startup_method",
+    "actors.router_address",
     "actors.system_base",
     "add.chart_name",
     "add.chart_type",
@@ -214,4 +215,4 @@ class Config(Protocol):
     def exists(self, section: Section, key: Key) -> bool: ...
 
 
-AnyConfig: TypeAlias = Union[Config, Self, str, None]
+AnyConfig: TypeAlias = Union[Config, Self, None]

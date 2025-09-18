@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import configparser
+import contextvars
 import logging
 import os.path
 import shutil
@@ -131,6 +132,28 @@ def auto_load_local_config(base_config, additional_sections=None, config_file_cl
     return cfg
 
 
+CONFIG = contextvars.ContextVar[types.Config | None](f"{__name__}.CONFIG", default=None)
+
+
+def get_config() -> types.Config:
+    cfg = CONFIG.get()
+    if cfg is None:
+        raise exceptions.ConfigError("Config not initialized.")
+    return cfg
+
+
+def init_config(cfg: types.AnyConfig = None, force=False) -> types.Config:
+    if force or CONFIG.get() is None:
+        cfg = Config.from_config(cfg)
+        CONFIG.set(cfg)
+        return cfg
+    raise exceptions.ConfigError(f"Config already initialized: {cfg}")
+
+
+def clear_config() -> None:
+    CONFIG.set(None)
+
+
 class Config:
     """
     Config is the main entry point to retrieve and set benchmark properties. It provides multiple scopes to allow overriding of values on
@@ -143,20 +166,14 @@ class Config:
     CURRENT_CONFIG_VERSION = 17
 
     @classmethod
-    def from_config(cls, cfg: types.AnyConfig = None, load_config: bool = False) -> Self:
+    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
+        if cfg is None:
+            cfg = get_config()
         if isinstance(cfg, cls):
             return cfg
         if isinstance(cfg, types.Config):
-            return cls(copy_from=cfg)
-        if cfg is None or isinstance(cfg, str):
-            cfg = cls(cfg)
-            if load_config:
-                try:
-                    cfg.load_config(auto_upgrade=True)
-                except FileNotFoundError:
-                    LOG.warning("No config file found at [%s].", cfg)
-            return cfg
-        raise TypeError(f"unexpected cfg: got type {type(cfg).__name__}, expected Config, str or None")
+            return cls(opts_from=cfg)
+        raise TypeError(f"unexpected cfg: got type {type(cfg).__name__}, expected types.Config | str | None")
 
     def __init__(self, config_name: str | None = None, config_file_class=ConfigFile, copy_from: types.Config | None = None, **kwargs):
         self.name = config_name

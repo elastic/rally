@@ -17,10 +17,10 @@
 from __future__ import annotations
 
 import asyncio
-import contextvars
+import dataclasses
 import logging
 import socket
-import time
+import uuid
 from typing import Any, get_args
 
 from thespian import actors
@@ -29,24 +29,52 @@ from typing_extensions import Self
 
 from esrally import log, types
 from esrally.actors._config import ActorConfig, ProcessStartupMethod, SystemBase
+from esrally.actors._context import Context, ContextError, get_context, set_context
+from esrally.actors._proto import PoisonError, RequestMessage, ResponseMessage
 from esrally.utils import net
 
 LOG = logging.getLogger(__name__)
 
 
-class ActorSystem(actors.ActorSystem):
+def get_system() -> actors.ActorSystem:
+    return get_system_context().system
+
+
+def init_system(cfg: types.AnyConfig = None) -> actors.ActorSystem:
+    try:
+        ctx = get_system_context()
+        LOG.warning("ActorSystem already initialized.")
+        return ctx.system
+    except ContextError:
+        pass
+
+    LOG.info("Initializing actor system...")
+    ctx = SystemContext.from_config(cfg)
+    set_context(ctx)
+    LOG.info("Actor system initialized.")
+    return ctx.system
+
+
+def get_system_context() -> SystemContext:
+    ctx = get_context()
+    if not isinstance(ctx, SystemContext):
+        raise TypeError("Context is not a SystemContext")
+    return ctx
+
+
+@dataclasses.dataclass
+class SystemContext(Context):
 
     @classmethod
-    def from_config(cls, cfg: types.Config) -> Self:
+    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
         cfg = ActorConfig.from_config(cfg)
         first_error: Exception | None = None
         system_bases = [cfg.system_base]
         if cfg.fallback_system_base and cfg.fallback_system_base != cfg.system_base:
             system_bases.append(cfg.fallback_system_base)
-
         for sb in system_bases:
             try:
-                return cls.create(
+                system = create_system(
                     system_base=sb,
                     ip=cfg.ip,
                     admin_port=cfg.admin_port,
@@ -54,111 +82,119 @@ class ActorSystem(actors.ActorSystem):
                     coordinator_port=cfg.coordinator_port,
                     process_startup_method=cfg.process_startup_method,
                 )
+                return cls(system)
             except Exception as ex:
                 LOG.exception("Failed setting up actor system with system base '%s'", sb)
                 first_error = first_error or ex
-        raise first_error or Exception(f"Could not initialize actor system with system base '{cfg.system_base}'")
 
-    @classmethod
-    def create(
-        cls,
-        system_base: SystemBase | None = None,
-        ip: str | None = None,
-        admin_port: int | None = None,
-        coordinator_ip: str | None = None,
-        coordinator_port: int | None = None,
-        process_startup_method: str | None = None,
-    ) -> Self:
-        if system_base and system_base not in get_args(SystemBase):
-            raise ValueError(f"invalid system base value: '{system_base}', valid options are: {get_args(SystemBase)}")
+        raise first_error or RuntimeError(f"Could not initialize actor system with system base '{cfg.system_base}'")
 
-        capabilities: dict[str, Any] = {"coordinator": True}
-        if system_base in ("multiprocTCPBase", "multiprocUDPBase"):
-            proto = {"multiprocTCPBase": socket.IPPROTO_TCP, "multiprocUDPBase": socket.IPPROTO_UDP}[system_base]
-            if ip:
-                ip, admin_port = net.resolve(ip, port=admin_port, proto=proto)
-                capabilities["ip"] = ip
+    system: actors.ActorSystem
+    results: dict[str, asyncio.Future[Any]] = dataclasses.field(default_factory=dict)
 
-            if admin_port:
-                capabilities["Admin Port"] = admin_port
+    def create(self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None) -> actors.ActorAddress:
+        return self.system.createActor(cls, requirements)
 
-            if coordinator_ip:
-                coordinator_ip, coordinator_port = net.resolve(coordinator_ip, coordinator_port)
+    def send(self, destination: actors.ActorAddress, message: Any) -> None:
+        self.system.tell(destination, message)
+
+    def request(self, destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future[Any]:
+        req_id = ""
+        while True:
+            if req_id:
+                future = self.results.get(req_id, None)
+                if future is not None and future.done():
+                    return future
+            if message is None:
+                got = self.system.listen(timeout)
+            else:
+                if not isinstance(message, RequestMessage):
+                    message = RequestMessage(message)
+                req_id = message.req_id
+                if not req_id:
+                    message.req_id = req_id = str(uuid.uuid4())
+                if req_id not in self.results:
+                    self.results[req_id] = asyncio.get_event_loop().create_future()
+                got = self.system.ask(destination, message, timeout)
+            if got is None:
+                raise TimeoutError("No response from actor.")
+            if isinstance(got, actors.PoisonMessage):
+                error = PoisonError(got.details)
+                if isinstance(got.poisonMessage, RequestMessage):
+                    future = self.results.get(got.poisonMessage.req_id, None)
+                    if future and not future.done():
+                        future.set_exception(error)
+                        continue
+                    if req_id and req_id != got.poisonMessage.req_id:
+                        LOG.warning("Ignoring poison message: %r\n%s", got.poisonMessage, got.details)
+                        continue
+                raise error
+            if isinstance(got, ResponseMessage):
+                if not got.req_id:
+                    raise RuntimeError("No request ID in response message.")
+                future = self.results.get(got.req_id, None)
+                if future and not future.done():
+                    try:
+                        future.set_result(got.result())
+                        continue
+                    except Exception as error:
+                        future.set_exception(error)
+                        continue
+                if req_id and req_id != got.req_id:
+                    LOG.warning("Ignoring response message from actor: %r", got)
+                    continue
+
+    def shutdown(self):
+        self.system.shutdown()
+
+
+def create_system(
+    system_base: SystemBase | None = None,
+    ip: str | None = None,
+    admin_port: int | None = None,
+    coordinator_ip: str | None = None,
+    coordinator_port: int | None = None,
+    process_startup_method: str | None = None,
+) -> actors.ActorSystem:
+    if system_base and system_base not in get_args(SystemBase):
+        raise ValueError(f"invalid system base value: '{system_base}', valid options are: {get_args(SystemBase)}")
+
+    capabilities: dict[str, Any] = {"coordinator": True}
+    if system_base in ("multiprocTCPBase", "multiprocUDPBase"):
+        proto = {"multiprocTCPBase": socket.IPPROTO_TCP, "multiprocUDPBase": socket.IPPROTO_UDP}[system_base]
+        if ip:
+            ip, admin_port = net.resolve(ip, port=admin_port, proto=proto)
+            capabilities["ip"] = ip
+
+        if admin_port:
+            capabilities["Admin Port"] = admin_port
+
+        if coordinator_ip:
+            coordinator_ip, coordinator_port = net.resolve(coordinator_ip, coordinator_port)
+            if coordinator_port:
+                coordinator_port = int(coordinator_port)
                 if coordinator_port:
-                    coordinator_port = int(coordinator_port)
-                    if coordinator_port:
-                        coordinator_ip += f":{coordinator_port}"
-                capabilities["Convention Address.IPv4"] = coordinator_ip
-                if ip and coordinator_ip != ip:
-                    capabilities["coordinator"] = False
+                    coordinator_ip += f":{coordinator_port}"
+            capabilities["Convention Address.IPv4"] = coordinator_ip
+            if ip and coordinator_ip != ip:
+                capabilities["coordinator"] = False
 
-        if system_base != "simpleSystemBase":
-            if process_startup_method:
-                if process_startup_method not in get_args(ProcessStartupMethod):
-                    raise ValueError(
-                        f"invalid process startup method value: '{process_startup_method}', valid options are: "
-                        f"{get_args(ProcessStartupMethod)}"
-                    )
-                capabilities["Process Startup Method"] = process_startup_method
+    if process_startup_method:
+        if process_startup_method not in get_args(ProcessStartupMethod):
+            raise ValueError(
+                f"invalid process startup method value: '{process_startup_method}', valid options are: " f"{get_args(ProcessStartupMethod)}"
+            )
+        capabilities["Process Startup Method"] = process_startup_method
 
-        log_defs = False
-        if not isinstance(logging.root, ThespianLogForwarder):
-            log_defs = log.load_configuration()
-        LOG.debug(
-            "Creating actor system:\n - systemBase: %r\n - capabilities: %r\n - logDefs: %r\n",
-            system_base,
-            capabilities,
-            log_defs,
-        )
-        s = cls(systemBase=system_base, capabilities=capabilities, logDefs=log_defs, transientUnique=True)
-        LOG.debug("Actor system created:\n - capabilities: %r\n", s.capabilities)
-        return s
-
-
-_CURRENT_SYSTEM = contextvars.ContextVar[actors.ActorSystem | None]("_CURRENT_SYSTEM", default=None)
-
-
-def system() -> ActorSystem:
-    s = _CURRENT_SYSTEM.get()
-    if not s:
-        raise RuntimeError("Actor system not initialized.") from None
-    return s
-
-
-def init_system(cfg: types.Config) -> ActorSystem:
-    assert isinstance(cfg, types.Config)
-    s = _CURRENT_SYSTEM.get()
-    if s:
-        raise RuntimeError("Actor system is already initialized.")
-
-    LOG.warning("Initializing actor system...")
-    _CURRENT_SYSTEM.set(s := ActorSystem.from_config(cfg))
-    LOG.info("Actor system initialized.")
-    return s
-
-
-def shutdown_system() -> None:
-    s = _CURRENT_SYSTEM.get()
-    if s is None:
-        return
-
-    LOG.warning("Shutting down actor system...")
-    _CURRENT_SYSTEM.set(None)
-    s.shutdown()
-    LOG.info("Actor system shut down.")
-
-
-async def ask(actor_addr: actors.ActorAddress, msg: Any, timeout: float | None = None) -> Any:
-    s = system()
-    res = s.ask(actor_addr, msg)
-    if res is not None:
-        return res
-    deadline = None
-    if timeout is not None:
-        deadline = time.monotonic() + timeout
-    while deadline is None or deadline >= time.monotonic():
-        res = s.listen(timeout=0.0)
-        if res is not None:
-            return res
-        await asyncio.sleep(0.1)
-    raise TimeoutError(f"Request timed out: {msg}")
+    log_defs = False
+    if not isinstance(logging.root, ThespianLogForwarder):
+        log_defs = log.load_configuration()
+    LOG.debug(
+        "Creating actor system:\n - systemBase: %r\n - capabilities: %r\n - logDefs: %r\n",
+        system_base,
+        capabilities,
+        log_defs,
+    )
+    system = actors.ActorSystem(systemBase=system_base, capabilities=capabilities, logDefs=log_defs, transientUnique=True)
+    LOG.debug("Actor system created:\n - capabilities: %r\n", system.capabilities)
+    return system

@@ -20,7 +20,7 @@ from typing import Literal
 
 from esrally import config
 
-SystemBase = Literal["simpleSystemBase", "multiprocQueueBase", "multiprocTCPBase", "multiprocUDPBase"]
+SystemBase = Literal["multiprocQueueBase", "multiprocTCPBase", "multiprocUDPBase"]
 
 DEFAULT_SYSTEM_BASE: SystemBase = "multiprocTCPBase"
 DEFAULT_FALLBACK_SYSTEM_BASE: SystemBase = "multiprocQueueBase"
@@ -29,6 +29,7 @@ DEFAULT_IP: str = "127.0.0.1"
 DEFAULT_ADMIN_PORT: int = 0
 DEFAULT_COORDINATOR_IP: str = ""
 DEFAULT_COORDINATOR_PORT: int = 0
+DEFAULT_ROUTER_ADDRESS: str | None = None
 
 ProcessStartupMethod = Literal[
     "fork",

@@ -16,5 +16,9 @@
 # under the License.
 from __future__ import annotations
 
-from esrally.actors._config import ActorConfig
-from esrally.actors._system import ActorSystem, init_system, shutdown_system, system
+from thespian.actors import Actor, ActorAddress, ActorSystem
+
+from esrally.actors._actor import AsyncActor, get_actor, send_error, send_result
+from esrally.actors._config import ActorConfig, SystemBase
+from esrally.actors._context import ContextError, create, request, send, shutdown
+from esrally.actors._system import get_system, init_system

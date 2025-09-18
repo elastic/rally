@@ -19,7 +19,6 @@ from __future__ import annotations
 import dataclasses
 from typing import get_args
 
-from esrally import types
 from esrally.actors._config import (
     DEFAULT_ADMIN_PORT,
     DEFAULT_COORDINATOR_IP,
@@ -35,7 +34,7 @@ from esrally.utils import cases
 
 @dataclasses.dataclass
 class FromConfigCase:
-    cfg: types.AnyConfig = None
+    name: str | None = None
     system_base: SystemBase = DEFAULT_SYSTEM_BASE
     fallback_system_base: SystemBase | None = DEFAULT_FALLBACK_SYSTEM_BASE
     ip: str = DEFAULT_IP
@@ -47,17 +46,17 @@ class FromConfigCase:
 
 @cases.cases(
     default=FromConfigCase(),
-    config_name=FromConfigCase(cfg="some_name", want_name="some_name"),
-    system_base=FromConfigCase(system_base="simpleSystemBase"),
-    fallback_system_base=FromConfigCase(fallback_system_base="simpleSystemBase"),
-    fallback_system_base_None=FromConfigCase(fallback_system_base=None),
+    with_name=FromConfigCase(name="some_name", want_name="some_name"),
+    system_base=FromConfigCase(system_base="multiprocUDPBase"),
+    fallback_system_base=FromConfigCase(fallback_system_base="multiprocTCPBase"),
+    fallback_system_base_none=FromConfigCase(fallback_system_base=None),
     ip=FromConfigCase(ip="some_ip"),
     admin_port=FromConfigCase(admin_port=1234),
     coordinator_ip=FromConfigCase(coordinator_ip="some_ip"),
     coordinator_port=FromConfigCase(coordinator_port=4321),
 )
 def test_from_config(case: FromConfigCase) -> None:
-    got = ActorConfig.from_config(case.cfg)
+    got = ActorConfig(case.name)
     if case.system_base != DEFAULT_SYSTEM_BASE:
         got.system_base = case.system_base
     if case.fallback_system_base != DEFAULT_FALLBACK_SYSTEM_BASE:
