@@ -172,6 +172,9 @@ Configuration options are:
   At this point in time `esrally.storage._http:HTTPAdapter` is the only existing `Adapter` implementations intended
   for public use and that is already the default one. So it is required to edit this option for special customizations.
 
+* ``storage.head_ttl`` indicates the default time to live in seconds replies from head requests has to be considered
+  valid. In case this value is zero, the caching mechanism is disabled.
+
 * ``storage.local_dir`` indicates the default directory where to store local files when no path has been specified.
 
 * ``storage.max_connections`` represents the maximum number of client connections to be made against the same server or
@@ -222,6 +225,9 @@ Configuration options are:
 
 * ``storage.random_seed`` a string used to initialize the client random number generator. This could be used to make
   problems easier to reproduce in continuous integration. In most of the cases it should be left empty.
+
+* ``storage.resolve_ttl`` indicates the default time to live in seconds replies from resolve requests has to be
+  considered valid. In case this value is zero, the caching mechanism is disabled.
 
 
 HTTP Adapter
@@ -293,6 +299,32 @@ Configuration options:
   .. _S3 Cloud Storage Service: https://aws.amazon.com/es/s3/
   .. _Boto3 Client: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
   .. _S3 Service Documentation: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistS3AndCustomOrigins.html#concept_S3Origin
+
+
+track
+~~~~~
+
+This section specifies how tracks corpora files has to be fetched. Available options are:
+
+* ``track.downloader.multipart_enabled`` if `true`, it will enable the use the new multipart `esrally.storage` package for
+  downloading corpora files. For more configuration options please have a look to the `[storage]` configuration section.
+
+  NOTES:
+
+  * The storage module is still experimental and its use should be limited for now.
+
+  * There are know issues of compatibility of this implementation with thespian actor library on Linux and OSX because
+    it uses by default `fork` as process startup method. To workaround this issue please use this option as in the
+    following example.
+
+  Example::
+
+      [actor]
+      actor.process.startup.method = spawn
+
+      [track]
+      track.downloader.multipart_enabled = true
+
 
 tracks
 ~~~~~~

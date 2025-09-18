@@ -21,14 +21,15 @@ import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Container, Iterable
+from collections.abc import Container
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from typing_extensions import Self
 
+from esrally import types
+from esrally.storage._config import StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet
-from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
 
@@ -77,12 +78,13 @@ class Adapter(ABC):
     """Base class for storage class client implementation"""
 
     @classmethod
+    @abstractmethod
     def match_url(cls, url: str) -> bool:
         """It returns a canonical URL in case this adapter accepts the URL, None otherwise."""
-        raise NotImplementedError
 
     @classmethod
-    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
+    @abstractmethod
+    def from_config(cls, cfg: types.AnyConfig) -> Self:
         """Default `Adapter` objects factory method used to create adapters from `esrally` client.
 
         Default implementation will ignore `cfg` parameter. It can be overridden from `Adapter` implementations that
@@ -91,7 +93,6 @@ class Adapter(ABC):
         :param cfg: the configuration object from which to get configuration values.
         :return: an adapter object.
         """
-        return cls(**kwargs)
 
     @abstractmethod
     def head(self, url: str) -> Head:
@@ -100,19 +101,19 @@ class Adapter(ABC):
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    @abstractmethod
+    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
         """It downloads a remote bucket object to a local file path.
 
         :param url: it represents the URL of the remote file object.
         :param stream: it represents the local file stream where to write data to.
-        :param head: it allows to specify optional parameters:
+        :param want: it allows to specify optional parameters:
             - range: portion of the file to transfer (it must be empty or a continuous range).
-            - document_length: the number of bytes to transfer.
+            - content_length: the number of bytes to transfer.
             - crc32c the CRC32C checksum of the file.
             - date: the date the file has been modified.
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
-        raise NotImplementedError(f"{type(self).__name__} adapter does not implement get method.")
 
 
 ADAPTER_CLASS_NAMES = [
@@ -124,38 +125,32 @@ ADAPTER_CLASS_NAMES = [
 class AdapterRegistry:
     """AdapterClassRegistry allows to register classes of adapters to be selected according to the target URL."""
 
-    def __init__(self, cfg: Config) -> None:
+    @classmethod
+    def from_config(cls, cfg: types.AnyConfig) -> Self:
+        return cls(StorageConfig.from_config(cfg))
+
+    def __init__(self, cfg: StorageConfig | None = None) -> None:
         self._classes: list[type[Adapter]] = []
         self._adapters: dict[type[Adapter], Adapter] = {}
         self._lock = threading.Lock()
-        self._cfg = cfg
-
-    @classmethod
-    def from_config(cls, cfg: Config) -> Self:
-        registry = cls(cfg)
-        adapter_names: Iterable[str] = cfg.opts(
-            section="storage", key="storage.adapters", default_value=ADAPTER_CLASS_NAMES, mandatory=False
-        )
-        if isinstance(adapter_names, str):
-            # It parses adapter names when it has been defined as a single string.
-            adapter_names = adapter_names.replace(" ", "").split(",")
-        for adapter_name in adapter_names:
-            module_name, class_name = adapter_name.split(":")
+        self._cfg = StorageConfig.from_config(cfg)
+        for name in self._cfg.adapters:
             try:
-                module = importlib.import_module(module_name)
-            except ModuleNotFoundError:
-                LOG.exception("unable to import module '%s'.", module_name)
+                self.register_class(name)
+            except ImportError:
+                LOG.exception("failed registering adapter '%s'", name)
                 continue
-            try:
-                obj = getattr(module, class_name)
-            except AttributeError:
-                raise ValueError("Invalid Adapter class name: '{class_name}'.")
-            if not isinstance(obj, type) or not issubclass(obj, Adapter):
-                raise TypeError(f"'{obj}' is not a valid subclass of Adapter")
-            registry.register_class(obj)
-        return registry
 
-    def register_class(self, cls: type[Adapter], position: int | None = None) -> type[Adapter]:
+    def register_class(self, cls: type[Adapter] | str, position: int | None = None) -> type[Adapter]:
+        if isinstance(cls, str):
+            module_name, class_name = cls.split(":", 1)
+            module = importlib.import_module(module_name)
+            try:
+                cls = getattr(module, class_name)
+            except AttributeError:
+                raise ValueError(f"invalid adapter class name: '{class_name}'")
+        if not isinstance(cls, type) or not issubclass(cls, Adapter):
+            raise TypeError(f"'{cls}' is not a subclass of Adapter")
         with self._lock:
             if position is None:
                 self._classes.append(cls)

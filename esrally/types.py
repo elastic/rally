@@ -14,8 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
-from typing import Any, Literal, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar, Union, runtime_checkable
+
+from typing_extensions import Self, TypeAlias
 
 Section = Literal[
     "actor",
@@ -24,7 +27,9 @@ Section = Literal[
     "defaults",
     "distributions",
     "driver",
+    "executors",
     "generator",
+    "log",
     "mechanic",
     "meta",
     "no_copy",
@@ -43,7 +48,13 @@ Section = Literal[
     "unit-test",
 ]
 Key = Literal[
+    "actor.admin.port",
+    "actor.coordinator.ip",
+    "actor.coordinator.port",
+    "actor.fallback.system.base",
+    "actor.ip",
     "actor.process.startup.method",
+    "actor.system.base",
     "add.chart_name",
     "add.chart_type",
     "add.config.option",
@@ -89,6 +100,9 @@ Key = Literal[
     "elasticsearch.src.subdir",
     "env.name",
     "exclude.tasks",
+    "executors.forwarder.log.level",
+    "executors.max_workers",
+    "executors.use_threading",
     "format",
     "hosts",
     "include.tasks",
@@ -157,21 +171,23 @@ Key = Literal[
     "src.root.dir",
     "storage.adapters",
     "storage.aws.profile",
+    "storage.head_ttl",
     "storage.http.chunk_size",
     "storage.http.max_retries",
     "storage.local_dir",
     "storage.max_connections",
-    "storage.max_workers",
-    "storage.mirrors_files",
+    "storage.mirror_files",
     "storage.monitor_interval",
     "storage.multipart_size",
     "storage.random_seed",
+    "storage.resolve_ttl",
     "target.arch",
     "target.os",
     "team.path",
     "team.repository.dir",
     "test.mode.enabled",
     "time.start",
+    "track.downloader.multipart_enabled",
     "track.name",
     "track.path",
     "track.repository.dir",
@@ -181,13 +197,22 @@ Key = Literal[
 _Config = TypeVar("_Config", bound="Config")
 
 
+@runtime_checkable
 class Config(Protocol):
+
+    name: str | None = None
+
     def add(self, scope, section: Section, key: Key, value: Any) -> None: ...
 
     def add_all(self, source: _Config, section: Section) -> None: ...
 
     def opts(self, section: Section, key: Key, default_value=None, mandatory: bool = True) -> Any: ...
 
+    def all_sections(self) -> list[Section]: ...
+
     def all_opts(self, section: Section) -> dict: ...
 
     def exists(self, section: Section, key: Key) -> bool: ...
+
+
+AnyConfig: TypeAlias = Union[Config, Self, str, None]

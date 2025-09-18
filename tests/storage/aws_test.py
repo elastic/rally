@@ -24,10 +24,10 @@ from unittest.mock import call, create_autospec
 import boto3
 import pytest
 
-from esrally.config import Config, Scope
+from esrally.config import Scope
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._aws import S3Adapter, S3Client, head_from_response
-from esrally.storage._http import CHUNK_SIZE
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, StorageConfig
 from esrally.storage._range import rangeset
 from esrally.types import Key
 from esrally.utils.cases import cases
@@ -117,7 +117,7 @@ def test_get(case: GetCase, s3_client) -> None:
     s3_client.get_object.return_value = case.response
     adapter = S3Adapter(s3_client=s3_client)
     stream = create_autospec(Writable, spec_set=True, instance=True)
-    head = adapter.get(case.url, stream, head=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
+    head = adapter.get(case.url, stream, want=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
     assert head == case.want
     kwargs = {}
     if case.want_range:
@@ -155,7 +155,7 @@ def test_head_from_response(case: HeadFromResponseCase):
 class FromConfigCase:
     opts: dict[Key, str]
     want_aws_profile: str = None
-    want_chunk_size: int = CHUNK_SIZE
+    want_chunk_size: int = DEFAULT_STORAGE_CONFIG.chunk_size
 
 
 @cases(
@@ -164,7 +164,7 @@ class FromConfigCase:
     aws_profile=FromConfigCase({"storage.aws.profile": "foo"}, want_aws_profile="foo"),
 )
 def test_from_config(case: FromConfigCase) -> None:
-    cfg = Config()
+    cfg = StorageConfig()
     for k, v in case.opts.items():
         cfg.add(Scope.application, "storage", k, v)
     adapter = S3Adapter.from_config(cfg)

@@ -29,7 +29,8 @@ import pytest
 
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
-from esrally.storage._client import MAX_CONNECTIONS, Client
+from esrally.storage._client import CachedHeadError, Client
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 from esrally.storage.testing import DummyAdapter
 from esrally.types import Key
@@ -80,7 +81,7 @@ MIRRORS = {
 
 class StorageAdapter(DummyAdapter):
     HEADS = HEADS
-    DATA: dict[str, bytes] = defaultdict(lambda: SOME_BODY)
+    DATA: tuple[str, bytes] = defaultdict(lambda: SOME_BODY)
 
 
 @pytest.fixture(scope="function")
@@ -96,7 +97,7 @@ def mirror_files(tmpdir: PathLike) -> Iterator[str]:
 @pytest.fixture
 def cfg(mirror_files: str) -> Config:
     cfg = Config()
-    cfg.add(Scope.application, "storage", "storage.mirrors_files", mirror_files)
+    cfg.add(Scope.application, "storage", "storage.mirror_files", mirror_files)
     cfg.add(Scope.application, "storage", "storage.random_seed", 42)
     cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
     return cfg
@@ -108,16 +109,9 @@ def client(cfg: Config) -> Client:
 
 
 @dataclass()
-class HeadCase:
-    url: str
-    want: Head
-    ttl: float | None = None
-
-
-@dataclass()
 class FromConfigCase:
     opts: dict[Key, str]
-    want_max_connections: int = MAX_CONNECTIONS
+    want_max_connections: int = DEFAULT_STORAGE_CONFIG.max_connections
     want_random: random.Random | None = None
 
 
@@ -128,7 +122,7 @@ class FromConfigCase:
 )
 def test_from_config(case: FromConfigCase) -> None:
     # pylint: disable=protected-access
-    cfg = Config()
+    cfg = StorageConfig()
     for k, v in case.opts.items():
         cfg.add(Scope.application, "storage", k, v)
     client = Client.from_config(cfg)
@@ -138,12 +132,43 @@ def test_from_config(case: FromConfigCase) -> None:
         assert client._random.random() == case.want_random.random()
 
 
-@cases(default=HeadCase(SOME_URL, SOME_HEAD), ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=300.0))
+@dataclass()
+class HeadCase:
+    url: str
+    want: Head | None = None
+    want_error: type[Exception] | None = None
+    ttl: float | None = None
+    want_cached: bool | None = None
+
+
+@cases(
+    default=HeadCase(SOME_URL, SOME_HEAD),
+    ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=300.0, want_cached=True),
+    zero_ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=0.0, want_cached=False),
+    negative_ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=-1.0, want_cached=False),
+    error=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError),
+    error_ttl=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError, ttl=300.0, want_cached=True),
+    error_zero_ttl=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError, ttl=0.0, want_cached=False),
+)
 def test_head(case: HeadCase, client: Client) -> None:
-    got = client.head(url=case.url, ttl=case.ttl)
-    assert got == case.want
-    if case.ttl is not None:
-        assert got is client.head(url=case.url, ttl=case.ttl)
+    # pylint: disable=catching-non-exception
+    err: Exception | None = None
+    want_error = tuple(filter(None, [case.want_error]))
+    try:
+        got = client.head(url=case.url, ttl=case.ttl)
+    except want_error as e:
+        got = None
+        err = e
+    else:
+        assert got == case.want
+    if case.want_cached is not None:
+        try:
+            assert (got is client.head(url=case.url, ttl=case.ttl)) == case.want_cached
+        except CachedHeadError as ex:
+            assert case.want_cached
+            assert err is ex.__cause__
+        except want_error:
+            assert not case.want_cached
 
 
 @dataclass()
@@ -168,7 +193,7 @@ class ResolveCase:
 )
 def test_resolve(case: ResolveCase, client: Client) -> None:
     check = Head(content_length=case.content_length, accept_ranges=case.accept_ranges)
-    got = sorted(client.resolve(case.url, check=check, ttl=case.ttl), key=lambda h: str(h.url))
+    got = sorted(client.resolve(case.url, want=check, ttl=case.ttl), key=lambda h: str(h.url))
     want = sorted(case.want, key=lambda h: str(h.url))
     assert got == want, "unexpected resolve result"
     for g in got:
@@ -211,7 +236,7 @@ class GetCase:
 )
 def test_get(case: GetCase, client: Client) -> None:
     stream = create_autospec(Writable, spec_set=True, instance=True)
-    got = client.get(case.url, stream, head=Head(ranges=case.ranges, document_length=case.document_length))
+    got = client.get(case.url, stream, want=Head(ranges=case.ranges, document_length=case.document_length))
     assert [] != check_any(got, case.want_any)
     if case.want_data is not None:
         stream.write.assert_called_once_with(case.want_data)
