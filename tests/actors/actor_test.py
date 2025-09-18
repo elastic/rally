@@ -51,12 +51,12 @@ def test_actor(system: actors.ActorSystem, event_loop: asyncio.AbstractEventLoop
     with pytest.raises(TypeError):
         assert actors.get_actor()
 
-    address = actors.create(TestActor)
+    address = actors.create(SomeActor)
     with pytest.raises(TypeError):
         assert actors.get_actor()
 
     value = random.random()
-    future = actors.request(address, TestMessage(value))
+    future = actors.request(address, SomeMessage(value))
     event_loop.run_until_complete(future)
     assert future.result() == value
 
@@ -64,9 +64,9 @@ def test_actor(system: actors.ActorSystem, event_loop: asyncio.AbstractEventLoop
         assert actors.get_actor()
 
 
-class TestActor(actors.AsyncActor):
+class SomeActor(actors.AsyncActor):
 
-    async def receiveMsg_TestMessage(self, message: TestMessage, sender: actors.ActorAddress) -> Any:
+    async def receiveMsg_SomeMessage(self, message: SomeMessage, sender: actors.ActorAddress) -> Any:
         assert actors.get_actor() is self
         assert asyncio.get_event_loop() is self.loop, "loop not set"
 
@@ -82,7 +82,7 @@ class TestActor(actors.AsyncActor):
 
 
 @dataclasses.dataclass
-class TestMessage:
+class SomeMessage:
     return_value: Any
 
 

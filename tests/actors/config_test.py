@@ -25,6 +25,7 @@ from esrally.actors._config import (
     DEFAULT_COORDINATOR_PORT,
     DEFAULT_FALLBACK_SYSTEM_BASE,
     DEFAULT_IP,
+    DEFAULT_PROCESS_STARTUP_METHOD,
     DEFAULT_SYSTEM_BASE,
     ActorConfig,
     SystemBase,
@@ -41,6 +42,7 @@ class FromConfigCase:
     admin_port: int = DEFAULT_ADMIN_PORT
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
     coordinator_port: int = DEFAULT_COORDINATOR_PORT
+    process_startup_method: str | None = DEFAULT_PROCESS_STARTUP_METHOD
     want_name: str | None = None
 
 
@@ -54,6 +56,9 @@ class FromConfigCase:
     admin_port=FromConfigCase(admin_port=1234),
     coordinator_ip=FromConfigCase(coordinator_ip="some_ip"),
     coordinator_port=FromConfigCase(coordinator_port=4321),
+    fork=FromConfigCase(process_startup_method="fork"),
+    forkserver=FromConfigCase(process_startup_method="forkserver"),
+    spawn=FromConfigCase(process_startup_method="spawn"),
 )
 def test_from_config(case: FromConfigCase) -> None:
     got = ActorConfig(case.name)

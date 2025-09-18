@@ -32,8 +32,10 @@ from esrally.actors._config import (
     DEFAULT_COORDINATOR_PORT,
     DEFAULT_FALLBACK_SYSTEM_BASE,
     DEFAULT_IP,
+    DEFAULT_PROCESS_STARTUP_METHOD,
     DEFAULT_SYSTEM_BASE,
     ActorConfig,
+    ProcessStartupMethod,
     SystemBase,
 )
 from esrally.actors._context import CONTEXT
@@ -85,12 +87,19 @@ class SystemCase:
     admin_port: int = DEFAULT_ADMIN_PORT
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
     coordinator_port: int = DEFAULT_COORDINATOR_PORT
+    process_startup_method: ProcessStartupMethod = DEFAULT_PROCESS_STARTUP_METHOD
     want_capabilities: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 @cases.cases(
     default=SystemCase(),
-    multiprocQueueBase=SystemCase(system_base="multiprocQueueBase", want_capabilities={"Thespian ActorSystem Name": "multiprocQueueBase"}),
+    multiprocQueueBase=SystemCase(
+        system_base="multiprocQueueBase",
+        want_capabilities={
+            "Thespian ActorSystem Name": "multiprocQueueBase",
+            "Process Startup Method": "spawn",
+        },
+    ),
     multiprocTCPBase=SystemCase(
         system_base="multiprocTCPBase", want_capabilities={"Thespian ActorSystem Name": "multiprocTCPBase", "ip": DEFAULT_IP}
     ),
@@ -116,6 +125,18 @@ class SystemCase:
         coordinator_ip="192.168.0.3",
         want_capabilities={"coordinator": True, "ip": "192.168.0.3", "Convention Address.IPv4": "192.168.0.3"},
     ),
+    fork=SystemCase(
+        process_startup_method="fork",
+        want_capabilities={"Process Startup Method": "fork"},
+    ),
+    spawn=SystemCase(
+        process_startup_method="spawn",
+        want_capabilities={"Process Startup Method": "spawn"},
+    ),
+    forkserver=SystemCase(
+        process_startup_method="forkserver",
+        want_capabilities={"Process Startup Method": "forkserver"},
+    ),
 )
 def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None:
     cfg = ActorConfig()
@@ -131,6 +152,8 @@ def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None
         cfg.coordinator_ip = case.coordinator_ip
     if case.coordinator_port != DEFAULT_COORDINATOR_PORT:
         cfg.coordinator_port = case.coordinator_port
+    if case.process_startup_method != DEFAULT_PROCESS_STARTUP_METHOD:
+        cfg.process_startup_method = case.process_startup_method
     config.init_config(cfg)
 
     with pytest.raises(actors.ContextError):

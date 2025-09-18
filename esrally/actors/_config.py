@@ -32,12 +32,13 @@ DEFAULT_COORDINATOR_PORT: int = 0
 DEFAULT_ROUTER_ADDRESS: str | None = None
 
 ProcessStartupMethod = Literal[
+    None,
     "fork",
     "spawn",
     "forkserver",
 ]
 
-DEFAULT_PROCESS_STARTUP_METHOD: ProcessStartupMethod | None = None
+DEFAULT_PROCESS_STARTUP_METHOD: ProcessStartupMethod = None
 
 
 class ActorConfig(config.Config):
@@ -91,8 +92,8 @@ class ActorConfig(config.Config):
         self.add(config.Scope.applicationOverride, "actors", "actors.coordinator_port", int(value))
 
     @property
-    def process_startup_method(self) -> ProcessStartupMethod | None:
-        return self.opts("actors", "actors.process_startup_method", default_value="", mandatory=False).strip() or None
+    def process_startup_method(self) -> ProcessStartupMethod:
+        return self.opts("actors", "actors.process_startup_method", default_value=DEFAULT_PROCESS_STARTUP_METHOD, mandatory=False)
 
     @process_startup_method.setter
     def process_startup_method(self, value: ProcessStartupMethod) -> None:

@@ -180,12 +180,14 @@ def create_system(
             if ip and coordinator_ip != ip:
                 capabilities["coordinator"] = False
 
-    if process_startup_method:
         if process_startup_method not in get_args(ProcessStartupMethod):
             raise ValueError(
                 f"invalid process startup method value: '{process_startup_method}', valid options are: " f"{get_args(ProcessStartupMethod)}"
             )
         capabilities["Process Startup Method"] = process_startup_method
+
+    if system_base == "multiprocQueueBase":
+        capabilities["Process Startup Method"] = "spawn"
 
     log_defs = False
     if not isinstance(logging.root, ThespianLogForwarder):
