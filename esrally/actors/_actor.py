@@ -28,7 +28,12 @@ from thespian import actors  # type: ignore[import-untyped]
 
 from esrally import types
 from esrally.actors._config import ActorConfig
-from esrally.actors._context import Context, enter_context, get_context, set_context
+from esrally.actors._context import (
+    ActorContext,
+    enter_context,
+    get_context,
+    set_context,
+)
 from esrally.actors._proto import (
     PoisonError,
     RequestMessage,
@@ -45,10 +50,10 @@ def get_actor() -> AsyncActor:
     return get_request_context().actor
 
 
-def get_request_context() -> RequestContext:
+def get_request_context() -> ActorRequestContext:
     ctx = get_context()
-    if not isinstance(ctx, RequestContext):
-        raise TypeError(f"Context is not an ActorContext: {ctx!r}")
+    if not isinstance(ctx, ActorRequestContext):
+        raise TypeError(f"Context is not a RequestContext: {ctx!r}")
     return ctx
 
 
@@ -57,7 +62,7 @@ def respond(status: Any = None, error: Exception | None = None) -> None:
 
 
 @dataclasses.dataclass
-class RequestContext(Context):
+class ActorRequestContext(ActorContext):
     actor: AsyncActor
     sender: actors.ActorAddress | None = None
     req_id: str = ""
@@ -137,7 +142,7 @@ class AsyncActor(actors.ActorTypeDispatcher):
 
     def _receive_message(self, message: Any, sender: actors.ActorAddress) -> None:
         """It makes sure the message is handled with the actor context variables."""
-        with enter_context(RequestContext(actor=self, sender=sender)) as ctx:
+        with enter_context(ActorRequestContext(actor=self, sender=sender)) as ctx:
             try:
                 ctx.respond(status=super().receiveMessage(message, sender))
             except Exception as error:

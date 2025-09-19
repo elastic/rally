@@ -32,7 +32,12 @@ from typing_extensions import Self
 
 from esrally import log, types
 from esrally.actors._config import ActorConfig, ProcessStartupMethod, SystemBase
-from esrally.actors._context import Context, ContextError, get_context, set_context
+from esrally.actors._context import (
+    ActorContext,
+    ActorContextError,
+    get_context,
+    set_context,
+)
 from esrally.actors._proto import PoisonError, RequestMessage, ResponseMessage
 from esrally.utils import net
 
@@ -48,25 +53,25 @@ def init_system(cfg: types.Config | None = None) -> actors.ActorSystem:
         ctx = get_system_context()
         LOG.warning("ActorSystem already initialized.")
         return ctx.system
-    except ContextError:
+    except ActorContextError:
         pass
 
     LOG.info("Initializing actor system...")
-    ctx = SystemContext.from_config(cfg)
+    ctx = ActorSystemContext.from_config(cfg)
     set_context(ctx)
     LOG.info("Actor system initialized.")
     return ctx.system
 
 
-def get_system_context() -> SystemContext:
+def get_system_context() -> ActorSystemContext:
     ctx = get_context()
-    if not isinstance(ctx, SystemContext):
-        raise TypeError("Context is not a SystemContext")
+    if not isinstance(ctx, ActorSystemContext):
+        raise TypeError("Context is not an ActorSystemContext")
     return ctx
 
 
 @dataclasses.dataclass
-class SystemContext(Context):
+class ActorSystemContext(ActorContext):
 
     @classmethod
     def from_config(cls, cfg: types.Config | None = None) -> Self:

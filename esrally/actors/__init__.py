@@ -24,5 +24,12 @@ from thespian.actors import (  # type: ignore[import-untyped]
 
 from esrally.actors._actor import AsyncActor, get_actor, respond
 from esrally.actors._config import ActorConfig, SystemBase
-from esrally.actors._context import ContextError, create, request, send, shutdown
+from esrally.actors._context import (
+    ActorContext,
+    ActorContextError,
+    create,
+    request,
+    send,
+    shutdown,
+)
 from esrally.actors._system import get_system, init_system

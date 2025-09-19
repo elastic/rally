@@ -80,7 +80,7 @@ WANT_CAPABILITIES = {
 
 @dataclasses.dataclass
 class SystemCase:
-    cfg: types.AnyConfig = None
+    cfg: types.Config = None
     system_base: str = DEFAULT_SYSTEM_BASE
     fallback_system_base: SystemBase | None = DEFAULT_FALLBACK_SYSTEM_BASE
     ip: str = DEFAULT_IP
@@ -156,7 +156,7 @@ def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None
         cfg.process_startup_method = case.process_startup_method
     config.init_config(cfg)
 
-    with pytest.raises(actors.ContextError):
+    with pytest.raises(actors.ActorContextError):
         actors.get_system()
 
     system = actors.init_system()
@@ -186,7 +186,7 @@ def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None
     finally:
         actors.shutdown()
 
-    with pytest.raises(actors.ContextError):
+    with pytest.raises(actors.ActorContextError):
         actors.get_system()
 
 

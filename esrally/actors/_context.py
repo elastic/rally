@@ -31,7 +31,7 @@ from esrally.actors._config import ActorConfig
 LOG = logging.getLogger(__name__)
 
 
-CONTEXT = contextvars.ContextVar[Optional["Context"]]("actors.context", default=None)
+CONTEXT = contextvars.ContextVar[Optional["ActorContext"]]("actors.context", default=None)
 
 
 def create(cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None) -> actors.ActorAddress:
@@ -54,29 +54,29 @@ def request(destination: actors.ActorAddress, message: Any, *, timeout: float | 
 def shutdown() -> None:
     try:
         ctx = get_context()
-    except ContextError:
+    except ActorContextError:
         return
     set_context(None)
     ctx.shutdown()
 
 
-class ContextError(RuntimeError):
+class ActorContextError(RuntimeError):
     pass
 
 
-def get_context() -> Context:
+def get_context() -> ActorContext:
     ctx = CONTEXT.get()
     if not ctx:
-        raise ContextError("No actor context set.")
+        raise ActorContextError("No actor context set.")
     return ctx
 
 
-def set_context(ctx: Context | None) -> None:
-    assert ctx is None or isinstance(ctx, Context)
+def set_context(ctx: ActorContext | None) -> None:
+    assert ctx is None or isinstance(ctx, ActorContext)
     CONTEXT.set(ctx)
 
 
-C = TypeVar("C", bound="Context")
+C = TypeVar("C", bound="ActorContext")
 
 
 @contextlib.contextmanager
@@ -89,7 +89,7 @@ def enter_context(ctx: C) -> Generator[C]:
 
 
 @runtime_checkable
-class Context(Protocol):
+class ActorContext(Protocol):
 
     def create(self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None) -> actors.ActorAddress:
         raise NotImplementedError
