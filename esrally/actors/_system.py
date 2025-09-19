@@ -114,8 +114,13 @@ class ActorSystemContext(ActorContext):
     system: actors.ActorSystem
     results: dict[str, asyncio.Future[Any]] = dataclasses.field(default_factory=dict)
 
-    def create(self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None) -> actors.ActorAddress:
-        return self.system.createActor(cls, requirements)
+    def create(
+        self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None
+    ) -> actors.ActorAddress:
+        address = self.system.createActor(cls, requirements)
+        if hasattr(cls, "receiveMsg_ActorConfig"):
+            self.send(address, ActorConfig.from_config(cfg))
+        return address
 
     def send(self, destination: actors.ActorAddress, message: Any) -> None:
         self.system.tell(destination, message)

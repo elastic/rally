@@ -68,8 +68,13 @@ class ActorRequestContext(ActorContext):
     req_id: str = ""
     responded: bool = False
 
-    def create(self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None) -> actors.ActorAddress:
-        return self.actor.createActor(cls, requirements)
+    def create(
+        self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None
+    ) -> actors.ActorAddress:
+        address = self.actor.createActor(cls, requirements)
+        if hasattr(cls, "receiveMsg_ActorConfig"):
+            self.send(address, ActorConfig.from_config(cfg))
+        return address
 
     def send(self, destination: actors.ActorAddress, message: Any) -> actors.ActorAddress:
         return self.actor.send(destination, message)
@@ -200,7 +205,6 @@ class AsyncActor(actors.ActorTypeDispatcher):
         if not future or future.done():
             return self.SUPER
         future.set_exception(PoisonError(f"failing handling message: {message.poisonMessage!r}\n{message.details}"))
-        return None
 
     def receiveMsg_RequestMessage(self, request: RequestMessage, sender: actors.ActorAddress) -> Any:
         get_request_context().req_id = request.req_id

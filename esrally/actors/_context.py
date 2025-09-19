@@ -26,7 +26,6 @@ from typing import Any, Optional, Protocol, TypeVar, runtime_checkable
 from thespian import actors  # type: ignore[import-untyped]
 
 from esrally import types
-from esrally.actors._config import ActorConfig
 
 LOG = logging.getLogger(__name__)
 
@@ -35,12 +34,7 @@ CONTEXT = contextvars.ContextVar[Optional["ActorContext"]]("actors.context", def
 
 
 def create(cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None) -> actors.ActorAddress:
-    ctx = get_context()
-    address = ctx.create(cls, requirements=requirements)
-    if hasattr(cls, "receiveMsg_ActorConfig"):
-        cfg = ActorConfig.from_config(cfg)
-        send(address, cfg)
-    return address
+    return get_context().create(cls, requirements=requirements, cfg=cfg)
 
 
 def send(destination: actors.ActorAddress, message: Any) -> None:
@@ -91,7 +85,9 @@ def enter_context(ctx: C) -> Generator[C]:
 @runtime_checkable
 class ActorContext(Protocol):
 
-    def create(self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None) -> actors.ActorAddress:
+    def create(
+        self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None
+    ) -> actors.ActorAddress:
         raise NotImplementedError
 
     def send(self, destination: actors.ActorAddress, message: Any) -> None:
