@@ -203,7 +203,10 @@ def create_system(
 
     log_defs = False
     if not isinstance(logging.root, ThespianLogForwarder):
-        log_defs = log.load_configuration()
+        try:
+            log_defs = log.load_configuration()
+        except FileNotFoundError:
+            LOG.exception("Failed to load logging configuration.")
     LOG.debug(
         "Creating actor system:\n - systemBase: %r\n - capabilities: %r\n - logDefs: %r\n",
         system_base,
