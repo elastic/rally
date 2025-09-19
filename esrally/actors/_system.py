@@ -21,10 +21,13 @@ import dataclasses
 import logging
 import socket
 import uuid
+from collections.abc import Iterable
 from typing import Any, get_args
 
-from thespian import actors
-from thespian.system.logdirector import ThespianLogForwarder
+from thespian import actors  # type: ignore[import-untyped]
+from thespian.system.logdirector import (  # type: ignore[import-untyped]
+    ThespianLogForwarder,
+)
 from typing_extensions import Self
 
 from esrally import log, types
@@ -74,6 +77,7 @@ class SystemContext(Context):
 
         first_error: Exception | None = None
         for system_base in system_bases:
+            admin_ports: Iterable[int | None]
             if system_base in ["multiprocTCPBase", "multiprocUDPBase"]:
                 admin_ports = cfg.admin_ports
             else:

@@ -16,7 +16,11 @@
 # under the License.
 from __future__ import annotations
 
-from thespian.actors import Actor, ActorAddress, ActorSystem
+from thespian.actors import (  # type: ignore[import-untyped]
+    Actor,
+    ActorAddress,
+    ActorSystem,
+)
 
 from esrally.actors._actor import AsyncActor, get_actor, send_error, send_result
 from esrally.actors._config import ActorConfig, SystemBase

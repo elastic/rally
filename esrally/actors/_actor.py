@@ -24,7 +24,7 @@ import logging
 from collections.abc import Awaitable
 from typing import Any
 
-from thespian import actors
+from thespian import actors  # type: ignore[import-untyped]
 
 from esrally import types
 from esrally.actors._config import ActorConfig
@@ -82,7 +82,7 @@ def get_future() -> asyncio.Future:
     return ctx.future
 
 
-def send_result_callback(future: asyncio.Future[Any]):
+def send_result_callback(future: asyncio.Future[Any]) -> None:
     ctx = get_actor_context()
     send(ctx.request_sender, ResponseMessage.from_future(ctx.request_id, future))
 
@@ -117,7 +117,7 @@ def send_error(error: Exception) -> None:
 class AsyncActor(actors.ActorTypeDispatcher):
 
     @classmethod
-    def from_config(cls, cfg: types.AnyConfig = None) -> tuple[actors.ActorAddress, Any]:
+    def from_config(cls, cfg: types.Config | None = None) -> tuple[actors.ActorAddress, Any]:
         cfg = ActorConfig.from_config(cfg)
         system = get_system()
         address = system.createActor(cls)
@@ -227,7 +227,7 @@ class AsyncActor(actors.ActorTypeDispatcher):
     def create_future(self) -> asyncio.Future:
         return self.add_future(self.loop.create_future())
 
-    def create_task(self, coro: Any, *, name: str = None) -> asyncio.Future:
+    def create_task(self, coro: Any, *, name: str | None = None) -> asyncio.Future:
         return self.add_future(self.loop.create_task(coro, name=name))
 
     def add_future(self, coro_or_future: Awaitable) -> asyncio.Future:

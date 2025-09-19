@@ -20,9 +20,10 @@ import asyncio
 import contextlib
 import contextvars
 import logging
+from collections.abc import Generator
 from typing import Any, Optional, Protocol, runtime_checkable
 
-from thespian import actors
+from thespian import actors  # type: ignore[import-untyped]
 
 from esrally import types
 from esrally.actors._config import ActorConfig
@@ -30,7 +31,7 @@ from esrally.actors._config import ActorConfig
 LOG = logging.getLogger(__name__)
 
 
-CONTEXT = contextvars.ContextVar[Optional["Router"]]("actors.context", default=None)
+CONTEXT = contextvars.ContextVar[Optional["Context"]]("actors.context", default=None)
 
 
 def create(cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None) -> actors.ActorAddress:
@@ -46,7 +47,7 @@ def send(destination: actors.ActorAddress, message: Any) -> None:
     get_context().send(destination, message)
 
 
-def request(destination: actors.ActorAddress, message: Any, *, timeout: float = None) -> asyncio.Future[Any]:
+def request(destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future[Any]:
     return get_context().request(destination, message, timeout=timeout)
 
 
@@ -76,7 +77,7 @@ def set_context(ctx: Context | None) -> None:
 
 
 @contextlib.contextmanager
-def enter_context(ctx: Context | None):
+def enter_context(ctx: Context | None) -> Generator[None]:
     token = CONTEXT.set(ctx)
     try:
         yield
