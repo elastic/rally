@@ -93,4 +93,4 @@ class RepeatMessage:
 class RepeatActor(actors.AsyncActor):
 
     def receiveMsg_RepeatMessage(self, repeat: RepeatMessage, sender: actors.ActorAddress) -> None:
-        actors.send_result(repeat.message)
+        actors.respond(repeat.message)

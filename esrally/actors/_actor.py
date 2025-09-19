@@ -28,15 +28,13 @@ from thespian import actors  # type: ignore[import-untyped]
 
 from esrally import types
 from esrally.actors._config import ActorConfig
-from esrally.actors._context import (
-    Context,
-    ContextError,
-    enter_context,
-    get_context,
-    send,
-    set_context,
+from esrally.actors._context import Context, enter_context, get_context, set_context
+from esrally.actors._proto import (
+    PoisonError,
+    RequestMessage,
+    ResponseMessage,
+    response_from_status,
 )
-from esrally.actors._proto import PoisonError, RequestMessage, ResponseMessage
 from esrally.actors._system import get_system
 from esrally.config import init_config
 
@@ -44,22 +42,26 @@ LOG = logging.getLogger(__name__)
 
 
 def get_actor() -> AsyncActor:
-    return get_actor_context().actor
+    return get_request_context().actor
 
 
-def get_actor_context() -> ActorContext:
+def get_request_context() -> RequestContext:
     ctx = get_context()
-    if not isinstance(ctx, ActorContext):
+    if not isinstance(ctx, RequestContext):
         raise TypeError(f"Context is not an ActorContext: {ctx!r}")
     return ctx
 
 
+def respond(status: Any = None, error: Exception | None = None) -> None:
+    get_request_context().respond(status, error)
+
+
 @dataclasses.dataclass
-class ActorContext(Context):
+class RequestContext(Context):
     actor: AsyncActor
-    future: asyncio.Future | None = None
-    request_sender: actors.ActorAddress | None = None
-    request_id: str = ""
+    sender: actors.ActorAddress | None = None
+    req_id: str = ""
+    responded: bool = False
 
     def create(self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None) -> actors.ActorAddress:
         return self.actor.createActor(cls, requirements)
@@ -73,45 +75,31 @@ class ActorContext(Context):
     def shutdown(self) -> None:
         self.actor.send(self.actor.myAddress, actors.ActorExitRequest())
 
+    def respond(self, status: Any = None, error: Exception | None = None) -> None:
+        if error is None and inspect.isawaitable(status):
+            f = self.actor.add_future(status)
+            if not f.done():
+                f.add_done_callback(self.respond)  # Call me back when you are done.
+                return
+            try:
+                status = f.result()
+            except Exception as e:
+                error = e
 
-def get_future() -> asyncio.Future:
-    ctx = get_actor_context()
-    if ctx.future is None:
-        ctx.future = ctx.actor.create_future()
-        ctx.future.add_done_callback(send_result_callback)
-    return ctx.future
+        if self.req_id:
+            response = response_from_status(self.req_id, status, error)
+        elif error is not None:
+            raise error  # The response will eventually reach requester in the form of a PoisonMessage
+        else:
+            response = status
 
-
-def send_result_callback(future: asyncio.Future[Any]) -> None:
-    ctx = get_actor_context()
-    send(ctx.request_sender, ResponseMessage.from_future(ctx.request_id, future))
-
-
-def send_result(result: Any) -> None:
-    try:
-        ctx = get_actor_context()
-    except ContextError:
-        if result is None:
+        if self.responded:
+            if status is not None:
+                LOG.warning("Ignored request status: %r", status)
             return
-        raise
-
-    if ctx.future and ctx.future.done():
-        if result is not None:
-            LOG.warning("Ignore actor result: %r.", result)
-        return
-    if inspect.isawaitable(result):
-        ctx.future = get_actor().add_future(result)
-        ctx.future.add_done_callback(send_result_callback)
-        return
-    get_future().set_result(result)
-
-
-def send_error(error: Exception) -> None:
-    ctx = get_actor_context()
-    if ctx.future and ctx.future.done():
-        LOG.exception("Ignore actor error: %s.", exc_info=error)
-        return
-    get_future().set_exception(error)
+        if response is not None:
+            self.send(self.sender, response)
+            self.responded = True
 
 
 class AsyncActor(actors.ActorTypeDispatcher):
@@ -143,22 +131,22 @@ class AsyncActor(actors.ActorTypeDispatcher):
         original_loop = asyncio.get_event_loop()
         asyncio.set_event_loop(self._loop)
         try:
-            self._ctx.copy().run(self._receive_message, message, sender)
+            self._ctx.run(self._receive_message, message, sender)
         finally:
             asyncio.set_event_loop(original_loop)
 
     def _receive_message(self, message: Any, sender: actors.ActorAddress) -> None:
         """It makes sure the message is handled with the actor context variables."""
-        with enter_context(ActorContext(self)):
+        with enter_context(RequestContext(actor=self, sender=sender)) as ctx:
             try:
-                send_result(super().receiveMessage(message, sender))
+                ctx.respond(status=super().receiveMessage(message, sender))
             except Exception as error:
-                send_error(error)
+                ctx.respond(error=error)
 
     def receiveMsg_ActorConfig(self, cfg: ActorConfig, sender: actors.ActorAddress) -> None:
         """It adds the configuration to the actor context."""
         self.log.debug("Received configuration message: %s", cfg)
-        self._ctx.run(init_config, cfg, force=True)
+        init_config(cfg, force=True)
 
     def receiveMsg_ActorExitRequest(self, message: actors.ActorExitRequest, sender: actors.ActorAddress) -> None:
         if self._pending_tasks:
@@ -210,9 +198,7 @@ class AsyncActor(actors.ActorTypeDispatcher):
         return None
 
     def receiveMsg_RequestMessage(self, request: RequestMessage, sender: actors.ActorAddress) -> Any:
-        ctx = get_actor_context()
-        ctx.request_id = request.req_id
-        ctx.request_sender = sender
+        get_request_context().req_id = request.req_id
         return super().receiveMessage(request.message, sender)
 
     @property

@@ -16,7 +16,6 @@
 # under the License.
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import time
 import uuid
@@ -40,38 +39,36 @@ class RequestMessage:
         return cls(message=message, deadline=deadline)
 
 
+def response_from_status(req_id: str, status: Any = None, error: Exception | None = None) -> Any:
+    if error is not None:
+        return ErrorMessage(req_id, status, error)
+    if status is not None:
+        return StatusMessage(req_id, status)
+    return ResponseMessage(req_id)
+
+
 @dataclasses.dataclass
 class ResponseMessage:
     req_id: str
-
-    @classmethod
-    def from_future(cls, req_id: str, future: asyncio.Future) -> ResponseMessage:
-        try:
-            result = future.result()
-            if result is None:
-                return ResponseMessage(req_id)
-            return ResultMessage(req_id, result)
-        except Exception as error:
-            return ErrorMessage(req_id, error)
 
     def result(self) -> Any:
         return None
 
 
 @dataclasses.dataclass
-class ResultMessage(ResponseMessage):
-    _result: Any
+class StatusMessage(ResponseMessage):
+    status: Any
 
     def result(self) -> Any:
-        return self._result
+        return self.status
 
 
 @dataclasses.dataclass
-class ErrorMessage(ResponseMessage):
-    _error: Exception
+class ErrorMessage(StatusMessage):
+    error: Exception
 
     def result(self) -> Any:
-        raise self._error
+        raise self.error
 
 
 class PoisonError(RuntimeError):

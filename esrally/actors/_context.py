@@ -21,7 +21,7 @@ import contextlib
 import contextvars
 import logging
 from collections.abc import Generator
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, TypeVar, runtime_checkable
 
 from thespian import actors  # type: ignore[import-untyped]
 
@@ -76,11 +76,14 @@ def set_context(ctx: Context | None) -> None:
     CONTEXT.set(ctx)
 
 
+C = TypeVar("C", bound="Context")
+
+
 @contextlib.contextmanager
-def enter_context(ctx: Context | None) -> Generator[None]:
+def enter_context(ctx: C) -> Generator[C]:
     token = CONTEXT.set(ctx)
     try:
-        yield
+        yield ctx
     finally:
         CONTEXT.reset(token)
 

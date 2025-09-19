@@ -39,7 +39,7 @@ from esrally.actors._config import (
     SystemBase,
 )
 from esrally.actors._context import CONTEXT
-from esrally.actors._proto import RequestMessage, ResultMessage
+from esrally.actors._proto import RequestMessage, StatusMessage
 from esrally.utils import cases
 
 
@@ -203,6 +203,6 @@ class RepeatActor(actors.Actor):
             return
         if isinstance(msg, RequestMessage):
             assert isinstance(msg.message, RepeatMessage)
-            self.send(sender, ResultMessage(msg.req_id, msg.message.message))
+            self.send(sender, StatusMessage(msg.req_id, msg.message.message))
             return
         raise TypeError(f"Invalid message type: {msg}")
