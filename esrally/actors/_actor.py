@@ -57,7 +57,7 @@ def get_request_context() -> ActorRequestContext:
     return ctx
 
 
-def respond(status: Any = None, error: Exception | None = None) -> None:
+def respond(*, status: Any = None, error: Exception | None = None) -> None:
     get_request_context().respond(status, error)
 
 

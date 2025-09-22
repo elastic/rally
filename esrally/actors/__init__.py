@@ -19,11 +19,12 @@ from __future__ import annotations
 from thespian.actors import (  # type: ignore[import-untyped]
     Actor,
     ActorAddress,
+    ActorExitRequest,
     ActorSystem,
 )
 
 from esrally.actors._actor import AsyncActor, get_actor, respond
-from esrally.actors._config import ActorConfig, SystemBase
+from esrally.actors._config import ActorConfig
 from esrally.actors._context import (
     ActorContext,
     ActorContextError,
@@ -32,4 +33,4 @@ from esrally.actors._context import (
     send,
     shutdown,
 )
-from esrally.actors._system import get_system, init_system
+from esrally.actors._system import SystemBase, get_system, init_system

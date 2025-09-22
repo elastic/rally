@@ -337,6 +337,15 @@ class Config(types.Config):
         else:
             return scope, section, key
 
+    def __eq__(self, other):
+        if not isinstance(other, Config):
+            return False
+        if other.name != self.name:
+            return False
+        if other._opts != self._opts:
+            return False
+        return True
+
 
 def migrate(config_file, current_version, target_version, out=print, i=input):
     logger = logging.getLogger(__name__)
