@@ -20,8 +20,8 @@ import asyncio
 import dataclasses
 import logging
 import socket
-import uuid
-from collections.abc import Iterable
+import time
+from collections.abc import Generator, Iterable
 from typing import Any, get_args
 
 from thespian import actors  # type: ignore[import-untyped]
@@ -38,7 +38,13 @@ from esrally.actors._context import (
     get_context,
     set_context,
 )
-from esrally.actors._proto import PoisonError, RequestMessage, ResponseMessage
+from esrally.actors._proto import (
+    CancelMessage,
+    PoisonError,
+    RequestMessage,
+    ResponseMessage,
+    RunningMessage,
+)
 from esrally.utils import net
 
 LOG = logging.getLogger(__name__)
@@ -126,50 +132,75 @@ class ActorSystemContext(ActorContext):
         self.system.tell(destination, message)
 
     def request(self, destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future[Any]:
-        req_id = ""
-        while True:
-            if req_id:
-                future = self.results.get(req_id, None)
-                if future is not None and future.done():
-                    return future
-            if message is None:
-                got = self.system.listen(timeout)
-            else:
-                if not isinstance(message, RequestMessage):
-                    message = RequestMessage(message)
-                req_id = message.req_id
-                if not req_id:
-                    message.req_id = req_id = str(uuid.uuid4())
-                if req_id not in self.results:
-                    self.results[req_id] = asyncio.get_event_loop().create_future()
-                got = self.system.ask(destination, message, timeout)
-            if got is None:
-                raise TimeoutError("No response from actor.")
-            if isinstance(got, actors.PoisonMessage):
-                error = PoisonError(got.details)
-                if isinstance(got.poisonMessage, RequestMessage):
-                    future = self.results.get(got.poisonMessage.req_id, None)
-                    if future and not future.done():
-                        future.set_exception(error)
-                        continue
-                    if req_id and req_id != got.poisonMessage.req_id:
-                        LOG.warning("Ignoring poison message: %r\n%s", got.poisonMessage, got.details)
-                        continue
-                raise error
-            if isinstance(got, ResponseMessage):
-                if not got.req_id:
-                    raise RuntimeError("No request ID in response message.")
-                future = self.results.get(got.req_id, None)
+        request = RequestMessage.from_message(message, timeout=timeout)
+        future = self.results.get(request.req_id, None)
+        if future is None:
+            self.results[request.req_id] = future = asyncio.get_event_loop().create_future()
+            original_cancel = future.cancel
+
+            def cancel_wrapper(msg: Any | None = None) -> bool:
+                self.send(destination, CancelMessage(request.req_id))
+                return original_cancel(msg)
+
+            future.cancel = cancel_wrapper  # type: ignore[method-assign]
+
+        responses = self._request(destination, request)
+        for response in responses:
+            if isinstance(response, RunningMessage):
+
+                async def _receive_response():
+                    for response in responses:
+                        LOG.debug("Received response: %s", response)
+
+                asyncio.get_event_loop().create_task(_receive_response())
+                break
+
+        return future
+
+    def _request(self, destination: actors.ActorAddress, request: RequestMessage) -> Generator[ResponseMessage]:
+        deadline: float | None = request.deadline
+        timeout: float | None = None
+        if deadline is not None:
+            timeout = deadline - time.monotonic()
+        future = self.results.get(request.req_id, None)
+        if future is None or future.done():
+            return
+
+        response = self.system.ask(destination, request, timeout=timeout)
+        while response is not None:
+            self._receive_response(response)
+            if response.req_id == request.req_id:
+                yield response
+            if future.done():
+                return
+            if deadline is not None:
+                timeout = deadline - time.monotonic()
+                if timeout < 0.0:
+                    future.set_result(TimeoutError("No response for actor."))
+                    return
+            response = self.system.listen(timeout=timeout)
+
+    def _receive_response(self, response: Any) -> None:
+        if isinstance(response, actors.PoisonMessage):
+            error = PoisonError(response.details)
+            if isinstance(response.poisonMessage, RequestMessage):
+                future = self.results.get(response.poisonMessage.req_id, None)
                 if future and not future.done():
-                    try:
-                        future.set_result(got.result())
-                        continue
-                    except Exception as error:
-                        future.set_exception(error)
-                        continue
-                if req_id and req_id != got.req_id:
-                    LOG.warning("Ignoring response message from actor: %r", got)
-                    continue
+                    future.set_exception(error)
+                    return
+            LOG.warning("Ignoring poison message: %r\n%s", response.poisonMessage, response.details)
+            return
+        if isinstance(response, ResponseMessage):
+            future = self.results.get(response.req_id, None)
+            if future and not future.done():
+                try:
+                    future.set_result(response.result())
+                except Exception as error:
+                    future.set_exception(error)
+                return
+            LOG.warning("Ignoring response message from actor: %r", response)
+            return
+        LOG.warning("Ignoring message from actor: %r", response)
 
     def shutdown(self):
         self.system.shutdown()

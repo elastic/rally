@@ -48,6 +48,16 @@ def response_from_status(req_id: str, status: Any = None, error: Exception | Non
 
 
 @dataclasses.dataclass
+class RunningMessage:
+    req_id: str
+
+
+@dataclasses.dataclass
+class CancelMessage:
+    req_id: str
+
+
+@dataclasses.dataclass
 class ResponseMessage:
     req_id: str
 

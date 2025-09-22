@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import itertools
 import random
 import uuid
 from collections.abc import Generator
@@ -69,7 +68,8 @@ def parent_actor() -> Generator[actors.ActorAddress]:
 
 @pytest.fixture(scope="function")
 def children_actors(parent_actor: actors.ActorAddress) -> Generator[list[actors.ActorAddress]]:
-    children = [actors.request(parent_actor, CreateChildRequest()).result() for _ in range(3)]
+    tasks = [actors.request(parent_actor, CreateChildRequest()) for _ in range(3)]
+    children = asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
     yield children
     for child in children:
         actors.send(child, actors.ActorExitRequest())
@@ -104,6 +104,25 @@ async def test_respond_error(parent_actor: actors.ActorAddress) -> None:
     error = ValueError(f"some ramdom error: {random.random()}")
     with pytest.raises(ValueError):
         await actors.request(parent_actor, ResponseRequest(error=error, explicit=True))
+
+
+@pytest.mark.asyncio
+async def test_blocking_task(parent_actor: actors.ActorAddress) -> None:
+    """This verifies a blocking task would not block the actor from processing further messages."""
+    actors.send(parent_actor, BlockingRequest(timeout=300.0))
+    ping = PingRequest()
+    response = await actors.request(parent_actor, ping)
+    assert response == PongResponse(ping)
+
+
+@pytest.mark.asyncio
+async def test_cancel_request(parent_actor: actors.ActorAddress) -> None:
+    blocking = actors.request(parent_actor, BlockingRequest(timeout=300.0))
+    blocking.cancel()
+
+    ping = PingRequest()
+    response = await actors.request(parent_actor, ping)
+    assert response == PongResponse(ping)
 
 
 @pytest.mark.asyncio
@@ -156,18 +175,15 @@ class GetConfigRequest:
 
 
 @dataclasses.dataclass
-class ExpectMessageRequest:
-    source: actors.ActorAddress
-    message: Any
-
-
-ping_sequence_numbers = itertools.count()
+class BlockingRequest:
+    timeout: float
+    destination: actors.ActorAddress | None = None
 
 
 @dataclasses.dataclass
 class PingRequest:
-    send_method: SendMethod
     destination: actors.ActorAddress | None = None
+    send_method: SendMethod = "send"
     uuid: str = dataclasses.field(default_factory=uuid.uuid4)
 
 
@@ -210,9 +226,7 @@ class DummyActor(actors.AsyncActor):
     def receiveMsg_GetConfigRequest(self, message: GetConfigRequest, sender: actors.ActorAddress) -> types.Config:
         return config.get_config()
 
-    async def receiveMsg_PingRequest(
-        self, request: PingRequest, sender: actors.ActorAddress, destination: actors.ActorAddress | None = None
-    ) -> PongResponse:
+    async def receiveMsg_PingRequest(self, request: PingRequest, sender: actors.ActorAddress) -> PongResponse:
         if request.destination in [None, self.myAddress]:
             return PongResponse(request)
 
@@ -224,6 +238,12 @@ class DummyActor(actors.AsyncActor):
         self.pending_pongs[request.uuid] = future
         actors.send(request.destination, request)
         return await future
+
+    async def receiveMsg_BlockingRequest(self, request: BlockingRequest, sender: actors.ActorAddress) -> None:
+        if request.destination in [None, self.myAddress]:
+            await asyncio.sleep(request.timeout)
+            return
+        return await actors.request(request.destination, request)
 
     async def receiveMsg_PongResponse(self, response: PongResponse, sender: actors.ActorAddress) -> None:
         self.pending_pongs[response.ping.uuid].set_result(response)
