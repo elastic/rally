@@ -21,7 +21,7 @@ from typing import Literal
 from esrally import config
 from esrally.utils import convert
 
-SystemBase = Literal["multiprocQueueBase", "multiprocTCPBase", "multiprocUDPBase"]
+SystemBase = Literal["multiprocQueueBase", "multiprocTCPBase"]
 
 DEFAULT_SYSTEM_BASE: SystemBase = "multiprocTCPBase"
 DEFAULT_FALLBACK_SYSTEM_BASE: SystemBase = "multiprocQueueBase"

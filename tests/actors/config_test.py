@@ -49,7 +49,7 @@ class FromConfigCase:
 @cases.cases(
     default=FromConfigCase(),
     with_name=FromConfigCase(name="some_name", want_name="some_name"),
-    system_base=FromConfigCase(system_base="multiprocUDPBase"),
+    system_base=FromConfigCase(system_base="multiprocQueueBase"),
     fallback_system_base=FromConfigCase(fallback_system_base="multiprocTCPBase"),
     fallback_system_base_none=FromConfigCase(fallback_system_base=None),
     ip=FromConfigCase(ip="some_ip"),

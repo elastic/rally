@@ -106,9 +106,6 @@ class SystemCase:
     multiprocTCPBase=SystemCase(
         system_base="multiprocTCPBase", want_capabilities={"Thespian ActorSystem Name": "multiprocTCPBase", "ip": DEFAULT_IP}
     ),
-    multiprocUDPBase=SystemCase(
-        system_base="multiprocUDPBase", want_capabilities={"Thespian ActorSystem Name": "multiprocUDPBase", "ip": DEFAULT_IP}
-    ),
     fallback_system_base=SystemCase(
         system_base="invalid-value",
         want_capabilities={"Thespian ActorSystem Name": "multiprocQueueBase"},
