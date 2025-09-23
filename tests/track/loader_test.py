@@ -188,7 +188,7 @@ class TestTrackPreparation:
             data_root="/tmp",
         )
 
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", None)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")
@@ -214,7 +214,7 @@ class TestTrackPreparation:
             data_root="/tmp",
         )
 
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", None)
 
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("os.path.getsize")
@@ -329,7 +329,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json.bz2", "/tmp/docs.json.bz2", 200, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", "http://benchmarks.elasticsearch.org/corpora/unit-test")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -346,18 +346,18 @@ class TestTrackPreparation:
         is_file.side_effect = [False, True, True]
         # uncompressed file size is 2000
         get_size.return_value = 2000
-        scheme = random.choice(["http", "https", "s3", "gs"])
+        scheme = str(random.choice(["http", "https", "s3", "gs"]))
 
         prepare_file_offset_table.return_value = 5
 
         p = loader.DocumentSetPreparator(
             track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
         )
-
+        url = f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/"
         p.prepare_document_set(
             document_set=track.Documents(
                 source_format=track.Documents.SOURCE_FORMAT_BULK,
-                base_url=f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/",
+                base_url=url,
                 document_file="docs.json",
                 # --> We don't provide a document archive here <--
                 document_archive=None,
@@ -372,7 +372,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", url)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.net.download")
@@ -411,7 +411,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", "http://benchmarks.elasticsearch.org/corpora/unit-test")
 
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -608,7 +608,7 @@ class TestTrackPreparation:
             data_root=".",
         )
 
-        prepare_file_offset_table.assert_called_with("./docs.json")
+        prepare_file_offset_table.assert_called_with("./docs.json", None)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -795,7 +795,7 @@ class TestTrackPreparation:
             data_root=".",
         )
 
-        prepare_file_offset_table.assert_called_with("./docs.json")
+        prepare_file_offset_table.assert_called_with("./docs.json", None)
 
     @mock.patch("os.path.getsize")
     @mock.patch("os.path.isfile")
