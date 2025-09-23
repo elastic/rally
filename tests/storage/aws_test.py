@@ -27,7 +27,7 @@ import pytest
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
 from esrally.storage._aws import S3Adapter, S3Client, head_from_response
-from esrally.storage._http import CHUNK_SIZE
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG
 from esrally.storage._range import rangeset
 from esrally.types import Key
 from esrally.utils.cases import cases
@@ -117,7 +117,7 @@ def test_get(case: GetCase, s3_client) -> None:
     s3_client.get_object.return_value = case.response
     adapter = S3Adapter(s3_client=s3_client)
     stream = create_autospec(Writable, spec_set=True, instance=True)
-    head = adapter.get(case.url, stream, head=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
+    head = adapter.get(case.url, stream, want=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
     assert head == case.want
     kwargs = {}
     if case.want_range:
@@ -155,7 +155,7 @@ def test_head_from_response(case: HeadFromResponseCase):
 class FromConfigCase:
     opts: dict[Key, str]
     want_aws_profile: str = None
-    want_chunk_size: int = CHUNK_SIZE
+    want_chunk_size: int = DEFAULT_STORAGE_CONFIG.chunk_size
 
 
 @cases(

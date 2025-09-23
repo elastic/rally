@@ -27,66 +27,62 @@ from botocore.response import StreamingBody
 from typing_extensions import Self
 
 from esrally.storage._adapter import Adapter, Head, Writable
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG, AnyConfig, StorageConfig
 from esrally.storage._http import (
-    CHUNK_SIZE,
     head_to_headers,
     parse_accept_ranges,
     parse_content_range,
     parse_hashes_from_headers,
 )
-from esrally.types import Config
 
 LOG = logging.getLogger(__name__)
-
-AWS_PROFILE: str | None = None
 
 
 class S3Adapter(Adapter):
     """Adapter class for s3:// scheme protocol"""
 
     @classmethod
-    def from_config(cls, cfg: Config, chunk_size: int | None = None, aws_profile: str | None = None, **kwargs: Any) -> Self:
-        if aws_profile is None:
-            aws_profile = cfg.opts("storage", "storage.aws.profile", default_value=AWS_PROFILE, mandatory=False)
-        if chunk_size is None:
-            chunk_size = int(cfg.opts("storage", "storage.http.chunk_size", CHUNK_SIZE, False))
-        return super().from_config(cfg, aws_profile=aws_profile, chunk_size=chunk_size, **kwargs)
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("s3://")
+
+    @classmethod
+    def from_config(cls, cfg: AnyConfig = None) -> Self:
+        cfg = StorageConfig.from_config(cfg)
+        return cls(aws_profile=cfg.aws_profile, chunk_size=cfg.chunk_size)
 
     def __init__(
         self,
-        aws_profile: str | None = AWS_PROFILE,
-        chunk_size: int = CHUNK_SIZE,
+        aws_profile: str = DEFAULT_STORAGE_CONFIG.aws_profile,
+        chunk_size: int = DEFAULT_STORAGE_CONFIG.chunk_size,
         s3_client: S3Client | None = None,
     ) -> None:
+        if chunk_size < 0:
+            raise ValueError("Chunk size must be positive")
         self.chunk_size = chunk_size
-        self.aws_profile = aws_profile
+        self.aws_profile = aws_profile.strip() or None
         self._s3_client = s3_client
-
-    @classmethod
-    def match_url(cls, url: str) -> bool:
-        return url.startswith("s3://")
 
     def head(self, url: str) -> Head:
         address = S3Address.from_url(url)
         res = self._s3.head_object(Bucket=address.bucket, Key=address.key)
         return head_from_response(url, res)
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
         headers: dict[str, Any] = {}
-        head_to_headers(head, headers)
+        head_to_headers(want, headers)
 
         address = S3Address.from_url(url)
         res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
-        ret = head_from_response(url, res)
-        if head is not None:
-            head.check(ret)
+        got = head_from_response(url, res)
+        if want is not None:
+            want.check(got)
         body: StreamingBody | None = res.get("Body")
         if body is None:
             raise RuntimeError("S3 client returned no body.")
         for chunk in body.iter_chunks(self.chunk_size):
             if chunk:
                 stream.write(chunk)
-        return ret
+        return got
 
     _s3_client = None
 

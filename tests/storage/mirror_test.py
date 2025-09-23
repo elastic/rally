@@ -16,13 +16,15 @@
 # under the License.
 from __future__ import annotations
 
+import dataclasses
 import os.path
-from dataclasses import dataclass
 
-from esrally.config import Config, Scope
+import pytest
+
+from esrally import config, types
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG
 from esrally.storage._mirror import MirrorList
-from esrally.types import Key
-from esrally.utils.cases import cases
+from esrally.utils import cases
 
 BASE_URL = "https://rally-tracks.elastic.co"
 SOME_PATH = "some/file.json.bz2"
@@ -35,24 +37,28 @@ MIRRORS = {
 MIRROR_FILES = os.path.join(os.path.dirname(__file__), "mirrors.json")
 
 
-@dataclass()
+@dataclasses.dataclass()
 class FromConfigCase:
-    opts: dict[Key, str]
+    opts: dict[types.Key, str]
     want_error: type[Exception] | None = None
+    want_mirror_files: set[str] = DEFAULT_STORAGE_CONFIG.mirror_files
     want_urls: dict[str, set[str]] | None = None
 
 
-@cases(
+@pytest.fixture(autouse=True)
+def patch_default_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(DEFAULT_STORAGE_CONFIG, "mirror_files", tuple())
+
+
+@cases.cases(
     default=FromConfigCase({}, want_urls={}),
-    mirror_files=FromConfigCase(
-        {"storage.mirrors_files": MIRROR_FILES}, want_urls={f"{BASE_URL}/": {f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"}}
-    ),
-    invalid_mirror_files=FromConfigCase({"storage.mirrors_files": "<!invalid-file-path!>"}, want_error=FileNotFoundError),
+    mirror_files=FromConfigCase({"storage.mirror_files": MIRROR_FILES}, want_urls={f"{BASE_URL}/": {f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"}}),
+    invalid_mirror_files=FromConfigCase({"storage.mirror_files": "<!invalid-file-path!>"}, want_urls={}),
 )
-def test_from_config(case: FromConfigCase):
-    cfg = Config()
+def test_from_config(case: FromConfigCase, monkeypatch):
+    cfg = config.Config()
     for k, v in case.opts.items():
-        cfg.add(Scope.application, "storage", k, v)
+        cfg.add(config.Scope.application, "storage", k, v)
 
     try:
         got_mirrors = MirrorList.from_config(cfg)
@@ -69,14 +75,14 @@ def test_from_config(case: FromConfigCase):
         assert isinstance(got_error, case.want_error)
 
 
-@dataclass()
+@dataclasses.dataclass()
 class ResolveCase:
     url: str
     want: list[str] | None = None
     want_error: type[Exception] | None = None
 
 
-@cases(
+@cases.cases(
     empty=ResolveCase("", want_error=Exception),
     simple=ResolveCase(URL, want=[f"{MIRROR1_URL}/{SOME_PATH}", f"{MIRROR2_URL}/{SOME_PATH}"]),
     normalized=ResolveCase("https://rally-tracks.elastic.co/", want=[f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"]),
