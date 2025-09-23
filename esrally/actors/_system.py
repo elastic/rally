@@ -39,11 +39,13 @@ from esrally.actors._context import (
     set_context,
 )
 from esrally.actors._proto import (
-    CancelMessage,
+    CancelRequest,
+    DoneResponse,
+    MessageRequest,
+    PendingResponse,
     PoisonError,
-    RequestMessage,
-    ResponseMessage,
-    RunningMessage,
+    Request,
+    Response,
 )
 from esrally.utils import net
 
@@ -132,21 +134,21 @@ class ActorSystemContext(ActorContext):
         self.system.tell(destination, message)
 
     def request(self, destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future[Any]:
-        request = RequestMessage.from_message(message, timeout=timeout)
+        request = MessageRequest.from_message(message, timeout=timeout)
         future = self.results.get(request.req_id, None)
         if future is None:
             self.results[request.req_id] = future = asyncio.get_event_loop().create_future()
             original_cancel = future.cancel
 
             def cancel_wrapper(msg: Any | None = None) -> bool:
-                self.send(destination, CancelMessage(request.req_id))
+                self.send(destination, CancelRequest(request.req_id))
                 return original_cancel(msg)
 
             future.cancel = cancel_wrapper  # type: ignore[method-assign]
 
-        responses = self._request(destination, request)
+        responses = iter(self._request(destination, request))
         for response in responses:
-            if isinstance(response, RunningMessage):
+            if isinstance(response, PendingResponse):
 
                 async def _receive_response():
                     for response in responses:
@@ -157,7 +159,7 @@ class ActorSystemContext(ActorContext):
 
         return future
 
-    def _request(self, destination: actors.ActorAddress, request: RequestMessage) -> Generator[ResponseMessage]:
+    def _request(self, destination: actors.ActorAddress, request: MessageRequest) -> Generator[Response]:
         deadline: float | None = request.deadline
         timeout: float | None = None
         if deadline is not None:
@@ -169,7 +171,7 @@ class ActorSystemContext(ActorContext):
         response = self.system.ask(destination, request, timeout=timeout)
         while response is not None:
             self._receive_response(response)
-            if response.req_id == request.req_id:
+            if isinstance(response, Response):
                 yield response
             if future.done():
                 return
@@ -181,16 +183,19 @@ class ActorSystemContext(ActorContext):
             response = self.system.listen(timeout=timeout)
 
     def _receive_response(self, response: Any) -> None:
+        if isinstance(response, PendingResponse):
+            return
+
         if isinstance(response, actors.PoisonMessage):
-            error = PoisonError(response.details)
-            if isinstance(response.poisonMessage, RequestMessage):
+            error = PoisonError.from_poison_message(poison=response)
+            if isinstance(response.poisonMessage, Request):
                 future = self.results.get(response.poisonMessage.req_id, None)
                 if future and not future.done():
                     future.set_exception(error)
                     return
-            LOG.warning("Ignoring poison message: %r\n%s", response.poisonMessage, response.details)
-            return
-        if isinstance(response, ResponseMessage):
+            raise error
+
+        if isinstance(response, DoneResponse):
             future = self.results.get(response.req_id, None)
             if future and not future.done():
                 try:
@@ -200,6 +205,7 @@ class ActorSystemContext(ActorContext):
                 return
             LOG.warning("Ignoring response message from actor: %r", response)
             return
+
         LOG.warning("Ignoring message from actor: %r", response)
 
     def shutdown(self):

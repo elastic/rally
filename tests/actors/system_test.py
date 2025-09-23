@@ -39,7 +39,7 @@ from esrally.actors._config import (
     SystemBase,
 )
 from esrally.actors._context import CONTEXT
-from esrally.actors._proto import RequestMessage, StatusMessage
+from esrally.actors._proto import PingRequest, PongResponse
 from esrally.utils import cases
 
 
@@ -47,9 +47,12 @@ from esrally.utils import cases
 def clean_event_loop() -> Generator[None, Any, None]:
     asyncio.set_event_loop(None)
     yield
-    loop = asyncio.get_event_loop()
-    asyncio.set_event_loop(None)
-    loop.close()
+    try:
+        loop = asyncio.get_event_loop()
+        asyncio.set_event_loop(None)
+        loop.close()
+    except RuntimeError:
+        pass
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -138,7 +141,8 @@ class SystemCase:
         want_capabilities={"Process Startup Method": "forkserver"},
     ),
 )
-def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None:
+@pytest.mark.asyncio
+async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None:
     cfg = ActorConfig()
     if case.system_base != DEFAULT_SYSTEM_BASE:
         cfg.system_base = case.system_base
@@ -170,17 +174,15 @@ def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None
             assert system.capabilities.get(name) == value
 
         assert isinstance(system, actors.ActorSystem)
-        destination = actors.create(RepeatActor)
+        destination = actors.create(actors.AsyncActor)
         assert isinstance(destination, actors.ActorAddress)
 
-        value = random.random()
-        got_reply = system.ask(destination, RepeatMessage(value))
-        assert got_reply == value
+        request = PingRequest(message=random.random())
+        response = system.ask(destination, request)
+        assert response == PongResponse(request.req_id, status=request.message)
 
         value = random.random()
-        future_response = actors.request(destination, RepeatMessage(value))
-        assert isinstance(future_response, asyncio.Future)
-        assert asyncio.get_event_loop().run_until_complete(asyncio.wait_for(future_response, timeout=5)) == value
+        assert [value] == await asyncio.gather(actors.ping(destination, message=value))  # type: ignore[comparison-overlap]
 
         assert system is actors.get_system()
     finally:
@@ -188,21 +190,3 @@ def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None
 
     with pytest.raises(actors.ActorContextError):
         actors.get_system()
-
-
-@dataclasses.dataclass
-class RepeatMessage:
-    message: Any
-
-
-class RepeatActor(actors.Actor):
-
-    def receiveMessage(self, msg: Any, sender: actors.ActorAddress) -> None:
-        if isinstance(msg, RepeatMessage):
-            self.send(sender, msg.message)
-            return
-        if isinstance(msg, RequestMessage):
-            assert isinstance(msg.message, RepeatMessage)
-            self.send(sender, StatusMessage(msg.req_id, msg.message.message))
-            return
-        raise TypeError(f"Invalid message type: {msg}")

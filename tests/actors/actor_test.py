@@ -19,14 +19,13 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import random
-import uuid
 from collections.abc import Generator
 from typing import Any, Literal, get_args
 
 import pytest
 
 from esrally import actors, config, types
-from esrally.actors import _actor, _context
+from esrally.actors import _actor, _context, _proto
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -110,9 +109,8 @@ async def test_respond_error(parent_actor: actors.ActorAddress) -> None:
 async def test_blocking_task(parent_actor: actors.ActorAddress) -> None:
     """This verifies a blocking task would not block the actor from processing further messages."""
     actors.send(parent_actor, BlockingRequest(timeout=300.0))
-    ping = PingRequest()
-    response = await actors.request(parent_actor, ping)
-    assert response == PongResponse(ping)
+    value = random.random()
+    assert value == await actors.ping(parent_actor, message=value)
 
 
 @pytest.mark.asyncio
@@ -120,9 +118,8 @@ async def test_cancel_request(parent_actor: actors.ActorAddress) -> None:
     blocking = actors.request(parent_actor, BlockingRequest(timeout=300.0))
     blocking.cancel()
 
-    ping = PingRequest()
-    response = await actors.request(parent_actor, ping)
-    assert response == PongResponse(ping)
+    value = random.random()
+    assert value == await actors.ping(parent_actor, message=value)
 
 
 @pytest.mark.asyncio
@@ -143,16 +140,11 @@ async def test_children_config(children_actors: list[actors.ActorAddress]) -> No
 SendMethod = Literal["send", "request"]
 
 
-@pytest.fixture(scope="function", params=get_args(SendMethod))
-def send_method(request) -> Generator[SendMethod]:
-    yield request.param
-
-
 @pytest.mark.asyncio
-async def test_send(parent_actor: actors.ActorAddress, children_actors: list[actors.ActorAddress], send_method: SendMethod) -> None:
-    requests = [PingRequest(destination=child, send_method=send_method) for child in children_actors]
+async def test_request(parent_actor: actors.ActorAddress, children_actors: list[actors.ActorAddress]) -> None:
+    requests = [_proto.PingRequest(destination=child, message=random.random()) for child in children_actors]
     responses = await asyncio.gather(*[actors.request(parent_actor, r) for r in requests])
-    assert responses == [PongResponse(r) for r in requests]
+    assert responses == [r.message for r in requests]
 
 
 class CheckActorContextRequest:
@@ -180,23 +172,7 @@ class BlockingRequest:
     destination: actors.ActorAddress | None = None
 
 
-@dataclasses.dataclass
-class PingRequest:
-    destination: actors.ActorAddress | None = None
-    send_method: SendMethod = "send"
-    uuid: str = dataclasses.field(default_factory=uuid.uuid4)
-
-
-@dataclasses.dataclass
-class PongResponse:
-    ping: PingRequest
-
-
 class DummyActor(actors.AsyncActor):
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.pending_pongs: dict[str, asyncio.Future[PongResponse]] = {}
 
     def receiveMsg_CheckActorContext(self, request: CheckActorContextRequest) -> None:
         ctx = _context.get_context()
@@ -226,24 +202,8 @@ class DummyActor(actors.AsyncActor):
     def receiveMsg_GetConfigRequest(self, message: GetConfigRequest, sender: actors.ActorAddress) -> types.Config:
         return config.get_config()
 
-    async def receiveMsg_PingRequest(self, request: PingRequest, sender: actors.ActorAddress) -> PongResponse:
-        if request.destination in [None, self.myAddress]:
-            return PongResponse(request)
-
-        if request.send_method == "request":
-            return await actors.request(request.destination, request)
-
-        assert request.send_method == "send"
-        future: asyncio.Future[PongResponse] = self.create_future()
-        self.pending_pongs[request.uuid] = future
-        actors.send(request.destination, request)
-        return await future
-
     async def receiveMsg_BlockingRequest(self, request: BlockingRequest, sender: actors.ActorAddress) -> None:
         if request.destination in [None, self.myAddress]:
             await asyncio.sleep(request.timeout)
             return
         return await actors.request(request.destination, request)
-
-    async def receiveMsg_PongResponse(self, response: PongResponse, sender: actors.ActorAddress) -> None:
-        self.pending_pongs[response.ping.uuid].set_result(response)

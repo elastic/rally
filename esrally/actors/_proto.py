@@ -21,52 +21,100 @@ import time
 import uuid
 from typing import Any
 
+from thespian import actors  # type: ignore[import-untyped]
+from typing_extensions import Self
+
 
 @dataclasses.dataclass
-class RequestMessage:
+class Request:
+    """Base message sent to async actors requiring a response."""
 
-    message: Any
     req_id: str = dataclasses.field(default_factory=lambda: str(uuid.uuid4()))
     deadline: float | None = None
 
+
+@dataclasses.dataclass
+class MessageRequest(Request):
+    """Message envelope sent to async actors requiring a response.
+
+    As soon the actor receive this request it sends a PendingResponse with the same req_id to notify it.
+    Then after processing carried message, it will send one of the following responses:
+    - DoneResponse: in case the message processing succeeded without any resulting status.
+    - StatusResponse: in case the message processing succeeded with a non-None resulting status.
+    - ErrorResponse: in case the message processing failed with an exception message.
+    All response messages send by target actor will have the same req_id as this message.
+    """
+
+    message: Any = None
+
     @classmethod
-    def from_message(cls, message: Any, *, timeout: float | None = None) -> RequestMessage:
-        if isinstance(message, RequestMessage):
-            return message
+    def from_message(cls, message: Any, *, timeout: float | None = None) -> MessageRequest:
         deadline: float | None = None
         if timeout is not None:
             deadline = max(0.0, time.monotonic() + timeout)
+        if isinstance(message, MessageRequest):
+            if deadline is not None:
+                if message.deadline is None or deadline < message.deadline:
+                    message.deadline = deadline
+            return message
         return cls(message=message, deadline=deadline)
 
 
-def response_from_status(req_id: str, status: Any = None, error: Exception | None = None) -> Any:
-    if error is not None:
-        return ErrorMessage(req_id, status, error)
-    if status is not None:
-        return StatusMessage(req_id, status)
-    return ResponseMessage(req_id)
+@dataclasses.dataclass
+class CancelRequest(MessageRequest):
+    """It is sent to an actor to cancel all pending asynchronous tasks started by a request with the same req_id."""
 
 
 @dataclasses.dataclass
-class RunningMessage:
+class Response:
+    """Base message sent to async actors after receiving a request."""
+
+    # req_id is required to match the request.
     req_id: str
 
 
 @dataclasses.dataclass
-class CancelMessage:
-    req_id: str
+class PendingResponse(Response):
+    """PendingResponse is sent by the actor to notify sender that it has just received the request, and it is starting processing it."""
 
 
 @dataclasses.dataclass
-class ResponseMessage:
-    req_id: str
+class DoneResponse(Response):
+    """It is sent by the actor to notify sender has just finished processing a response without any resulting status."""
+
+    @classmethod
+    def from_status(cls, req_id: str, status: Any = None, error: Exception | None = None) -> DoneResponse:
+        """Given a status and an error it will return a Response of one of the following types:
+        - ErrorResponse: in case error is not None
+        - StatusResponse: in case error is None and status is not None
+        - DoneResponse: in case error and status are both None
+        """
+        if error is not None:
+            return ErrorResponse(req_id, error)
+        if isinstance(status, DoneResponse):
+            return status
+        if status is not None:
+            return StatusResponse(req_id, status)
+        return DoneResponse(req_id)
 
     def result(self) -> Any:
         return None
 
 
 @dataclasses.dataclass
-class StatusMessage(ResponseMessage):
+class CancelledResponse(DoneResponse):
+    """CancelledResponse is sent by the actor to notify sender that the request has been cancelled."""
+
+    message: Any = None
+
+    def result(self) -> Any:
+        raise CancelledRequestError(self.message and str(self.message) or "")
+
+
+@dataclasses.dataclass
+class StatusResponse(DoneResponse):
+    """It is sent by the actor to notify sender has just finished processing a response with a non-none resulting status."""
+
     status: Any
 
     def result(self) -> Any:
@@ -74,12 +122,36 @@ class StatusMessage(ResponseMessage):
 
 
 @dataclasses.dataclass
-class ErrorMessage(StatusMessage):
+class ErrorResponse(DoneResponse):
+    """It is sent by the actor to notify sender has just finished processing a response raising an Exception."""
+
     error: Exception
 
     def result(self) -> Any:
         raise self.error
 
 
-class PoisonError(RuntimeError):
+class ActorRequestError(Exception):
+    pass
+
+
+class CancelledRequestError(ActorRequestError):
+    pass
+
+
+class PoisonError(ActorRequestError):
+    """It is used to translate a PoisonMessage to an Exception instance."""
+
+    @classmethod
+    def from_poison_message(cls, poison: actors.PoisonMessage) -> Self:
+        return cls(f"poison message: {poison.poisonMessage!r}, details:\n{poison.details!r}")
+
+
+@dataclasses.dataclass
+class PingRequest(MessageRequest):
+    destination: actors.ActorAddress | None = None
+
+
+@dataclasses.dataclass
+class PongResponse(StatusResponse):
     pass

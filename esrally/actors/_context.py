@@ -26,6 +26,7 @@ from typing import Any, Optional, Protocol, TypeVar, runtime_checkable
 from thespian import actors  # type: ignore[import-untyped]
 
 from esrally import types
+from esrally.actors._proto import PingRequest
 
 LOG = logging.getLogger(__name__)
 
@@ -43,6 +44,10 @@ def send(destination: actors.ActorAddress, message: Any) -> None:
 
 def request(destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future[Any]:
     return get_context().request(destination, message, timeout=timeout)
+
+
+def ping(destination: actors.ActorAddress, *, message: Any = None, timeout: float | None = None) -> asyncio.Future[Any]:
+    return get_context().request(destination, PingRequest(message=message), timeout=timeout)
 
 
 def shutdown() -> None:
