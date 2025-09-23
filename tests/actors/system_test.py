@@ -179,6 +179,8 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
 
         request = PingRequest(message=random.random())
         response = system.ask(destination, request)
+        if isinstance(response, actors.PoisonMessage):
+            pytest.fail(f"Actor responded with poison message: message={response.poisonMessage!r}, details={response.details!r}")
         assert response == PongResponse(request.req_id, status=request.message)
 
         value = random.random()

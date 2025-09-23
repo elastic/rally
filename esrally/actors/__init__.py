@@ -21,6 +21,7 @@ from thespian.actors import (  # type: ignore[import-untyped]
     ActorAddress,
     ActorExitRequest,
     ActorSystem,
+    PoisonMessage,
 )
 
 from esrally.actors._actor import AsyncActor, get_actor, respond

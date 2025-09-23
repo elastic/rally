@@ -188,7 +188,10 @@ class AsyncActor(actors.ActorTypeDispatcher):
 
     def receiveMessage(self, message: Any, sender: actors.ActorAddress) -> None:
         """It makes sure the message is handled with the actor context variables."""
-        original_loop = asyncio.get_event_loop()
+        try:
+            original_loop = asyncio.get_event_loop()
+        except RuntimeError:
+            original_loop = None
         asyncio.set_event_loop(self._loop)
         try:
             self._ctx.run(self._receive_message, message, sender)
