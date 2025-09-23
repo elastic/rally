@@ -25,7 +25,6 @@ PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json
 
 .PHONY: install \
 	check-venv \
-	venv-destroy \
 	reinstall \
 	check-uv \
 	venv-destroy \
@@ -48,10 +47,6 @@ PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json
 
 install: check-uv
 	uv sync --python $(PY_VERSION) --locked --extra=develop
-
-venv-destroy:
-	# Remove virtual environment
-	rm -rf ${VIRTUAL_ENV}
 
 reinstall: venv-destroy install
 
