@@ -582,9 +582,9 @@ class DocumentSetPreparator:
     def has_expected_size(self, file_name, expected_size):
         return expected_size is None or os.path.getsize(file_name) == expected_size
 
-    def create_file_offset_table(self, document_file_path, expected_number_of_lines):
+    def create_file_offset_table(self, document_file_path, expected_number_of_lines, corpus_base_url=None):
         # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
-        lines_read = io.prepare_file_offset_table(document_file_path)
+        lines_read = io.prepare_file_offset_table(document_file_path, corpus_base_url)
         if lines_read and lines_read != expected_number_of_lines:
             io.remove_file_offset_table(document_file_path)
             raise exceptions.DataError(
@@ -641,7 +641,7 @@ class DocumentSetPreparator:
                         ) from None
                     raise
 
-        self.create_file_offset_table(doc_path, document_set.number_of_lines)
+        self.create_file_offset_table(doc_path, document_set.number_of_lines, document_set.base_url)
 
     def prepare_bundled_document_set(self, document_set, data_root):
         """
@@ -668,7 +668,7 @@ class DocumentSetPreparator:
         while True:
             if self.is_locally_available(doc_path):
                 if self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
-                    self.create_file_offset_table(doc_path, document_set.number_of_lines)
+                    self.create_file_offset_table(doc_path, document_set.number_of_lines, document_set.base_url)
                     return True
                 else:
                     raise exceptions.DataError(
