@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
 
 import json
 import logging
@@ -26,6 +27,8 @@ import ecs_logging
 
 from esrally import paths
 from esrally.utils import collections, io
+
+LOG = logging.getLogger(__name__)
 
 
 # pylint: disable=unused-argument
@@ -50,7 +53,7 @@ class RallyEcsFormatter(ecs_logging.StdlibFormatter):
     def __init__(
         self,
         *args: typing.Any,
-        mutators: typing.Optional[list[MutatorType]] = None,
+        mutators: list[MutatorType] | None = None,
         **kwargs: typing.Any,
     ):
         super().__init__(*args, **kwargs)
@@ -191,7 +194,7 @@ def load_configuration():
         return json.load(f)
 
 
-def post_configure_actor_logging():
+def post_configure_logging():
     """
     Reconfigures all loggers in actor processes.
 

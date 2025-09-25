@@ -17,29 +17,36 @@
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
+from typing_extensions import Self
+
+from esrally import types
 from esrally.storage._adapter import Adapter, Head, Writable
-from esrally.storage._executor import Executor
 from esrally.storage._range import NO_RANGE, RangeSet
+from esrally.utils import executors
 
 
 class DummyAdapter(Adapter):
 
     HEADS: Iterable[Head] = tuple()
-    DATA: dict[str, bytes] = {}
+    DATA: Mapping[str, bytes] = {}
 
     @classmethod
     def match_url(cls, url: str) -> bool:
         return True
 
-    def __init__(self, heads: Iterable[Head] | None = None, data: dict[str, bytes] | None = None) -> None:
+    @classmethod
+    def from_config(cls, cfg: types.AnyConfig = None) -> Self:
+        return cls()
+
+    def __init__(self, heads: Iterable[Head] | None = None, data: Mapping[str, bytes] | None = None) -> None:
         if heads is None:
             heads = self.HEADS
         if data is None:
             data = self.DATA
-        self.heads: dict[str, Head] = {h.url: h for h in heads if h.url is not None}
-        self.data: dict[str, bytes] = copy.deepcopy(data)
+        self.heads: Mapping[str, Head] = {h.url: h for h in heads if h.url is not None}
+        self.data: Mapping[str, bytes] = copy.deepcopy(data)
 
     def head(self, url: str) -> Head:
         try:
@@ -47,10 +54,10 @@ class DummyAdapter(Adapter):
         except KeyError:
             raise FileNotFoundError from None
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
         ranges: RangeSet = NO_RANGE
-        if head is not None:
-            ranges = head.ranges
+        if want is not None:
+            ranges = want.ranges
             if len(ranges) > 1:
                 raise NotImplementedError("len(head.ranges) > 1")
         data = self.data[url]
@@ -62,7 +69,7 @@ class DummyAdapter(Adapter):
         return Head(url, content_length=len(data))
 
 
-class DummyExecutor(Executor):
+class DummyExecutor(executors.Executor):
 
     def __init__(self):
         self.tasks: list[tuple] | None = []

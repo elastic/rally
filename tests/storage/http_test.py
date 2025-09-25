@@ -27,13 +27,8 @@ from requests.structures import CaseInsensitiveDict
 
 from esrally.config import Config, Scope
 from esrally.storage._adapter import Head, Writable
-from esrally.storage._http import (
-    CHUNK_SIZE,
-    MAX_RETRIES,
-    HTTPAdapter,
-    head_from_headers,
-    ranges_to_headers,
-)
+from esrally.storage._config import DEFAULT_STORAGE_CONFIG
+from esrally.storage._http import HTTPAdapter, head_from_headers, ranges_to_headers
 from esrally.storage._range import rangeset
 from esrally.types import Key
 from esrally.utils.cases import cases
@@ -120,7 +115,7 @@ def test_get(case: GetCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
     session.get.return_value = case.response
     stream = create_autospec(Writable, spec_set=True, instance=True)
-    head = adapter.get(case.url, stream, head=Head(ranges=rangeset(case.ranges)))
+    head = adapter.get(case.url, stream, want=Head(ranges=rangeset(case.ranges)))
     assert head == case.want
     if case.want_data:
         stream.write.assert_called_once_with(case.want_data)
@@ -147,7 +142,6 @@ class RangesToHeadersCase:
     multipart=RangesToHeadersCase("1-5,7-10", want_errors=(NotImplementedError,)),
 )
 def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
-    # pylint: disable=protected-access
     got: dict[str, Any] = {}
     try:
         ranges_to_headers(rangeset(case.ranges), got)
@@ -176,7 +170,6 @@ class HeadFromHeadersCase:
     x_amz_checksum=HeadFromHeadersCase(X_AMZ_CHECKSUM_CRC32C_HEADER, Head(URL, crc32c="some-checksum")),
 )
 def test_head_from_headers(case: HeadFromHeadersCase):
-    # pylint: disable=protected-access
     try:
         got = head_from_headers(url=case.url, headers=case.headers)
     except Exception as ex:
@@ -190,8 +183,8 @@ def test_head_from_headers(case: HeadFromHeadersCase):
 @dataclass()
 class FromConfigCase:
     opts: dict[Key, str]
-    want_chunk_size: int = CHUNK_SIZE
-    want_max_retries: int = MAX_RETRIES
+    want_chunk_size: int = DEFAULT_STORAGE_CONFIG.chunk_size
+    want_max_retries: int = DEFAULT_STORAGE_CONFIG.max_retries
     want_backoff_factor: int = 0
 
 
