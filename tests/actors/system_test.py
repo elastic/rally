@@ -158,12 +158,12 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
     config.init_config(cfg)
 
     with pytest.raises(actors.ActorContextError):
-        actors.get_system()
+        actors.get_actor_system()
 
-    system = actors.init_system()
+    system = actors.init_actor_system()
 
     assert isinstance(system, actors.ActorSystem)
-    assert system is actors.get_system()
+    assert system is actors.get_actor_system()
     try:
         want_capabilities = copy.deepcopy(WANT_CAPABILITIES)
         want_capabilities.update(case.want_capabilities)
@@ -171,7 +171,7 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
             assert system.capabilities.get(name) == value
 
         assert isinstance(system, actors.ActorSystem)
-        destination = actors.create(actors.AsyncActor)
+        destination = actors.create_actor(actors.AsyncActor)
         assert isinstance(destination, actors.ActorAddress)
 
         request = PingRequest(message=random.random())
@@ -183,9 +183,9 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
         value = random.random()
         assert [value] == await asyncio.gather(actors.ping(destination, message=value))  # type: ignore[comparison-overlap]
 
-        assert system is actors.get_system()
+        assert system is actors.get_actor_system()
     finally:
         actors.shutdown()
 
     with pytest.raises(actors.ActorContextError):
-        actors.get_system()
+        actors.get_actor_system()

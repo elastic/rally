@@ -16,200 +16,90 @@
 # under the License.
 from __future__ import annotations
 
-import asyncio
-import dataclasses
 import logging
 import socket
-import time
-from collections.abc import Generator, Iterable
+from collections.abc import Iterable
 from typing import Any, get_args
 
 from thespian import actors  # type: ignore[import-untyped]
 from thespian.system.logdirector import (  # type: ignore[import-untyped]
     ThespianLogForwarder,
 )
-from typing_extensions import Self
 
 from esrally import log, types
 from esrally.actors._config import ActorConfig, ProcessStartupMethod, SystemBase
 from esrally.actors._context import (
     ActorContext,
     ActorContextError,
-    get_context,
-    set_context,
-)
-from esrally.actors._proto import (
-    CancelRequest,
-    DoneResponse,
-    MessageRequest,
-    PendingResponse,
-    PoisonError,
-    Request,
-    Response,
+    get_actor_context,
+    set_actor_context,
 )
 from esrally.utils import net
 
 LOG = logging.getLogger(__name__)
 
 
-def get_system() -> actors.ActorSystem:
-    return get_system_context().system
+def get_actor_system() -> actors.ActorSystem:
+    system = get_actor_context().handler
+    if not isinstance(system, actors.ActorSystem):
+        raise ActorContextError("Context handler is not an ActorSystem")
+    return system
 
 
-def init_system(cfg: types.Config | None = None) -> actors.ActorSystem:
+def init_actor_system(cfg: types.Config | None = None) -> actors.ActorSystem:
     try:
-        ctx = get_system_context()
-        LOG.warning("ActorSystem already initialized.")
-        return ctx.system
+        system = get_actor_system()
     except ActorContextError:
         pass
+    else:
+        LOG.warning("ActorSystem already initialized.")
+        return system
 
     LOG.info("Initializing actor system...")
-    ctx = ActorSystemContext.from_config(cfg)
-    set_context(ctx)
+    ctx = context_from_config(cfg)
+    if not isinstance(ctx.handler, actors.ActorSystem):
+        raise ActorContextError("Context handler is not an ActorSystem")
+    set_actor_context(ctx)
     LOG.info("Actor system initialized.")
-    return ctx.system
+    return ctx.handler
 
 
-def get_system_context() -> ActorSystemContext:
-    ctx = get_context()
-    if not isinstance(ctx, ActorSystemContext):
-        raise TypeError("Context is not an ActorSystemContext")
-    return ctx
+def context_from_config(cfg: types.Config | None = None) -> ActorContext:
+    cfg = ActorConfig.from_config(cfg)
+    system_bases = [cfg.system_base]
+    if cfg.fallback_system_base and cfg.fallback_system_base != cfg.system_base:
+        system_bases.append(cfg.fallback_system_base)
 
+    first_error: Exception | None = None
+    for system_base in system_bases:
+        admin_ports: Iterable[int | None]
+        if system_base in ["multiprocTCPBase", "multiprocUDPBase"]:
+            admin_ports = cfg.admin_ports
+        else:
+            admin_ports = [None]
+        for admin_port in admin_ports:
+            try:
+                system = create_system(
+                    system_base=system_base,
+                    ip=cfg.ip,
+                    admin_port=admin_port,
+                    coordinator_ip=cfg.coordinator_ip,
+                    coordinator_port=cfg.coordinator_port,
+                    process_startup_method=cfg.process_startup_method,
+                )
+                return ActorContext(handler=system)
+            except actors.InvalidActorAddress as ex:
+                first_error = first_error or ex
+                if admin_port is not None:
+                    LOG.exception("Failed setting up actor system with system base '%s' and admin port %s", system_base, admin_port)
+                    continue  # It tries the next port
+                break  # It tries the next system base
+            except Exception as ex:
+                LOG.exception("Failed setting up actor system with system base '%s'", system_base)
+                first_error = first_error or ex
+                break  # It tries the next system base
 
-@dataclasses.dataclass
-class ActorSystemContext(ActorContext):
-
-    @classmethod
-    def from_config(cls, cfg: types.Config | None = None) -> Self:
-        cfg = ActorConfig.from_config(cfg)
-        system_bases = [cfg.system_base]
-        if cfg.fallback_system_base and cfg.fallback_system_base != cfg.system_base:
-            system_bases.append(cfg.fallback_system_base)
-
-        first_error: Exception | None = None
-        for system_base in system_bases:
-            admin_ports: Iterable[int | None]
-            if system_base in ["multiprocTCPBase", "multiprocUDPBase"]:
-                admin_ports = cfg.admin_ports
-            else:
-                admin_ports = [None]
-            for admin_port in admin_ports:
-                try:
-                    system = create_system(
-                        system_base=system_base,
-                        ip=cfg.ip,
-                        admin_port=admin_port,
-                        coordinator_ip=cfg.coordinator_ip,
-                        coordinator_port=cfg.coordinator_port,
-                        process_startup_method=cfg.process_startup_method,
-                    )
-                    return cls(system)
-                except actors.InvalidActorAddress as ex:
-                    first_error = first_error or ex
-                    if admin_port is not None:
-                        LOG.exception("Failed setting up actor system with system base '%s' and admin port %s", system_base, admin_port)
-                        continue  # It tries the next port
-                    break  # It tries the next system base
-                except Exception as ex:
-                    LOG.exception("Failed setting up actor system with system base '%s'", system_base)
-                    first_error = first_error or ex
-                    break  # It tries the next system base
-
-        raise first_error or RuntimeError(f"Could not initialize actor system with system base '{cfg.system_base}'")
-
-    system: actors.ActorSystem
-    results: dict[str, asyncio.Future[Any]] = dataclasses.field(default_factory=dict)
-
-    def create(
-        self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None
-    ) -> actors.ActorAddress:
-        address = self.system.createActor(cls, requirements)
-        if hasattr(cls, "receiveMsg_ActorConfig"):
-            self.send(address, ActorConfig.from_config(cfg))
-        return address
-
-    def send(self, destination: actors.ActorAddress, message: Any) -> None:
-        self.system.tell(destination, message)
-
-    def request(self, destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future[Any]:
-        request = MessageRequest.from_message(message, timeout=timeout)
-        future = self.results.get(request.req_id, None)
-        if future is None:
-            self.results[request.req_id] = future = asyncio.get_event_loop().create_future()
-            original_cancel = future.cancel
-
-            def cancel_wrapper(msg: Any | None = None) -> bool:
-                self.send(destination, CancelRequest(request.req_id))
-                return original_cancel(msg)
-
-            future.cancel = cancel_wrapper  # type: ignore[method-assign]
-
-        responses = iter(self._request(destination, request))
-        for response in responses:
-            if isinstance(response, PendingResponse):
-
-                async def _receive_response():
-                    for response in responses:
-                        LOG.debug("Received response: %s", response)
-
-                asyncio.get_event_loop().create_task(_receive_response())
-                break
-
-        return future
-
-    def _request(self, destination: actors.ActorAddress, request: MessageRequest) -> Generator[Response]:
-        deadline: float | None = request.deadline
-        timeout: float | None = None
-        if deadline is not None:
-            timeout = deadline - time.monotonic()
-        future = self.results.get(request.req_id, None)
-        if future is None or future.done():
-            return
-
-        response = self.system.ask(destination, request, timeout=timeout)
-        while response is not None:
-            self._receive_response(response)
-            if isinstance(response, Response):
-                yield response
-            if future.done():
-                return
-            if deadline is not None:
-                timeout = deadline - time.monotonic()
-                if timeout < 0.0:
-                    future.set_result(TimeoutError("No response for actor."))
-                    return
-            response = self.system.listen(timeout=timeout)
-
-    def _receive_response(self, response: Any) -> None:
-        if isinstance(response, PendingResponse):
-            return
-
-        if isinstance(response, actors.PoisonMessage):
-            error = PoisonError.from_poison_message(poison=response)
-            if isinstance(response.poisonMessage, Request):
-                future = self.results.get(response.poisonMessage.req_id, None)
-                if future and not future.done():
-                    future.set_exception(error)
-                    return
-            raise error
-
-        if isinstance(response, DoneResponse):
-            future = self.results.get(response.req_id, None)
-            if future and not future.done():
-                try:
-                    future.set_result(response.result())
-                except Exception as error:
-                    future.set_exception(error)
-                return
-            LOG.warning("Ignoring response message from actor: %r", response)
-            return
-
-        LOG.warning("Ignoring message from actor: %r", response)
-
-    def shutdown(self):
-        self.system.shutdown()
+    raise first_error or RuntimeError(f"Could not initialize actor system with system base '{cfg.system_base}'")
 
 
 def create_system(

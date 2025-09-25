@@ -19,14 +19,25 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import contextvars
+import dataclasses
 import logging
-from collections.abc import Generator
-from typing import Any, Optional, Protocol, TypeVar, runtime_checkable
+from collections.abc import Coroutine, Generator
+from typing import Any, Optional, TypeVar
 
 from thespian import actors  # type: ignore[import-untyped]
+from typing_extensions import Self
 
 from esrally import types
-from esrally.actors._proto import PingRequest
+from esrally.actors._config import ActorConfig
+from esrally.actors._proto import (
+    CancelRequest,
+    PingRequest,
+    PoisonError,
+    Request,
+    Response,
+    ResultResponse,
+    RunningTaskResponse,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -34,28 +45,44 @@ LOG = logging.getLogger(__name__)
 CONTEXT = contextvars.ContextVar[Optional["ActorContext"]]("actors.context", default=None)
 
 
-def create(cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None) -> actors.ActorAddress:
-    return get_context().create(cls, requirements=requirements, cfg=cfg)
+def create_actor(
+    cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None
+) -> actors.ActorAddress:
+    return get_actor_context().create_actor(cls=cls, requirements=requirements, cfg=cfg)
+
+
+R = TypeVar("R")
+
+
+def create_task(coro: Coroutine[None, None, R], *, name: str | None = None) -> asyncio.Task[R]:
+    """It creates a task and registers it for cancellation with the current request.
+
+    :param coro: the task coroutine
+    :param name: the task name
+    :param context: the variables context of the task
+    :return: created task.
+    """
+    return get_actor_context().create_task(coro, name=name)
 
 
 def send(destination: actors.ActorAddress, message: Any) -> None:
-    get_context().send(destination, message)
+    get_actor_context().send(destination, message)
 
 
 def request(destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future[Any]:
-    return get_context().request(destination, message, timeout=timeout)
+    return get_actor_context().request(destination, message, timeout=timeout)
 
 
 def ping(destination: actors.ActorAddress, *, message: Any = None, timeout: float | None = None) -> asyncio.Future[Any]:
-    return get_context().request(destination, PingRequest(message=message), timeout=timeout)
+    return request(destination, PingRequest(message=message), timeout=timeout)
 
 
 def shutdown() -> None:
     try:
-        ctx = get_context()
+        ctx = get_actor_context()
     except ActorContextError:
         return
-    set_context(None)
+    set_actor_context(None)
     ctx.shutdown()
 
 
@@ -63,14 +90,14 @@ class ActorContextError(RuntimeError):
     pass
 
 
-def get_context() -> ActorContext:
+def get_actor_context() -> ActorContext:
     ctx = CONTEXT.get()
     if not ctx:
         raise ActorContextError("No actor context set.")
     return ctx
 
 
-def set_context(ctx: ActorContext | None) -> None:
+def set_actor_context(ctx: ActorContext | None) -> None:
     assert ctx is None or isinstance(ctx, ActorContext)
     CONTEXT.set(ctx)
 
@@ -79,27 +106,157 @@ C = TypeVar("C", bound="ActorContext")
 
 
 @contextlib.contextmanager
-def enter_context(ctx: C) -> Generator[C]:
+def enter_actor_context(ctx: C) -> Generator[C]:
+    try:
+        original_loop = asyncio.get_event_loop()
+    except RuntimeError:
+        original_loop = None
+    asyncio.set_event_loop(ctx.loop)
     token = CONTEXT.set(ctx)
     try:
         yield ctx
     finally:
         CONTEXT.reset(token)
+        asyncio.set_event_loop(original_loop)
 
 
-@runtime_checkable
-class ActorContext(Protocol):
+@dataclasses.dataclass
+class ActorContext:
+    handler: actors.ActorTypeDispatcher | actors.ActorSystem
+    sent_requests: dict[str, asyncio.Future[Any]] = dataclasses.field(default_factory=dict)
+    loop: asyncio.AbstractEventLoop = dataclasses.field(default_factory=asyncio.get_event_loop)
+    log: logging.Logger = LOG
+    sender: actors.ActorAddress | None = None
 
-    def create(
+    @contextlib.contextmanager
+    def enter(self) -> Generator[Self]:
+        try:
+            original_loop = asyncio.get_event_loop()
+        except RuntimeError:
+            original_loop = None
+        asyncio.set_event_loop(self.loop)
+        token = CONTEXT.set(self)
+        try:
+            yield self
+        except BaseException:
+            self.log.exception("Exception while in the context")
+        finally:
+            CONTEXT.reset(token)
+            asyncio.set_event_loop(original_loop)
+
+    def create_actor(
         self, cls: type[actors.Actor], *, requirements: dict[str, Any] | None = None, cfg: types.Config | None = None
     ) -> actors.ActorAddress:
-        raise NotImplementedError
+        self.log.debug("Creating actor of type %s (requirements=%r)...", cls, requirements)
+        address = self.handler.createActor(cls, requirements)
+        if hasattr(cls, "receiveMsg_ActorConfig"):
+            self.send(address, ActorConfig.from_config(cfg))
+        self.log.debug("Created actor of type %s.", cls)
+        return address
+
+    def create_task(self, coro: Coroutine[None, None, R], *, name: str | None = None) -> asyncio.Task[R]:
+        return self.loop.create_task(coro, name=name)
 
     def send(self, destination: actors.ActorAddress, message: Any) -> None:
-        raise NotImplementedError
-
-    def request(self, destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future[Any]:
-        raise NotImplementedError
+        if isinstance(self.handler, actors.ActorSystem):
+            return self.handler.tell(destination, message)
+        if isinstance(self.handler, actors.Actor):
+            return self.handler.send(destination, message)
+        raise NotImplementedError(f"Handler type {type(self.handler)} not implemented.")
 
     def shutdown(self):
-        raise NotImplementedError
+        if isinstance(self.handler, actors.ActorSystem):
+            self.log.warning("Shutting down actor system (handler=%r)...", self.handler)
+            self.handler.shutdown()
+            return
+
+        if isinstance(self.handler, actors.Actor):
+            self.log.warning("Shutting down actor (handler=%r)...", self.handler)
+            self.handler.send(self.handler.myAddress, actors.ActorExitRequest())
+            return
+
+        raise NotImplementedError("Cannot shutdown actor context")
+
+    def request(self, destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future:
+        task = self.create_task(self.send_request(destination, message, timeout=timeout), name=f"request({message!r})")
+        if timeout is None:
+            return task
+        return asyncio.ensure_future(asyncio.wait_for(task, timeout))
+
+    async def send_request(self, destination: actors.ActorAddress, message: Any, timeout: float | None = None) -> Any:
+        request = Request.from_message(message, timeout=timeout)
+        future = self.sent_requests.get(request.req_id)
+        if future is None:
+            self.sent_requests[request.req_id] = future = self.loop.create_future()
+            original_cancel = future.cancel
+
+            def cancel_wrapper(msg: Any | None = None) -> bool:
+                self.sent_requests.pop(request.req_id, None)
+                self.send(destination, CancelRequest(message=msg, req_id=request.req_id))
+                return original_cancel(msg)
+
+            future.cancel = cancel_wrapper  # type: ignore[method-assign]
+            future.add_done_callback(lambda f: self.sent_requests.pop(request.req_id, None))
+
+        if not future.done():
+            if isinstance(self.handler, actors.Actor):
+                self.send(destination, request)
+            elif isinstance(self.handler, actors.ActorSystem):
+                response = self.handler.ask(destination, request, timeout=request.timeout)
+                while response is not None:
+                    if not self.receive_message(response, destination):
+                        self.log.warning("Ignored response from actor %s: %r", destination, response)
+                    if future.done():
+                        break
+                    response = self.handler.listen(timeout=request.timeout)
+                if not future.done():
+                    error = TimeoutError(f"No result response from actor {destination}.")
+                    self.send(destination, CancelRequest(message=str(error), req_id=request.req_id))
+                    future.set_exception(error)
+            else:
+                raise NotImplementedError("Cannot send request to actor.")
+
+        try:
+            return await future
+        except asyncio.CancelledError:
+            if future is not None and not future.done():
+                future.cancel()
+            raise
+
+    def receive_message(self, message: Any, sender: actors.ActorAddress) -> bool:
+        if isinstance(message, Response) and self.receive_response(message, sender):
+            return True
+
+        if isinstance(message, actors.PoisonMessage) and self.receive_poison_message(message, sender):
+            return True
+
+        return False
+
+    def receive_poison_message(self, message: actors.PoisonMessage, sender: actors.ActorAddress) -> bool:
+        if isinstance(message.poisonMessage, Request):
+            future = self.sent_requests.pop(message.poisonMessage.req_id, None)
+            if future and not future.done():
+                future.set_exception(PoisonError.from_poison_message(message))
+                return True
+        return False
+
+    def receive_response(self, response: Response, sender: actors.ActorAddress) -> bool:
+        if isinstance(response, ResultResponse) and self.receive_result_response(response, sender):
+            return True
+        if isinstance(response, RunningTaskResponse) and self.receive_running_task_response(response, sender):
+            return True
+        return False
+
+    def receive_result_response(self, response: ResultResponse, sender: actors.ActorAddress) -> bool:
+        future = self.sent_requests.pop(response.req_id, None)
+        if future and not future.done():
+            try:
+                future.set_result(response.result())
+            except Exception as error:
+                future.set_exception(error)
+        return True
+
+    def receive_running_task_response(self, response: RunningTaskResponse, sender: actors.ActorAddress) -> bool:
+        if response.req_id in self.sent_requests:
+            LOG.debug("Waiting for actor %s task completion: %s", sender, response.name)
+        return True

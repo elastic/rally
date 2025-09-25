@@ -53,14 +53,14 @@ def cfg(system_base: actors.SystemBase) -> Generator[types.Config]:
 
 @pytest.fixture(scope="function", autouse=True)
 def system() -> Generator[actors.ActorSystem]:
-    system = actors.init_system()
+    system = actors.init_actor_system()
     yield system
     actors.shutdown()
 
 
 @pytest.fixture(scope="function")
 def parent_actor() -> Generator[actors.ActorAddress]:
-    address = actors.create(DummyActor)
+    address = actors.create_actor(DummyActor)
     yield address
     actors.send(address, actors.ActorExitRequest())
 
@@ -106,18 +106,19 @@ async def test_respond_error(parent_actor: actors.ActorAddress) -> None:
 
 
 @pytest.mark.asyncio
-async def test_blocking_task(parent_actor: actors.ActorAddress) -> None:
+async def test_timeout_request(parent_actor: actors.ActorAddress) -> None:
     """This verifies a blocking task would not block the actor from processing further messages."""
-    actors.send(parent_actor, BlockingRequest(timeout=300.0))
+    future = actors.request(parent_actor, BlockingRequest(timeout=10.0), timeout=0.2)
     value = random.random()
     assert value == await actors.ping(parent_actor, message=value)
+    with pytest.raises(TimeoutError):
+        await future
 
 
 @pytest.mark.asyncio
 async def test_cancel_request(parent_actor: actors.ActorAddress) -> None:
     blocking = actors.request(parent_actor, BlockingRequest(timeout=300.0))
-    blocking.cancel()
-
+    blocking.cancel("some reason")
     value = random.random()
     assert value == await actors.ping(parent_actor, message=value)
 
@@ -186,7 +187,7 @@ class DummyActor(actors.AsyncActor):
 
     def receiveMsg_ResponseRequest(self, request: ResponseRequest, sender: actors.ActorAddress) -> Any:
         if request.explicit:
-            ctx = _context.get_context()
+            ctx = _context.get_actor_context()
             assert isinstance(ctx, _actor.ActorRequestContext), "Actor request context initialized."
             assert not ctx.responded, "Actor responded flag not set."
             actors.respond(status=request.status, error=request.error)
@@ -197,7 +198,7 @@ class DummyActor(actors.AsyncActor):
             return request.status
 
     def receiveMsg_CreateChildRequest(self, message: GetConfigRequest, sender: actors.ActorAddress) -> actors.ActorAddress:
-        return actors.create(DummyActor)
+        return actors.create_actor(DummyActor)
 
     def receiveMsg_GetConfigRequest(self, message: GetConfigRequest, sender: actors.ActorAddress) -> types.Config:
         return config.get_config()

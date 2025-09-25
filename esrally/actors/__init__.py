@@ -29,10 +29,10 @@ from esrally.actors._config import ActorConfig
 from esrally.actors._context import (
     ActorContext,
     ActorContextError,
-    create,
+    create_actor,
     ping,
     request,
     send,
     shutdown,
 )
-from esrally.actors._system import SystemBase, get_system, init_system
+from esrally.actors._system import SystemBase, get_actor_system, init_actor_system
