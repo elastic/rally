@@ -71,17 +71,37 @@ R = TypeVar("R")
 
 @dataclasses.dataclass
 class ActorRequestContext(ActorContext):
+    """Actor context being used while some received messages is being processed by an actor."""
 
+    # req_id will contain the current request ID in case the actor is processing a Request message.
     req_id: str = ""
+
+    # request_tasks contains sets of asyncio tasks (indexed by request IDs) to be cancelled in case of a CancelRequest is
+    # received.
     request_tasks: dict[str, set[asyncio.Task]] = dataclasses.field(default_factory=lambda: collections.defaultdict(set))
+
+    # responded will be true after current request message has been responded. The purpose of this flag is avoiding
+    # returning multiple responses to a single request.
     responded: bool = False
 
     @property
     def actor(self) -> AsyncActor:
+        """actor property returns the local actor where the current messages are being received."""
         assert isinstance(self.handler, AsyncActor)
         return self.handler
 
     def create_task(self, coro: Coroutine[None, None, R], *, name: str | None = None) -> asyncio.Task[R]:
+        """create_task is a wrapper around asyncio.AbstractEventLoop.create_task which while processing a request
+        message will register create task for cancellation in case a CancelRequest message is received.
+
+        Please note that while processing a request from inside an actor, all tasks created by calling this method will
+        be cancelled in case of a CancelRequest message. This could also include requests that have been forwarded to
+        other actors. To prevent this to happen, please use asyncio.create_task function instead.
+
+        :param coro: The coroutine to wrap.
+        :param name: The name of the task.
+        :return: The wrapper task.
+        """
         task = super().create_task(coro, name=name)
         if self.req_id:
             self.request_tasks[self.req_id].add(task)
@@ -89,71 +109,86 @@ class ActorRequestContext(ActorContext):
         return task
 
     def receive_message(self, message: Any, sender: actors.ActorAddress) -> bool:
-        """Invoke by the actor when receiving a new message."""
+        """receive_message is called by the actor when receiving a new message."""
 
+        # It processes requests.
         if isinstance(message, Request) and self.receive_request(message, sender):
             return True
 
+        # It receives application configuration.
         if isinstance(message, ActorConfig) and self.receive_actor_config(message, sender):
             return True
 
+        # It processes responses.
         if super().receive_message(message, sender):
             return True
 
+        # It dispatches the message back to the actor.
         actors.ActorTypeDispatcher.receiveMessage(self.actor, message, sender)
         return True
 
     def receive_actor_config(self, cfg: ActorConfig, sender: actors.ActorAddress) -> bool:
-        """It adds the configuration to the actor context."""
+        """It adds the configuration to the actor contextvars.Context."""
         self.log.debug("Received configuration message: %s", cfg)
         init_config(cfg, force=True)
         return False
 
     def receive_request(self, request: Request, sender: actors.ActorAddress) -> bool:
+        """It processes a request message."""
         try:
             ctx = get_actor_context()
         except ActorContextError:
             ctx = None
         if ctx is not self:
+            # It ensures the request is processed within this actor context.
             with self.enter():
                 return self.receive_request(request, sender)
 
         self.log.debug("Received request from actor %s: %s", sender, request)
+        # It sets context variables that will later be used to respond the request.
         self.sender = sender
         self.req_id = request.req_id
         try:
+            # It cancels all tasks of a previous request.
             if isinstance(request, CancelRequest) and self.cancel_request(request.message):
                 return True
 
+            # It processes a ping request.
             if isinstance(request, PingRequest) and self.receive_ping_request(request):
                 return True
 
+            # It dispatches the request enveloped message to the actor.
             self.respond(actors.ActorTypeDispatcher.receiveMessage(self.actor, request.message, sender))
             return True
 
         except Exception as error:
+            # It sends the error as a response.
             self.respond(error=error)
             return True
 
     def receive_cancel_request(self, request: CancelRequest) -> bool:
+        """It processes a cancel request message."""
         self.cancel_request(request.message)
         return True
 
+    def cancel_request(self, message: Any = None) -> bool:
+        """It cancels all pending tasks of the current request. Then it sends back a CancelledResponse to notify request sender."""
+        for t in self.request_tasks.pop(self.req_id, []):
+            if not t.done():
+                t.cancel(message)
+        if not self.responded:
+            # It notifies the request sender the request has been cancelled.
+            self.respond(CancelledResponse(self.req_id, message))
+        return True
+
     def receive_ping_request(self, request: PingRequest) -> bool:
+        """It processes a ping request message."""
         if request.destination in [None, self.actor.myAddress]:
             # It responds to the ping request.
             self.respond(PongResponse(request.req_id, request.message))
         else:
             # It forwards the request to the destination actor.
             self.respond(self.request(request.destination, request))
-        return True
-
-    def cancel_request(self, message: Any = None) -> bool:
-        for t in self.request_tasks.pop(self.req_id, []):
-            if not t.done():
-                t.cancel(message)
-        if not self.responded:
-            self.respond(CancelledResponse(self.req_id, message))
         return True
 
     def respond(self, status: Any = None, error: Exception | None = None) -> None:
@@ -172,7 +207,7 @@ class ActorRequestContext(ActorContext):
             # make it spawning another task to wait for it. This should ensure there
             # should always be a response for every request which processing come to
             # an end. All tasks will be cancelled in case of a CancelRequest message is received.
-            self.create_task(self.respond_later(status), name=str(status))
+            self.create_task(self.respond_later(status), name=f"respond_later({status!r})")
             return
 
         if self.req_id:
@@ -186,16 +221,23 @@ class ActorRequestContext(ActorContext):
             # The error will eventually reach requester in the form of a PoisonMessage
             raise error
 
-        if response is not None:
+        if response is None:
+            self.log.debug("No response sent to actor %s: %r", self.sender, response)
+        else:
             # It finally sends a response.
             self.send(self.sender, response)
+            self.log.debug("Sent response to actor %s: %r", self.sender, response)
 
+        # Reaching this point it mean there is nothing more to respond to the request and all pending tasks can be
+        # cancelled.
         self.responded = True
-        LOG.debug("Sent response to actor %s: %r", self.sender, response)
         self.cancel_request()
-        return
 
     async def respond_later(self, status: Awaitable) -> None:
+        """respond_later awaits for a response to get ready.
+
+        It makes sures a response is always sent to the request sender, even if the awaited task is cancelled.
+        """
         try:
             self.respond(status=await status)
         except Exception as error:
@@ -211,7 +253,7 @@ class AsyncActor(actors.ActorTypeDispatcher):
     Additional features include:
     - It uses its own `asyncio` event loop to run asynchronous tasks (co-routines). The loop is set as current during
       messages processing.
-    - It periodically run pending tasks from the loop.
+    - It periodically run pending tasks from its event loop.
     - The methods processing a message type can be async coroutines, on which case they will be scheduled for execution
       as an async task of the actor event loop. While messages are being processed by these co-routines, other messages
       and loop events can be processed from the actor, making the actor truly asynchronous.
@@ -222,7 +264,7 @@ class AsyncActor(actors.ActorTypeDispatcher):
     - When receiving a PoisonErrorMessage as response of `request` method, it translates it to a PoisonError and raises
       it as a possible outcome of waiting for a response.
     - When receiving an ActorExitRequest, it cancels all pending tasks from the loop, then stops the loop, so that
-      requesters actors should receive CancelledError while waiting for a response.
+      request senders should receive CancelledError while waiting for a response.
     - It creates its own logger.
     """
 
@@ -282,6 +324,7 @@ class AsyncActor(actors.ActorTypeDispatcher):
         if message.payload == self._RUN_PENDING_TASKS:
             self._run_pending_tasks()
             return None
+        # It processes payload message as a standalone message.
         super().receiveMessage(message.payload, sender)
 
     def _run_pending_tasks(self) -> None:
