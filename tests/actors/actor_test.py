@@ -20,7 +20,7 @@ import asyncio
 import dataclasses
 import random
 from collections.abc import Generator
-from typing import Any, Literal, get_args
+from typing import Any, get_args
 
 import pytest
 
@@ -66,17 +66,20 @@ def parent_actor() -> Generator[actors.ActorAddress]:
 
 
 @pytest.fixture(scope="function")
-def children_actors(parent_actor: actors.ActorAddress) -> Generator[list[actors.ActorAddress]]:
-    tasks = [actors.request(parent_actor, CreateChildRequest()) for _ in range(3)]
-    children = asyncio.get_event_loop().run_until_complete(asyncio.gather(*tasks))
-    yield children
-    for child in children:
-        actors.send(child, actors.ActorExitRequest())
+def child_actor(parent_actor: actors.ActorAddress) -> Generator[actors.ActorAddress]:
+    child = asyncio.get_event_loop().run_until_complete(actors.request(parent_actor, CreateChildRequest()))
+    yield child
+    actors.send(child, actors.ActorExitRequest())
 
 
 @pytest.mark.asyncio
 async def test_actor_context(parent_actor: actors.ActorAddress) -> None:
     await actors.request(parent_actor, CheckActorContextRequest())
+
+
+@pytest.mark.asyncio
+async def test_child_actor_context(child_actor: actors.ActorAddress) -> None:
+    await actors.request(child_actor, CheckActorContextRequest())
 
 
 @pytest.mark.asyncio
@@ -116,11 +119,30 @@ async def test_timeout_request(parent_actor: actors.ActorAddress) -> None:
 
 
 @pytest.mark.asyncio
+async def test_timeout_nested_request(parent_actor: actors.ActorAddress, child_actor: actors.ActorAddress) -> None:
+    """This verifies a blocking task would not block the actor from processing further messages."""
+    future = actors.request(parent_actor, BlockingRequest(timeout=10.0, destination=child_actor), timeout=0.2)
+    value = random.random()
+    assert value == await actors.ping(parent_actor, message=value)
+    with pytest.raises(TimeoutError):
+        await future
+
+
+@pytest.mark.asyncio
 async def test_cancel_request(parent_actor: actors.ActorAddress) -> None:
     blocking = actors.request(parent_actor, BlockingRequest(timeout=300.0))
     blocking.cancel("some reason")
     value = random.random()
     assert value == await actors.ping(parent_actor, message=value)
+
+
+@pytest.mark.asyncio
+async def test_blocking_request(parent_actor: actors.ActorAddress) -> None:
+    blocking = actors.request(parent_actor, BlockingRequest(timeout=300.0))
+    value = random.random()
+    assert value == await actors.ping(parent_actor, message=value)
+    with pytest.raises(TimeoutError):
+        await actors.wait_for(blocking, timeout=0.1, cancel_message="too much time!")
 
 
 @pytest.mark.asyncio
@@ -131,21 +153,17 @@ async def test_parent_config(parent_actor: actors.ActorAddress) -> None:
 
 
 @pytest.mark.asyncio
-async def test_children_config(children_actors: list[actors.ActorAddress]) -> None:
-    for child in children_actors:
-        assert config.get_config() == await actors.request(
-            child, GetConfigRequest()
-        ), "Child actor received configuration from parent context."
-
-
-SendMethod = Literal["send", "request"]
+async def test_child_config(child_actor: actors.ActorAddress) -> None:
+    assert config.get_config() == await actors.request(
+        child_actor, GetConfigRequest()
+    ), "Child actor received configuration from parent context."
 
 
 @pytest.mark.asyncio
-async def test_request(parent_actor: actors.ActorAddress, children_actors: list[actors.ActorAddress]) -> None:
-    requests = [_proto.PingRequest(destination=child, message=random.random()) for child in children_actors]
-    responses = await asyncio.gather(*[actors.request(parent_actor, r) for r in requests])
-    assert responses == [r.message for r in requests]
+async def test_request(parent_actor: actors.ActorAddress, child_actor: actors.ActorAddress) -> None:
+    request = _proto.PingRequest(destination=child_actor, message=random.random())
+    response = await actors.request(parent_actor, request)
+    assert response == request.message
 
 
 class CheckActorContextRequest:

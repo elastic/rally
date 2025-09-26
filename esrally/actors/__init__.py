@@ -34,5 +34,6 @@ from esrally.actors._context import (
     request,
     send,
     shutdown,
+    wait_for,
 )
 from esrally.actors._system import SystemBase, get_actor_system, init_actor_system

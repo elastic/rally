@@ -178,12 +178,6 @@ class ActorContext:
         raise NotImplementedError("Cannot shutdown actor context")
 
     def request(self, destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future:
-        task = self.create_task(self.send_request(destination, message, timeout=timeout), name=f"request({message!r})")
-        if timeout is None:
-            return task
-        return asyncio.ensure_future(asyncio.wait_for(task, timeout))
-
-    async def send_request(self, destination: actors.ActorAddress, message: Any, timeout: float | None = None) -> Any:
         request = Request.from_message(message, timeout=timeout)
         future = self.sent_requests.get(request.req_id)
         if future is None:
@@ -198,32 +192,40 @@ class ActorContext:
             future.cancel = cancel_wrapper  # type: ignore[method-assign]
             future.add_done_callback(lambda f: self.sent_requests.pop(request.req_id, None))
 
-        if not future.done():
-            if isinstance(self.handler, actors.Actor):
-                self.send(destination, request)
-            elif isinstance(self.handler, actors.ActorSystem):
-                response = self.handler.ask(destination, request, timeout=request.timeout)
-                while response is not None:
-                    if not self.receive_message(response, destination):
-                        self.log.warning("Ignored response from actor %s: %r", destination, response)
-                    if future.done():
-                        break
-                    response = self.handler.listen(timeout=request.timeout)
-                if not future.done():
-                    error = TimeoutError(f"No result response from actor {destination}.")
-                    self.send(destination, CancelRequest(message=str(error), req_id=request.req_id))
-                    future.set_exception(error)
-            else:
-                raise NotImplementedError("Cannot send request to actor.")
+        if future.done():
+            return future
 
-        try:
-            return await future
-        except asyncio.CancelledError:
-            if future is not None and not future.done():
-                future.cancel()
-            raise
+        if timeout is not None:
+            task_name = f"request({destination!s}, {message!r}, timeout={timeout!r})"
+            future = self.create_task(wait_for(future, timeout=timeout, cancel_message=task_name), name=task_name)
+        else:
+            task_name = f"request({destination!s}, {message!r}"
+
+        if isinstance(self.handler, actors.Actor):
+            self.send(destination, request)
+            return future
+
+        if isinstance(self.handler, actors.ActorSystem):
+            response = self.handler.ask(destination, request, timeout=min_timeout(0.1, request.timeout))
+            self.receive_message(response, destination)
+            if future.done():
+                return future
+
+            async def listen_for_result() -> Any:
+                while not future.done():
+                    response = self.handler.listen(timeout=min_timeout(0.1, request.timeout))
+                    self.receive_message(response, destination)
+                    await asyncio.sleep(0)
+                return await future
+
+            return self.create_task(listen_for_result(), name=task_name)
+
+        raise NotImplementedError(f"Cannot send request to actor: invalid handler: {self.handler}.")
 
     def receive_message(self, message: Any, sender: actors.ActorAddress) -> bool:
+        if message is None:
+            return True
+
         if isinstance(message, Response) and self.receive_response(message, sender):
             return True
 
@@ -260,3 +262,22 @@ class ActorContext:
         if response.req_id in self.sent_requests:
             LOG.debug("Waiting for actor %s task completion: %s", sender, response.name)
         return True
+
+
+async def wait_for(future: asyncio.Future[R], *, timeout: float | None = None, cancel_message: Any = None) -> R:
+    if future.done() or timeout is None:
+        return await future
+
+    await asyncio.wait([future], timeout=timeout)
+    if not future.done():
+        future.cancel(cancel_message)
+        raise TimeoutError(str(cancel_message))
+
+    return await future
+
+
+def min_timeout(*timeouts: float | None) -> float | None:
+    real_timeouts = [t for t in timeouts if t is not None]
+    if real_timeouts:
+        return min(real_timeouts)
+    return None
