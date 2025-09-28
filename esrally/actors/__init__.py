@@ -30,6 +30,7 @@ from esrally.actors._context import (
     ActorContext,
     ActorContextError,
     create_actor,
+    get_actor_context,
     ping,
     request,
     send,

@@ -18,14 +18,15 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import functools
 import random
-from collections.abc import Generator
-from typing import Any, get_args
+from collections.abc import Callable, Generator
+from typing import Any, Literal, get_args
 
 import pytest
 
 from esrally import actors, config, types
-from esrally.actors import _actor, _context, _proto
+from esrally.actors import ActorConfig, _actor, _context, _proto
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -59,111 +60,128 @@ def system() -> Generator[actors.ActorSystem]:
 
 
 @pytest.fixture(scope="function")
-def parent_actor() -> Generator[actors.ActorAddress]:
+def dummy_actor() -> Generator[actors.ActorAddress]:
     address = actors.create_actor(DummyActor)
     yield address
     actors.send(address, actors.ActorExitRequest())
 
 
-@pytest.fixture(scope="function")
-def child_actor(parent_actor: actors.ActorAddress) -> Generator[actors.ActorAddress]:
-    child = asyncio.get_event_loop().run_until_complete(actors.request(parent_actor, CreateChildRequest()))
-    yield child
-    actors.send(child, actors.ActorExitRequest())
+# It indicates if a test case has to be executed from an outside or from inside an actor.
+ExecuteFrom = Literal["from_external", "from_actor"]
+
+
+# This fixtures patches the test function so that its being executed from inside an AsyncActor in case param is "from_actor".
+@pytest.fixture(scope="function", params=get_args(ExecuteFrom))
+def execute_from(request, monkeypatch) -> Generator[ExecuteFrom, None, None]:
+    if request.param == "from_actor":
+        actor = actors.create_actor(ExecutorActor)
+        request.addfinalizer(lambda: actors.send(actor, actors.ActorExitRequest()))
+
+        original_func = getattr(request.module, request.function.__name__)
+
+        @functools.wraps(request.function)
+        async def func_wrapper(*args, **kwargs):
+            return await actors.request(actor, ExecuteRequest(original_func, args=args, kwargs=kwargs))
+
+        assert isinstance(request.node, pytest.Function)
+        request.node.obj = func_wrapper
+
+    yield request.param
 
 
 @pytest.mark.asyncio
-async def test_actor_context(parent_actor: actors.ActorAddress) -> None:
-    await actors.request(parent_actor, CheckActorContextRequest())
+async def test_get_actor_context(execute_from: ExecuteFrom):
+    ctx = actors.get_actor_context()
+    assert isinstance(ctx, actors.ActorContext)
+    if execute_from == "from_external":
+        assert not isinstance(ctx, _actor.ActorRequestContext)
+    elif execute_from == "from_actor":
+        assert isinstance(ctx, _actor.ActorRequestContext)
+        assert ctx.req_id
+        assert ctx.sender is not None
+    else:
+        raise NotImplementedError()
 
 
 @pytest.mark.asyncio
-async def test_child_actor_context(child_actor: actors.ActorAddress) -> None:
-    await actors.request(child_actor, CheckActorContextRequest())
-
-
-@pytest.mark.asyncio
-async def test_return_result(parent_actor: actors.ActorAddress) -> None:
+async def test_return_result(dummy_actor: actors.ActorAddress) -> None:
     result = random.random()
-    assert result == await actors.request(parent_actor, ResponseRequest(result))
+    assert result == await actors.request(dummy_actor, ResponseRequest(result))
 
 
 @pytest.mark.asyncio
-async def test_respond_status(parent_actor: actors.ActorAddress) -> None:
+async def test_respond_status(dummy_actor: actors.ActorAddress) -> None:
     result = random.random()
-    assert result == await actors.request(parent_actor, ResponseRequest(result, explicit=True))
+    assert result == await actors.request(dummy_actor, ResponseRequest(result, explicit=True))
 
 
 @pytest.mark.asyncio
-async def test_raises_error(parent_actor: actors.ActorAddress) -> None:
+async def test_raises_error(dummy_actor: actors.ActorAddress) -> None:
     error = RuntimeError(f"some ramdom error: {random.random()}")
     with pytest.raises(RuntimeError):
-        await actors.request(parent_actor, ResponseRequest(error=error))
+        await actors.request(dummy_actor, ResponseRequest(error=error))
 
 
 @pytest.mark.asyncio
-async def test_respond_error(parent_actor: actors.ActorAddress) -> None:
+async def test_respond_error(dummy_actor: actors.ActorAddress) -> None:
     error = ValueError(f"some ramdom error: {random.random()}")
     with pytest.raises(ValueError):
-        await actors.request(parent_actor, ResponseRequest(error=error, explicit=True))
+        await actors.request(dummy_actor, ResponseRequest(error=error, explicit=True))
 
 
 @pytest.mark.asyncio
-async def test_timeout_request(parent_actor: actors.ActorAddress) -> None:
+async def test_timeout_request(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
     """This verifies a blocking task would not block the actor from processing further messages."""
-    future = actors.request(parent_actor, BlockingRequest(timeout=10.0), timeout=0.2)
+    future = actors.request(dummy_actor, BlockingRequest(timeout=10.0), timeout=0.2)
     value = random.random()
-    assert value == await actors.ping(parent_actor, message=value)
+    assert value == await actors.ping(dummy_actor, message=value)
     with pytest.raises(TimeoutError):
         await future
 
 
 @pytest.mark.asyncio
-async def test_timeout_nested_request(parent_actor: actors.ActorAddress, child_actor: actors.ActorAddress) -> None:
-    """This verifies a blocking task would not block the actor from processing further messages."""
-    future = actors.request(parent_actor, BlockingRequest(timeout=10.0, destination=child_actor), timeout=0.2)
-    value = random.random()
-    assert value == await actors.ping(parent_actor, message=value)
-    with pytest.raises(TimeoutError):
-        await future
-
-
-@pytest.mark.asyncio
-async def test_cancel_request(parent_actor: actors.ActorAddress) -> None:
-    blocking = actors.request(parent_actor, BlockingRequest(timeout=300.0))
+async def test_cancel_request(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
+    blocking = actors.request(dummy_actor, BlockingRequest(timeout=300.0))
     blocking.cancel("some reason")
     value = random.random()
-    assert value == await actors.ping(parent_actor, message=value)
+    assert value == await actors.ping(dummy_actor, message=value)
 
 
 @pytest.mark.asyncio
-async def test_blocking_request(parent_actor: actors.ActorAddress) -> None:
-    blocking = actors.request(parent_actor, BlockingRequest(timeout=300.0))
+async def test_blocking_request(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
+    blocking = actors.request(dummy_actor, BlockingRequest(timeout=300.0))
     value = random.random()
-    assert value == await actors.ping(parent_actor, message=value)
+    assert value == await actors.ping(dummy_actor, message=value)
     with pytest.raises(TimeoutError):
         await actors.wait_for(blocking, timeout=0.1, cancel_message="too much time!")
 
 
 @pytest.mark.asyncio
-async def test_parent_config(parent_actor: actors.ActorAddress) -> None:
+async def test_actor_config(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
     assert config.get_config() == await actors.request(
-        parent_actor, GetConfigRequest()
+        dummy_actor, GetConfigRequest()
     ), "Parent actor received configuration from system context."
 
 
 @pytest.mark.asyncio
-async def test_child_config(child_actor: actors.ActorAddress) -> None:
-    assert config.get_config() == await actors.request(
-        child_actor, GetConfigRequest()
-    ), "Child actor received configuration from parent context."
+async def test_request(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
+    request = _proto.PingRequest(message=random.random())
+    response = await actors.request(dummy_actor, request)
+    assert response == request.message
 
 
 @pytest.mark.asyncio
-async def test_request(parent_actor: actors.ActorAddress, child_actor: actors.ActorAddress) -> None:
-    request = _proto.PingRequest(destination=child_actor, message=random.random())
-    response = await actors.request(parent_actor, request)
-    assert response == request.message
+async def test_create_actor(execute_from: ExecuteFrom) -> None:
+    # It uses this special configuration object to check it is going to be propagated to child actor as it is.
+    special_config = actors.ActorConfig()
+    special_config.admin_ports = range(100, 200)
+    actor_address = actors.create_actor(DummyActor, cfg=special_config)
+    try:
+        actor_config = await actors.request(actor_address, GetConfigRequest())
+        assert isinstance(actor_config, ActorConfig)
+        assert actor_config.admin_ports == special_config.admin_ports
+    finally:
+        actors.send(actor_address, actors.ActorExitRequest())
 
 
 class CheckActorContextRequest:
@@ -226,3 +244,19 @@ class DummyActor(actors.AsyncActor):
             await asyncio.sleep(request.timeout)
             return
         return await actors.request(request.destination, request)
+
+
+@dataclasses.dataclass
+class ExecuteRequest:
+    func: Callable
+    args: tuple = tuple()
+    kwargs: dict = dataclasses.field(default_factory=dict)
+
+    def __call__(self) -> Any:
+        return self.func(*self.args, **self.kwargs)
+
+
+class ExecutorActor(actors.AsyncActor):
+
+    async def receiveMsg_ExecuteRequest(self, request: ExecuteRequest, sender: actors.ActorAddress) -> Any:
+        return request()
