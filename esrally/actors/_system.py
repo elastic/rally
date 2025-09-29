@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import socket
-from collections.abc import Iterable
+from collections.abc import Generator, Iterable
 from typing import Any, get_args
 
 from thespian import actors  # type: ignore[import-untyped]
@@ -73,10 +73,14 @@ def context_from_config(cfg: types.Config | None = None) -> ActorContext:
     first_error: Exception | None = None
     for system_base in system_bases:
         admin_ports: Iterable[int | None]
-        if system_base in ["multiprocTCPBase", "multiprocUDPBase"]:
-            admin_ports = cfg.admin_ports
+        if system_base == "multiprocTCPBase":
+            if cfg.try_join:
+                admin_ports = cfg.admin_ports
+            else:
+                admin_ports = iter_unused_random_ports()
         else:
             admin_ports = [None]
+
         for admin_port in admin_ports:
             try:
                 system = create_system(
@@ -157,3 +161,11 @@ def create_system(
     system = actors.ActorSystem(systemBase=system_base, capabilities=capabilities, logDefs=log_defs, transientUnique=True)
     LOG.debug("Actor system created:\n - capabilities: %r\n", system.capabilities)
     return system
+
+
+def iter_unused_random_ports() -> Generator[int]:
+    while True:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            _, port = sock.getsockname()
+        yield port

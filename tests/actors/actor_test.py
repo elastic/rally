@@ -48,6 +48,7 @@ def system_base(request) -> Generator[actors.SystemBase]:
 def cfg(system_base: actors.SystemBase) -> Generator[types.Config]:
     cfg = actors.ActorConfig()
     cfg.system_base = system_base
+    cfg.try_join = False
     config.init_config(cfg)
     yield cfg
     config.clear_config()

@@ -32,6 +32,7 @@ DEFAULT_ADMIN_PORTS: range = range(1900, 2000)
 DEFAULT_COORDINATOR_IP: str = ""
 DEFAULT_COORDINATOR_PORT: int = 0
 DEFAULT_ROUTER_ADDRESS: str | None = None
+DEFAULT_TRY_JOIN: bool = True
 
 # ProcessStartupMethod values are used to specify the way actor processes have to be created.
 ProcessStartupMethod = Literal[
@@ -117,3 +118,20 @@ class ActorConfig(config.Config):
     @process_startup_method.setter
     def process_startup_method(self, value: ProcessStartupMethod) -> None:
         self.add(config.Scope.applicationOverride, "actors", "actors.process_startup_method", value)
+
+    @property
+    def try_join(self) -> bool:
+        """It indicates if it should try joining an existing actor system already running on the current host.
+
+        When running with 'multiprocTCPBase' system base (the default) it will try to connect to the smaller
+        admin port in given range first, to look if there is an existing actor system running on it and join it.
+
+        On the contrary it will pick random unused ports to avoid joining existing actor systems. In the case of running
+        tests with short living actor systems this setting this to False should increase actor system initialization
+        performance.
+        """
+        return convert.to_bool(self.opts("actors", "actors.try_join", default_value=DEFAULT_TRY_JOIN, mandatory=False))
+
+    @try_join.setter
+    def try_join(self, value: bool) -> None:
+        self.add(config.Scope.applicationOverride, "actors", "actors.try_join", bool(value))

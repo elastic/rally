@@ -34,6 +34,7 @@ from esrally.actors._config import (
     DEFAULT_IP,
     DEFAULT_PROCESS_STARTUP_METHOD,
     DEFAULT_SYSTEM_BASE,
+    DEFAULT_TRY_JOIN,
     ActorConfig,
     ProcessStartupMethod,
     SystemBase,
@@ -91,6 +92,7 @@ class SystemCase:
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
     coordinator_port: int = DEFAULT_COORDINATOR_PORT
     process_startup_method: ProcessStartupMethod = DEFAULT_PROCESS_STARTUP_METHOD
+    try_join: bool = DEFAULT_TRY_JOIN
     want_capabilities: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
@@ -137,9 +139,14 @@ class SystemCase:
         process_startup_method="forkserver",
         want_capabilities={"Process Startup Method": "forkserver"},
     ),
+    no_try_join=SystemCase(
+        try_join=False,
+    ),
 )
 @pytest.mark.asyncio
 async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None:
+    if case.process_startup_method in ["forkserver", "spawn"]:
+        pytest.skip(reason="Some issues has been encountered with other methods than fork.")
     cfg = ActorConfig()
     if case.system_base != DEFAULT_SYSTEM_BASE:
         cfg.system_base = case.system_base
@@ -155,6 +162,8 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
         cfg.coordinator_port = case.coordinator_port
     if case.process_startup_method != DEFAULT_PROCESS_STARTUP_METHOD:
         cfg.process_startup_method = case.process_startup_method
+    if case.try_join != DEFAULT_TRY_JOIN:
+        cfg.try_join = case.try_join
     config.init_config(cfg)
 
     with pytest.raises(actors.ActorContextError):

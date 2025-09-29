@@ -27,6 +27,7 @@ from esrally.actors._config import (
     DEFAULT_IP,
     DEFAULT_PROCESS_STARTUP_METHOD,
     DEFAULT_SYSTEM_BASE,
+    DEFAULT_TRY_JOIN,
     ActorConfig,
     SystemBase,
 )
@@ -43,6 +44,7 @@ class FromConfigCase:
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
     coordinator_port: int = DEFAULT_COORDINATOR_PORT
     process_startup_method: str | None = DEFAULT_PROCESS_STARTUP_METHOD
+    try_join: bool | None = DEFAULT_TRY_JOIN
     want_name: str | None = None
 
 
@@ -59,6 +61,7 @@ class FromConfigCase:
     fork=FromConfigCase(process_startup_method="fork"),
     forkserver=FromConfigCase(process_startup_method="forkserver"),
     spawn=FromConfigCase(process_startup_method="spawn"),
+    no_try_join=FromConfigCase(try_join=False),
 )
 def test_from_config(case: FromConfigCase) -> None:
     cfg = ActorConfig(case.name)
@@ -74,6 +77,8 @@ def test_from_config(case: FromConfigCase) -> None:
         cfg.coordinator_ip = case.coordinator_ip
     if case.coordinator_port != DEFAULT_COORDINATOR_PORT:
         cfg.coordinator_port = case.coordinator_port
+    if case.try_join != DEFAULT_TRY_JOIN:
+        cfg.try_join = case.try_join
     assert isinstance(cfg, ActorConfig)
     assert cfg.name == case.want_name
     assert cfg.system_base in get_args(SystemBase)
@@ -84,3 +89,4 @@ def test_from_config(case: FromConfigCase) -> None:
     assert cfg.admin_ports == convert.to_range(case.admin_ports)
     assert cfg.coordinator_ip == case.coordinator_ip
     assert cfg.coordinator_port == case.coordinator_port
+    assert cfg.try_join == case.try_join
