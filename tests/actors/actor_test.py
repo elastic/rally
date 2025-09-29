@@ -27,6 +27,7 @@ import pytest
 
 from esrally import actors, config, types
 from esrally.actors import ActorConfig, _actor, _context, _proto
+from esrally.utils import cases
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -99,6 +100,7 @@ async def test_get_actor_context(execute_from: ExecuteFrom):
         assert not isinstance(ctx, _actor.ActorRequestContext)
         assert isinstance(ctx.handler, actors.ActorSystem)
         assert ctx.handler is actors.get_actor_system()
+        assert str(ctx) == "ActorContext[ActorSystem]", f"invalid value: 'str(ctx)' -> {ctx}"
 
     elif execute_from == "from_actor":
         assert isinstance(ctx, _actor.ActorRequestContext), "Actor request context initialized."
@@ -111,6 +113,8 @@ async def test_get_actor_context(execute_from: ExecuteFrom):
         actors.respond()
         assert ctx.responded, "Actor request is responded."
         assert ctx.pending_tasks == {}
+        assert ctx.name == f"ExecutorActor|{ctx.req_id}"
+        assert str(ctx) == f"ActorContext[ExecutorActor|{ctx.req_id}]", f"invalid value: 'str(ctx)' -> {ctx}"
 
     else:
         raise NotImplementedError()
@@ -220,18 +224,32 @@ async def test_create_actor(execute_from: ExecuteFrom) -> None:
         actors.send(actor_address, actors.ActorExitRequest())
 
 
+@dataclasses.dataclass
+class CreateTaskCase:
+    task_name: str | None = None
+
+
+@cases.cases(
+    default=CreateTaskCase(),
+    name=CreateTaskCase(task_name="some-task-name"),
+)
 @pytest.mark.asyncio
-async def test_create_task(execute_from: ExecuteFrom) -> None:
+async def test_create_task(case: CreateTaskCase, execute_from: ExecuteFrom) -> None:
     result = asyncio.get_event_loop().create_future()
 
     async def task() -> Any:
         return await result
 
-    task = actors.create_task(task(), name="some-task")
+    coro = task()
+    task = actors.create_task(coro, name=case.task_name)
     assert isinstance(task, asyncio.Task)
-    assert task.get_name() == "some-task"
     assert not task.cancelled()
     assert not task.done()
+
+    if case.task_name is None:
+        assert task.get_name() == f"{coro}@{actors.get_actor_context().name}", f"unexpected task name: {task.get_name()}"
+    else:
+        assert task.get_name() == f"{case.task_name}@{actors.get_actor_context().name}", f"unexpected task name: {task.get_name()}"
 
     if execute_from == "from_actor":
         ctx = actors.get_actor_context()

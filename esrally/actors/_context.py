@@ -127,6 +127,13 @@ class ActorContext:
     loop: asyncio.AbstractEventLoop = dataclasses.field(default_factory=asyncio.get_event_loop)
     log: logging.Logger = LOG
 
+    @property
+    def name(self) -> str:
+        return type(self.handler).__name__
+
+    def __str__(self) -> str:
+        return f"{type(self).__name__}[{self.name}]"
+
     @contextlib.contextmanager
     def enter(self) -> Generator[Self]:
         try:
@@ -154,7 +161,7 @@ class ActorContext:
         return address
 
     def create_task(self, coro: Coroutine[None, None, R], *, name: str | None = None) -> asyncio.Task[R]:
-        return self.loop.create_task(coro, name=name)
+        return self.loop.create_task(coro, name=f"{name or coro}@{self.name}" or self.name)
 
     def send(self, destination: actors.ActorAddress, message: Any) -> None:
         if isinstance(self.handler, actors.ActorSystem):

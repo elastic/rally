@@ -84,8 +84,12 @@ class ActorRequestContext(ActorContext):
     pending_tasks: dict[str, set[asyncio.Task]] = dataclasses.field(default_factory=lambda: collections.defaultdict(set))
 
     # responded will be true after current request message has been responded. The purpose of this flag is avoiding
-    # returning multiple responses to a single request.
+    # returning multiple responses to the same 'req_id'.
     responded: bool = False
+
+    @property
+    def name(self) -> str:
+        return f"{super().name}|{self.req_id}"
 
     @property
     def actor(self) -> AsyncActor:
@@ -94,8 +98,10 @@ class ActorRequestContext(ActorContext):
         return self.handler
 
     def create_task(self, coro: Coroutine[None, None, R], *, name: str | None = None) -> asyncio.Task[R]:
-        """create_task is a wrapper around asyncio.AbstractEventLoop.create_task which while processing a request
-        message will register create task for cancellation in case a CancelRequest message is received.
+        """create_task is a wrapper around asyncio.AbstractEventLoop.create_task
+
+        While processing a request message will register create task for cancellation in case a CancelRequest message
+        is received.
 
         Please note that while processing a request from inside an actor, all tasks created by calling this method will
         be cancelled in case of a CancelRequest message. This could also include requests that have been forwarded to
@@ -109,7 +115,11 @@ class ActorRequestContext(ActorContext):
         if self.req_id:
 
             def remove_task(f: asyncio.Task) -> None:
-                self.pending_tasks.get(self.req_id, set()).discard(f)
+                tasks = self.pending_tasks.get(self.req_id)
+                if tasks is not None:
+                    tasks.discard(f)
+                    if not tasks:
+                        del self.pending_tasks[self.req_id]
 
             task.add_done_callback(remove_task)
 
