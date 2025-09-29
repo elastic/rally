@@ -181,6 +181,7 @@ class ActorContext:
         future = self.pending_results.get(request.req_id)
         if future is None:
             self.pending_results[request.req_id] = future = self.loop.create_future()
+
             original_cancel = future.cancel
 
             def cancel_wrapper(msg: Any | None = None) -> bool:
@@ -217,7 +218,17 @@ class ActorContext:
                     await asyncio.sleep(0)
                 return await future
 
-            return self.create_task(listen_for_result(), name=task_name)
+            task = self.create_task(listen_for_result(), name=task_name)
+            original_cancel = task.cancel
+
+            def cancel_task_wrapper(msg: Any | None = None) -> bool:
+                future = self.pending_results.get(request.req_id)
+                if future is not None:
+                    future.cancel(msg)
+                return original_cancel(msg)
+
+            task.cancel = cancel_task_wrapper  # type: ignore[method-assign]
+            return task
 
         raise NotImplementedError(f"Cannot send request to actor: invalid handler: {self.handler}.")
 

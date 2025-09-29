@@ -154,10 +154,24 @@ async def test_timeout_request(execute_from: ExecuteFrom, dummy_actor: actors.Ac
 
 @pytest.mark.asyncio
 async def test_cancel_request(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
+    ctx = actors.get_actor_context()
+    assert ctx.pending_results == {}
+
     blocking = actors.request(dummy_actor, BlockingRequest(timeout=300.0))
-    blocking.cancel("some reason")
+    assert not blocking.done()
+    if execute_from == "from_actor":
+        assert not blocking.done()
+        assert len(ctx.pending_results) == 1
+
     value = random.random()
     assert value == await actors.ping(dummy_actor, message=value)
+
+    blocking.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await blocking
+
+    assert blocking.cancelled()
+    assert ctx.pending_results == {}
 
 
 @pytest.mark.asyncio
@@ -178,9 +192,18 @@ async def test_actor_config(execute_from: ExecuteFrom, dummy_actor: actors.Actor
 
 @pytest.mark.asyncio
 async def test_request(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
+    ctx = actors.get_actor_context()
+    assert ctx.pending_results == {}
+
     request = _proto.PingRequest(message=random.random())
-    response = await actors.request(dummy_actor, request)
+    future = actors.request(dummy_actor, request)
+    if execute_from == "from_actor":
+        assert not future.done()
+        assert len(ctx.pending_results) == 1
+
+    response = await future
     assert response == request.message
+    assert ctx.pending_results == {}
 
 
 @pytest.mark.asyncio
