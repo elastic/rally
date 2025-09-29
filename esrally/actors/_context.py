@@ -200,31 +200,46 @@ class ActorContext:
             future.add_done_callback(lambda f: self.pending_results.pop(request.req_id, None))
 
         if future.done():
+            # It could be this request has been already sent before and for some reason it is retrying it again.
+            # Being the request done, it avoids resending it. To send a new request and avoid race condition it is
+            # expected the req_id to be different from previous ones. In this way it works around the situation caller
+            # retries to execute a request that eventually is already in progress.
             return future
 
         if timeout is not None:
+            # It implements the timeout by wrapping the future with a waiter async task so that it can raise a
+            # TimeoutError on the requester side, while sending a CancelRequest to the destination actor so it will
+            # eventually cancel async tasks created while processing this request.
             task_name = f"request({destination!s}, {message!r}, timeout={timeout!r})"
             future = self.create_task(wait_for(future, timeout=timeout, cancel_message=task_name), name=task_name)
         else:
             task_name = f"request({destination!s}, {message!r}"
 
         if isinstance(self.handler, actors.Actor):
+            # When running inside an actor, it relies on the asynchronous thespian actor implementation. The event
+            # loop will be run using a periodic actor wakeup message.
             self.send(destination, request)
             return future
 
         if isinstance(self.handler, actors.ActorSystem):
-            response = self.handler.ask(destination, request, timeout=min_timeout(0.1, request.timeout))
+            # It avoids blocking in SystemActor.ask method by setting a timeout long enough to send the request,
+            # but short enough to periodically run the event loop and process request timeouts, async tasks and
+            # futures callbacks.
+            response = self.handler.ask(destination, request, timeout=min_timeout(0.001, request.timeout))
             self.receive_message(response, destination)
             if future.done():
                 return future
 
             async def listen_for_result() -> Any:
+                # It consumes response messages or poison errors until we get the response for this request.
                 while not future.done():
                     response = self.handler.listen(timeout=min_timeout(0.1, request.timeout))
                     self.receive_message(response, destination)
-                    await asyncio.sleep(0)
+                    await asyncio.sleep(0)  # It runs the event loop before listening for messages again.
                 return await future
 
+            # It will listen for incoming messages later in the event loop the next time the caller will await for some
+            # incoming event. This should allow gathering multiple request responses ant the same time.
             self.create_task(listen_for_result(), name=task_name)
             return future
 
