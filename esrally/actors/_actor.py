@@ -73,12 +73,15 @@ R = TypeVar("R")
 class ActorRequestContext(ActorContext):
     """Actor context being used while some received messages is being processed by an actor."""
 
-    # req_id will contain the current request ID in case the actor is processing a Request message.
+    # sender represents the address of the actor that sent current request message.
+    sender: actors.ActorAddress | None = None
+
+    # req_id represents the unique request ID carried by current request message.
     req_id: str = ""
 
-    # request_tasks contains sets of asyncio tasks (indexed by request IDs) to be cancelled in case of a CancelRequest is
+    # pending_tasks contains sets of asyncio tasks (indexed by req_id) to be cancelled in case of a CancelRequest is
     # received.
-    request_tasks: dict[str, set[asyncio.Task]] = dataclasses.field(default_factory=lambda: collections.defaultdict(set))
+    pending_tasks: dict[str, set[asyncio.Task]] = dataclasses.field(default_factory=lambda: collections.defaultdict(set))
 
     # responded will be true after current request message has been responded. The purpose of this flag is avoiding
     # returning multiple responses to a single request.
@@ -104,7 +107,13 @@ class ActorRequestContext(ActorContext):
         """
         task = super().create_task(coro, name=name)
         if self.req_id:
-            self.request_tasks[self.req_id].add(task)
+
+            def remove_task(f: asyncio.Task) -> None:
+                self.pending_tasks.get(self.req_id, set()).discard(f)
+
+            task.add_done_callback(remove_task)
+
+            self.pending_tasks[self.req_id].add(task)
             self.send(self.sender, RunningTaskResponse(req_id=self.req_id, name=task.get_name()))
         return task
 
@@ -173,7 +182,7 @@ class ActorRequestContext(ActorContext):
 
     def cancel_request(self, message: Any = None) -> bool:
         """It cancels all pending tasks of the current request. Then it sends back a CancelledResponse to notify request sender."""
-        for t in self.request_tasks.pop(self.req_id, []):
+        for t in self.pending_tasks.pop(self.req_id, []):
             if not t.done():
                 t.cancel(message)
         if not self.responded:
@@ -297,7 +306,7 @@ class AsyncActor(actors.ActorTypeDispatcher):
     def receiveMessage(self, message: Any, sender: actors.ActorAddress) -> None:
         """It makes sure the message is handled with the actor context variables."""
         ctx = ActorRequestContext(
-            handler=self, sent_requests=self._sent_requests, loop=self.loop, log=self.log, request_tasks=self._request_tasks
+            handler=self, pending_results=self._sent_requests, loop=self.loop, log=self.log, pending_tasks=self._request_tasks
         )
         self._ctx.run(ctx.receive_message, message, sender)
 

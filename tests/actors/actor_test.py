@@ -93,12 +93,25 @@ def execute_from(request, monkeypatch) -> Generator[ExecuteFrom, None, None]:
 async def test_get_actor_context(execute_from: ExecuteFrom):
     ctx = actors.get_actor_context()
     assert isinstance(ctx, actors.ActorContext)
+    assert ctx.pending_results == {}
+
     if execute_from == "from_external":
         assert not isinstance(ctx, _actor.ActorRequestContext)
+        assert isinstance(ctx.handler, actors.ActorSystem)
+        assert ctx.handler is actors.get_actor_system()
+
     elif execute_from == "from_actor":
-        assert isinstance(ctx, _actor.ActorRequestContext)
+        assert isinstance(ctx, _actor.ActorRequestContext), "Actor request context initialized."
+        assert ctx.handler is ctx.actor, "Actor request context initialized."
+        assert isinstance(ctx.actor, ExecutorActor), "This is being executed from inside a executor actor."
+        assert ctx.actor is actors.get_actor(), "Actor request context initialized."
         assert ctx.req_id
         assert ctx.sender is not None
+        assert not ctx.responded, "Actor request is not responded."
+        actors.respond()
+        assert ctx.responded, "Actor request is responded."
+        assert ctx.pending_tasks == {}
+
     else:
         raise NotImplementedError()
 
@@ -184,6 +197,35 @@ async def test_create_actor(execute_from: ExecuteFrom) -> None:
         actors.send(actor_address, actors.ActorExitRequest())
 
 
+@pytest.mark.asyncio
+async def test_create_task(execute_from: ExecuteFrom) -> None:
+    result = asyncio.get_event_loop().create_future()
+
+    async def task() -> Any:
+        return await result
+
+    task = actors.create_task(task(), name="some-task")
+    assert isinstance(task, asyncio.Task)
+    assert task.get_name() == "some-task"
+    assert not task.cancelled()
+    assert not task.done()
+
+    if execute_from == "from_actor":
+        ctx = actors.get_actor_context()
+        assert isinstance(ctx, _actor.ActorRequestContext)
+        assert task in ctx.pending_tasks[ctx.req_id]
+
+    result.set_result(random.random())
+    assert await result == await task
+    assert not task.cancelled()
+    assert task.done()
+
+    if execute_from == "from_actor":
+        ctx = actors.get_actor_context()
+        assert isinstance(ctx, _actor.ActorRequestContext)
+        assert task not in ctx.pending_tasks[ctx.req_id]
+
+
 class CheckActorContextRequest:
     pass
 
@@ -210,16 +252,6 @@ class BlockingRequest:
 
 
 class DummyActor(actors.AsyncActor):
-
-    def receiveMsg_CheckActorContext(self, request: CheckActorContextRequest) -> None:
-        ctx = _context.get_context()
-        assert isinstance(ctx, _context.ActorContext), "Actor context initialized."
-        assert isinstance(ctx, _actor.ActorRequestContext), "Actor request context initialized."
-        assert ctx.actor is self, "Actor request context initialized."
-        assert ctx.req_id, "Actor request ID set."
-        assert ctx.sender, "Actor request sender is set."
-        assert not ctx.responded, "Actor request is not responded."
-        assert actors.get_actor() is self, "Actor context initialized."
 
     def receiveMsg_ResponseRequest(self, request: ResponseRequest, sender: actors.ActorAddress) -> Any:
         if request.explicit:

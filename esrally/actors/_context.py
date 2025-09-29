@@ -123,10 +123,9 @@ def enter_actor_context(ctx: C) -> Generator[C]:
 @dataclasses.dataclass
 class ActorContext:
     handler: actors.ActorTypeDispatcher | actors.ActorSystem
-    sent_requests: dict[str, asyncio.Future[Any]] = dataclasses.field(default_factory=dict)
+    pending_results: dict[str, asyncio.Future[Any]] = dataclasses.field(default_factory=dict)
     loop: asyncio.AbstractEventLoop = dataclasses.field(default_factory=asyncio.get_event_loop)
     log: logging.Logger = LOG
-    sender: actors.ActorAddress | None = None
 
     @contextlib.contextmanager
     def enter(self) -> Generator[Self]:
@@ -179,18 +178,18 @@ class ActorContext:
 
     def request(self, destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future:
         request = Request.from_message(message, timeout=timeout)
-        future = self.sent_requests.get(request.req_id)
+        future = self.pending_results.get(request.req_id)
         if future is None:
-            self.sent_requests[request.req_id] = future = self.loop.create_future()
+            self.pending_results[request.req_id] = future = self.loop.create_future()
             original_cancel = future.cancel
 
             def cancel_wrapper(msg: Any | None = None) -> bool:
-                self.sent_requests.pop(request.req_id, None)
-                self.send(destination, CancelRequest(message=msg, req_id=request.req_id))
+                if self.pending_results.pop(request.req_id, None):
+                    self.send(destination, CancelRequest(message=msg, req_id=request.req_id))
                 return original_cancel(msg)
 
             future.cancel = cancel_wrapper  # type: ignore[method-assign]
-            future.add_done_callback(lambda f: self.sent_requests.pop(request.req_id, None))
+            future.add_done_callback(lambda f: self.pending_results.pop(request.req_id, None))
 
         if future.done():
             return future
@@ -236,7 +235,7 @@ class ActorContext:
 
     def receive_poison_message(self, message: actors.PoisonMessage, sender: actors.ActorAddress) -> bool:
         if isinstance(message.poisonMessage, Request):
-            future = self.sent_requests.pop(message.poisonMessage.req_id, None)
+            future = self.pending_results.pop(message.poisonMessage.req_id, None)
             if future and not future.done():
                 future.set_exception(PoisonError.from_poison_message(message))
                 return True
@@ -250,7 +249,7 @@ class ActorContext:
         return False
 
     def receive_result_response(self, response: ResultResponse, sender: actors.ActorAddress) -> bool:
-        future = self.sent_requests.pop(response.req_id, None)
+        future = self.pending_results.pop(response.req_id, None)
         if future and not future.done():
             try:
                 future.set_result(response.result())
@@ -259,7 +258,7 @@ class ActorContext:
         return True
 
     def receive_running_task_response(self, response: RunningTaskResponse, sender: actors.ActorAddress) -> bool:
-        if response.req_id in self.sent_requests:
+        if response.req_id in self.pending_results:
             LOG.debug("Waiting for actor %s task completion: %s", sender, response.name)
         return True
 
