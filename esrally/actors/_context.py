@@ -14,8 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import contextvars
@@ -90,7 +88,7 @@ class ActorContextError(RuntimeError):
     pass
 
 
-def get_actor_context() -> ActorContext:
+def get_actor_context() -> "ActorContext":
     ctx = CONTEXT.get()
     if not ctx:
         raise ActorContextError("No actor context set.")

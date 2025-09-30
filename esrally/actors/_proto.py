@@ -14,8 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
 import asyncio.exceptions
 import copy
 import dataclasses
@@ -45,11 +43,11 @@ class Request:
     req_id: str = dataclasses.field(default_factory=lambda: str(uuid.uuid4()))
 
     @classmethod
-    def from_message(cls, message: Any, *, timeout: float | None = None) -> Request:
+    def from_message(cls, message: Any, *, timeout: float | None = None) -> Self:
         deadline: float | None = None
         if timeout is not None:
             deadline = max(0.0, time.monotonic() + timeout)
-        if isinstance(message, Request):
+        if isinstance(message, cls):
             if deadline is not None:
                 if message.deadline is None or deadline < message.deadline:
                     message = copy.deepcopy(message)
@@ -87,7 +85,7 @@ class RunningTaskResponse(Response):
 class ResultResponse(Response):
 
     @classmethod
-    def from_status(cls, req_id: str, status: Any = None, error: Exception | None = None) -> ResultResponse:
+    def from_status(cls, req_id: str, status: Any = None, error: Exception | None = None) -> "ResultResponse":
         """Given a status and an error it will return a Response of one of the following types:
         - ErrorResponse: in case error is not None
         - StatusResponse: in case error is None and status is not None
@@ -95,7 +93,7 @@ class ResultResponse(Response):
         """
         if error is not None:
             return ErrorResponse(req_id, error=error, details=traceback.format_exc())
-        if isinstance(status, ResultResponse):
+        if isinstance(status, cls):
             if req_id != status.req_id:
                 status = copy.deepcopy(status)
                 status.req_id = req_id

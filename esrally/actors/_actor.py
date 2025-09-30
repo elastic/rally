@@ -14,8 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
 import asyncio
 import collections
 import contextvars
@@ -48,12 +46,12 @@ from esrally.config import init_config
 LOG = logging.getLogger(__name__)
 
 
-def get_actor() -> AsyncActor:
+def get_actor() -> "AsyncActor":
     """It returns the actor where the actual message is being received."""
     return get_actor_request_context().actor
 
 
-def get_actor_request_context() -> ActorRequestContext:
+def get_actor_request_context() -> "ActorRequestContext":
     """It retrieve details about the context where the actual message is being received."""
     ctx = get_actor_context()
     if not isinstance(ctx, ActorRequestContext):
@@ -92,7 +90,7 @@ class ActorRequestContext(ActorContext):
         return f"{super().name}|{self.req_id}"
 
     @property
-    def actor(self) -> AsyncActor:
+    def actor(self) -> "AsyncActor":
         """actor property returns the local actor where the current messages are being received."""
         assert isinstance(self.handler, AsyncActor)
         return self.handler
