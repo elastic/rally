@@ -967,8 +967,8 @@ def create_readers(
     conflict_probability: float,
     on_conflict: str,
     recency: str,
-    create_reader: Callable[..., IndexDataReader],
-) -> list[IndexDataReader]:
+    create_reader: Callable[..., "IndexDataReader"],
+) -> list["IndexDataReader"]:
     """
     Return a list of IndexDataReader instances to allow a range of clients to read their share of corpora.
 
