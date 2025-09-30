@@ -18,6 +18,7 @@
 from typing import Any, Literal, Protocol, TypeVar
 
 Section = Literal[
+    "actor",
     "benchmarks",
     "client",
     "defaults",
@@ -42,6 +43,7 @@ Section = Literal[
     "unit-test",
 ]
 Key = Literal[
+    "actor.process.startup.method",
     "add.chart_name",
     "add.chart_type",
     "add.config.option",
