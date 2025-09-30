@@ -147,7 +147,7 @@ def create_system(
     if system_base == "multiprocQueueBase":
         capabilities["Process Startup Method"] = "spawn"
 
-    log_defs = False
+    log_defs = None
     if not isinstance(logging.root, ThespianLogForwarder):
         conf_path = log.log_config_path()
         if os.path.isfile(conf_path):
