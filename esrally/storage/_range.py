@@ -14,13 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
 import sys
 from abc import abstractmethod
 from collections.abc import Hashable, Iterable, Iterator, Sequence, Set
 from itertools import chain, islice
-from typing import Any, Final, overload
+from typing import Any, Final, Union, overload
 
 # MAX_LENGTH represents the maximum supported file size
 MAX_LENGTH = sys.maxsize
@@ -50,7 +48,7 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
         raise NotImplementedError
 
     @abstractmethod
-    def split(self, max_size: int = MAX_LENGTH) -> tuple[Range | EmptyRange, RangeSet]:
+    def split(self, max_size: int = MAX_LENGTH) -> tuple[Union["Range", "EmptyRange"], "RangeSet"]:
         """It returns a Range of max size on the left and the rest of the range set on the right.
         :param max_size: if given, returned range is cut after `max_size` bytes, and is excluded part is appended to
         the rangeset remaining part.
@@ -65,37 +63,37 @@ class RangeSet(Sequence["Range"], Set["Range"], Hashable):
     def __repr__(self) -> str:
         return f"rangeset('{str(self)}')"
 
-    def __or__(self, others: Iterable[Range]) -> RangeSet:  # type: ignore
+    def __or__(self, others: Iterable[Range]) -> "RangeSet":  # type: ignore
         return _rangeset(self._combine(others))
 
-    def _combine(self, others: Iterable[Range]) -> Iterable[Range]:
+    def _combine(self, others: Iterable["Range"]) -> Iterable["Range"]:
         return _combine(chain(self, others))
 
-    def __and__(self, others: Iterable[Range]) -> RangeSet:
+    def __and__(self, others: Iterable["Range"]) -> "RangeSet":
         """It returns the intersection between two sets of ranges."""
         return _rangeset(self._intersect(others))
 
     @abstractmethod
-    def _intersect(self, others: Iterable[Range]) -> Iterable[Range]:
+    def _intersect(self, others: Iterable["Range"]) -> Iterable["Range"]:
         raise NotImplementedError
 
-    def __sub__(self, others: Iterable[Range]) -> RangeSet:
+    def __sub__(self, others: Iterable["Range"]) -> "RangeSet":
         """It returns subtract the other range sets from this one."""
         return _rangeset(self._remove(others))
 
     @abstractmethod
-    def _remove(self, others: Iterable[Range]) -> Iterable[Range]:
+    def _remove(self, others: Iterable["Range"]) -> Iterable["Range"]:
         raise NotImplementedError
 
     @overload
-    def __getitem__(self, i: int) -> Range:
+    def __getitem__(self, i: int) -> "Range":
         """It returns the range at the ith position."""
 
     @overload
-    def __getitem__(self, i: slice) -> RangeSet:
+    def __getitem__(self, i: slice) -> "RangeSet":
         """It returns a set of ranges selected using a slice."""
 
-    def __getitem__(self, i: int | slice) -> RangeSet:
+    def __getitem__(self, i: int | slice) -> "RangeSet":
         if isinstance(i, int):
             if i < 0:
                 raise IndexError(f"index key can't be negative: {i} < 0")
@@ -127,22 +125,22 @@ class EmptyRange(RangeSet):
     def __len__(self) -> int:
         return 0
 
-    def __iter__(self) -> Iterator[Range]:
+    def __iter__(self) -> Iterator["Range"]:
         return iter(tuple())
 
     def __bool__(self) -> bool:
         return False
 
-    def _combine(self, others: Iterable[Range]) -> Iterable[Range]:
+    def _combine(self, others: Iterable["Range"]) -> Iterable["Range"]:
         return _combine(others)
 
-    def _intersect(self, others: Iterable[Range]) -> Iterable[Range]:
+    def _intersect(self, others: Iterable["Range"]) -> Iterable["Range"]:
         return NO_RANGE
 
-    def _remove(self, others: Iterable[Range]) -> Iterable[Range]:
+    def _remove(self, others: Iterable["Range"]) -> Iterable["Range"]:
         return NO_RANGE
 
-    def split(self, max_size: int = MAX_LENGTH) -> tuple[Range | EmptyRange, RangeSet]:
+    def split(self, max_size: int = MAX_LENGTH) -> tuple[Union["Range", "EmptyRange"], RangeSet]:
         return NO_RANGE, NO_RANGE
 
     @property
@@ -189,7 +187,7 @@ class Range(RangeSet):
     def size(self):
         return self._end - self._start
 
-    def _intersect(self, others: Iterable[Range]) -> Iterator[Range]:
+    def _intersect(self, others: Iterable["Range"]) -> Iterator["Range"]:
         # pylint: disable=protected-access
         for r in _combine(others):
             if r.end <= self.start:
@@ -198,7 +196,7 @@ class Range(RangeSet):
                 break
             yield Range(max(r._start, self._start), min(r._end, self._end))
 
-    def _remove(self, others: Iterable[Range]) -> Iterator[Range]:
+    def _remove(self, others: Iterable["Range"]) -> Iterator["Range"]:
         # pylint: disable=protected-access
         position = self._start
         for o in _combine(others):
@@ -219,7 +217,7 @@ class Range(RangeSet):
             return str(self._start)
         return f"{self._start}-{_pretty_end(self._end)}"
 
-    def split(self, max_size: int = MAX_LENGTH) -> tuple[Range | EmptyRange, RangeSet]:
+    def split(self, max_size: int = MAX_LENGTH) -> tuple["Range" | EmptyRange, RangeSet]:
         if max_size == MAX_LENGTH:
             return self, NO_RANGE
         if max_size <= 0:
@@ -235,7 +233,7 @@ class Range(RangeSet):
     def __len__(self) -> int:
         return 1
 
-    def __iter__(self) -> Iterator[Range]:
+    def __iter__(self) -> Iterator["Range"]:
         yield self
 
     def __contains__(self, item: Any) -> bool:

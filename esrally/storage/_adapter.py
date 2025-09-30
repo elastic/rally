@@ -14,8 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
 import datetime
 import importlib
 import logging
@@ -57,7 +55,7 @@ class Head:
     crc32c: str | None = None
     date: datetime.datetime | None = None
 
-    def check(self, other: Head, ignore: Container[str] = _HEAD_CHECK_IGNORE) -> None:
+    def check(self, other: "Head", ignore: Container[str] = _HEAD_CHECK_IGNORE) -> None:
         for field in ("url", "content_length", "accept_ranges", "ranges", "document_length", "crc32c", "date"):
             if ignore is not None and field in ignore:
                 continue
