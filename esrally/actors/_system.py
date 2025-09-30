@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import socket
 from collections.abc import Generator, Iterable
 from typing import Any, get_args
@@ -148,10 +149,11 @@ def create_system(
 
     log_defs = False
     if not isinstance(logging.root, ThespianLogForwarder):
-        try:
+        conf_path = log.log_config_path()
+        if os.path.isfile(conf_path):
             log_defs = log.load_configuration()
-        except FileNotFoundError:
-            LOG.exception("Failed to load logging configuration.")
+        else:
+            LOG.warning("File not found: %s", conf_path)
     LOG.debug(
         "Creating actor system:\n - systemBase: %r\n - capabilities: %r\n - logDefs: %r\n",
         system_base,
