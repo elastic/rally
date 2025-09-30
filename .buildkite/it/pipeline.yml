@@ -4,7 +4,7 @@ agents:
   machineType: "n1-standard-8"
 
 steps:
-  - label: "Run 3.9 integration tests :test_tube:"
-    command: bash .buildkite/it/run.sh 3.9
-  - label: "Run 3.12 integration tests :test_tube:"
-    command: bash .buildkite/it/run.sh 3.12
+  - label: "Run 3.10 integration tests :test_tube:"
+    command: bash .buildkite/it/run.sh 3.10
+  - label: "Run 3.13 integration tests :test_tube:"
+    command: bash .buildkite/it/run.sh 3.13

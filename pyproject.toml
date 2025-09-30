@@ -17,7 +17,7 @@ authors = [
 description = "Macrobenchmarking framework for Elasticsearch"
 readme = "README.md"
 license = { text = "Apache License 2.0" }
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.10,<3.14"
 classifiers = [
     "Topic :: System :: Benchmark",
     "Development Status :: 5 - Production/Stable",
@@ -27,10 +27,10 @@ classifiers = [
     "Operating System :: POSIX",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
 ]
 ################################################################################################
@@ -210,6 +210,7 @@ files = ["esrally/", "it/", "tests/"]
 
 [[tool.mypy.overrides]]
 module = [
+    "esrally.actor",
     "esrally.actors.*",
     "esrally.mechanic.team",
     "esrally.storage.*",

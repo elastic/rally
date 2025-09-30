@@ -17,6 +17,7 @@
 
 import os
 import sys
+import typing
 import urllib
 
 from ._version import __version__
@@ -72,9 +73,25 @@ $$$$$$$$$$""""           ""$$$$$$$$$$$"
 '''
 
 
+class Version(typing.NamedTuple):
+    major: int
+    minor: int = 0
+    micro: int = 0
+
+    def __str__(self) -> str:
+        return f"{self.major}.{self.minor}.{self.micro}"
+
+
+MIN_PYTHON_VERSION = Version(3, 10)
+
+MAX_PYTHON_VERSION = Version(3, 14)
+
+
 def check_python_version():
-    if sys.version_info < (3, 9):
-        raise RuntimeError("Rally requires at least Python 3.9 but you are using:\n\nPython %s" % str(sys.version))
+    if sys.version_info < MIN_PYTHON_VERSION:
+        raise RuntimeError(f"Expecting Python version >= {MIN_PYTHON_VERSION}, got {sys.version}")
+    if sys.version_info >= MAX_PYTHON_VERSION:
+        raise RuntimeError(f"Expecting Python version < {MAX_PYTHON_VERSION}, got {sys.version}")
 
 
 def doc_link(path=None):
