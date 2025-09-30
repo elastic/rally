@@ -99,9 +99,6 @@ serve-docs: check-venv
 
 test: test-3.12
 
-test-3.9: check-venv
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.9
-
 test-3.10: check-venv
 	. $(VENV_ACTIVATE_FILE); nox -s test-3.10
 
@@ -117,9 +114,6 @@ test-3.13: check-venv
 
 # It checks the recommended python version
 it: it-3.12
-
-it-3.9: check-venv python-caches-clean
-	. $(VENV_ACTIVATE_FILE); nox -s it-3.9
 
 it-3.10: check-venv python-caches-clean
 	. $(VENV_ACTIVATE_FILE); nox -s it-3.10
@@ -144,4 +138,3 @@ release-checks: check-venv
 # usage: e.g. make release release_version=0.9.2 next_version=0.9.3
 release: check-venv release-checks clean docs lint test it
 	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
-
