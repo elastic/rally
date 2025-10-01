@@ -21,6 +21,7 @@ from esrally.actors._config import (
     DEFAULT_ADMIN_PORTS,
     DEFAULT_COORDINATOR_IP,
     DEFAULT_COORDINATOR_PORT,
+    DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL,
     DEFAULT_FALLBACK_SYSTEM_BASE,
     DEFAULT_IP,
     DEFAULT_PROCESS_STARTUP_METHOD,
@@ -44,6 +45,7 @@ class FromConfigCase:
     process_startup_method: str | None = DEFAULT_PROCESS_STARTUP_METHOD
     try_join: bool | None = DEFAULT_TRY_JOIN
     want_name: str | None = None
+    external_request_poll_interval: float | None = DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL
 
 
 @cases.cases(
@@ -60,6 +62,7 @@ class FromConfigCase:
     forkserver=FromConfigCase(process_startup_method="forkserver"),
     spawn=FromConfigCase(process_startup_method="spawn"),
     no_try_join=FromConfigCase(try_join=False),
+    external_request_poll_interval=FromConfigCase(external_request_poll_interval=120.0),
 )
 def test_from_config(case: FromConfigCase) -> None:
     cfg = ActorConfig(case.name)
@@ -77,6 +80,8 @@ def test_from_config(case: FromConfigCase) -> None:
         cfg.coordinator_port = case.coordinator_port
     if case.try_join != DEFAULT_TRY_JOIN:
         cfg.try_join = case.try_join
+    if case.external_request_poll_interval != DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL:
+        cfg.external_request_poll_interval = case.external_request_poll_interval
     assert isinstance(cfg, ActorConfig)
     assert cfg.name == case.want_name
     assert cfg.system_base in get_args(SystemBase)
@@ -88,3 +93,4 @@ def test_from_config(case: FromConfigCase) -> None:
     assert cfg.coordinator_ip == case.coordinator_ip
     assert cfg.coordinator_port == case.coordinator_port
     assert cfg.try_join == case.try_join
+    assert cfg.external_request_poll_interval == case.external_request_poll_interval

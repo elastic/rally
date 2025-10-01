@@ -90,7 +90,7 @@ def context_from_config(cfg: types.Config | None = None) -> ActorContext:
                     coordinator_port=cfg.coordinator_port,
                     process_startup_method=cfg.process_startup_method,
                 )
-                return ActorContext(handler=system)
+                return ActorContext(handler=system, external_request_poll_interval=cfg.external_request_poll_interval)
             except actors.InvalidActorAddress as ex:
                 first_error = first_error or ex
                 if admin_port is not None:

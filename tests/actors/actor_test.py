@@ -148,7 +148,7 @@ async def test_respond_error(dummy_actor: actors.ActorAddress) -> None:
 @pytest.mark.asyncio
 async def test_timeout_request(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
     """This verifies a blocking task would not block the actor from processing further messages."""
-    future = actors.request(dummy_actor, BlockingRequest(timeout=10.0), timeout=0.2)
+    future = actors.request(dummy_actor, BlockingRequest(timeout=10.0), timeout=0.1)
     value = random.random()
     assert value == await actors.ping(dummy_actor, message=value)
     with pytest.raises(TimeoutError):

@@ -19,14 +19,16 @@ import contextlib
 import contextvars
 import dataclasses
 import logging
+import selectors
+import sys
 from collections.abc import Coroutine, Generator
-from typing import Any, Optional, TypeVar
+from typing import Any, Optional, TypeAlias, TypeVar
 
 from thespian import actors  # type: ignore[import-untyped]
 from typing_extensions import Self
 
 from esrally import types
-from esrally.actors._config import ActorConfig
+from esrally.actors._config import DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL, ActorConfig
 from esrally.actors._proto import (
     CancelRequest,
     PingRequest,
@@ -95,9 +97,22 @@ def get_actor_context() -> "ActorContext":
     return ctx
 
 
-def set_actor_context(ctx: ActorContext | None) -> None:
+if sys.version_info < (3, 12) and sys.platform == "darwin":
+    # Force using SelectSelector on OSX because of some bugs in selectors.KqueueSelector that have been solved with
+    # Python 3.12
+    DefaultSelector: TypeAlias = selectors.SelectSelector
+else:
+    DefaultSelector: TypeAlias = selectors.DefaultSelector
+
+
+def set_actor_context(ctx: Optional["ActorContext"]) -> contextvars.Token:
     assert ctx is None or isinstance(ctx, ActorContext)
-    CONTEXT.set(ctx)
+    token = CONTEXT.set(ctx)
+    if ctx is not None:
+        asyncio.set_event_loop(ctx.loop)
+    # It sets the default selectpr class used by Thespian used for exchanging messages.
+    selectors.DefaultSelector = DefaultSelector  # type: ignore[misc]
+    return token
 
 
 C = TypeVar("C", bound="ActorContext")
@@ -109,12 +124,13 @@ def enter_actor_context(ctx: C) -> Generator[C]:
         original_loop = asyncio.get_event_loop()
     except RuntimeError:
         original_loop = None
-    asyncio.set_event_loop(ctx.loop)
-    token = CONTEXT.set(ctx)
+    DefaultSelector = selectors.DefaultSelector
+    token = set_actor_context(ctx)
     try:
         yield ctx
     finally:
         CONTEXT.reset(token)
+        selectors.DefaultSelector = DefaultSelector  # type: ignore[misc]
         asyncio.set_event_loop(original_loop)
 
 
@@ -124,6 +140,7 @@ class ActorContext:
     pending_results: dict[str, asyncio.Future[Any]] = dataclasses.field(default_factory=dict)
     loop: asyncio.AbstractEventLoop = dataclasses.field(default_factory=asyncio.get_event_loop)
     log: logging.Logger = LOG
+    external_request_poll_interval: float | None = DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL
 
     @property
     def name(self) -> str:
@@ -220,10 +237,11 @@ class ActorContext:
             return future
 
         if isinstance(self.handler, actors.ActorSystem):
-            # It avoids blocking in SystemActor.ask method by setting a timeout long enough to send the request,
-            # but short enough to periodically run the event loop and process request timeouts, async tasks and
-            # futures callbacks.
-            response = self.handler.ask(destination, request, timeout=min_timeout(0.001, request.timeout))
+            # It avoids blocking in SystemActor.ask and SystemActor.listen methods by setting a timeout long enough to
+            # send the request, but short enough to periodically run the event loop and process request timeouts, async
+            # tasks and futures callbacks.
+            max_timeout: float | None = self.external_request_poll_interval
+            response = self.handler.ask(destination, request, timeout=min_timeout(request.timeout, max_timeout))
             self.receive_message(response, destination)
             if future.done():
                 return future
@@ -231,7 +249,7 @@ class ActorContext:
             async def listen_for_result() -> Any:
                 # It consumes response messages or poison errors until we get the response for this request.
                 while not future.done():
-                    response = self.handler.listen(timeout=min_timeout(0.1, request.timeout))
+                    response = self.handler.listen(timeout=min_timeout(request.timeout, max_timeout))
                     self.receive_message(response, destination)
                     await asyncio.sleep(0)  # It runs the event loop before listening for messages again.
                 return await future
@@ -285,11 +303,12 @@ class ActorContext:
         return True
 
 
-async def wait_for(future: asyncio.Future[R], *, timeout: float | None = None, cancel_message: Any = None) -> R:
+async def wait_for(future: asyncio.Future[R], *, timeout: float | None = None, cancel_message: Any = "") -> R:
     if future.done() or timeout is None:
         return await future
 
     await asyncio.wait([future], timeout=timeout)
+
     if not future.done():
         future.cancel(cancel_message)
         raise TimeoutError(str(cancel_message))
@@ -298,7 +317,8 @@ async def wait_for(future: asyncio.Future[R], *, timeout: float | None = None, c
 
 
 def min_timeout(*timeouts: float | None) -> float | None:
+    """It picks the minimal non None timeout time duration between given values."""
     real_timeouts = [t for t in timeouts if t is not None]
     if real_timeouts:
-        return min(real_timeouts)
+        return max(0.0, min(real_timeouts))
     return None

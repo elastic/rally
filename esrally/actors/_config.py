@@ -42,6 +42,8 @@ ProcessStartupMethod = Literal[
 
 DEFAULT_PROCESS_STARTUP_METHOD: ProcessStartupMethod = None
 
+DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL: float | None = 0.1
+
 
 class ActorConfig(config.Config):
     """Configuration class defining properties to read and set '[actors'] section."""
@@ -128,8 +130,19 @@ class ActorConfig(config.Config):
         tests with short living actor systems this setting this to False should increase actor system initialization
         performance.
         """
-        return convert.to_bool(self.opts("actors", "actors.try_join", default_value=DEFAULT_TRY_JOIN, mandatory=False))
+        return convert.to_bool(self.opts("actors", "actors.try_join", DEFAULT_TRY_JOIN, False))
 
     @try_join.setter
     def try_join(self, value: bool) -> None:
         self.add(config.Scope.applicationOverride, "actors", "actors.try_join", bool(value))
+
+    @property
+    def external_request_poll_interval(self) -> float | None:
+        """It specifies a maximum interval of time used to pool for response to an external request."""
+        return float(self.opts("actors", "actors.external_request_poll_interval", DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL, False))
+
+    @external_request_poll_interval.setter
+    def external_request_poll_interval(self, value: float | None) -> None:
+        if value is not None:
+            value = float(value)
+        self.add(config.Scope.applicationOverride, "actors", "actors.external_request_poll_interval", value)

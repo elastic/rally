@@ -49,6 +49,7 @@ Key = Literal[
     "actors.admin_ports",
     "actors.coordinator_ip",
     "actors.coordinator_port",
+    "actors.external_request_poll_interval",
     "actors.fallback_system_base",
     "actors.ip",
     "actors.process_startup_method",

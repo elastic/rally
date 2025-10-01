@@ -28,6 +28,7 @@ from esrally.actors._config import (
     DEFAULT_ADMIN_PORTS,
     DEFAULT_COORDINATOR_IP,
     DEFAULT_COORDINATOR_PORT,
+    DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL,
     DEFAULT_FALLBACK_SYSTEM_BASE,
     DEFAULT_IP,
     DEFAULT_PROCESS_STARTUP_METHOD,
@@ -91,6 +92,7 @@ class SystemCase:
     coordinator_port: int = DEFAULT_COORDINATOR_PORT
     process_startup_method: ProcessStartupMethod = DEFAULT_PROCESS_STARTUP_METHOD
     try_join: bool = DEFAULT_TRY_JOIN
+    external_request_poll_interval: float | None = DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL
     want_capabilities: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
@@ -140,6 +142,9 @@ class SystemCase:
     no_try_join=SystemCase(
         try_join=False,
     ),
+    external_request_poll_interval=SystemCase(
+        external_request_poll_interval=0.5,
+    ),
 )
 @pytest.mark.asyncio
 async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None:
@@ -162,6 +167,8 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
         cfg.process_startup_method = case.process_startup_method
     if case.try_join != DEFAULT_TRY_JOIN:
         cfg.try_join = case.try_join
+    if case.external_request_poll_interval != DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL:
+        cfg.external_request_poll_interval = case.external_request_poll_interval
     config.init_config(cfg)
 
     with pytest.raises(actors.ActorContextError):
@@ -176,6 +183,9 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
         want_capabilities.update(case.want_capabilities)
         for name, value in want_capabilities.items():
             assert system.capabilities.get(name) == value
+
+        ctx = actors.get_actor_context()
+        assert ctx.external_request_poll_interval == case.external_request_poll_interval
 
         assert isinstance(system, actors.ActorSystem)
         destination = actors.create_actor(actors.AsyncActor)
