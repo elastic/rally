@@ -1,4 +1,4 @@
-FROM docker.elastic.co/wolfi/python:3.12.3-dev AS builder
+FROM docker.elastic.co/wolfi/python:3.13.7-dev AS builder
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
 
