@@ -64,7 +64,7 @@ venv-destroy:
 	@echo "Removing virtual environment $(VIRTUAL_ENV)"
 	rm -rf $(VIRTUAL_ENV)
 
-clean: nondocs-clean docs-clean
+clean: clean-others clean-docs
 
 uv-add:
 ifndef ARGS
@@ -75,11 +75,8 @@ endif
 uv-lock:
 	uv lock --python $(PY_VERSION)
 
-nondocs-clean:
+clean-others:
 	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
-
-docs-clean:
-	cd docs && $(MAKE) clean
 
 # Avoid conflicts between .pyc/pycache related files created by local Python interpreters and other interpreters in Docker
 python-caches-clean:
@@ -92,10 +89,13 @@ lint: check-uv
 format: lint
 
 docs: check-venv
-	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html
+	@. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ html
 
 serve-docs: check-venv
-	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
+	@. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ serve
+
+clean-docs:
+	$(MAKE) -C docs/ clean
 
 test: test-3.12
 

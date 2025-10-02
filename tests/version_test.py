@@ -15,18 +15,52 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import dataclasses
 import os
+import sys
 
+import pytest
+
+import esrally
 from esrally import version
+from esrally.utils import cases
 
 MIN_ES_VERSION_PATH = os.path.join(os.path.dirname(version.__file__), "min-es-version.txt")
 
 
-class TestVersion:
+def test_minimum_es_version():
+    assert os.path.exists(MIN_ES_VERSION_PATH)
+    got = version.minimum_es_version()
+    with open(MIN_ES_VERSION_PATH) as f:
+        want = f.read().strip()
+    assert want == got
 
-    def test_minimum_es_version(self):
-        assert os.path.exists(MIN_ES_VERSION_PATH)
-        got = version.minimum_es_version()
-        with open(MIN_ES_VERSION_PATH) as f:
-            want = f.read().strip()
-        assert want == got
+
+@dataclasses.dataclass
+class VersionCase:
+    version: esrally.Version
+    want_error: Exception | None = None
+
+
+@cases.cases(
+    v309=VersionCase(
+        esrally.Version(3, 9), want_error=RuntimeError(f"Expecting Python version >= {esrally.MIN_PYTHON_VERSION}, got 3.9.0")
+    ),
+    v310=VersionCase(esrally.Version(3, 10)),
+    v311=VersionCase(esrally.Version(3, 11)),
+    v321=VersionCase(esrally.Version(3, 12)),
+    v313=VersionCase(esrally.Version(3, 13)),
+    v314=VersionCase(
+        esrally.Version(3, 14), want_error=RuntimeError(f"Expecting Python version < {esrally.MAX_PYTHON_VERSION}, got 3.14.0")
+    ),
+)
+def test_check_version(case: VersionCase, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "version_info", case.version)
+    monkeypatch.setattr(sys, "version", str(case.version))
+    if case.want_error is None:
+        esrally.check_python_version()
+        return
+
+    want_error_types = (type(case.want_error),)
+    with pytest.raises(want_error_types, match=str(case.want_error)):
+        esrally.check_python_version()
