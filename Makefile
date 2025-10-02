@@ -92,6 +92,7 @@ venv: uv $(VENV_ACTIVATE_FILE)
 $(VENV_ACTIVATE_FILE):
 	uv venv --allow-existing --seed --python '$(PY_VERSION)' '$(VENV_DIR)'
 	$(VENV_ACTIVATE); uv sync --active --managed-python --python '$(PY_VERSION)' --locked --extra=develop
+	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
 
 clean-venv:
 	rm -fR '$(VENV_DIR)'
@@ -141,7 +142,7 @@ docs: venv
 	$(VENV_ACTIVATE); $(MAKE) -C docs/ html
 
 serve-docs: venv
-	$(VENV_ACTIVATE);  $(MAKE) -C docs/ serve
+	$(VENV_ACTIVATE); $(MAKE) -C docs/ serve
 
 clean-docs:
 	$(VENV_ACTIVATE); $(MAKE) -C docs/ clean
@@ -149,7 +150,7 @@ clean-docs:
 # --- Test goals ---
 
 test: venv
-	$(VENV_ACTIVATE); pytest tests/
+	$(VENV_ACTIVATE); pytest -s $(or $(ARGS), tests/)
 
 test-all: test-3.10 test-3.11 test-3.12 test-3.13
 
@@ -167,10 +168,13 @@ test-3.13:
 
 # It checks the recommended python version
 it: venv
-	$(VENV_ACTIVATE); pytest it/
+	$(MAKE) test ARGS=it/
+
+it_serverless:
+	$(VENV_ACTIVATE); pytest -s --log-cli-level=INFO --track-repository-test-directory=it_serverless $(or $(ARGS), it/track_repo_compatibility)
 
 benchmark: venv
-	$(VENV_ACTIVATE); pytest benchmarks/
+	$(MAKE) test ARGS=benchmarks/
 
 release-checks: venv
 	$(VENV_ACTIVATE); ./release-checks.sh $(release_version) $(next_version)
