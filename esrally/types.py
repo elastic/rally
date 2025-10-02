@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
 
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -198,7 +197,7 @@ class Config(Protocol):
 
     def add(self, scope, section: Section, key: Key, value: Any) -> None: ...
 
-    def add_all(self, source: Config, section: Section) -> None: ...
+    def add_all(self, source: "Config", section: Section) -> None: ...
 
     def opts(self, section: Section, key: Key, default_value=None, mandatory: bool = True) -> Any: ...
 
