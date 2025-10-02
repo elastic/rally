@@ -57,13 +57,14 @@ check-all: all
 	serve-docs \
 	clean-docs \
 	test \
+	test-all \
 	test-3.10 \
 	test-3.11 \
 	test-3.12 \
 	test-3.13 \
-	test-all \
 	it \
-	check-all \
+	it_serverless \
+	rally_tracks_compat \
 	benchmark \
 	release-checks \
 	release
@@ -147,7 +148,7 @@ serve-docs: venv
 clean-docs:
 	$(VENV_ACTIVATE); $(MAKE) -C docs/ clean
 
-# --- Test goals ---
+# --- Unit tests goals ---
 
 test: venv
 	$(VENV_ACTIVATE); pytest -s $(or $(ARGS), tests/)
@@ -166,6 +167,8 @@ test-3.12:
 test-3.13:
 	$(MAKE) test PY_VERSION=3.13
 
+# --- Integration tests goals ---
+
 # It checks the recommended python version
 it: venv
 	$(MAKE) test ARGS=it/
@@ -173,14 +176,13 @@ it: venv
 benchmark: venv
 	$(MAKE) test ARGS=benchmarks/
 
-
-
 it_serverless:
 	$(VENV_ACTIVATE); pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_serverless it/track_repo_compatibility $(ARGS)
 
 rally_tracks_compat:
 	$(VENV_ACTIVATE); pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
 
+# --- Release goals ---
 
 release-checks: venv
 	$(VENV_ACTIVATE); ./release-checks.sh $(release_version) $(next_version)
