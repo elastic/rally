@@ -14,6 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import enum
 import json
 import logging
@@ -22,7 +24,7 @@ import threading
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from typing import BinaryIO, Optional
+from typing import BinaryIO
 
 from esrally.storage._adapter import Head, ServiceUnavailableError
 from esrally.storage._client import MAX_CONNECTIONS, Client
@@ -77,8 +79,7 @@ class Transfer:
         url: str,
         path: str,
         executor: Executor,
-        *,
-        document_length: int | None = None,
+        document_length: int | None,
         todo: RangeSet = NO_RANGE,
         done: RangeSet = NO_RANGE,
         multipart_size: int | None = None,
@@ -125,7 +126,7 @@ class Transfer:
         self._multipart_size = multipart_size
         self._todo = todo - done
         self._done = done
-        self._fds: list["FileDescriptor"] = []
+        self._fds: list[FileDescriptor] = []
         self._executor = executor
         self._errors: list[Exception] = []
         self._lock = threading.Lock()
@@ -348,7 +349,7 @@ class Transfer:
                 LOG.warning("error closing file descriptor %r: %s", fd.path, ex)
 
     @contextmanager
-    def _open(self) -> Iterator[Optional["FileDescriptor"]]:
+    def _open(self) -> Iterator[FileDescriptor | None]:
         todo: RangeSet
         with self._lock:
             # It gets a part of the file to transfer from the remaining range.
