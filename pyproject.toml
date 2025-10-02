@@ -154,7 +154,7 @@ esrallyd = "esrally.rallyd:main"
 
 [tool.black]
 line-length = 140
-target-version = ['py39', 'py310', 'py311', 'py312']
+target-version = ['py310', 'py311', 'py312', 'py313']
 
 [tool.isort]
 profile = 'black'
@@ -180,7 +180,7 @@ xfail_strict = true
 # is to keep "arg-type" error code, while disabling other error codes.
 # Ref: https://github.com/elastic/rally/pull/1798
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 # subset of "strict", kept at global config level as some of the options are
 # supported only at this level
 # https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
