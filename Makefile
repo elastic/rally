@@ -53,7 +53,7 @@ PRE_COMMIT_PATH := $(MAKEFILE_DIR)/.git/hooks/pre-commit
 	release
 
 install: check-uv
-	uv sync --python $(PY_VERSION) --locked --extra=develop
+	uv sync --managed-python --python '$(PY_VERSION)' --locked --extra=develop
 
 reinstall: venv-destroy install
 
