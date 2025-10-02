@@ -25,7 +25,7 @@ VENV_ACTIVATE := source $(VENV_ACTIVATE_FILE)
 PRE_COMMIT_HOOK_PATH := .git/hooks/pre-commit
 
 PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
-
+LOG_CI_LEVEL := INFO
 
 # --- Global goals ---
 
@@ -170,11 +170,17 @@ test-3.13:
 it: venv
 	$(MAKE) test ARGS=it/
 
-it_serverless:
-	$(VENV_ACTIVATE); pytest -s --log-cli-level=INFO --track-repository-test-directory=it_serverless $(or $(ARGS), it/track_repo_compatibility)
-
 benchmark: venv
 	$(MAKE) test ARGS=benchmarks/
+
+
+
+it_serverless:
+	$(VENV_ACTIVATE); pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_serverless it/track_repo_compatibility $(ARGS)
+
+rally_tracks_compat:
+	$(VENV_ACTIVATE); pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
+
 
 release-checks: venv
 	$(VENV_ACTIVATE); ./release-checks.sh $(release_version) $(next_version)

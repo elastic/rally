@@ -13,7 +13,7 @@ def it(session: nox.Session) -> None:
     session.run("pytest", "-s", "it")
 
 
-@nox.session(python="3.12")
+@nox.session(python="3.13")
 def it_serverless(session: nox.Session) -> None:
     session.install(".[develop]")
     session.install("pytest-rally @ git+https://github.com/elastic/pytest-rally.git")
