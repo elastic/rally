@@ -37,6 +37,7 @@ export JAVA21_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 echo "--- Install UV"
 
 curl -LsSf https://astral.sh/uv/install.sh | sh
+source "${HOME}/.local/bin/env"
 
 echo "--- Create virtual environment"
 

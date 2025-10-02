@@ -32,6 +32,7 @@ retry 5 sudo apt-get install -y \
 echo "--- Install UV"
 
 curl -LsSf https://astral.sh/uv/install.sh | sh
+source "${HOME}/.local/bin/env"
 
 echo "--- Create virtual environment"
 
