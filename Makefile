@@ -18,13 +18,16 @@
 SHELL := /bin/bash
 
 # We assume an active virtualenv for development
-VENV_DIR := .venv$(if $(PY_VERSION),-$(PY_VERSION))
-VENV_ACTIVATE_FILE := $(VENV_DIR)/bin/activate
+VIRTUAL_ENV := $(or $(VIRTUAL_ENV),.venv$(if $(PY_VERSION),-$(PY_VERSION)))
+VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
 VENV_ACTIVATE := source $(VENV_ACTIVATE_FILE)
+
+PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
+export UV_PYTHON := $(PY_VERSION)
+export UV_PROJECT_ENVIRONMENT := $(VIRTUAL_ENV)
 
 PRE_COMMIT_HOOK_PATH := .git/hooks/pre-commit
 
-PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
 LOG_CI_LEVEL := INFO
 
 # --- Global goals ---
@@ -80,10 +83,10 @@ uv-add:
 ifndef ARGS
 	$(error Missing arguments. Use make uv-add ARGS="...")
 endif
-	uv add --python $(PY_VERSION) $$ARGS
+	uv add $$ARGS
 
 uv-lock:
-	uv lock --python $(PY_VERSION)
+	uv lock
 
 
 # --- venv goals ---
@@ -91,12 +94,12 @@ uv-lock:
 venv: uv $(VENV_ACTIVATE_FILE)
 
 $(VENV_ACTIVATE_FILE):
-	uv venv --allow-existing --seed --python '$(PY_VERSION)' '$(VENV_DIR)'
-	$(VENV_ACTIVATE); uv sync --active --managed-python --python '$(PY_VERSION)' --locked --extra=develop
+	uv venv --allow-existing --seed
+	uv sync --locked --extra=develop
 	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
 
 clean-venv:
-	rm -fR '$(VENV_DIR)'
+	rm -fR '$(VIRTUAL_ENV)'
 
 # Old legacy alias goals
 
@@ -121,10 +124,10 @@ clean-pycache:
 # --- Linter goals ---
 
 lint: venv
-	$(VENV_ACTIVATE); pre-commit run --all-files
+	uv run -- pre-commit run --all-files
 
 pre-commit: venv
-	$(VENV_ACTIVATE); pre-commit run
+	uv run -- pre-commit run
 
 install-pre-commit: $(PRE_COMMIT_HOOK_PATH)
 
@@ -145,13 +148,13 @@ docs: venv
 serve-docs: venv
 	$(VENV_ACTIVATE); $(MAKE) -C docs/ serve
 
-clean-docs:
+clean-docs: venv
 	$(VENV_ACTIVATE); $(MAKE) -C docs/ clean
 
 # --- Unit tests goals ---
 
 test: venv
-	$(VENV_ACTIVATE); pytest -s $(or $(ARGS), tests/)
+	uv run -- pytest -s $(or $(ARGS), tests/)
 
 test-all: test-3.10 test-3.11 test-3.12 test-3.13
 
@@ -177,10 +180,10 @@ benchmark: venv
 	$(MAKE) test ARGS=benchmarks/
 
 it_serverless:
-	$(VENV_ACTIVATE); pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_serverless it/track_repo_compatibility $(ARGS)
+	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_serverless it/track_repo_compatibility $(ARGS)
 
 rally_tracks_compat:
-	$(VENV_ACTIVATE); pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
+	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
 
 # --- Release goals ---
 
