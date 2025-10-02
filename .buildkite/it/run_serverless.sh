@@ -26,13 +26,16 @@ retry 5 sudo add-apt-repository --yes ppa:deadsnakes/ppa
 retry 5 sudo apt-get update
 retry 5 sudo apt-get install -y \
     "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-dev" "python${PYTHON_VERSION}-venv" \
-    dnsutils  # provides nslookup
+    make \
+    dnsutils # provides nslookup
 
-echo "--- Python modules"
+echo "--- Install UV"
 
-"python${PYTHON_VERSION}" -m venv .venv
-source .venv/bin/activate
-pip install nox
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+echo "--- Create virtual environment"
+
+make venv
 
 echo "--- Run IT serverless test \"$TEST_NAME\" :pytest:"
 
@@ -45,12 +48,13 @@ export THESPLOG_THRESHOLD="INFO"
 
 trap upload_logs ERR
 
+
 case $TEST_NAME in
     "user")
-        nox -s it_serverless
+        make -s it_serverless
         ;;
     "operator")
-        nox -s it_serverless -- --operator
+        make -s it_serverless ARGS=--operator
         ;;
     *)
         echo "Unknown test type."

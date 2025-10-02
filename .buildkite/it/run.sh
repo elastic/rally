@@ -34,6 +34,14 @@ retry 5 sudo apt-get install -y \
 export JAVA11_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 export JAVA21_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
+echo "--- Install UV"
+
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+echo "--- Create virtual environment"
+
+make venv
+
 echo "--- Run IT test :pytest:"
 
 export RALLY_HOME=$HOME
@@ -45,12 +53,8 @@ export THESPLOG_THRESHOLD="INFO"
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
 
-"python${PYTHON_VERSION}" -m venv .venv
-source .venv/bin/activate
-
-pip install nox
-
 trap upload_logs ERR
-nox -s "it-${PYTHON_VERSION}"
+
+make it "PY_VERSION=${PYTHON_VERSION}"
 
 upload_logs
