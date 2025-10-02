@@ -52,7 +52,7 @@ RUN make install
 
 ENV VIRTUAL_ENV=/rally/.venv
 
-ENV PATH=/rally/venv/bin:$PATH
+ENV PATH=$VIRTUAL_ENV/bin:$PATH
 
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
