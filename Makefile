@@ -97,7 +97,7 @@ serve-docs: check-venv
 clean-docs:
 	$(MAKE) -C docs/ clean
 
-test: test-3.12
+test: test-3.13
 
 test-3.10: check-venv
 	. $(VENV_ACTIVATE_FILE); nox -s test-3.10
@@ -113,7 +113,7 @@ test-3.13: check-venv
 	. $(VENV_ACTIVATE_FILE); nox -s test-3.13
 
 # It checks the recommended python version
-it: it-3.12
+it: it-3.13
 
 it-3.10: check-venv python-caches-clean
 	. $(VENV_ACTIVATE_FILE); nox -s it-3.10
