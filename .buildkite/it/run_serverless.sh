@@ -36,7 +36,7 @@ source "${HOME}/.local/bin/env"
 
 echo "--- Create virtual environment"
 
-make venv
+make venv "PY_VERSION=${PYTHON_VERSION}"
 
 echo "--- Run IT serverless test \"$TEST_NAME\" :pytest:"
 
