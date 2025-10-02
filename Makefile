@@ -23,19 +23,26 @@ VE_MISSING_HELP := "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_E
 
 PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
 
+MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+MAKEFILE_DIR := $(patsubst %/,%,$(dir $(MAKEFILE_PATH)))
+PRE_COMMIT_PATH := $(MAKEFILE_DIR)/.git/hooks/pre-commit
+
 .PHONY: install \
 	check-venv \
 	reinstall \
 	check-uv \
 	venv-destroy \
 	clean \
+	clean-docs \
+	clean-others \
 	uv-add \
 	uv-lock \
-	nondocs-clean \
 	docs-clean \
 	python-caches-clean \
 	lint \
 	format \
+	pre-commit \
+	pre-commit-install \
 	docs \
 	serve-docs \
 	test \
@@ -85,17 +92,25 @@ python-caches-clean:
 lint: check-uv
 	uv run --python=$(PY_VERSION) pre-commit run --all-files
 
+pre-commit:
+	uv run --python=$(PY_VERSION) pre-commit run
+
+pre-commit-install:
+	echo '#!/usr/bin/env bash' > '$(PRE_COMMIT_PATH)'
+	echo "make -C '$(MAKEFILE_DIR)' pre-commit" > '$(PRE_COMMIT_PATH)'
+	chmod ugo+x '$(PRE_COMMIT_PATH)'
+
 # pre-commit run also formats files, but let's keep `make format` for convenience
 format: lint
 
 docs: check-venv
-	@. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ html
+	. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ html
 
 serve-docs: check-venv
-	@. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ serve
+	. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ serve
 
 clean-docs:
-	$(MAKE) -C docs/ clean
+	. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ clean
 
 test: test-3.13
 
