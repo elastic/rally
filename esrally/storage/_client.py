@@ -14,8 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
 import logging
 import threading
 import time
@@ -202,7 +200,7 @@ class Client:
         with self._lock:
             return self._connections[_server_key(url)]
 
-    def _server_stats_from_url(self, url: str, ttl: float | None = None) -> deque[ServerStats]:
+    def _server_stats_from_url(self, url: str, ttl: float | None = None) -> deque["ServerStats"]:
         with self._lock:
             stats = self._stats[_server_key(url)]
             if ttl is not None:

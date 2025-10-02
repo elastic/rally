@@ -24,7 +24,7 @@ Rally is developed for Unix and is actively tested on Linux and macOS. Rally sup
 
 **Note**: If you actively develop on Elasticsearch, we recommend that you [install Rally in development mode](https://esrally.readthedocs.io/en/latest/developing.html#installation-instructions-for-development) instead as Elasticsearch is fast moving and Rally always adapts accordingly to the latest main version.
 
-Install Python 3.9+ including `pip3`, git 1.9+ and an [appropriate JDK to run Elasticsearch](https://www.elastic.co/support/matrix#matrix_jvm). Be sure that `JAVA_HOME` points to that JDK. Then run the following command, optionally prefixed by `sudo` if necessary:
+Install Python 3.10+ including `pip3`, git 1.9+ and an [appropriate JDK to run Elasticsearch](https://www.elastic.co/support/matrix#matrix_jvm). Be sure that `JAVA_HOME` points to that JDK. Then run the following command, optionally prefixed by `sudo` if necessary:
 
     pip3 install esrally
 

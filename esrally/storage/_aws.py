@@ -14,13 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
 import logging
 import os
 import urllib.parse
 from collections.abc import Mapping
-from typing import Any, NamedTuple, Protocol, runtime_checkable
+from typing import Any, NamedTuple, Optional, Protocol, runtime_checkable
 
 import boto3
 from botocore.response import StreamingBody
@@ -56,7 +54,7 @@ class S3Adapter(Adapter):
         self,
         aws_profile: str | None = AWS_PROFILE,
         chunk_size: int = CHUNK_SIZE,
-        s3_client: S3Client | None = None,
+        s3_client: Optional["S3Client"] = None,
     ) -> None:
         self.chunk_size = chunk_size
         self.aws_profile = aws_profile
@@ -91,7 +89,7 @@ class S3Adapter(Adapter):
     _s3_client = None
 
     @property
-    def _s3(self) -> S3Client:
+    def _s3(self) -> "S3Client":
         if self._s3_client is None:
             self._s3_client = boto3.Session(profile_name=self.aws_profile).client("s3")
         return self._s3_client
@@ -104,7 +102,7 @@ class S3Address(NamedTuple):
     region: str = ""
 
     @classmethod
-    def from_url(cls, url: str, region: str = "") -> S3Address:
+    def from_url(cls, url: str, region: str = "") -> "S3Address":
         url = url.strip()
         if not url:
             raise ValueError("unspecified remote file url")
