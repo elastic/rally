@@ -16,62 +16,64 @@
 # under the License.
 
 SHELL := /bin/bash
+
 # We assume an active virtualenv for development
-VIRTUAL_ENV ?= .venv
-VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
-VE_MISSING_HELP := "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_ENV); have you executed make install?\033[0m\n"
+VENV_DIR := .venv$(if $(PY_VERSION),-$(PY_VERSION))
+VENV_ACTIVATE_FILE := $(VENV_DIR)/bin/activate
+VENV_ACTIVATE := source $(VENV_ACTIVATE_FILE)
+
+PRE_COMMIT_HOOK_PATH := .git/hooks/pre-commit
 
 PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
 
-MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
-MAKEFILE_DIR := $(patsubst %/,%,$(dir $(MAKEFILE_PATH)))
-PRE_COMMIT_PATH := $(MAKEFILE_DIR)/.git/hooks/pre-commit
 
-.PHONY: install \
-	check-venv \
-	reinstall \
-	check-uv \
-	venv-destroy \
+# --- Global goals ---
+
+all: lint test it
+
+clean: clean-others clean-docs
+
+check-all: all
+
+.PHONY: \
+	all \
 	clean \
-	clean-docs \
-	clean-others \
+	check-all \
+	uv \
 	uv-add \
 	uv-lock \
-	docs-clean \
-	python-caches-clean \
+	venv \
+	clean-venv \
+	install \
+	reinstall \
+	venv-destroy \
+	clean-others \
+	clean-pycache \
 	lint \
 	format \
 	pre-commit \
-	pre-commit-install \
+	install-pre-commit \
 	docs \
 	serve-docs \
+	clean-docs \
 	test \
+	test-3.10 \
+	test-3.11 \
+	test-3.12 \
+	test-3.13 \
+	test-all \
 	it \
 	check-all \
 	benchmark \
 	release-checks \
 	release
 
-install: check-uv
-	uv sync --managed-python --python '$(PY_VERSION)' --locked --extra=develop
+# --- uv goals ---
 
-reinstall: venv-destroy install
-
-check-venv:
-	@if [[ ! -f $(VENV_ACTIVATE_FILE) ]]; then \
-		printf $(VE_MISSING_HELP); \
-	fi
-
-check-uv:
+uv:
 	@if [[ ! -x $$(command -v uv) ]]; then \
-		printf "Please install uv by running the following outside of a virtual env: [ curl -LsSf https://astral.sh/uv/install.sh | sh ]\n"; \
+		printf "Please install uv by running the following outside of a virtual env: [ curl -LsSf https://astral.sh/uv/install.sh | $(SHELL) ]\n"; \
 	fi
-
-venv-destroy:
-	@echo "Removing virtual environment $(VIRTUAL_ENV)"
-	rm -rf $(VIRTUAL_ENV)
-
-clean: clean-others clean-docs
 
 uv-add:
 ifndef ARGS
@@ -82,74 +84,97 @@ endif
 uv-lock:
 	uv lock --python $(PY_VERSION)
 
-clean-others:
+
+# --- venv goals ---
+
+venv: uv $(VENV_ACTIVATE_FILE)
+
+$(VENV_ACTIVATE_FILE):
+	uv venv --allow-existing --seed --python '$(PY_VERSION)' '$(VENV_DIR)'
+	$(VENV_ACTIVATE); uv sync --active --managed-python --python '$(PY_VERSION)' --locked --extra=develop
+
+clean-venv:
+	rm -fR '$(VENV_DIR)'
+
+# Old legacy alias goals
+
+install: venv
+
+reinstall: clean-venv
+	$(MAKE) venv
+
+venv-destroy: clean-venv
+
+
+# --- Other goals ---
+
+clean-others: clean-pycache
 	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
 
 # Avoid conflicts between .pyc/pycache related files created by local Python interpreters and other interpreters in Docker
-python-caches-clean:
+clean-pycache:
 	-@find . -name "__pycache__" -prune -exec rm -rf -- \{\} \;
 
-lint: check-uv
-	uv run --python=$(PY_VERSION) pre-commit run --all-files
 
-pre-commit:
-	uv run --python=$(PY_VERSION) pre-commit run
+# --- Linter goals ---
 
-pre-commit-install:
-	echo '#!/usr/bin/env bash' > '$(PRE_COMMIT_PATH)'
-	echo "make -C '$(MAKEFILE_DIR)' pre-commit" > '$(PRE_COMMIT_PATH)'
-	chmod ugo+x '$(PRE_COMMIT_PATH)'
+lint: venv
+	$(VENV_ACTIVATE); pre-commit run --all-files
+
+pre-commit: venv
+	$(VENV_ACTIVATE); pre-commit run
+
+install-pre-commit: $(PRE_COMMIT_HOOK_PATH)
+
+$(PRE_COMMIT_HOOK_PATH):
+	mkdir -p $(dir $@)
+	echo '#!/usr/bin/env $(SHELL)' > '$@'
+	echo 'make pre-commit' >> '$@'
+	chmod ugo+x '$@'
 
 # pre-commit run also formats files, but let's keep `make format` for convenience
 format: lint
 
-docs: check-venv
-	. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ html
+# --- Doc goals ---
 
-serve-docs: check-venv
-	. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ serve
+docs: venv
+	$(VENV_ACTIVATE); $(MAKE) -C docs/ html
+
+serve-docs: venv
+	$(VENV_ACTIVATE);  $(MAKE) -C docs/ serve
 
 clean-docs:
-	. $(VENV_ACTIVATE_FILE); $(MAKE) -C docs/ clean
+	$(VENV_ACTIVATE); $(MAKE) -C docs/ clean
 
-test: test-3.13
+# --- Test goals ---
 
-test-3.10: check-venv
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.10
+test: venv
+	$(VENV_ACTIVATE); pytest tests/
 
-test-3.11: check-venv
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.11
+test-all: test-3.10 test-3.11 test-3.12 test-3.13
+
+test-3.10:
+	$(MAKE) test PY_VERSION=3.10
+
+test-3.11:
+	$(MAKE) test PY_VERSION=3.11
+
+test-3.12:
+	$(MAKE) test PY_VERSION=3.12
+
+test-3.13:
+	$(MAKE) test PY_VERSION=3.13
 
 # It checks the recommended python version
-test-3.12: check-venv
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.12
+it: venv
+	$(VENV_ACTIVATE); pytest it/
 
-test-3.13: check-venv
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.13
+benchmark: venv
+	$(VENV_ACTIVATE); pytest benchmarks/
 
-# It checks the recommended python version
-it: it-3.13
-
-it-3.10: check-venv python-caches-clean
-	. $(VENV_ACTIVATE_FILE); nox -s it-3.10
-
-it-3.11: check-venv python-caches-clean
-	. $(VENV_ACTIVATE_FILE); nox -s it-3.11
-
-it-3.12: check-venv python-caches-clean
-	. $(VENV_ACTIVATE_FILE); nox -s it-3.12
-
-it-3.13: check-venv python-caches-clean
-	. $(VENV_ACTIVATE_FILE); nox -s it-3.13
-
-check-all: lint test it
-
-benchmark: check-venv
-	uv run --python=$(PY_VERSION) pytest benchmarks/
-
-release-checks: check-venv
-	. $(VENV_ACTIVATE_FILE); ./release-checks.sh $(release_version) $(next_version)
+release-checks: venv
+	$(VENV_ACTIVATE); ./release-checks.sh $(release_version) $(next_version)
 
 # usage: e.g. make release release_version=0.9.2 next_version=0.9.3
-release: check-venv release-checks clean docs lint test it
-	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
+release: venv release-checks clean docs lint test it
+	$(VENV_ACTIVATE); ./release.sh $(release_version) $(next_version)
