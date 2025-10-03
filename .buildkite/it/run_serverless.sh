@@ -52,10 +52,10 @@ trap upload_logs ERR
 
 case $TEST_NAME in
     "user")
-        make -s it_serverless
+        make -s it_serverless "PY_VERSION=${PYTHON_VERSION}"
         ;;
     "operator")
-        make -s it_serverless ARGS=--operator
+        make -s it_serverless "ARGS=--operator" "PY_VERSION=${PYTHON_VERSION}"
         ;;
     *)
         echo "Unknown test type."
