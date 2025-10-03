@@ -17,7 +17,7 @@ export DEBIAN_FRONTEND=noninteractive
 sudo mkdir -p /etc/needrestart
 echo "\$nrconf{restart} = 'a';" | sudo tee -a /etc/needrestart/needrestart.conf > /dev/null
 
-PYTHON_VERSION="$1"
+export PY_VERSION="$1"
 TEST_NAME="$2"
 
 echo "--- System dependencies"
@@ -25,7 +25,7 @@ echo "--- System dependencies"
 retry 5 sudo add-apt-repository --yes ppa:deadsnakes/ppa
 retry 5 sudo apt-get update
 retry 5 sudo apt-get install -y \
-    "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-dev" "python${PYTHON_VERSION}-venv" \
+    "python${PY_VERSION}" "python${PY_VERSION}-dev" "python${PY_VERSION}-venv" \
     make \
     dnsutils # provides nslookup
 
@@ -36,7 +36,7 @@ source "${HOME}/.local/bin/env"
 
 echo "--- Create virtual environment"
 
-make venv "PY_VERSION=${PYTHON_VERSION}"
+make venv
 
 echo "--- Run IT serverless test \"$TEST_NAME\" :pytest:"
 
@@ -52,10 +52,10 @@ trap upload_logs ERR
 
 case $TEST_NAME in
     "user")
-        make -s it_serverless "PY_VERSION=${PYTHON_VERSION}"
+        make -s it_serverless
         ;;
     "operator")
-        make -s it_serverless "ARGS=--operator" "PY_VERSION=${PYTHON_VERSION}"
+        make -s it_serverless "ARGS=--operator"
         ;;
     *)
         echo "Unknown test type."
