@@ -83,7 +83,7 @@ jobs:
       - name: "Install UV"
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: "Run tests"
-        run: make rally_tracks_compat
+        run: make it_tracks_compat
         timeout-minutes: 120
         env:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid

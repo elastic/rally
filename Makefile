@@ -47,6 +47,7 @@ check-all: all
 	uv-lock \
 	venv \
 	clean-venv \
+	install_pytest_rally_plugin \
 	install \
 	reinstall \
 	venv-destroy \
@@ -67,8 +68,7 @@ check-all: all
 	test-3.13 \
 	it \
 	it_serverless \
-	rally_tracks_compat \
-	install_pytest_rally_plugin \
+	it_tracks_compat \
 	benchmark \
 	release-checks \
 	release \
@@ -102,8 +102,11 @@ $(VENV_ACTIVATE_FILE):
 clean-venv:
 	rm -fR '$(VIRTUAL_ENV)'
 
-# Old legacy alias goals
+# It installs the Rally PyTest plugin
+install_pytest_rally_plugin: venv
+	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
 
+# Old legacy alias goals
 install: venv
 
 reinstall: clean-venv
@@ -173,21 +176,21 @@ test-3.13:
 
 # --- Integration tests goals ---
 
+# It runs integration tests
 it: venv
 	$(MAKE) test ARGS=it/
 
-benchmark: venv
-	$(MAKE) test ARGS=benchmarks/
-
+# It runs serverless integration tests
 it_serverless: install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_serverless it/track_repo_compatibility $(ARGS)
 
-rally_tracks_compat: install_pytest_rally_plugin
+# It runs rally_tracks_compat integration tests
+it_tracks_compat: install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
 
-install_pytest_rally_plugin: venv
-	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
-
+# It runs benchmark tests
+benchmark: venv
+	$(MAKE) test ARGS=benchmarks/
 
 # --- Release goals ---
 
@@ -198,5 +201,6 @@ release-checks: venv
 release: venv release-checks clean docs lint test it
 	$(VENV_ACTIVATE); ./release.sh $(release_version) $(next_version)
 
+# This is a shortcut for creating a shell running inside the project virtual environment.
 sh:
 	$(VENV_ACTIVATE); sh
