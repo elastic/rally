@@ -43,16 +43,12 @@ class VersionCase:
 
 
 @cases.cases(
-    v309=VersionCase(
-        esrally.Version(3, 9), want_error=RuntimeError(f"Expecting Python version >= {esrally.MIN_PYTHON_VERSION}, got 3.9.0")
-    ),
+    v309=VersionCase(esrally.Version(3, 9), want_error=RuntimeError(f"Expecting Python version >= {esrally.MIN_PYTHON_VERSION}, got 3.9")),
     v310=VersionCase(esrally.Version(3, 10)),
     v311=VersionCase(esrally.Version(3, 11)),
     v321=VersionCase(esrally.Version(3, 12)),
     v313=VersionCase(esrally.Version(3, 13)),
-    v314=VersionCase(
-        esrally.Version(3, 14), want_error=RuntimeError(f"Expecting Python version < {esrally.MAX_PYTHON_VERSION}, got 3.14.0")
-    ),
+    v314=VersionCase(esrally.Version(3, 14)),
 )
 def test_check_version(case: VersionCase, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "version_info", case.version)

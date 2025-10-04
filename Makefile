@@ -70,7 +70,8 @@ check-all: all
 	rally_tracks_compat \
 	benchmark \
 	release-checks \
-	release
+	release \
+	sh
 
 # --- uv goals ---
 
@@ -193,3 +194,6 @@ release-checks: venv
 # usage: e.g. make release release_version=0.9.2 next_version=0.9.3
 release: venv release-checks clean docs lint test it
 	$(VENV_ACTIVATE); ./release.sh $(release_version) $(next_version)
+
+sh:
+	$(VENV_ACTIVATE); sh

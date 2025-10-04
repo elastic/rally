@@ -19,6 +19,7 @@ import os
 import sys
 import typing
 import urllib
+from collections.abc import Sequence
 
 from ._version import __version__
 
@@ -75,23 +76,18 @@ $$$$$$$$$$""""           ""$$$$$$$$$$$"
 
 class Version(typing.NamedTuple):
     major: int
-    minor: int = 0
-    micro: int = 0
+    minor: int
 
     def __str__(self) -> str:
-        return f"{self.major}.{self.minor}.{self.micro}"
+        return f"{self.major}.{self.minor}"
 
 
 MIN_PYTHON_VERSION = Version(3, 10)
 
-MAX_PYTHON_VERSION = Version(3, 14)
 
-
-def check_python_version():
-    if sys.version_info < MIN_PYTHON_VERSION:
-        raise RuntimeError(f"Expecting Python version >= {MIN_PYTHON_VERSION}, got {sys.version}")
-    if sys.version_info >= MAX_PYTHON_VERSION:
-        raise RuntimeError(f"Expecting Python version < {MAX_PYTHON_VERSION}, got {sys.version}")
+def check_python_version() -> None:
+    if MIN_PYTHON_VERSION > sys.version_info:
+        raise RuntimeError(f"Expecting Python version >= {MIN_PYTHON_VERSION}, got {sys.version_info}")
 
 
 def doc_link(path=None):
