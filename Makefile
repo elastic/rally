@@ -68,6 +68,7 @@ check-all: all
 	it \
 	it_serverless \
 	rally_tracks_compat \
+	install_pytest_rally_plugin \
 	benchmark \
 	release-checks \
 	release \
@@ -97,7 +98,6 @@ venv: uv $(VENV_ACTIVATE_FILE)
 $(VENV_ACTIVATE_FILE):
 	uv venv --allow-existing --seed
 	uv sync --locked --extra=develop
-	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
 
 clean-venv:
 	rm -fR '$(VIRTUAL_ENV)'
@@ -173,18 +173,21 @@ test-3.13:
 
 # --- Integration tests goals ---
 
-# It checks the recommended python version
 it: venv
 	$(MAKE) test ARGS=it/
 
 benchmark: venv
 	$(MAKE) test ARGS=benchmarks/
 
-it_serverless:
+it_serverless: install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_serverless it/track_repo_compatibility $(ARGS)
 
-rally_tracks_compat:
+rally_tracks_compat: install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
+
+install_pytest_rally_plugin: venv
+	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
+
 
 # --- Release goals ---
 
