@@ -1,4 +1,4 @@
-FROM docker.elastic.co/wolfi/python:3.12.3-dev AS builder
+FROM docker.elastic.co/wolfi/python:3.13.7-dev AS builder
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
 
@@ -36,7 +36,7 @@ RUN chgrp 0 /entrypoint.sh && \
 RUN mkdir -p /rally/.rally && \
     chown -R 1000:0 /rally/
 
-COPY --from=ghcr.io/astral-sh/uv:0.7.12 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.8.22 /uv /uvx /bin/
 
 USER 1000
 

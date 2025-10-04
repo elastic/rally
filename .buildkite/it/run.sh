@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eo pipefail
+set -exo pipefail
 
 source .buildkite/retry.sh
 
@@ -24,15 +24,24 @@ cat /proc/cpuinfo
 
 echo "--- System dependencies"
 
-PYTHON_VERSION="$1"
+export PY_VERSION="$1"
 retry 5 sudo add-apt-repository --yes ppa:deadsnakes/ppa
 retry 5 sudo apt-get update
 retry 5 sudo apt-get install -y \
-    "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-dev" "python${PYTHON_VERSION}-venv" \
+    "python${PY_VERSION}" "python${PY_VERSION}-dev" "python${PY_VERSION}-venv" \
     git make jq docker \
     openjdk-21-jdk-headless openjdk-11-jdk-headless
 export JAVA11_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 export JAVA21_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+
+echo "--- Install UV"
+
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source "${HOME}/.local/bin/env"
+
+echo "--- Create virtual environment"
+
+make venv
 
 echo "--- Run IT test :pytest:"
 
@@ -45,12 +54,8 @@ export THESPLOG_THRESHOLD="INFO"
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
 
-"python${PYTHON_VERSION}" -m venv .venv
-source .venv/bin/activate
-
-pip install nox
-
 trap upload_logs ERR
-nox -s "it-${PYTHON_VERSION}"
+
+make it
 
 upload_logs

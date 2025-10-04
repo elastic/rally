@@ -17,7 +17,9 @@
 
 import os
 import sys
+import typing
 import urllib
+from collections.abc import Sequence
 
 from ._version import __version__
 
@@ -72,9 +74,20 @@ $$$$$$$$$$""""           ""$$$$$$$$$$$"
 '''
 
 
-def check_python_version():
-    if sys.version_info < (3, 9):
-        raise RuntimeError("Rally requires at least Python 3.9 but you are using:\n\nPython %s" % str(sys.version))
+class Version(typing.NamedTuple):
+    major: int
+    minor: int
+
+    def __str__(self) -> str:
+        return f"{self.major}.{self.minor}"
+
+
+MIN_PYTHON_VERSION = Version(3, 10)
+
+
+def check_python_version() -> None:
+    if MIN_PYTHON_VERSION > sys.version_info:
+        raise RuntimeError(f"Expecting Python version >= {MIN_PYTHON_VERSION}, got {sys.version_info}")
 
 
 def doc_link(path=None):
