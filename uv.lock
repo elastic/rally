@@ -130,15 +130,6 @@ wheels = [
 ]
 
 [[package]]
-name = "argcomplete"
-version = "3.6.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/16/0f/861e168fc813c56a78b35f3c30d91c6757d1fd185af1110f1aec784b35d0/argcomplete-3.6.2.tar.gz", hash = "sha256:d0519b1bc867f5f4f4713c41ad0aba73a4a5f007449716b16f385f2166dc6adf", size = 73403, upload-time = "2025-04-03T04:57:03.52Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/31/da/e42d7a9d8dd33fa775f467e4028a47936da2f01e4b0e561f9ba0d74cb0ca/argcomplete-3.6.2-py3-none-any.whl", hash = "sha256:65b3133a29ad53fb42c48cf5114752c7ab66c1c38544fdf6460f450c09b42591", size = 43708, upload-time = "2025-04-03T04:57:01.591Z" },
-]
-
-[[package]]
 name = "astroid"
 version = "3.3.11"
 source = { registry = "https://pypi.org/simple" }
@@ -459,18 +450,6 @@ wheels = [
 ]
 
 [[package]]
-name = "colorlog"
-version = "6.9.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/7a/359f4d5df2353f26172b3cc39ea32daa39af8de522205f512f458923e677/colorlog-6.9.0.tar.gz", hash = "sha256:bfba54a1b93b94f54e1f4fe48395725a3d92fd2a4af702f6bd70946bdc0c6ac2", size = 16624, upload-time = "2024-10-29T18:34:51.011Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e3/51/9b208e85196941db2f0654ad0357ca6388ab3ed67efdbfc799f35d1f83aa/colorlog-6.9.0-py3-none-any.whl", hash = "sha256:5906e71acd67cb07a71e779c47c4bcb45fb8c2993eebe9e5adcd6a6f1b283eff", size = 11424, upload-time = "2024-10-29T18:34:49.815Z" },
-]
-
-[[package]]
 name = "cryptography"
 version = "45.0.5"
 source = { registry = "https://pypi.org/simple" }
@@ -651,7 +630,6 @@ develop = [
     { name = "github3-py" },
     { name = "gitpython" },
     { name = "mypy" },
-    { name = "nox" },
     { name = "pre-commit" },
     { name = "pylint" },
     { name = "pytest" },
@@ -659,7 +637,6 @@ develop = [
     { name = "pytest-benchmark" },
     { name = "pytest-httpserver" },
     { name = "sphinx" },
-    { name = "tox" },
     { name = "trustme" },
     { name = "types-jsonschema" },
     { name = "types-psutil" },
@@ -702,7 +679,6 @@ requires-dist = [
     { name = "jsonschema", specifier = "==3.1.1" },
     { name = "markupsafe", specifier = "==2.0.1" },
     { name = "mypy", marker = "extra == 'develop'", specifier = "==1.15.0" },
-    { name = "nox", marker = "extra == 'develop'", specifier = "==2024.3.2" },
     { name = "pre-commit", marker = "extra == 'develop'", specifier = "==2.20.0" },
     { name = "psutil", specifier = "==5.9.4" },
     { name = "py-cpuinfo", specifier = "==7.0.0" },
@@ -718,7 +694,6 @@ requires-dist = [
     { name = "standard-imghdr", specifier = ">=3.13.0" },
     { name = "tabulate", specifier = "==0.8.9" },
     { name = "thespian", specifier = "==4.0.1" },
-    { name = "tox", marker = "extra == 'develop'", specifier = "==3.25.0" },
     { name = "trustme", marker = "extra == 'develop'", specifier = "==0.9.0" },
     { name = "types-jsonschema", marker = "extra == 'develop'", specifier = "==3.2.0" },
     { name = "types-psutil", marker = "extra == 'develop'", specifier = "==5.9.4" },
@@ -1498,21 +1473,6 @@ wheels = [
 ]
 
 [[package]]
-name = "nox"
-version = "2024.3.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "argcomplete" },
-    { name = "colorlog" },
-    { name = "packaging" },
-    { name = "virtualenv" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/6b/2c02879d29704b74586a89900c48d9744780a5aad771f1d182c7394cfd57/nox-2024.3.2.tar.gz", hash = "sha256:f521ae08a15adbf5e11f16cb34e8d0e6ea521e0b92868f684e91677deb974553", size = 3994775, upload-time = "2024-03-03T20:08:54.879Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c2/55/c0d4ca1e6f68da8a1c7055ad80d4bf1fef651af08a68b52323cee97880c9/nox-2024.3.2-py3-none-any.whl", hash = "sha256:e53514173ac0b98dd47585096a55572fe504fecede58ced708979184d05440be", size = 58282, upload-time = "2024-03-03T20:08:52.032Z" },
-]
-
-[[package]]
 name = "packaging"
 version = "25.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2268,25 +2228,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/cc/18/0bbf3884e9eaa38819ebe46a7bd25dcd56b67434402b66a58c4b8e552575/tomlkit-0.13.3.tar.gz", hash = "sha256:430cf247ee57df2b94ee3fbe588e71d362a941ebb545dec29b53961d61add2a1", size = 185207, upload-time = "2025-06-05T07:13:44.947Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bd/75/8539d011f6be8e29f339c42e633aae3cb73bffa95dd0f9adec09b9c58e85/tomlkit-0.13.3-py3-none-any.whl", hash = "sha256:c89c649d79ee40629a9fda55f8ace8c6a1b42deb912b2a8fd8d942ddadb606b0", size = 38901, upload-time = "2025-06-05T07:13:43.546Z" },
-]
-
-[[package]]
-name = "tox"
-version = "3.25.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
-    { name = "filelock" },
-    { name = "packaging" },
-    { name = "pluggy" },
-    { name = "py" },
-    { name = "six" },
-    { name = "toml" },
-    { name = "virtualenv" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/6a/2a746db0157c39bf622cea42f6e67a6c1887b5f50b2de48dec226a4c72f1/tox-3.25.0.tar.gz", hash = "sha256:37888f3092aa4e9f835fc8cc6dadbaaa0782651c41ef359e3a5743fcb0308160", size = 317568, upload-time = "2022-04-11T09:53:02.886Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ac/6a/6f97900d7e04c60d4bed183666d10be180c63a6a9b3765b91481da96d2fe/tox-3.25.0-py2.py3-none-any.whl", hash = "sha256:0805727eb4d6b049de304977dfc9ce315a1938e6619c3ab9f38682bb04662a5a", size = 85853, upload-time = "2022-04-11T09:52:56.516Z" },
 ]
 
 [[package]]
