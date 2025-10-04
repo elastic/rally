@@ -76,33 +76,38 @@ check-all: all
 
 # --- uv goals ---
 
+# It checks uv is installed.
 uv:
 	@if [[ ! -x $$(command -v uv) ]]; then \
 		printf "Please install uv by running the following outside of a virtual env: [ curl -LsSf https://astral.sh/uv/install.sh | $(SHELL) ]\n"; \
 	fi
 
+# It adds a list of packages to the project.
 uv-add:
 ifndef ARGS
 	$(error Missing arguments. Use make uv-add ARGS="...")
 endif
 	uv add $$ARGS
 
+# It updates the uv lock file.
 uv-lock:
 	uv lock
 
 
 # --- venv goals ---
 
+# It creates the project virtual environment.
 venv: uv $(VENV_ACTIVATE_FILE)
 
 $(VENV_ACTIVATE_FILE):
 	uv venv --allow-existing --seed
 	uv sync --locked --extra=develop
 
+# It delete the project virtual environment from disk.
 clean-venv:
 	rm -fR '$(VIRTUAL_ENV)'
 
-# It installs the Rally PyTest plugin
+# It installs the Rally PyTest plugin.
 install_pytest_rally_plugin: venv
 	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
 
@@ -117,6 +122,7 @@ venv-destroy: clean-venv
 
 # --- Other goals ---
 
+# It delete many temporary files types.
 clean-others: clean-pycache
 	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
 
@@ -127,12 +133,15 @@ clean-pycache:
 
 # --- Linter goals ---
 
+# It run all linters on all files using pre-commit.
 lint: venv
 	uv run -- pre-commit run --all-files
 
+# It run all linters on changed files using pre-commit.
 pre-commit: venv
 	uv run -- pre-commit run
 
+# It install a pre-commit hook in the project .git dir so modified files are checked before creating every commit.
 install-pre-commit: $(PRE_COMMIT_HOOK_PATH)
 
 $(PRE_COMMIT_HOOK_PATH):
@@ -141,54 +150,65 @@ $(PRE_COMMIT_HOOK_PATH):
 	echo 'make pre-commit' >> '$@'
 	chmod ugo+x '$@'
 
-# pre-commit run also formats files, but let's keep `make format` for convenience
+# pre-commit run also formats files, but let's keep `make format` for convenience.
 format: lint
+
 
 # --- Doc goals ---
 
+# It build project documentation.
 docs: venv
 	$(VENV_ACTIVATE); $(MAKE) -C docs/ html
 
 serve-docs: venv
 	$(VENV_ACTIVATE); $(MAKE) -C docs/ serve
 
+# It cleans project documentation.
 clean-docs: venv
 	$(VENV_ACTIVATE); $(MAKE) -C docs/ clean
 
+
 # --- Unit tests goals ---
 
+# It runs unit tests using the default python interpreter version.
 test: venv
 	uv run -- pytest -s $(or $(ARGS), tests/)
 
+# It runs unit tests using all supported python versions.
 test-all: test-3.10 test-3.11 test-3.12 test-3.13
 
+# It runs unit tests using Python 3.10.
 test-3.10:
 	$(MAKE) test PY_VERSION=3.10
 
+# It runs unit tests using Python 3.11.
 test-3.11:
 	$(MAKE) test PY_VERSION=3.11
 
+# It runs unit tests using Python 3.12.
 test-3.12:
 	$(MAKE) test PY_VERSION=3.12
 
+# It runs unit tests using Python 3.13.
 test-3.13:
 	$(MAKE) test PY_VERSION=3.13
 
+
 # --- Integration tests goals ---
 
-# It runs integration tests
+# It runs integration tests.
 it: venv
 	$(MAKE) test ARGS=it/
 
-# It runs serverless integration tests
+# It runs serverless integration tests.
 it_serverless: install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_serverless it/track_repo_compatibility $(ARGS)
 
-# It runs rally_tracks_compat integration tests
+# It runs rally_tracks_compat integration tests.
 it_tracks_compat: install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
 
-# It runs benchmark tests
+# It runs benchmark tests.
 benchmark: venv
 	$(MAKE) test ARGS=benchmarks/
 
