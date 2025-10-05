@@ -14,6 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+from __future__ import annotations
+
 import collections
 import inspect
 import logging
@@ -30,8 +33,8 @@ from esrally import exceptions
 from esrally.track import track
 from esrally.utils import io
 
-__PARAM_SOURCES_BY_OP: dict[track.OperationType, "ParamSource"] = {}
-__PARAM_SOURCES_BY_NAME: dict[str, "ParamSource"] = {}
+__PARAM_SOURCES_BY_OP: dict[track.OperationType, ParamSource] = {}
+__PARAM_SOURCES_BY_NAME: dict[str, ParamSource] = {}
 
 
 def param_source_for_operation(op_type, track, params, task_name):
@@ -967,8 +970,8 @@ def create_readers(
     conflict_probability: float,
     on_conflict: str,
     recency: str,
-    create_reader: Callable[..., "IndexDataReader"],
-) -> list["IndexDataReader"]:
+    create_reader: Callable[..., IndexDataReader],
+) -> list[IndexDataReader]:
     """
     Return a list of IndexDataReader instances to allow a range of clients to read their share of corpora.
 
