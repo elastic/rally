@@ -118,20 +118,20 @@ def add_missing_loggers_to_config(
     config_path: str = CONFIG_PATH,
     template_path: str = TEMPLATE_PATH,
 ):
-    """It appends any missing top level loggers found resources/logging.json to current log configuration."""
+    """It appends any missing top level loggers found in resources/logging.json to current log configuration."""
 
     with open(template_path, encoding="UTF-8") as fd:
-        template: dict[str, typing.Any] = json.load(fd)
+        missing_loggers: dict[str, typing.Any] = json.load(fd)["loggers"]
 
     with open(config_path, encoding="UTF-8") as fd:
         config: dict[str, typing.Any] = json.load(fd)
 
-    missing_loggers: dict[str, typing.Any] = {
-        logger: value for logger, value in template["loggers"].items() if logger not in config["loggers"]
-    }
+    config_loggers = config.setdefault("loggers", {})
+    for found_logger in config_loggers:
+        missing_loggers.pop(found_logger, None)
 
     if missing_loggers:
-        config["loggers"].update(missing_loggers)
+        config_loggers.update(missing_loggers)
         with open(config_path, "w", encoding="UTF-8") as fd:
             json.dump(config, fd, indent=2)
 
