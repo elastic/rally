@@ -610,8 +610,6 @@ dependencies = [
     { name = "py-cpuinfo" },
     { name = "python-json-logger" },
     { name = "requests" },
-    { name = "sphinx" },
-    { name = "standard-imghdr" },
     { name = "tabulate" },
     { name = "thespian" },
     { name = "typing-extensions" },
@@ -689,9 +687,7 @@ requires-dist = [
     { name = "pytest-httpserver", marker = "extra == 'develop'", specifier = "==1.0.5" },
     { name = "python-json-logger", specifier = "==2.0.7" },
     { name = "requests", specifier = "<2.32.0" },
-    { name = "sphinx", specifier = ">=5.1.1" },
     { name = "sphinx", marker = "extra == 'develop'", specifier = "==5.1.1" },
-    { name = "standard-imghdr", specifier = ">=3.13.0" },
     { name = "tabulate", specifier = "==0.8.9" },
     { name = "thespian", specifier = "==4.0.1" },
     { name = "trustme", marker = "extra == 'develop'", specifier = "==0.9.0" },
@@ -703,7 +699,7 @@ requires-dist = [
     { name = "typing-extensions", specifier = "==4.12.2" },
     { name = "ujson", marker = "extra == 'develop'" },
     { name = "urllib3", specifier = "==1.26.19" },
-    { name = "wheel", specifier = "==0.37.1" },
+    { name = "wheel", specifier = "==0.45.1" },
     { name = "yappi", specifier = "==1.6.10" },
     { name = "zstandard", specifier = "==0.21.0" },
 ]
@@ -2141,15 +2137,6 @@ wheels = [
 ]
 
 [[package]]
-name = "standard-imghdr"
-version = "3.13.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1a/8d/ab2620fbe2e348483c9cb776c3b7b3cc407899291a041d7fa026469b7cd1/standard_imghdr-3.13.0.tar.gz", hash = "sha256:8d9c68058d882f6fc3542a8d39ef9ff94d2187dc90bd0c851e0902776b7b7a42", size = 5511, upload-time = "2024-10-30T16:01:36.412Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/df/cb/e1da7e340586a078404c7e4328bfefc930867ace8a9a55916fd220cf9547/standard_imghdr-3.13.0-py3-none-any.whl", hash = "sha256:30a1bff5465605bb496f842a6ac3cc1f2131bf3025b0da28d4877d6d4b7cc8e9", size = 4639, upload-time = "2024-10-30T16:01:13.829Z" },
-]
-
-[[package]]
 name = "tabulate"
 version = "0.8.9"
 source = { registry = "https://pypi.org/simple" }
@@ -2436,11 +2423,11 @@ wheels = [
 
 [[package]]
 name = "wheel"
-version = "0.37.1"
+version = "0.45.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c0/6c/9f840c2e55b67b90745af06a540964b73589256cb10cc10057c87ac78fc2/wheel-0.37.1.tar.gz", hash = "sha256:e9a504e793efbca1b8e0e9cb979a249cf4a0a7b5b8c9e8b65a5e39d49529c1c4", size = 66376, upload-time = "2021-12-22T12:22:02.135Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8a/98/2d9906746cdc6a6ef809ae6338005b3f21bb568bea3165cfc6a243fdc25c/wheel-0.45.1.tar.gz", hash = "sha256:661e1abd9198507b1409a20c02106d9670b2576e916d58f520316666abca6729", size = 107545, upload-time = "2024-11-23T00:18:23.513Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/d6/003e593296a85fd6ed616ed962795b2f87709c3eee2bca4f6d0fe55c6d00/wheel-0.37.1-py2.py3-none-any.whl", hash = "sha256:4bdcd7d840138086126cd09254dc6195fb4fc6f01c050a1d7236f2630db1d22a", size = 35301, upload-time = "2021-12-22T12:22:00.742Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/2c/87f3254fd8ffd29e4c02732eee68a83a1d3c346ae39bc6822dcbcb697f2b/wheel-0.45.1-py3-none-any.whl", hash = "sha256:708e7481cc80179af0e556bbf0cc00b8444c7321e2700b8d8580231d13017248", size = 72494, upload-time = "2024-11-23T00:18:21.207Z" },
 ]
 
 [[package]]
