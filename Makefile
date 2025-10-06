@@ -79,7 +79,7 @@ check-all: all
 # It checks uv is installed.
 uv:
 	@if [[ ! -x $$(command -v uv) ]]; then \
-		printf "Please install uv by running the following outside of a virtual env: [ curl -LsSf https://astral.sh/uv/install.sh | $(SHELL) ]\n"; \
+		printf "Please install uv by running the following outside of a virtual environment (https://docs.astral.sh/uv/getting-started/installation/)"; \
 	fi
 
 # It adds a list of packages to the project.
