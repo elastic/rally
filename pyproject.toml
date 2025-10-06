@@ -17,7 +17,7 @@ authors = [
 description = "Macrobenchmarking framework for Elasticsearch"
 readme = "README.md"
 license = { text = "Apache License 2.0" }
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.10,<3.14"
 classifiers = [
     "Topic :: System :: Benchmark",
     "Development Status :: 5 - Production/Stable",
@@ -27,10 +27,10 @@ classifiers = [
     "Operating System :: POSIX",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
 ]
 ################################################################################################
@@ -91,7 +91,7 @@ dependencies = [
     "ecs-logging==2.2.0",
     "hatch==1.3.1",
     "hatchling==1.6.0",
-    "wheel==0.37.1",
+    "wheel==0.45.1",
 ]
 
 [project.optional-dependencies]
@@ -113,13 +113,11 @@ develop = [
     "pytest-benchmark==3.4.1",
     "pytest-asyncio==0.19.0",
     "pytest-httpserver==1.0.5",
-    "tox==3.25.0",
-    "nox==2024.3.2",
     "sphinx==5.1.1",
     "furo==2022.06.21",
     "github3.py==3.2.0",
     "pre-commit==2.20.0",
-    "pylint==3.1.0",
+    "pylint==3.3.8",
     "trustme==0.9.0",
     "GitPython==3.1.30",
     # formatting
@@ -152,7 +150,7 @@ esrallyd = "esrally.rallyd:main"
 
 [tool.black]
 line-length = 140
-target-version = ['py39', 'py310', 'py311', 'py312']
+target-version = ['py310', 'py311', 'py312', 'py313']
 
 [tool.isort]
 profile = 'black'
@@ -178,7 +176,7 @@ xfail_strict = true
 # is to keep "arg-type" error code, while disabling other error codes.
 # Ref: https://github.com/elastic/rally/pull/1798
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 # subset of "strict", kept at global config level as some of the options are
 # supported only at this level
 # https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
