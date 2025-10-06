@@ -43,10 +43,81 @@ async def test_example():
     """It creates an actor, it sends it a request, and it finally waits for a response."""
 
     parent = actors.create_actor(ParentActor)
+    LOG.info("Parent actor created: %s", parent)
 
+    LOG.info("About to send request to parent actor to create children: %s", parent)
     response = await actors.request(parent, CreateChildrenRequest(["qui", "quo", "qua"]))
 
     assert response == "All OK"
+    LOG.info("All done.")
+
+
+class ParentActor(actors.AsyncActor):
+
+    async def receiveMsg_CreateChildrenRequest(self, request: "CreateChildrenRequest", sender: actors.ActorAddress) -> str:
+        """It creates some child actors, teach each one its name and tell to greet each others.
+
+        It performs the operations for every child actor in parallel, without blocking the actor before returning the final message.
+        It also performs verification all child actors do it right before returning the final message.
+
+        The purpose is to demonstrate how simple would become implementing a workflow involving multiple actors interactions
+        with AsyncActor class without falling in the complexity of keeping the workflow state in actors instance attributes.
+
+        This also demonstrate the reliability of an asynchronous workflow that always performs operations in the same,
+        order thanks the fact actors are using queues to communicate with each other.
+
+        :param request: the request containing the name of the child actor.
+        :param sender:
+        :return:
+        """
+        # It creates the child actors and map them by name.
+        children = {name: actors.create_actor(ChildActor) for name in request.names}
+        LOG.info("Created child actors: %s.", children)
+
+        # It assigns each of them a name. It doesn't wait for the request to complete.
+        for name, child in children.items():
+            actors.send(child, AssignNameRequest(name))
+        LOG.info("Assigned name to child actors.")
+
+        # It verifies each child learned his names.
+        assert request.names == await asyncio.gather(*[actors.request(child, AskNameRequest()) for child in children.values()])
+        LOG.info("Each child know his name.")
+
+        # It says each child to greet his sibling (including itself) and it gathers what they hear in response.
+        assert await asyncio.gather(*[actors.request(child, GreetSiblingRequest(children)) for child in children.values()]) == [
+            [f"Hello {name2}, it's {name1}" for name1 in children] for name2 in children
+        ]
+        LOG.info("Each child greeted each of other child actors (including himself).")
+
+        return "All OK"
+
+
+class ChildActor(actors.AsyncActor):
+    def __int__(self):
+        super().__init__()
+        self.name: str | None = None
+
+    def receiveMsg_AssignNameRequest(self, request: "AssignNameRequest", sender: actors.ActorAddress) -> None:
+        """It receives the actor name."""
+        self.name = request.name
+
+    def receiveMsg_AskNameRequest(self, request: "AskNameRequest", sender: actors.ActorAddress) -> str:
+        """It gets the actor name."""
+        assert self.name is not None
+        return self.name
+
+    def receiveMsg_GreetSiblingRequest(self, request: "GreetSiblingRequest", sender: actors.ActorAddress) -> asyncio.Future[list[str]]:
+        """It GreetMessage to all sibling actors (including itself)."""
+        # This demonstrates an async task will be created to gather all the answers from the requests sent here.
+        # No actor will be blocked waiting at any time while this is in execution.
+        assert isinstance(self.name, str)
+        return asyncio.gather(
+            *[actors.request(sibling, GreetMessage(sender=self.name, receiver=name)) for name, sibling in request.sibling.items()]
+        )
+
+    def receiveMsg_GreetMessage(self, message: "GreetMessage", sender: actors.ActorAddress) -> str:
+        assert self.name == message.receiver
+        return f"Hello {message.sender}, it's {self.name}"
 
 
 @dataclasses.dataclass
@@ -73,63 +144,3 @@ class GreetSiblingRequest:
 class GreetMessage:
     sender: str
     receiver: str
-
-
-class ParentActor(actors.AsyncActor):
-
-    async def receiveMsg_CreateChildrenRequest(self, request: CreateChildrenRequest, sender: actors.ActorAddress) -> str:
-        """It creates some child actors, teach each one its name, and it verifies if he learned it.
-
-        It performs the operations for every child actor in parallel, without blocking the actor before returning the final message.
-
-        The purpose is to demonstrate how simple become implementing a workflow involving multiple actors interactions
-        with Async actor class without falling in the complexity of keeping the workflow state in actors variables.
-
-        :param request:
-        :param sender:
-        :return:
-        """
-        # Create the children actors and map them by name.
-        children = {name: actors.create_actor(ChildActor) for name in request.names}
-
-        # It assigns each of them a name. I don't actually really need to wait for request to complete.
-        for name, child in children.items():
-            actors.send(child, AssignNameRequest(name))
-
-        # It verifies all of them learned their names.
-        assert request.names == await asyncio.gather(*[actors.request(child, AskNameRequest()) for child in children.values()])
-
-        # It says each child to greet his sibling (including itself) and tell what they hear.
-        assert await asyncio.gather(*[actors.request(child, GreetSiblingRequest(children)) for child in children.values()]) == [
-            [f"Hello {name2}, it's {name1}" for name1 in children] for name2 in children
-        ]
-
-        return "All OK"
-
-
-class ChildActor(actors.AsyncActor):
-    def __int__(self):
-        super().__init__()
-        self.name: str | None = None
-
-    def receiveMsg_AssignNameRequest(self, request: AssignNameRequest, sender: actors.ActorAddress) -> None:
-        """It receives the actor name."""
-        self.name = request.name
-
-    def receiveMsg_AskNameRequest(self, request: AskNameRequest, sender: actors.ActorAddress) -> str:
-        """It gets the actor name."""
-        assert self.name is not None
-        return self.name
-
-    def receiveMsg_GreetSiblingRequest(self, request: GreetSiblingRequest, sender: actors.ActorAddress) -> asyncio.Future[list[str]]:
-        """It GreetMessage to all sibling actors (including itself)."""
-        # This demonstrates an async task will be created to gather all the answers from the requests sent here.
-        # No actor will be blocked waiting at any time while this is in execution.
-        assert isinstance(self.name, str)
-        return asyncio.gather(
-            *[actors.request(sibling, GreetMessage(sender=self.name, receiver=name)) for name, sibling in request.sibling.items()]
-        )
-
-    def receiveMsg_GreetMessage(self, message: GreetMessage, sender: actors.ActorAddress) -> str:
-        assert self.name == message.receiver
-        return f"Hello {message.sender}, it's {self.name}"
