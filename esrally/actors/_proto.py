@@ -134,7 +134,13 @@ class ErrorResponse(ResultResponse):
     details: str
 
     def result(self) -> Any:
-        raise self.error
+        cause: BaseException | None = None
+        if self.details:
+            # Attach error details (which it should include original error traceback) as a cause of the error,
+            # so that both stack traces (local and remote) will be visible when logging the exception.
+            message = f"{self.error}\n{self.details}"
+            cause = type(self.error)(message)
+        raise self.error from cause
 
 
 class ActorRequestError(Exception):

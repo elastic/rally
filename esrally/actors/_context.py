@@ -59,7 +59,6 @@ def create_task(coro: Coroutine[None, None, R], *, name: str | None = None) -> a
 
     :param coro: the task coroutine
     :param name: the task name
-    :param context: the variables context of the task
     :return: created task.
     """
     return get_actor_context().create_task(coro, name=name)

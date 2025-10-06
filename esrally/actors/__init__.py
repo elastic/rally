@@ -20,6 +20,7 @@ from thespian.actors import (  # type: ignore[import-untyped]
     ActorExitRequest,
     ActorSystem,
     PoisonMessage,
+    WakeupMessage,
 )
 
 from esrally.actors._actor import AsyncActor, get_actor, respond

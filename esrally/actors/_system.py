@@ -140,7 +140,8 @@ def create_system(
             raise ValueError(
                 f"invalid process startup method value: '{process_startup_method}', valid options are: " f"{get_args(ProcessStartupMethod)}"
             )
-        capabilities["Process Startup Method"] = process_startup_method
+        if process_startup_method is not None:
+            capabilities["Process Startup Method"] = process_startup_method
 
     if system_base == "multiprocQueueBase":
         capabilities["Process Startup Method"] = "spawn"
