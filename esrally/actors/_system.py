@@ -118,16 +118,14 @@ def create_system(
 
     capabilities: dict[str, Any] = {"coordinator": True}
     if system_base in ("multiprocTCPBase", "multiprocUDPBase"):
-        proto = {"multiprocTCPBase": socket.IPPROTO_TCP, "multiprocUDPBase": socket.IPPROTO_UDP}[system_base]
         if ip:
-            ip, admin_port = net.resolve(ip, port=admin_port, proto=proto)
-            capabilities["ip"] = ip
+            capabilities["ip"] = resolve(ip)
 
         if admin_port:
             capabilities["Admin Port"] = admin_port
 
         if coordinator_ip:
-            coordinator_ip, coordinator_port = net.resolve(coordinator_ip, coordinator_port)
+            coordinator_ip = resolve(coordinator_ip)
             if coordinator_port:
                 coordinator_port = int(coordinator_port)
                 if coordinator_port:
@@ -162,6 +160,13 @@ def create_system(
     system = actors.ActorSystem(systemBase=system_base, capabilities=capabilities, logDefs=log_defs, transientUnique=True)
     LOG.debug("Actor system created:\n - capabilities: %r\n", system.capabilities)
     return system
+
+
+def resolve(hostname_or_ip: str) -> str:
+    resolved = net.resolve(hostname_or_ip)
+    if not resolved:
+        raise ValueError(f"Invalid hostname or ip address: '{hostname_or_ip}'")
+    return resolved
 
 
 def iter_unused_random_ports() -> Generator[int]:
