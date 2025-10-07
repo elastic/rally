@@ -543,34 +543,16 @@ class FileOffsetTable:
             separator = "/"
         remote_offset_url = f"{corpus_base_url}{separator}{offset_file_name}"
 
+        logger.info("Attempting to download offset file from [%s]", remote_offset_url)
+
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(self.offset_table_path), exist_ok=True)
         try:
-            logger.info("Attempting to download offset file from [%s]", remote_offset_url)
-
-            # Ensure the directory exists
-            os.makedirs(os.path.dirname(self.offset_table_path), exist_ok=True)
-
-            # Download the offset file using Rally's existing HTTP download functionality
-            if remote_offset_url.startswith(("http://", "https://")):
-                net.download_http(remote_offset_url, self.offset_table_path)
-            elif remote_offset_url.startswith(("s3://", "gs://")):
-                # Extract scheme for bucket downloads
-                scheme = remote_offset_url.split("://")[0]
-                net.download_from_bucket(scheme, remote_offset_url, self.offset_table_path)
-            else:
-                logger.debug("Unsupported URL scheme for remote offset download: [%s]", remote_offset_url)
-                return False
-
+            net.download(remote_offset_url, self.offset_table_path)
             logger.info("Successfully downloaded offset file from [%s]", remote_offset_url)
             return True
-
-        except Exception as e:
-            logger.debug("Failed to download offset file from [%s]: %s", remote_offset_url, str(e))
-            # Clean up any partially downloaded file
-            if os.path.exists(self.offset_table_path):
-                try:
-                    os.remove(self.offset_table_path)
-                except Exception:
-                    pass  # Best effort cleanup
+        except BaseException as be:
+            logger.debug("Download failed: %s", str(be))
             return False
 
     def __enter__(self) -> Self:
