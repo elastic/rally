@@ -34,22 +34,20 @@ from typing import Callable, Optional
 
 import thespian.actors
 
-from esrally import (
-    PROGRAM_NAME,
-    actor,
-    client,
-    config,
-    exceptions,
-    metrics,
-    paths,
-    telemetry,
-    track,
-    types,
-)
+from esrally import PROGRAM_NAME, actor, client, config, exceptions, metrics, paths, telemetry, track, types
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
 from esrally.utils import console, convert, net
+
+
+class OnErrorBehavior(Enum):
+    ABORT = "abort"
+    CONTINUE = "continue"
+    CONTINUE_ON_NETWORK = "continue-on-network"
+
+    def __str__(self):
+        return self.value
 
 
 ##################################
@@ -2026,6 +2024,13 @@ async def execute_single(runner, es, params, on_error):
     import elasticsearch
 
     fatal_error = False
+    # Accept both string and Enum for backward compatibility
+    if isinstance(on_error, str):
+        try:
+            on_error = OnErrorBehavior(on_error)
+        except ValueError:
+            on_error = OnErrorBehavior.CONTINUE
+
     try:
         async with runner:
             return_value = await runner(es, params)
@@ -2045,8 +2050,8 @@ async def execute_single(runner, es, params, on_error):
     except elasticsearch.TransportError as e:
         # we *specifically* want to distinguish connection refused (a node died?) from connection timeouts
         # pylint: disable=unidiomatic-typecheck
-        if type(e) is elasticsearch.ConnectionError:
-            fatal_error = True
+        is_connection_error = type(e) is elasticsearch.ConnectionError
+        fatal_error = is_connection_error
 
         total_ops = 0
         total_ops_unit = "ops"
@@ -2121,7 +2126,7 @@ async def execute_single(runner, es, params, on_error):
         raise exceptions.SystemSetupError(msg)
 
     if not request_meta_data["success"]:
-        if on_error == "abort" or fatal_error:
+        if on_error == OnErrorBehavior.ABORT or (fatal_error and on_error != OnErrorBehavior.CONTINUE_ON_NETWORK):
             msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
 
             if description := request_meta_data.get("error-description"):

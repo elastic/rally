@@ -379,10 +379,20 @@ class TestTask:
         effective_on_error = task.error_behavior(default_error_behavior="continue")
         assert effective_on_error == "continue"
 
+    def test_task_continues_with_global_continue_on_network(self):
+        task = self.task()
+        effective_on_error = task.error_behavior(default_error_behavior="continue-on-network")
+        assert effective_on_error == "continue-on-network"
+
     def test_task_continues_with_global_abort_and_task_override(self):
         task = self.task(ignore_response_error_level="non-fatal")
         effective_on_error = task.error_behavior(default_error_behavior="abort")
         assert effective_on_error == "continue"
+
+    def test_task_continues_on_network_with_global_continue_on_network_and_task_override(self):
+        task = self.task(ignore_response_error_level="non-fatal")
+        effective_on_error = task.error_behavior(default_error_behavior="continue-on-network")
+        assert effective_on_error == "continue-on-network"
 
     def test_task_aborts_with_global_abort(self):
         task = self.task()

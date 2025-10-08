@@ -1090,14 +1090,14 @@ class Task:
         :param default_error_behavior: (str) the default error behavior for the benchmark
         :return: (str) prescribing error handling when a non-fatal error occurs:
             "abort": will fail when any error gets encountered
-            "continue": will continue for non fatal errors
+            "continue": will continue for non-fatal errors
+            "continue-on-network": will continue for non-fatal errors and network errors
         """
 
-        behavior = "continue"
-        if default_error_behavior == "abort":
-            if self.ignore_response_error_level != "non-fatal":
-                behavior = "abort"
-
+        behavior = default_error_behavior if default_error_behavior in ("abort", "continue", "continue-on-network") else "continue"
+        if behavior == "abort":
+            if self.ignore_response_error_level == "non-fatal":
+                behavior = "continue"
         return behavior
 
     def __hash__(self):
