@@ -34,7 +34,18 @@ from typing import Callable, Optional
 
 import thespian.actors
 
-from esrally import PROGRAM_NAME, actor, client, config, exceptions, metrics, paths, telemetry, track, types
+from esrally import (
+    PROGRAM_NAME,
+    actor,
+    client,
+    config,
+    exceptions,
+    metrics,
+    paths,
+    telemetry,
+    track,
+    types,
+)
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
