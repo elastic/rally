@@ -99,6 +99,7 @@ disable=raw-checker-failed,
         redefined-outer-name,
         consider-using-f-string,  # pyupgrade will cover that
         use-implicit-booleaness-not-comparison,
+        too-many-positional-arguments,
 
 
 # Enable the message, report, category or checker with the given id(s). You can
