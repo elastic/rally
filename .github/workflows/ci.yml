@@ -28,7 +28,7 @@ jobs:
         with:
           version: "0.8.22"
       - name: Run tests
-        run: make pre-commit
+        run: make lint
       - uses: elastic/es-perf-github-status@v2
         if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
         with:
