@@ -694,10 +694,11 @@ def create_arg_parser():
     )
     race_parser.add_argument(
         "--on-error",
+        type=OnErrorBehavior,
         choices=list(OnErrorBehavior),
         help="Controls how Rally behaves on response errors (default: continue). 'continue-on-network' will retry on network errors"
         "(e.g., connection refused).",
-        default="continue",
+        default=OnErrorBehavior.CONTINUE,
     )
     race_parser.add_argument(
         "--telemetry",
