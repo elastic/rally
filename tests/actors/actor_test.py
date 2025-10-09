@@ -44,9 +44,11 @@ def system_base(request) -> Generator[actors.SystemBase]:
 
 @pytest.fixture(scope="function", autouse=True)
 def cfg(system_base: actors.SystemBase) -> Generator[types.Config]:
+    # if system_base == "multiprocTCPBase" and sys.version_info < (3, 12) and sys.platform == "darwin":
+    #     pytest.skip("There are know issues with multiprocTCPBase, OSX and Python < 3.12")
+
     cfg = actors.ActorConfig()
     cfg.system_base = system_base
-    cfg.try_join = False
     config.init_config(cfg)
     yield cfg
     config.clear_config()
@@ -60,8 +62,8 @@ def system() -> Generator[actors.ActorSystem]:
 
 
 @pytest.fixture(scope="function")
-def dummy_actor() -> Generator[actors.ActorAddress]:
-    address = actors.create_actor(DummyActor)
+def dummy_actor(event_loop: asyncio.AbstractEventLoop) -> Generator[actors.ActorAddress]:
+    address = event_loop.run_until_complete(actors.create_actor(DummyActor))
     yield address
     actors.send(address, actors.ActorExitRequest())
 
@@ -74,14 +76,13 @@ ExecuteFrom = Literal["from_external", "from_actor"]
 @pytest.fixture(scope="function", params=get_args(ExecuteFrom))
 def execute_from(request, monkeypatch) -> Generator[ExecuteFrom, None, None]:
     if request.param == "from_actor":
-        actor = actors.create_actor(ExecutorActor)
-        request.addfinalizer(lambda: actors.send(actor, actors.ActorExitRequest()))
 
         original_func = getattr(request.module, request.function.__name__)
 
         @functools.wraps(request.function)
         async def func_wrapper(*args, **kwargs):
-            return await actors.request(actor, ExecuteRequest(original_func, args=args, kwargs=kwargs))
+            actor = await actors.create_actor(ExecutorActor, message=ExecuteRequest(original_func, args=args, kwargs=kwargs))
+            request.addfinalizer(lambda: actors.send(actor, actors.ActorExitRequest()))
 
         assert isinstance(request.node, pytest.Function)
         request.node.obj = func_wrapper
@@ -99,21 +100,29 @@ async def test_get_actor_context(execute_from: ExecuteFrom):
         assert not isinstance(ctx, _actor.ActorRequestContext)
         assert isinstance(ctx.handler, actors.ActorSystem)
         assert ctx.handler is actors.get_actor_system()
-        assert str(ctx) == "ActorContext[ActorSystem]", f"invalid value: 'str(ctx)' -> {ctx}"
+        assert ctx.handler is ctx.actor_system
+        assert ctx.details == {"cls": "ActorSystem"}
+        assert str(ctx) == "ActorContext<cls=ActorSystem>", f"invalid value: 'str(ctx)' -> {ctx}"
 
     elif execute_from == "from_actor":
         assert isinstance(ctx, _actor.ActorRequestContext), "Actor request context initialized."
         assert ctx.handler is ctx.actor, "Actor request context initialized."
         assert isinstance(ctx.actor, ExecutorActor), "This is being executed from inside a executor actor."
         assert ctx.actor is actors.get_actor(), "Actor request context initialized."
-        assert ctx.req_id
-        assert ctx.sender is not None
+        assert ctx.req_id, "req_id not set"
+        assert ctx.sender is not None, "sender not set"
         assert not ctx.responded, "Actor request is not responded."
-        actors.respond()
-        assert ctx.responded, "Actor request is responded."
-        assert ctx.pending_tasks == {}
-        assert ctx.name == f"ExecutorActor|{ctx.req_id}"
-        assert str(ctx) == f"ActorContext[ExecutorActor|{ctx.req_id}]", f"invalid value: 'str(ctx)' -> {ctx}"
+        assert ctx.pending_tasks.get(ctx.req_id), "test method has no tasks"
+        assert ctx.details == {
+            "cls": "ExecutorActor",
+            "req_id": ctx.req_id,
+            "sender": ctx.sender,
+            "address": ctx.actor.myAddress,
+        }, f"Invalid actor context details: {ctx.details}"
+        assert ctx.details["cls"] == ExecutorActor.__name__
+        assert (
+            str(ctx) == f"ActorRequestContext<address={ctx.actor.myAddress}, cls=ExecutorActor, req_id={ctx.req_id}, sender={ctx.sender}>"
+        ), f"invalid value: 'str(ctx)' -> {ctx}"
 
     else:
         raise NotImplementedError()
@@ -214,7 +223,7 @@ async def test_create_actor(execute_from: ExecuteFrom) -> None:
     # It uses this special configuration object to check it is going to be propagated to child actor as it is.
     special_config = actors.ActorConfig()
     special_config.admin_ports = range(100, 200)
-    actor_address = actors.create_actor(DummyActor, cfg=special_config)
+    actor_address = await actors.create_actor(DummyActor, cfg=special_config)
     try:
         actor_config = await actors.request(actor_address, GetConfigRequest())
         assert isinstance(actor_config, ActorConfig)
@@ -246,9 +255,9 @@ async def test_create_task(case: CreateTaskCase, execute_from: ExecuteFrom) -> N
     assert not task.done()
 
     if case.task_name is None:
-        assert task.get_name() == f"{coro}@{actors.get_actor_context().name}", f"unexpected task name: {task.get_name()}"
+        assert task.get_name() == f"{coro}@{actors.get_actor_context().handler}", f"unexpected task name: {task.get_name()}"
     else:
-        assert task.get_name() == f"{case.task_name}@{actors.get_actor_context().name}", f"unexpected task name: {task.get_name()}"
+        assert task.get_name() == f"{case.task_name}@{actors.get_actor_context().handler}", f"unexpected task name: {task.get_name()}"
 
     if execute_from == "from_actor":
         ctx = actors.get_actor_context()

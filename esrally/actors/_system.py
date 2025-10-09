@@ -39,10 +39,7 @@ LOG = logging.getLogger(__name__)
 
 
 def get_actor_system() -> actors.ActorSystem:
-    system = get_actor_context().handler
-    if not isinstance(system, actors.ActorSystem):
-        raise ActorContextError("Context handler is not an ActorSystem")
-    return system
+    return get_actor_context().actor_system
 
 
 def init_actor_system(cfg: types.Config | None = None) -> actors.ActorSystem:
@@ -58,6 +55,10 @@ def init_actor_system(cfg: types.Config | None = None) -> actors.ActorSystem:
     ctx = context_from_config(cfg)
     if not isinstance(ctx.handler, actors.ActorSystem):
         raise ActorContextError("Context handler is not an ActorSystem")
+
+    # if sys.platform == "darwin" and sys.version_info < (3, 12):
+    #     selectors.DefaultSelector = selectors.SelectSelector
+
     set_actor_context(ctx)
     LOG.info("Actor system initialized.")
     return ctx.handler
@@ -66,19 +67,15 @@ def init_actor_system(cfg: types.Config | None = None) -> actors.ActorSystem:
 def context_from_config(cfg: types.Config | None = None) -> ActorContext:
     cfg = ActorConfig.from_config(cfg)
     system_bases = [cfg.system_base]
-    if cfg.fallback_system_base and cfg.fallback_system_base != cfg.system_base:
+    if cfg.fallback_system_base not in system_bases:
         system_bases.append(cfg.fallback_system_base)
 
     first_error: Exception | None = None
     for system_base in system_bases:
-        admin_ports: Iterable[int | None]
+        admin_ports: Iterable[int | None] = [None]
         if system_base == "multiprocTCPBase":
-            if cfg.try_join:
-                admin_ports = cfg.admin_ports
-            else:
-                admin_ports = iter_unused_random_ports()
-        else:
-            admin_ports = [None]
+            admin_ports = cfg.admin_ports or iter_unused_random_ports()
+            assert isinstance(admin_ports, Iterable)
 
         for admin_port in admin_ports:
             try:
@@ -87,10 +84,9 @@ def context_from_config(cfg: types.Config | None = None) -> ActorContext:
                     ip=cfg.ip,
                     admin_port=admin_port,
                     coordinator_ip=cfg.coordinator_ip,
-                    coordinator_port=cfg.coordinator_port,
                     process_startup_method=cfg.process_startup_method,
                 )
-                return ActorContext(handler=system, external_request_poll_interval=cfg.external_request_poll_interval)
+                return ActorContext(handler=system, loop_interval=cfg.loop_interval)
             except actors.InvalidActorAddress as ex:
                 first_error = first_error or ex
                 if admin_port is not None:
@@ -110,14 +106,13 @@ def create_system(
     ip: str | None = None,
     admin_port: int | None = None,
     coordinator_ip: str | None = None,
-    coordinator_port: int | None = None,
     process_startup_method: str | None = None,
 ) -> actors.ActorSystem:
     if system_base and system_base not in get_args(SystemBase):
         raise ValueError(f"invalid system base value: '{system_base}', valid options are: {get_args(SystemBase)}")
 
     capabilities: dict[str, Any] = {"coordinator": True}
-    if system_base in ("multiprocTCPBase", "multiprocUDPBase"):
+    if system_base == "multiprocTCPBase":
         if ip:
             capabilities["ip"] = resolve(ip)
 
@@ -126,23 +121,24 @@ def create_system(
 
         if coordinator_ip:
             coordinator_ip = resolve(coordinator_ip)
-            if coordinator_port:
-                coordinator_port = int(coordinator_port)
-                if coordinator_port:
-                    coordinator_ip += f":{coordinator_port}"
             capabilities["Convention Address.IPv4"] = coordinator_ip
             if ip and coordinator_ip != ip:
                 capabilities["coordinator"] = False
 
-        if process_startup_method not in get_args(ProcessStartupMethod):
-            raise ValueError(
-                f"invalid process startup method value: '{process_startup_method}', valid options are: " f"{get_args(ProcessStartupMethod)}"
-            )
-        if process_startup_method is not None:
+        if process_startup_method:
+            if process_startup_method not in get_args(ProcessStartupMethod):
+                raise ValueError(
+                    f"invalid process startup method value: '{process_startup_method}', valid options are: {get_args(ProcessStartupMethod)}"
+                )
             capabilities["Process Startup Method"] = process_startup_method
 
     if system_base == "multiprocQueueBase":
-        capabilities["Process Startup Method"] = "spawn"
+        if process_startup_method:
+            if process_startup_method not in ["fork", "spawn"]:
+                raise ValueError(
+                    f"invalid process startup method value: '{process_startup_method}', valid options are: {['fork', 'spawn']}"
+                )
+            capabilities["Process Startup Method"] = process_startup_method
 
     log_defs = None
     if not isinstance(logging.root, ThespianLogForwarder):

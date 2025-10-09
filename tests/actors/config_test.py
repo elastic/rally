@@ -20,17 +20,15 @@ from typing import get_args
 from esrally.actors._config import (
     DEFAULT_ADMIN_PORTS,
     DEFAULT_COORDINATOR_IP,
-    DEFAULT_COORDINATOR_PORT,
-    DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL,
     DEFAULT_FALLBACK_SYSTEM_BASE,
     DEFAULT_IP,
+    DEFAULT_LOOP_INTERVAL,
     DEFAULT_PROCESS_STARTUP_METHOD,
     DEFAULT_SYSTEM_BASE,
-    DEFAULT_TRY_JOIN,
     ActorConfig,
     SystemBase,
 )
-from esrally.utils import cases, convert
+from esrally.utils import cases
 
 
 @dataclasses.dataclass
@@ -41,11 +39,9 @@ class FromConfigCase:
     ip: str = DEFAULT_IP
     admin_ports: range | int = DEFAULT_ADMIN_PORTS
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
-    coordinator_port: int = DEFAULT_COORDINATOR_PORT
     process_startup_method: str | None = DEFAULT_PROCESS_STARTUP_METHOD
-    try_join: bool | None = DEFAULT_TRY_JOIN
     want_name: str | None = None
-    external_request_poll_interval: float | None = DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL
+    loop_interval: float | None = DEFAULT_LOOP_INTERVAL
 
 
 @cases.cases(
@@ -55,14 +51,11 @@ class FromConfigCase:
     fallback_system_base=FromConfigCase(fallback_system_base="multiprocTCPBase"),
     fallback_system_base_none=FromConfigCase(fallback_system_base=None),
     ip=FromConfigCase(ip="some_ip"),
-    admin_ports=FromConfigCase(admin_ports=1234),
+    admin_ports=FromConfigCase(admin_ports=range(1234, 4321)),
     coordinator_ip=FromConfigCase(coordinator_ip="some_ip"),
-    coordinator_port=FromConfigCase(coordinator_port=4321),
     fork=FromConfigCase(process_startup_method="fork"),
-    forkserver=FromConfigCase(process_startup_method="forkserver"),
     spawn=FromConfigCase(process_startup_method="spawn"),
-    no_try_join=FromConfigCase(try_join=False),
-    external_request_poll_interval=FromConfigCase(external_request_poll_interval=120.0),
+    loop_interval=FromConfigCase(loop_interval=1.0),
 )
 def test_from_config(case: FromConfigCase) -> None:
     cfg = ActorConfig(case.name)
@@ -76,21 +69,24 @@ def test_from_config(case: FromConfigCase) -> None:
         cfg.admin_ports = case.admin_ports
     if case.coordinator_ip != DEFAULT_COORDINATOR_IP:
         cfg.coordinator_ip = case.coordinator_ip
-    if case.coordinator_port != DEFAULT_COORDINATOR_PORT:
-        cfg.coordinator_port = case.coordinator_port
-    if case.try_join != DEFAULT_TRY_JOIN:
-        cfg.try_join = case.try_join
-    if case.external_request_poll_interval != DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL:
-        cfg.external_request_poll_interval = case.external_request_poll_interval
+    if case.loop_interval != DEFAULT_LOOP_INTERVAL:
+        cfg.loop_interval = case.loop_interval
     assert isinstance(cfg, ActorConfig)
     assert cfg.name == case.want_name
     assert cfg.system_base in get_args(SystemBase)
-    assert cfg.system_base == case.system_base
+    if case.system_base is None:
+        assert cfg.system_base == "multiprocTCPBase"
+    else:
+        assert cfg.system_base == case.system_base
     assert cfg.fallback_system_base in (get_args(SystemBase) + (None,))
-    assert cfg.fallback_system_base == case.fallback_system_base
+    if case.fallback_system_base is None:
+        if cfg.system_base == "multiprocQueueBase":
+            assert cfg.fallback_system_base == "multiprocTCPBase"
+        else:
+            assert cfg.fallback_system_base == "multiprocQueueBase"
+    else:
+        assert cfg.fallback_system_base == case.fallback_system_base
     assert cfg.ip == case.ip
-    assert cfg.admin_ports == convert.to_range(case.admin_ports)
+    assert cfg.admin_ports == case.admin_ports
     assert cfg.coordinator_ip == case.coordinator_ip
-    assert cfg.coordinator_port == case.coordinator_port
-    assert cfg.try_join == case.try_join
-    assert cfg.external_request_poll_interval == case.external_request_poll_interval
+    assert cfg.loop_interval == case.loop_interval

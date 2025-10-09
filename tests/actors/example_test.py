@@ -42,7 +42,7 @@ def actor_system() -> Generator[actors.ActorSystem]:
 async def test_example():
     """It creates an actor, it sends it a request, and it finally waits for a response."""
 
-    parent = actors.create_actor(ParentActor)
+    parent = await actors.create_actor(ParentActor)
     LOG.info("Parent actor created: %s", parent)
 
     LOG.info("About to send request to parent actor to create children: %s", parent)
@@ -71,7 +71,8 @@ class ParentActor(actors.AsyncActor):
         :return:
         """
         # It creates the child actors and map them by name.
-        children = {name: actors.create_actor(ChildActor) for name in request.names}
+        addresses = await asyncio.gather(*[actors.create_actor(ChildActor) for _ in request.names])
+        children = dict(zip(request.names, addresses))
         LOG.info("Created child actors: %s.", children)
 
         # It assigns each of them a name. It doesn't wait for the request to complete.

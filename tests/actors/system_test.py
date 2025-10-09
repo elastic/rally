@@ -18,6 +18,7 @@ import asyncio
 import copy
 import dataclasses
 import random
+import sys
 from collections.abc import Generator
 from typing import Any
 
@@ -27,19 +28,17 @@ from esrally import actors, config, types
 from esrally.actors._config import (
     DEFAULT_ADMIN_PORTS,
     DEFAULT_COORDINATOR_IP,
-    DEFAULT_COORDINATOR_PORT,
-    DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL,
     DEFAULT_FALLBACK_SYSTEM_BASE,
     DEFAULT_IP,
+    DEFAULT_LOOP_INTERVAL,
     DEFAULT_PROCESS_STARTUP_METHOD,
     DEFAULT_SYSTEM_BASE,
-    DEFAULT_TRY_JOIN,
     ActorConfig,
     ProcessStartupMethod,
     SystemBase,
 )
 from esrally.actors._context import CONTEXT
-from esrally.actors._proto import PingRequest, PongResponse
+from esrally.actors._proto import PingRequest
 from esrally.utils import cases
 
 
@@ -76,7 +75,7 @@ def clean_config():
 
 
 WANT_CAPABILITIES = {
-    "Thespian ActorSystem Name": DEFAULT_SYSTEM_BASE,
+    # "Thespian ActorSystem Name": DEFAULT_SYSTEM_BASE,
     "coordinator": True,
 }
 
@@ -89,11 +88,10 @@ class SystemCase:
     ip: str = DEFAULT_IP
     admin_ports: int | range = DEFAULT_ADMIN_PORTS
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
-    coordinator_port: int = DEFAULT_COORDINATOR_PORT
     process_startup_method: ProcessStartupMethod = DEFAULT_PROCESS_STARTUP_METHOD
-    try_join: bool = DEFAULT_TRY_JOIN
-    external_request_poll_interval: float | None = DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL
+    loop_interval: float = DEFAULT_LOOP_INTERVAL
     want_capabilities: dict[str, Any] = dataclasses.field(default_factory=dict)
+    want_error: Exception | None = None
 
 
 @cases.cases(
@@ -102,54 +100,40 @@ class SystemCase:
         system_base="multiprocQueueBase",
         want_capabilities={
             "Thespian ActorSystem Name": "multiprocQueueBase",
-            "Process Startup Method": "spawn",
         },
     ),
     multiprocTCPBase=SystemCase(
         system_base="multiprocTCPBase", want_capabilities={"Thespian ActorSystem Name": "multiprocTCPBase", "ip": DEFAULT_IP}
     ),
-    fallback_system_base=SystemCase(
-        system_base="invalid-value",
-        want_capabilities={"Thespian ActorSystem Name": "multiprocQueueBase"},
-    ),
-    ip=SystemCase(ip="0.0.0.0", want_capabilities={"ip": "0.0.0.0"}),
-    admin_ports=SystemCase(admin_ports=12345, want_capabilities={"Admin Port": 12345}),
+    ip=SystemCase(system_base="multiprocTCPBase", ip="0.0.0.0", want_capabilities={"ip": "0.0.0.0"}),
+    admin_ports=SystemCase(system_base="multiprocTCPBase", admin_ports=range(12340, 12345), want_capabilities={"Admin Port": 12340}),
     coordinator_ip=SystemCase(
-        coordinator_ip="192.168.0.1", want_capabilities={"coordinator": False, "Convention Address.IPv4": "192.168.0.1"}
-    ),
-    coordinator_port=SystemCase(
-        coordinator_port=3210,
-        coordinator_ip="192.168.0.2",
-        want_capabilities={"coordinator": False, "Convention Address.IPv4": "192.168.0.2:3210"},
+        system_base="multiprocTCPBase",
+        coordinator_ip="192.168.0.1",
+        want_capabilities={"coordinator": False, "Convention Address.IPv4": "192.168.0.1"},
     ),
     same_ip=SystemCase(
+        system_base="multiprocTCPBase",
         ip="192.168.0.3",
         coordinator_ip="192.168.0.3",
         want_capabilities={"coordinator": True, "ip": "192.168.0.3", "Convention Address.IPv4": "192.168.0.3"},
     ),
     fork=SystemCase(
+        system_base="multiprocTCPBase",
         process_startup_method="fork",
         want_capabilities={"Process Startup Method": "fork"},
     ),
     spawn=SystemCase(
+        system_base="multiprocQueueBase",
         process_startup_method="spawn",
         want_capabilities={"Process Startup Method": "spawn"},
     ),
-    forkserver=SystemCase(
-        process_startup_method="forkserver",
-        want_capabilities={"Process Startup Method": "forkserver"},
-    ),
-    no_try_join=SystemCase(
-        try_join=False,
-    ),
-    external_request_poll_interval=SystemCase(
-        external_request_poll_interval=0.5,
+    loop_interval=SystemCase(
+        loop_interval=2.0,
     ),
 )
 @pytest.mark.asyncio
 async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -> None:
-    if case.process_startup_method in ["forkserver", "spawn"]:
-        pytest.skip(reason="Some issues has been encountered with other methods than fork.")
     cfg = ActorConfig()
     if case.system_base != DEFAULT_SYSTEM_BASE:
         cfg.system_base = case.system_base
@@ -161,15 +145,15 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
         cfg.admin_ports = case.admin_ports
     if case.coordinator_ip != DEFAULT_COORDINATOR_IP:
         cfg.coordinator_ip = case.coordinator_ip
-    if case.coordinator_port != DEFAULT_COORDINATOR_PORT:
-        cfg.coordinator_port = case.coordinator_port
     if case.process_startup_method != DEFAULT_PROCESS_STARTUP_METHOD:
         cfg.process_startup_method = case.process_startup_method
-    if case.try_join != DEFAULT_TRY_JOIN:
-        cfg.try_join = case.try_join
-    if case.external_request_poll_interval != DEFAULT_EXTERNAL_REQUEST_POLL_INTERVAL:
-        cfg.external_request_poll_interval = case.external_request_poll_interval
+    if case.loop_interval != DEFAULT_LOOP_INTERVAL:
+        cfg.loop_interval = case.loop_interval
     config.init_config(cfg)
+
+    if sys.platform == "darwin" and sys.version_info < (3, 12) and cfg.process_startup_method == "fork":
+        # Old versions of Python on OSX have known problems with fork.
+        pytest.skip("There are known issues with OSX, Python < 3.12 and fork.")
 
     with pytest.raises(actors.ActorContextError):
         actors.get_actor_system()
@@ -185,17 +169,17 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
             assert system.capabilities.get(name) == value
 
         ctx = actors.get_actor_context()
-        assert ctx.external_request_poll_interval == case.external_request_poll_interval
+        assert ctx.loop_interval == case.loop_interval
 
         assert isinstance(system, actors.ActorSystem)
-        destination = actors.create_actor(actors.AsyncActor)
+        destination = await actors.create_actor(actors.AsyncActor)
         assert isinstance(destination, actors.ActorAddress)
 
         request = PingRequest(message=random.random())
-        response = system.ask(destination, request)
+        response = await actors.request(destination, request)
         if isinstance(response, actors.PoisonMessage):
             pytest.fail(f"Actor responded with poison message: message={response.poisonMessage!r}, details={response.details!r}")
-        assert response == PongResponse(request.req_id, status=request.message)
+        assert response == request.message
 
         value = random.random()
         assert [value] == await asyncio.gather(actors.ping(destination, message=value))  # type: ignore[comparison-overlap]

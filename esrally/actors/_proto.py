@@ -19,15 +19,44 @@ import copy
 import dataclasses
 import time
 import traceback
-import uuid
 from typing import Any
 
 from thespian import actors  # type: ignore[import-untyped]
 from typing_extensions import Self
 
+from esrally import config, types
+
 
 @dataclasses.dataclass
 class Request:
+    req_id: str = ""
+    deadline: float | None = None
+
+    @classmethod
+    def from_message(cls, message: Any, *, timeout: float | None = None, req_id: str | None = None) -> Self | "MessageRequest":
+        deadline: float | None = None
+        if timeout is not None:
+            deadline = max(0.0, time.monotonic() + timeout)
+        if req_id is None:
+            req_id = ""
+        req_id = req_id.strip()
+        if not isinstance(message, cls):
+            return MessageRequest(message=message, deadline=deadline, req_id=req_id)
+        if message.deadline != deadline or message.req_id != req_id:
+            message = copy.deepcopy(message)
+            message.deadline = deadline
+            message.req_id = req_id
+        return message
+
+    @property
+    def timeout(self) -> float | None:
+        if self.deadline is None:
+            return None
+        return self.deadline - time.monotonic()
+
+
+@dataclasses.dataclass
+class MessageRequest(Request):
     """Message envelope sent to async actors requiring a response.
 
     As soon the actor receive this request it sends a PendingResponse with the same req_id to notify it.
@@ -39,31 +68,17 @@ class Request:
     """
 
     message: Any = None
-    deadline: float | None = None
-    req_id: str = dataclasses.field(default_factory=lambda: str(uuid.uuid4()))
-
-    @classmethod
-    def from_message(cls, message: Any, *, timeout: float | None = None) -> Self:
-        deadline: float | None = None
-        if timeout is not None:
-            deadline = max(0.0, time.monotonic() + timeout)
-        if isinstance(message, cls):
-            if deadline is not None:
-                if message.deadline is None or deadline < message.deadline:
-                    message = copy.deepcopy(message)
-                    message.deadline = deadline
-            return message
-        return cls(message=message, deadline=deadline)
-
-    @property
-    def timeout(self) -> float | None:
-        if self.deadline is None:
-            return None
-        return self.deadline - time.monotonic()
 
 
 @dataclasses.dataclass
-class CancelRequest(Request):
+class ActorInitRequest(MessageRequest):
+    """It is sent by create_actor function just after an actor accepting ActorInitRequest is created."""
+
+    cfg: types.Config = dataclasses.field(default_factory=config.get_config)
+
+
+@dataclasses.dataclass
+class CancelRequest(MessageRequest):
     """It is sent to an actor to cancel all pending asynchronous tasks started by a request with the same req_id."""
 
 
@@ -74,6 +89,24 @@ class Response:
     # req_id is required to match the request.
     req_id: str
 
+    @classmethod
+    def from_status(cls, req_id: str, status: Any = None, error: Exception | None = None) -> "Response":
+        """Given a status and an error it will return a Response of one of the following types:
+        - ErrorResponse: in case error is not None
+        - StatusResponse: in case error is None and status is not None
+        - DoneResponse: in case error and status are both None
+        """
+        if error is not None:
+            return ErrorResponse(req_id, error, traceback.format_exc())
+        if isinstance(status, cls):
+            if req_id != status.req_id:
+                status = copy.deepcopy(status)
+                status.req_id = req_id
+            return status
+        if status is None:
+            return DoneResponse(req_id)
+        return ResultResponse(req_id, status)
+
 
 @dataclasses.dataclass
 class RunningTaskResponse(Response):
@@ -82,42 +115,14 @@ class RunningTaskResponse(Response):
     name: str
 
 
-class ResultResponse(Response):
-
-    @classmethod
-    def from_status(cls, req_id: str, status: Any = None, error: Exception | None = None) -> "ResultResponse":
-        """Given a status and an error it will return a Response of one of the following types:
-        - ErrorResponse: in case error is not None
-        - StatusResponse: in case error is None and status is not None
-        - DoneResponse: in case error and status are both None
-        """
-        if error is not None:
-            return ErrorResponse(req_id, error=error, details=traceback.format_exc())
-        if isinstance(status, cls):
-            if req_id != status.req_id:
-                status = copy.deepcopy(status)
-                status.req_id = req_id
-            return status
-        if status is not None:
-            return StatusResponse(req_id, status)
-        return ResultResponse(req_id)
+class DoneResponse(Response):
 
     def result(self) -> Any:
         return None
 
 
 @dataclasses.dataclass
-class CancelledResponse(ResultResponse):
-    """CancelledResponse is sent by the actor to notify sender that the request has been cancelled."""
-
-    message: Any = None
-
-    def result(self) -> Any:
-        raise asyncio.exceptions.CancelledError(self.message is not None and str(self.message) or "")
-
-
-@dataclasses.dataclass
-class StatusResponse(ResultResponse):
+class ResultResponse(DoneResponse):
     """It is sent by the actor to notify sender has just finished processing a response with a non-none resulting status."""
 
     status: Any
@@ -127,7 +132,15 @@ class StatusResponse(ResultResponse):
 
 
 @dataclasses.dataclass
-class ErrorResponse(ResultResponse):
+class CancelledResponse(ResultResponse):
+    """CancelledResponse is sent by the actor to notify sender that the request has been cancelled."""
+
+    def result(self) -> Any:
+        raise asyncio.exceptions.CancelledError(self.status is not None and str(self.status) or "")
+
+
+@dataclasses.dataclass
+class ErrorResponse(DoneResponse):
     """It is sent by the actor to notify sender has just finished processing a response raising an Exception."""
 
     error: Exception
@@ -156,10 +169,10 @@ class PoisonError(ActorRequestError):
 
 
 @dataclasses.dataclass
-class PingRequest(Request):
+class PingRequest(MessageRequest):
     destination: actors.ActorAddress | None = None
 
 
 @dataclasses.dataclass
-class PongResponse(StatusResponse):
+class PongResponse(ResultResponse):
     pass
