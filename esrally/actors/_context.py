@@ -171,10 +171,10 @@ class ActorContext:
         address = self.handler.createActor(cls, requirements)
         if hasattr(cls, "receiveMsg_Config"):
             try:
-                self.send(address, ActorInitRequest(cfg=ActorConfig.from_config(cfg), message=message))
+                await self.request(address, ActorInitRequest(cfg=ActorConfig.from_config(cfg), message=message))
             except BaseException:
-                self.send(address, actors.ActorExitRequest())
                 LOG.exception("Error initializing actor %s (requirements=%r)...", cls, requirements, exc_info=True)
+                self.send(address, actors.ActorExitRequest())
                 raise
         LOG.debug("Created actor of type %s.", cls)
         return address
