@@ -52,7 +52,6 @@ Key = Literal[
     "actors.loop_interval",
     "actors.process_startup_method",
     "actors.system_base",
-    "actors.try_join",
     "add.chart_name",
     "add.chart_type",
     "add.config.option",

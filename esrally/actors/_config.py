@@ -52,9 +52,6 @@ class ActorConfig(config.Config):
                 if value in get_args(SystemBase):
                     return cast(SystemBase, value)
                 raise ValueError(f"Invalid value for 'actors.system_base': '{value}', it must be one of {get_args(SystemBase)}")
-        # if sys.platform == "darwin" and sys.version_info < (3, 12):
-        #     # There are known issues with this multiprocTCPBase, OSX and Python < 3.12, so it prefers using multiprocQueueBase
-        #     return "multiprocQueueBase"
         return "multiprocTCPBase"
 
     @system_base.setter

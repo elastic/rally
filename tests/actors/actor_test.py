@@ -44,9 +44,6 @@ def system_base(request) -> Generator[actors.SystemBase]:
 
 @pytest.fixture(scope="function", autouse=True)
 def cfg(system_base: actors.SystemBase) -> Generator[types.Config]:
-    # if system_base == "multiprocTCPBase" and sys.version_info < (3, 12) and sys.platform == "darwin":
-    #     pytest.skip("There are know issues with multiprocTCPBase, OSX and Python < 3.12")
-
     cfg = actors.ActorConfig()
     cfg.system_base = system_base
     config.init_config(cfg)
