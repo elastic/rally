@@ -692,12 +692,44 @@ class TestElasticsearchSourceSupplier:
 
         builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
 
+    def test_build_no_snapshot(self):
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "system.build_command.no-snapshot": "./gradlew assemble"},
+        )
+        builder = mock.create_autospec(supplier.Builder)
+        renderer = supplier.TemplateRenderer(version="abc", arch="x86_64")
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
+        )
+        es.prepare()
+
+        builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
+
     def test_build_arm(self):
         car = team.Car(
             "default",
             root_path=None,
             config_paths=[],
             variables={"clean_command": "./gradlew clean", "system.build_command.arch": "./gradlew assemble"},
+        )
+        builder = mock.create_autospec(supplier.Builder)
+        renderer = supplier.TemplateRenderer(version="abc", arch="aarch64")
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
+        )
+        es.prepare()
+
+        builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
+
+    def test_build_arm_no_snapshot(self):
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "system.build_command.arch.no-snapshot": "./gradlew assemble"},
         )
         builder = mock.create_autospec(supplier.Builder)
         renderer = supplier.TemplateRenderer(version="abc", arch="aarch64")

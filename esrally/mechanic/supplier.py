@@ -40,6 +40,7 @@ def create(cfg: types.Config, sources, distribution, car, plugins=None):
     caching_enabled = cfg.opts("source", "cache", mandatory=False, default_value=True)
     revisions = _extract_revisions(cfg.opts("mechanic", "source.revision", mandatory=sources))
     source_build_method = cfg.opts("mechanic", "source.build.method", mandatory=False, default_value="default")
+    source_build_snapshot = cfg.opts("mechanic", "source.build.snapshot", mandatory=False, default_value=True)
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, plugins, revisions, distribution_version)
     build_needed = any(build for _, _, build in supply_requirements.values())
@@ -55,7 +56,9 @@ def create(cfg: types.Config, sources, distribution, car, plugins=None):
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
 
         if source_build_method == "docker":
-            builder = DockerBuilder(src_dir=es_src_dir, log_dir=paths.logs(), client=docker.from_env())
+            builder = DockerBuilder(
+                src_dir=es_src_dir, build_snapshot=source_build_snapshot, log_dir=paths.logs(), client=docker.from_env()
+            )
         else:
             raw_build_jdk = car.mandatory_var("build.jdk")
             try:
@@ -64,6 +67,7 @@ def create(cfg: types.Config, sources, distribution, car, plugins=None):
                 raise exceptions.SystemSetupError(f"Car config key [build.jdk] is invalid: [{raw_build_jdk}] (must be int)")
             builder = Builder(
                 build_jdk=build_jdk,
+                build_snapshot=source_build_snapshot,
                 src_dir=es_src_dir,
                 log_dir=paths.logs(),
             )
@@ -407,17 +411,15 @@ class ElasticsearchSourceSupplier:
         if self.builder:
             self.builder.build_jdk = self.resolve_build_jdk_major(self.src_dir)
 
+            commands = []
+            commands.append(self.template_renderer.render(self.car.mandatory_var("clean_command")))
+
             # There are no 'x86_64' specific gradle build commands
-            if self.template_renderer.arch != "x86_64":
-                commands = [
-                    self.template_renderer.render(self.car.mandatory_var("clean_command")),
-                    self.template_renderer.render(self.car.mandatory_var("system.build_command.arch")),
-                ]
-            else:
-                commands = [
-                    self.template_renderer.render(self.car.mandatory_var("clean_command")),
-                    self.template_renderer.render(self.car.mandatory_var("system.build_command")),
-                ]
+            system_build_variable = "system.build_command.arch" if self.template_renderer.arch != "x86_64" else "system.build_command"
+            if self.builder.build_snapshot is False:
+                system_build_variable += ".no-snapshot"
+
+            commands.append(self.template_renderer.render(self.car.mandatory_var(system_build_variable)))
 
             self.builder.build(commands)
 
@@ -782,9 +784,10 @@ class Builder:
     It is not intended to be used directly but should be triggered by its mechanic.
     """
 
-    def __init__(self, src_dir, build_jdk=None, log_dir=None):
+    def __init__(self, src_dir, build_jdk=None, build_snapshot=None, log_dir=None):
         self.src_dir = src_dir
         self.build_jdk = build_jdk
+        self.build_snapshot = build_snapshot
         self._java_home = None
         self.log_dir = log_dir
         self.logger = logging.getLogger(__name__)
@@ -823,11 +826,12 @@ class Builder:
 
 
 class DockerBuilder:
-    def __init__(self, src_dir, build_jdk=None, log_dir=None, client=None):
+    def __init__(self, src_dir, build_jdk=None, build_snapshot=None, log_dir=None, client=None):
         self.client = client
         self.src_dir = src_dir
         self.build_jdk = build_jdk
         self.log_dir = log_dir
+        self.build_snapshot = build_snapshot
         io.ensure_dir(self.log_dir)
         self.log_file = os.path.join(self.log_dir, "build.log")
         self.logger = logging.getLogger(__name__)
