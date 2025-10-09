@@ -1235,7 +1235,7 @@ class Worker(actor.RallyActor):
         self.client_contexts = None
         self.current_task_index = 0
         self.next_task_index = 0
-        self.on_error = None
+        self.on_error: OnErrorBehavior = OnErrorBehavior.CONTINUE
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # cancellation via future does not work, hence we use our own mechanism with a shared variable and polling
         self.cancel = threading.Event()
@@ -1764,14 +1764,16 @@ class ThroughputCalculator:
 
 
 class AsyncIoAdapter:
-    def __init__(self, cfg: types.Config, track, task_allocations, sampler, cancel, complete, abort_on_error, client_contexts, worker_id):
+    def __init__(
+        self, cfg: types.Config, track, task_allocations, sampler, cancel, complete, on_error: OnErrorBehavior, client_contexts, worker_id
+    ):
         self.cfg = cfg
         self.track = track
         self.task_allocations = task_allocations
         self.sampler = sampler
         self.cancel = cancel
         self.complete = complete
-        self.abort_on_error = abort_on_error
+        self.on_error = on_error
         self.client_contexts = client_contexts
         self.parent_worker_id = worker_id
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
@@ -1832,7 +1834,7 @@ class AsyncIoAdapter:
             )
             clients.append(es)
             async_executor = AsyncExecutor(
-                client_id, task, schedule, es, self.sampler, self.cancel, self.complete, task.error_behavior(self.abort_on_error)
+                client_id, task, schedule, es, self.sampler, self.cancel, self.complete, task.error_behavior(self.on_error)
             )
             final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
             awaitables.append(final_executor())
@@ -1888,7 +1890,7 @@ class AsyncProfiler:
 
 
 class AsyncExecutor:
-    def __init__(self, client_id, task, schedule, es, sampler, cancel, complete, on_error):
+    def __init__(self, client_id, task, schedule, es, sampler, cancel, complete, on_error: OnErrorBehavior):
         """
         Executes tasks according to the schedule for a given operation.
 
@@ -1898,7 +1900,7 @@ class AsyncExecutor:
         :param sampler: A container to store raw samples.
         :param cancel: A shared boolean that indicates we need to cancel execution.
         :param complete: A shared boolean that indicates we need to prematurely complete execution.
-        :param on_error: A string specifying how the load generator should behave on errors.
+        :param on_error: An Enum of type `OnErrorBehaviour` specifying how the load generator should behave on errors.
         """
         self.client_id = client_id
         self.task = task
@@ -2025,7 +2027,7 @@ class AsyncExecutor:
                 self.complete.set()
 
 
-async def execute_single(runner, es, params, on_error):
+async def execute_single(runner, es, params, on_error: OnErrorBehavior):
     """
     Invokes the given runner once and provides the runner's return value in a uniform structure.
 
@@ -2034,13 +2036,7 @@ async def execute_single(runner, es, params, on_error):
     # pylint: disable=import-outside-toplevel
     import elasticsearch
 
-    fatal_error = False
-    # Accept both string and Enum for backward compatibility
-    if isinstance(on_error, str):
-        try:
-            on_error = OnErrorBehavior(on_error)
-        except ValueError:
-            on_error = OnErrorBehavior.CONTINUE
+    is_connection_error = False
 
     try:
         async with runner:
@@ -2062,7 +2058,6 @@ async def execute_single(runner, es, params, on_error):
         # we *specifically* want to distinguish connection refused (a node died?) from connection timeouts
         # pylint: disable=unidiomatic-typecheck
         is_connection_error = type(e) is elasticsearch.ConnectionError
-        fatal_error = is_connection_error
 
         total_ops = 0
         total_ops_unit = "ops"
@@ -2137,7 +2132,7 @@ async def execute_single(runner, es, params, on_error):
         raise exceptions.SystemSetupError(msg)
 
     if not request_meta_data["success"]:
-        if on_error == OnErrorBehavior.ABORT or (fatal_error and on_error != OnErrorBehavior.CONTINUE_ON_NETWORK):
+        if on_error == OnErrorBehavior.ABORT or (is_connection_error and on_error != OnErrorBehavior.CONTINUE_ON_NETWORK):
             msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
 
             if description := request_meta_data.get("error-description"):
