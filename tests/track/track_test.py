@@ -20,6 +20,7 @@ import pytest
 from esrally import exceptions
 from esrally.track import track
 from esrally.utils import serverless
+from esrally.utils.error_behavior import OnErrorBehavior
 
 
 class TestTrack:
@@ -376,25 +377,25 @@ class TestTask:
 
     def test_task_continues_with_global_continue(self):
         task = self.task()
-        effective_on_error = task.error_behavior(default_error_behavior="continue")
-        assert effective_on_error == "continue"
+        effective_on_error = task.error_behavior(default_error_behavior=OnErrorBehavior.CONTINUE)
+        assert effective_on_error is OnErrorBehavior.CONTINUE
 
     def test_task_continues_with_global_continue_on_network(self):
         task = self.task()
-        effective_on_error = task.error_behavior(default_error_behavior="continue-on-network")
-        assert effective_on_error == "continue-on-network"
+        effective_on_error = task.error_behavior(default_error_behavior=OnErrorBehavior.CONTINUE_ON_NETWORK)
+        assert effective_on_error is OnErrorBehavior.CONTINUE_ON_NETWORK
 
     def test_task_continues_with_global_abort_and_task_override(self):
         task = self.task(ignore_response_error_level="non-fatal")
-        effective_on_error = task.error_behavior(default_error_behavior="abort")
-        assert effective_on_error == "continue"
+        effective_on_error = task.error_behavior(default_error_behavior=OnErrorBehavior.ABORT)
+        assert effective_on_error is OnErrorBehavior.CONTINUE
 
     def test_task_continues_on_network_with_global_continue_on_network_and_task_override(self):
         task = self.task(ignore_response_error_level="non-fatal")
-        effective_on_error = task.error_behavior(default_error_behavior="continue-on-network")
-        assert effective_on_error == "continue-on-network"
+        effective_on_error = task.error_behavior(default_error_behavior=OnErrorBehavior.CONTINUE_ON_NETWORK)
+        assert effective_on_error is OnErrorBehavior.CONTINUE_ON_NETWORK
 
     def test_task_aborts_with_global_abort(self):
         task = self.task()
-        effective_on_error = task.error_behavior(default_error_behavior="abort")
-        assert effective_on_error == "abort"
+        effective_on_error = task.error_behavior(default_error_behavior=OnErrorBehavior.ABORT)
+        assert effective_on_error is OnErrorBehavior.ABORT

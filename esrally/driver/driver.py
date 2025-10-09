@@ -50,15 +50,7 @@ from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
 from esrally.utils import console, convert, net
-
-
-class OnErrorBehavior(Enum):
-    ABORT = "abort"
-    CONTINUE = "continue"
-    CONTINUE_ON_NETWORK = "continue-on-network"
-
-    def __str__(self):
-        return self.value
+from esrally.utils.error_behavior import OnErrorBehavior
 
 
 ##################################

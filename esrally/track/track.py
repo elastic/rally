@@ -22,6 +22,7 @@ from enum import Enum, auto, unique
 
 from esrally import exceptions
 from esrally.utils import serverless
+from esrally.utils.error_behavior import OnErrorBehavior
 
 
 class Index:
@@ -1083,7 +1084,7 @@ class Task:
 
         return ignore_response_error_level
 
-    def error_behavior(self, default_error_behavior):
+    def error_behavior(self, default_error_behavior: OnErrorBehavior) -> OnErrorBehavior:
         """
         Returns the desired behavior when encountering errors during task execution.
 
@@ -1094,10 +1095,10 @@ class Task:
             "continue-on-network": will continue for non-fatal errors and network errors
         """
 
-        behavior = default_error_behavior if default_error_behavior in ("abort", "continue", "continue-on-network") else "continue"
-        if behavior == "abort":
+        behavior = default_error_behavior if default_error_behavior in list(OnErrorBehavior) else OnErrorBehavior.CONTINUE
+        if behavior == OnErrorBehavior.ABORT:
             if self.ignore_response_error_level == "non-fatal":
-                behavior = "continue"
+                behavior = OnErrorBehavior.CONTINUE
         return behavior
 
     def __hash__(self):

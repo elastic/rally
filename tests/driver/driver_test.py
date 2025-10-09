@@ -28,8 +28,9 @@ import pytest
 
 from esrally import config, exceptions, metrics, track
 from esrally.driver import driver, runner, scheduler
-from esrally.driver.driver import ApiKey, ClientContext, OnErrorBehavior
+from esrally.driver.driver import ApiKey, ClientContext
 from esrally.track import params
+from esrally.utils.error_behavior import OnErrorBehavior
 
 
 class DriverTestParamSource:
