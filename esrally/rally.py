@@ -380,7 +380,7 @@ def create_arg_parser():
     build_parser.add_argument(
         "--source-build-snapshot",
         help="Decides whether installing Elasticsearch as a release version (enabling feature flags for example) or a snapshot version.",
-        default=True,
+        default=snapshot_build,
     )
 
     download_parser = subparsers.add_parser("download", help="Downloads an artifact")
@@ -534,7 +534,7 @@ def create_arg_parser():
     install_parser.add_argument(
         "--source-build-snapshot",
         help="Decides whether installing Elasticsearch as a release version (enabling feature flags for example) or a snapshot version.",
-        default=True,
+        default=snapshot_build,
     )
     install_parser.add_argument(
         "--installation-id",
