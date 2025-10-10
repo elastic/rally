@@ -267,12 +267,21 @@ class ActorContext:
                 return future
 
             async def listen_for_result() -> Any:
-                # It consumes response messages or poison errors until we get the response for this request.
-                while self.handler and not future.done():
-                    await asyncio.sleep(0)  # It runs the event loop before listening for messages again.
-                    response = self.handler.listen(timeout=min_timeout(request.timeout, loop_interval))
-                    self.receive_message(response, destination)
-                return await future
+                try:
+                    # It consumes response messages or poison errors until we get the response for this request.
+                    while not future.done():
+                        if self.handler is None:
+                            raise ActorContextError("Actor system has been shut down.")
+                        await asyncio.sleep(0)  # It runs the event loop before listening for messages again.
+                        response = self.handler.listen(timeout=min_timeout(request.timeout, loop_interval))
+                        self.receive_message(response, destination)
+                    return await future
+                except Exception as ex:
+                    future.set_exception(ex)
+                    raise
+                except BaseException as ex:
+                    future.cancel(str(ex))
+                    raise
 
             # It will listen for incoming messages later in the event loop the next time the caller will await for some
             # incoming event. This should allow gathering multiple request responses ant the same time.
