@@ -416,8 +416,10 @@ class ElasticsearchSourceSupplier:
 
             # There are no 'x86_64' specific gradle build commands
             system_build_command_var = "system.build_command.arch" if self.template_renderer.arch != "x86_64" else "system.build_command"
-            if self.builder.release_build is True:
+            if getattr(self.builder, "release_build", None) and self.builder.release_build is True:
                 system_build_command_var += ".no-snapshot"
+            else: 
+                console.warn("Building a SNAPSHOT version of Elasticsearch, source.build.release was not set")
 
             commands.append(self.template_renderer.render(self.car.mandatory_var(system_build_command_var)))
 
