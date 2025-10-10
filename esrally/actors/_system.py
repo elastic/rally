@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import atexit
+import copy
 import itertools
 import logging
 import os
@@ -135,6 +136,21 @@ def context_from_config(cfg: types.Config | None = None) -> ActorContext:
                 LOG.exception("Failed setting up actor system with system base '%s'", system_base)
                 first_error = first_error or ex
                 break  # It tries the next system base
+
+            # Update ActorConfig instance so that it can be used to join the actor system in sub-processes.
+            cfg = copy.deepcopy(cfg)
+            system_base = system.capabilities.get("Thespian ActorSystem Name")
+            if system_base:
+                cfg.system_base = system_base
+            ip = system.capabilities.get("ip")
+            if ip:
+                cfg.ip = ip
+            admin_port = system.capabilities.get("Admin Port")
+            if admin_port:
+                cfg.admin_ports = range(admin_port, admin_port + 1)
+            process_startup_method = system.capabilities.get("Process Startup Method")
+            if process_startup_method:
+                cfg.process_startup_method = process_startup_method
 
             # It succeeded crating an actor system. The configuration passed to the context will be forwarded to all
             # actors created within this context.

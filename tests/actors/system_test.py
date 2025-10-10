@@ -89,7 +89,7 @@ class SystemCase:
     system_base: str = DEFAULT_SYSTEM_BASE
     fallback_system_base: SystemBase | None = DEFAULT_FALLBACK_SYSTEM_BASE
     ip: str = DEFAULT_IP
-    admin_ports: int | range = DEFAULT_ADMIN_PORTS
+    admin_ports: range = DEFAULT_ADMIN_PORTS
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
     process_startup_method: ProcessStartupMethod = DEFAULT_PROCESS_STARTUP_METHOD
     loop_interval: float = DEFAULT_LOOP_INTERVAL
@@ -172,11 +172,19 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
         for name, value in want_capabilities.items():
             assert system.capabilities.get(name) == value
 
-        if cfg.admin_ports:
-            want_ports = set(cfg.admin_ports)
+        if case.admin_ports:
+            want_ports = set(cfg.admin_ports or [])
             assert system.capabilities.get("Admin Port") in want_ports
 
         ctx = actors.get_actor_context()
+
+        # It verifies capabilities are copied to the cfg object to be sent to actor subprocesses.
+        assert system.capabilities["Thespian ActorSystem Name"] == ctx.cfg.system_base
+        if "ip" in system.capabilities:
+            assert system.capabilities["ip"] == ctx.cfg.ip
+            assert range(system.capabilities["Admin Port"], system.capabilities["Admin Port"] + 1) == ctx.cfg.admin_ports
+        assert system.capabilities["Process Startup Method"] == ctx.cfg.process_startup_method
+
         assert ctx.cfg.loop_interval == case.loop_interval
 
         assert isinstance(system, actors.ActorSystem)
