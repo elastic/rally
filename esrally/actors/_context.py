@@ -93,12 +93,8 @@ def get_actor_context() -> "ActorContext":
     return ctx
 
 
-def set_actor_context(ctx: Optional["ActorContext"]) -> contextvars.Token:
-    return CONTEXT.set(ctx)
-
-
-def reset_actor_context(token: contextvars.Token) -> None:
-    CONTEXT.reset(token)
+def set_actor_context(ctx: Optional["ActorContext"]) -> None:
+    CONTEXT.set(ctx)
 
 
 C = TypeVar("C", bound="ActorContext")
@@ -115,16 +111,23 @@ def enter_actor_context(ctx: C) -> Generator[C]:
 
 @dataclasses.dataclass
 class ActorContext:
-    # handler represents the target actor or actor system this context is about.
+    """Base class that implements context oriented global methods wrapping an actor or an actor system.
+
+    It is used for interacting with an actor system in case it is used from outside an actor.
+    When inside an actor ActorRequestContext subclass will be used instead.
+    """
+
+    # handler represents the target actor or actor system this context is wrapping.
     handler: actors.ActorTypeDispatcher | actors.ActorSystem
 
-    # pending_results maps the future results by request ID so used for waiting request responses.
+    # pending_results maps the future results by request ID used for receiving request responses.
     pending_results: dict[str, asyncio.Future[Any]] = dataclasses.field(default_factory=dict)
 
     # loop represents the event loop to be used while this context is active.
     loop: asyncio.AbstractEventLoop = dataclasses.field(default_factory=asyncio.get_event_loop)
 
     # The configuration object to be used for the actor system and for creating actors.
+    # A copy of it will be forwarded to created actors so that it is going to be propagated to the whole actor system.
     cfg: ActorConfig = dataclasses.field(default_factory=ActorConfig.from_config)
 
     @property
@@ -167,22 +170,30 @@ class ActorContext:
     ) -> actors.ActorAddress:
         """It creates a new actor in the current actor context."""
 
+        # It obtains an ActorConfig object to forward it to the new actor.
         if cfg is None:
             cfg = self.cfg
         else:
             cfg = ActorConfig.from_config(cfg)
         assert isinstance(cfg, ActorConfig)
 
-        LOG.debug("Creating actor of type %s (requirements=%r)...", cls, requirements)
+        LOG.debug("Creating actor of type %s (requirements=%r)...", cls.__name__, requirements)
         address = self.handler.createActor(cls, requirements)
         if hasattr(cls, "receiveMsg_ActorConfig"):
+            LOG.debug("Initializing the new actor (address=%s, cfg=%s)...", address, cfg)
             try:
                 await self.request(address, ActorInitRequest(cfg=cfg, message=message))
             except BaseException:
-                LOG.exception("Error initializing actor %s (requirements=%r)...", cls, requirements, exc_info=True)
+                LOG.exception(
+                    "Error initializing actor (cls=%s, address=%s, cfg=%s). Send it ActorExitRequest.",
+                    cls.__name__,
+                    address,
+                    cfg,
+                    exc_info=True,
+                )
                 self.send(address, actors.ActorExitRequest())
                 raise
-        LOG.debug("Created actor of type %s.", cls)
+        LOG.debug("New actor ready (address=%s, cls=%s).", address, cls.__name__)
         return address
 
     def create_task(self, coro: Coroutine[None, None, R], *, name: str | None = None) -> asyncio.Task[R]:

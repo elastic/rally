@@ -145,6 +145,15 @@ def create_system(
     coordinator_ip: str | None = None,
     process_startup_method: str | None = None,
 ) -> actors.ActorSystem:
+    """It creates a new actor system using given configuration.
+
+    :param system_base:
+    :param ip:
+    :param admin_port:
+    :param coordinator_ip:
+    :param process_startup_method:
+    :return: the new actor system from Thespian.
+    """
     if system_base and system_base not in get_args(SystemBase):
         raise ValueError(f"invalid system base value: '{system_base}', valid options are: {get_args(SystemBase)}")
 
