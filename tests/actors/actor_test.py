@@ -46,13 +46,14 @@ def system_base(request) -> Generator[actors.SystemBase]:
 def cfg(system_base: actors.SystemBase) -> Generator[types.Config]:
     cfg = actors.ActorConfig()
     cfg.system_base = system_base
-    config.init_config(cfg)
+    config.init_config(cfg, force=True)
     yield cfg
     config.clear_config()
 
 
 @pytest.fixture(scope="function", autouse=True)
 def system() -> Generator[actors.ActorSystem]:
+    actors.shutdown()
     system = actors.init_actor_system()
     yield system
     actors.shutdown()
@@ -125,27 +126,46 @@ async def test_get_actor_context(execute_from: ExecuteFrom):
         raise NotImplementedError()
 
 
+def test_ask_result(system: actors.ActorSystem, dummy_actor: actors.ActorAddress) -> None:
+    """It tests ask function receives a result from remote actor."""
+    result = random.random()
+    assert result == system.ask(dummy_actor, ResponseRequest(result))
+
+
+def test_ask_poison(system: actors.ActorSystem, dummy_actor: actors.ActorAddress) -> None:
+    """It tests request function raises an error that has been captured while processing request."""
+    error = RuntimeError(f"some ramdom error: {random.random()}")
+    response = system.ask(dummy_actor, ResponseRequest(error=error))
+    assert isinstance(response, actors.PoisonMessage)
+    assert isinstance(response.poisonMessage, ResponseRequest)
+    assert str(response.poisonMessage.error) == str(error)
+
+
 @pytest.mark.asyncio
-async def test_return_result(dummy_actor: actors.ActorAddress) -> None:
+async def test_request_result(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
+    """It tests request function receives a result from remote actor."""
     result = random.random()
     assert result == await actors.request(dummy_actor, ResponseRequest(result))
 
 
 @pytest.mark.asyncio
-async def test_respond_status(dummy_actor: actors.ActorAddress) -> None:
+async def test_request_respond(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
+    """It tests request function receives a result when actor responds using actors.respond function."""
     result = random.random()
     assert result == await actors.request(dummy_actor, ResponseRequest(result, explicit=True))
 
 
 @pytest.mark.asyncio
-async def test_raises_error(dummy_actor: actors.ActorAddress) -> None:
+async def test_request_raises(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
+    """It tests request function raises an error that has been captured while processing request."""
     error = RuntimeError(f"some ramdom error: {random.random()}")
     with pytest.raises(RuntimeError):
         await actors.request(dummy_actor, ResponseRequest(error=error))
 
 
 @pytest.mark.asyncio
-async def test_respond_error(dummy_actor: actors.ActorAddress) -> None:
+async def test_request_respond_error(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
+    """It tests request function raises an error that has been sent using respond function."""
     error = ValueError(f"some ramdom error: {random.random()}")
     with pytest.raises(ValueError):
         await actors.request(dummy_actor, ResponseRequest(error=error, explicit=True))
@@ -206,9 +226,8 @@ async def test_request(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddre
 
     request = _proto.PingRequest(message=random.random())
     future = actors.request(dummy_actor, request)
-    if execute_from == "from_actor":
-        assert not future.done()
-        assert len(ctx.pending_results) == 1
+    assert not future.done()
+    assert len(ctx.pending_results) == 1
 
     response = await future
     assert response == request.message

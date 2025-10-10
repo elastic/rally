@@ -18,7 +18,6 @@ import asyncio
 import copy
 import dataclasses
 import random
-import socket
 import sys
 from collections.abc import Generator
 from typing import Any
@@ -40,12 +39,10 @@ from esrally.actors._config import (
 )
 from esrally.actors._context import CONTEXT
 from esrally.actors._proto import PingRequest
-from esrally.utils import cases, net
+from esrally.utils import cases
 
-try:
-    ALTERNATE_IP: str = net.resolve(socket.gethostname())
-except Exception:
-    ALTERNATE_IP = "127.0.0.1"
+SAME_IP: str = "192.168.23.3"
+OTHER_IP: str = "192.168.23.2"
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -115,14 +112,14 @@ class SystemCase:
     admin_ports=SystemCase(system_base="multiprocTCPBase", admin_ports=range(12340, 12345)),
     coordinator_ip=SystemCase(
         system_base="multiprocTCPBase",
-        coordinator_ip="8.8.8.8",
-        want_capabilities={"coordinator": False, "Convention Address.IPv4": "8.8.8.8"},
+        coordinator_ip=OTHER_IP,
+        want_capabilities={"coordinator": False, "Convention Address.IPv4": OTHER_IP},
     ),
     same_coordinator_ip=SystemCase(
         system_base="multiprocTCPBase",
-        ip=ALTERNATE_IP,
-        coordinator_ip=ALTERNATE_IP,
-        want_capabilities={"coordinator": True, "ip": ALTERNATE_IP, "Convention Address.IPv4": ALTERNATE_IP},
+        ip=SAME_IP,
+        coordinator_ip=SAME_IP,
+        want_capabilities={"coordinator": True, "ip": SAME_IP, "Convention Address.IPv4": SAME_IP},
     ),
     fork=SystemCase(
         system_base="multiprocTCPBase",

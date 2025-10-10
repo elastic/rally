@@ -27,14 +27,18 @@ from thespian.system.logdirector import (  # type: ignore[import-untyped]
 )
 
 from esrally import log, types
-from esrally.actors._config import ActorConfig, SystemBase
+from esrally.actors._config import (
+    DEFAULT_COORDINATOR_IP,
+    DEFAULT_IP,
+    ActorConfig,
+    SystemBase,
+)
 from esrally.actors._context import (
     ActorContext,
     ActorContextError,
     get_actor_context,
     set_actor_context,
 )
-from esrally.utils import net
 
 LOG = logging.getLogger(__name__)
 
@@ -139,8 +143,8 @@ def context_from_config(cfg: types.Config | None = None) -> ActorContext:
 
 
 def create_system(
-    system_base: SystemBase | None = None,
-    ip: str | None = None,
+    system_base: SystemBase = "multiprocTCPBase",
+    ip: str = "127.0.0.1",
     admin_port: int | None = None,
     coordinator_ip: str | None = None,
     process_startup_method: str | None = None,
@@ -154,21 +158,29 @@ def create_system(
     :param process_startup_method:
     :return: the new actor system from Thespian.
     """
-    if system_base and system_base not in get_args(SystemBase):
+    if system_base not in get_args(SystemBase):
         raise ValueError(f"invalid system base value: '{system_base}', valid options are: {get_args(SystemBase)}")
 
     capabilities: dict[str, Any] = {"coordinator": True}
     if system_base == "multiprocTCPBase":
-        if ip:
+        ip = ip or DEFAULT_IP
+        try:
             capabilities["ip"] = ip = resolve(ip)
-            if admin_port is None:
-                admin_port = find_unused_random_port(ip)
+        except Exception:
+            LOG.error("Failed to resolve actor system IP address '%s', using 127.0.0.1.", ip)
+            ip = DEFAULT_IP
+        assert ip
 
-        if admin_port:
-            capabilities["Admin Port"] = admin_port
+        admin_port = admin_port or find_unused_random_port(ip)
+        assert admin_port
+
+        capabilities["Admin Port"] = admin_port
 
         if coordinator_ip:
-            coordinator_ip = resolve(coordinator_ip)
+            try:
+                coordinator_ip = resolve(coordinator_ip)
+            except Exception:
+                coordinator_ip = DEFAULT_COORDINATOR_IP
             capabilities["Convention Address.IPv4"] = coordinator_ip
             if ip and coordinator_ip != ip:
                 capabilities["coordinator"] = False
@@ -198,11 +210,14 @@ def create_system(
     return system
 
 
-def resolve(hostname_or_ip: str) -> str:
-    resolved = net.resolve(hostname_or_ip)
-    if not resolved:
-        raise ValueError(f"Invalid hostname or ip address: '{hostname_or_ip}'")
-    return resolved
+def resolve(address: str, port: int | None = None) -> str:
+    addrinfo = socket.getaddrinfo(address, port or 1900, 0, 0, socket.IPPROTO_TCP)
+    for family, _, _, _, sockaddr in addrinfo:
+        # We're interested in the IPv4 address
+        if family == socket.AddressFamily.AF_INET:
+            ip, _ = sockaddr[:2]
+            return str(ip)
+    raise ValueError(f"Invalid hostname or ip address: '{address}'")
 
 
 def find_unused_random_port(ip: str) -> int:
