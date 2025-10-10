@@ -16,6 +16,7 @@
 # under the License.
 
 import configparser
+from collections.abc import Generator
 
 import pytest
 
@@ -306,3 +307,37 @@ class TestConfigMigration:
         if config.Config.EARLIEST_SUPPORTED_VERSION < config.Config.CURRENT_CONFIG_VERSION:
             assert config_file.backup_created
         assert config_file.config["meta"]["config.version"] == str(config.Config.CURRENT_CONFIG_VERSION)
+
+
+@pytest.fixture(autouse=True)
+def clear_context() -> Generator[None]:
+    token = config.CONFIG.set(None)
+    yield
+    config.CONFIG.reset(token)
+
+
+def test_config_context():
+    with pytest.raises(exceptions.ConfigError):
+        config.get_config()
+    with pytest.raises(exceptions.ConfigError):
+        config.Config.from_config()
+
+    cfg = config.Config()
+    assert cfg is config.init_config(cfg)
+    assert cfg is config.get_config()
+    assert cfg is config.Config.from_config()
+    assert cfg is config.Config.from_config(cfg)
+
+    with pytest.raises(exceptions.ConfigError):
+        config.init_config(config.Config())
+
+    cfg2 = config.init_config(config.Config(), force=True)
+    assert cfg2 is not cfg
+    assert cfg2 is config.get_config()
+    assert cfg2 is config.Config.from_config()
+    assert cfg is config.Config.from_config(cfg)
+    assert cfg2 is config.Config.from_config(cfg2)
+
+    config.clear_config()
+    with pytest.raises(exceptions.ConfigError):
+        config.get_config()

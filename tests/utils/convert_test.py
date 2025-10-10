@@ -214,3 +214,20 @@ def test_size(case: SizeCase):
     assert got.mb() == case.want / (1024 * 1024)
     assert got.gb() == case.want / (1024 * 1024 * 1024)
     assert got.tb() == case.want / (1024 * 1024 * 1024 * 1024)
+
+
+@dataclass
+class ToRangeCase:
+    value: str | int | range
+    want: range
+
+
+@cases(
+    from_range=ToRangeCase(range(12, 14), range(12, 14)),
+    from_int=ToRangeCase(5, range(5, 6)),
+    from_str1=ToRangeCase("7", range(7, 8)),
+    from_str2=ToRangeCase("1-10", range(1, 11)),
+)
+def test_to_range(case: ToRangeCase):
+    got = convert.to_range(case.value)
+    assert got == case.want
