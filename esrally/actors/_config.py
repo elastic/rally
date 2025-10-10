@@ -21,12 +21,23 @@ from esrally import config
 from esrally.utils import convert
 
 # SystemBase is the type of actor system to be created in the application.
-SystemBase = Literal["multiprocQueueBase", "multiprocTCPBase"]
+SystemBase = Literal[
+    # "multiprocTCPBase" is recommended in most of the cases.
+    # Faster and safer as it uses no threads, so it can be used with fork.
+    "multiprocTCPBase",
+    # multiprocQueueBase is provided as fallback mode for 'multiprocTCPBase'.
+    # Because it uses threads for listening the queue it is not recommended using it with 'fork'.
+    "multiprocQueueBase",
+]
 
 # ProcessStartupMethod values are used to specify the way actor processes have to be created.
 ProcessStartupMethod = Literal[
-    "fork",  # A call to fork function is called to create a new actor process.
-    "spawn",  # A process is executed from scratch to create a new actor.
+    # "fork" is the fastest spawning process method. It calls fork function to create each a new actor process.
+    # It is not recommended using it with "multiprocQueueBase".
+    "fork",
+    # "spawn" is much slower than "fork". A process is executed from scratch to create every new actor.
+    # It is recommended for "multiprocQueueBase" because it could have problems with "fork".
+    "spawn",
 ]
 
 DEFAULT_SYSTEM_BASE: SystemBase | None = None
@@ -44,25 +55,28 @@ class ActorConfig(config.Config):
 
     @property
     def system_base(self) -> SystemBase:
-        """The actor system base used to initialize Thespian actor system"""
+        """The actor system base used to initialize Thespian actor system.
+        "multiprocTCPBase" is recommended on most of the cases.
+        "multiprocQueueBase" is only provided as fallback method.
+        """
         value: str | None = self.opts("actors", "actors.system_base", default_value=DEFAULT_SYSTEM_BASE, mandatory=False)
         if isinstance(value, str):
             value = value.strip()
             if value:
                 if value in get_args(SystemBase):
                     return cast(SystemBase, value)
-                raise ValueError(f"Invalid value for 'actors.system_base': '{value}', it must be one of {get_args(SystemBase)}")
+                raise ValueError(f"Invalid value for 'actors.system_base': '{value}', it must be one of {get_args(SystemBase)} or None.")
         return "multiprocTCPBase"
 
     @system_base.setter
-    def system_base(self, value: SystemBase) -> None:
+    def system_base(self, value: SystemBase | None) -> None:
         self.add(config.Scope.applicationOverride, "actors", "actors.system_base", value)
 
     @property
     def fallback_system_base(self) -> SystemBase:
         """The alternative system base used to initialize Thespian actor system.
 
-        This value is intended to be used in case it fails initializing with `system_base` option value.
+        This value is intended to be used in case it fails initializing with other `system_base` option value.
         """
         value = self.opts("actors", "actors.fallback_system_base", default_value=DEFAULT_FALLBACK_SYSTEM_BASE, mandatory=False)
         if isinstance(value, str):
@@ -70,18 +84,23 @@ class ActorConfig(config.Config):
             if value:
                 if value in get_args(SystemBase):
                     return cast(SystemBase, value)
-                raise ValueError(f"Invalid value for 'actors.fallback_system_base': '{value}', it must be one of {get_args(SystemBase)}")
+                raise ValueError(
+                    f"Invalid value for 'actors.fallback_system_base': '{value}', it must be one of {get_args(SystemBase)} or None."
+                )
         if self.system_base == "multiprocQueueBase":
             return "multiprocTCPBase"
         return "multiprocQueueBase"
 
     @fallback_system_base.setter
-    def fallback_system_base(self, value: SystemBase) -> None:
+    def fallback_system_base(self, value: SystemBase | None) -> None:
         self.add(config.Scope.applicationOverride, "actors", "actors.fallback_system_base", value)
 
     @property
     def ip(self) -> str:
-        """The local host IP used to open the Thespian administrator service (only for multiprocTCPBase system base)."""
+        """The local host IP used to open the Thespian administrator service.
+
+        It is only used with "multiprocTCPBase" system base.
+        """
         return self.opts("actors", "actors.ip", default_value=DEFAULT_IP, mandatory=False).strip()
 
     @ip.setter
@@ -90,7 +109,17 @@ class ActorConfig(config.Config):
 
     @property
     def admin_ports(self) -> range | None:
-        """The range of ports where to try opening one for the Thespian administrator service (only for multiprocTCPBase system base)."""
+        """The range of ports where to try opening one for the Thespian administrator service.
+
+        It is only used with "multiprocTCPBase" system base.
+
+        In case it is None, a random port will be used. It is only used with "multiprocTCPBase" system base.
+        In case it is a range, it will try using every port in the range starting from the smallest to the biggest in
+        the range.
+
+        To try joining a running actor system this value should be set to the same port used for starting the target
+        actor system (i.e. "1900").
+        """
         value = self.opts("actors", "actors.admin_ports", default_value=DEFAULT_ADMIN_PORTS, mandatory=False)
         if isinstance(value, str):
             value = value.strip()
@@ -103,14 +132,20 @@ class ActorConfig(config.Config):
         return None
 
     @admin_ports.setter
-    def admin_ports(self, value: range | None) -> None:
+    def admin_ports(self, value: str | range | None) -> None:
         self.add(config.Scope.applicationOverride, "actors", "actors.admin_ports", value)
 
     @property
     def coordinator_ip(self) -> str | None:
         """The IP address of the host where rally coordinator actors are running.
 
-        (only for multiprocTCPBase system base in a multi host configuration)."""
+        It is only used with "multiprocTCPBase" system base.
+
+        It is passed directly to Thespian as it is. So to specify a port other than the default one you should use
+        the following string format:
+
+            <coordinator_ip>:<coordinator_port>
+        """
         value = self.opts("actors", "actors.coordinator_ip", default_value=DEFAULT_COORDINATOR_IP, mandatory=False)
         if isinstance(value, str):
             value = value.strip()
@@ -124,9 +159,12 @@ class ActorConfig(config.Config):
 
     @property
     def process_startup_method(self) -> ProcessStartupMethod | None:
-        """The method used to starts actor sub-processes in Rally. By default, 'fork' is being used (which is the fastest).
+        """The method used to starts actor sub-processes in Rally.
 
+        By default, "fork" is being used (which is the fastest and the recommended).
         Others methods are being provided to overcome potential race conditions with the use of 'fork' in presence of threads.
+
+        It is recommended to use "spawn" with "multiprocQueueBase" because it uses threads,
         """
         value = self.opts("actors", "actors.process_startup_method", default_value=DEFAULT_PROCESS_STARTUP_METHOD, mandatory=False)
         if isinstance(value, str):
@@ -152,7 +190,10 @@ class ActorConfig(config.Config):
 
     @property
     def loop_interval(self) -> float:
-        """It specifies a maximum interval of time used to pool for response to an external request."""
+        """It specifies the ideal interval of time used to listen for actor messages.
+
+        Every actor wait this interval of time (in seconds) before processing the 'asyncio' event loop again.
+        """
         value = self.opts("actors", "actors.loop_interval", DEFAULT_LOOP_INTERVAL, False)
         if isinstance(value, str):
             value = value.strip()

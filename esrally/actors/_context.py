@@ -26,7 +26,7 @@ from typing import Any, Optional, TypeVar
 from thespian import actors  # type: ignore[import-untyped]
 
 from esrally import types
-from esrally.actors._config import DEFAULT_LOOP_INTERVAL, ActorConfig
+from esrally.actors._config import ActorConfig
 from esrally.actors._proto import (
     ActorInitRequest,
     CancelRequest,
@@ -124,9 +124,8 @@ class ActorContext:
     # loop represents the event loop to be used while this context is active.
     loop: asyncio.AbstractEventLoop = dataclasses.field(default_factory=asyncio.get_event_loop)
 
-    # external_request_poll_interval represents a configurable time duration to be used for interrupting
-    # ActorSystem.ask or ActorSystem.listen methods execution for running the event loop.
-    loop_interval: float = DEFAULT_LOOP_INTERVAL
+    # The configuration object to be used for the actor system and for creating actors.
+    cfg: ActorConfig = dataclasses.field(default_factory=ActorConfig.from_config)
 
     @property
     def actor(self) -> actors.Actor:
@@ -167,11 +166,18 @@ class ActorContext:
         message: Any | None = None,
     ) -> actors.ActorAddress:
         """It creates a new actor in the current actor context."""
+
+        if cfg is None:
+            cfg = self.cfg
+        else:
+            cfg = ActorConfig.from_config(cfg)
+        assert isinstance(cfg, ActorConfig)
+
         LOG.debug("Creating actor of type %s (requirements=%r)...", cls, requirements)
         address = self.handler.createActor(cls, requirements)
-        if hasattr(cls, "receiveMsg_Config"):
+        if hasattr(cls, "receiveMsg_ActorConfig"):
             try:
-                await self.request(address, ActorInitRequest(cfg=ActorConfig.from_config(cfg), message=message))
+                await self.request(address, ActorInitRequest(cfg=cfg, message=message))
             except BaseException:
                 LOG.exception("Error initializing actor %s (requirements=%r)...", cls, requirements, exc_info=True)
                 self.send(address, actors.ActorExitRequest())
@@ -235,7 +241,8 @@ class ActorContext:
             # It avoids blocking in SystemActor.ask and SystemActor.listen methods by setting a timeout long enough to
             # send the request, but short enough to periodically run the event loop and process request timeouts, async
             # tasks and futures callbacks.
-            response = self.handler.ask(destination, request, timeout=min_timeout(request.timeout, self.loop_interval))
+            loop_interval = self.cfg.loop_interval
+            response = self.handler.ask(destination, request, timeout=min_timeout(request.timeout, loop_interval))
             self.receive_message(response, destination)
             if future.done():
                 return future
@@ -244,7 +251,7 @@ class ActorContext:
                 # It consumes response messages or poison errors until we get the response for this request.
                 while not future.done():
                     await asyncio.sleep(0)  # It runs the event loop before listening for messages again.
-                    response = self.handler.listen(timeout=min_timeout(request.timeout, self.loop_interval))
+                    response = self.handler.listen(timeout=min_timeout(request.timeout, loop_interval))
                     self.receive_message(response, destination)
                 return await future
 

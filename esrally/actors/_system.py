@@ -14,10 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import itertools
 import logging
 import os
 import socket
-from collections.abc import Generator, Iterable
+from collections.abc import Iterable
 from typing import Any, get_args
 
 from thespian import actors  # type: ignore[import-untyped]
@@ -26,7 +27,7 @@ from thespian.system.logdirector import (  # type: ignore[import-untyped]
 )
 
 from esrally import log, types
-from esrally.actors._config import ActorConfig, ProcessStartupMethod, SystemBase
+from esrally.actors._config import ActorConfig, SystemBase
 from esrally.actors._context import (
     ActorContext,
     ActorContextError,
@@ -39,10 +40,34 @@ LOG = logging.getLogger(__name__)
 
 
 def get_actor_system() -> actors.ActorSystem:
+    """It returns the last actor system initialized using init_actor_system()"""
     return get_actor_context().actor_system
 
 
 def init_actor_system(cfg: types.Config | None = None) -> actors.ActorSystem:
+    """It initializes the actor system using given configuration.
+
+    To provide a custom configuration create and customize one with ActorConfig class. Example:
+
+        cfg = ActorConfig.from_config()
+        cfg.system_base = "multiprocTCPBase"
+        cfg.admin_ports = "1900"
+        system = actors.init_actor_system(cfg)
+
+    After the actor system is initialized, the actor system reference will be available using get_actor_system()
+    function. For creating actors and sending messages, you can then use `create_actor`, `send` and `request` global
+    functions.
+
+        address = actors.create_actor(MyActorClass)
+        response = await actors.request(address, MyRequest())
+
+    To finally shut down the actor system, use the `shutdown` function.
+
+        actors.shutdown()
+
+    :param cfg: Optional configuration object.
+    :return: An initialized actor system
+    """
     try:
         system = get_actor_system()
     except ActorContextError:
@@ -73,9 +98,8 @@ def context_from_config(cfg: types.Config | None = None) -> ActorContext:
     first_error: Exception | None = None
     for system_base in system_bases:
         admin_ports: Iterable[int | None] = [None]
-        if system_base == "multiprocTCPBase":
-            admin_ports = cfg.admin_ports or iter_unused_random_ports()
-            assert isinstance(admin_ports, Iterable)
+        if system_base == "multiprocTCPBase" and cfg.admin_ports:
+            admin_ports = itertools.chain(cfg.admin_ports, admin_ports)
 
         for admin_port in admin_ports:
             try:
@@ -86,7 +110,7 @@ def context_from_config(cfg: types.Config | None = None) -> ActorContext:
                     coordinator_ip=cfg.coordinator_ip,
                     process_startup_method=cfg.process_startup_method,
                 )
-                return ActorContext(handler=system, loop_interval=cfg.loop_interval)
+                return ActorContext(handler=system, cfg=cfg)
             except actors.InvalidActorAddress as ex:
                 first_error = first_error or ex
                 if admin_port is not None:
@@ -114,7 +138,9 @@ def create_system(
     capabilities: dict[str, Any] = {"coordinator": True}
     if system_base == "multiprocTCPBase":
         if ip:
-            capabilities["ip"] = resolve(ip)
+            capabilities["ip"] = ip = resolve(ip)
+            if admin_port is None:
+                admin_port = find_unused_random_port(ip)
 
         if admin_port:
             capabilities["Admin Port"] = admin_port
@@ -126,18 +152,10 @@ def create_system(
                 capabilities["coordinator"] = False
 
         if process_startup_method:
-            if process_startup_method not in get_args(ProcessStartupMethod):
-                raise ValueError(
-                    f"invalid process startup method value: '{process_startup_method}', valid options are: {get_args(ProcessStartupMethod)}"
-                )
             capabilities["Process Startup Method"] = process_startup_method
 
     if system_base == "multiprocQueueBase":
         if process_startup_method:
-            if process_startup_method not in ["fork", "spawn"]:
-                raise ValueError(
-                    f"invalid process startup method value: '{process_startup_method}', valid options are: {['fork', 'spawn']}"
-                )
             capabilities["Process Startup Method"] = process_startup_method
 
     log_defs = None
@@ -165,9 +183,11 @@ def resolve(hostname_or_ip: str) -> str:
     return resolved
 
 
-def iter_unused_random_ports() -> Generator[int]:
-    while True:
-        with socket.socket() as sock:
-            sock.bind(("127.0.0.1", 0))
-            _, port = sock.getsockname()
-        yield port
+def find_unused_random_port(ip: str) -> int:
+    with socket.socket() as sock:
+        try:
+            sock.bind((ip, 0))
+        except OSError:
+            sock.bind(("0.0.0.0", 0))
+        _, port = sock.getsockname()
+    return port

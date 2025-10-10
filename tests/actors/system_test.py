@@ -18,6 +18,7 @@ import asyncio
 import copy
 import dataclasses
 import random
+import socket
 import sys
 from collections.abc import Generator
 from typing import Any
@@ -39,7 +40,12 @@ from esrally.actors._config import (
 )
 from esrally.actors._context import CONTEXT
 from esrally.actors._proto import PingRequest
-from esrally.utils import cases
+from esrally.utils import cases, net
+
+try:
+    ALTERNATE_IP: str = net.resolve(socket.gethostname())
+except Exception:
+    ALTERNATE_IP = "127.0.0.1"
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -106,17 +112,17 @@ class SystemCase:
         system_base="multiprocTCPBase", want_capabilities={"Thespian ActorSystem Name": "multiprocTCPBase", "ip": DEFAULT_IP}
     ),
     ip=SystemCase(system_base="multiprocTCPBase", ip="0.0.0.0", want_capabilities={"ip": "0.0.0.0"}),
-    admin_ports=SystemCase(system_base="multiprocTCPBase", admin_ports=range(12340, 12345), want_capabilities={"Admin Port": 12340}),
+    admin_ports=SystemCase(system_base="multiprocTCPBase", admin_ports=range(12340, 12345)),
     coordinator_ip=SystemCase(
         system_base="multiprocTCPBase",
-        coordinator_ip="192.168.0.1",
-        want_capabilities={"coordinator": False, "Convention Address.IPv4": "192.168.0.1"},
+        coordinator_ip="8.8.8.8",
+        want_capabilities={"coordinator": False, "Convention Address.IPv4": "8.8.8.8"},
     ),
-    same_ip=SystemCase(
+    same_coordinator_ip=SystemCase(
         system_base="multiprocTCPBase",
-        ip="192.168.0.3",
-        coordinator_ip="192.168.0.3",
-        want_capabilities={"coordinator": True, "ip": "192.168.0.3", "Convention Address.IPv4": "192.168.0.3"},
+        ip=ALTERNATE_IP,
+        coordinator_ip=ALTERNATE_IP,
+        want_capabilities={"coordinator": True, "ip": ALTERNATE_IP, "Convention Address.IPv4": ALTERNATE_IP},
     ),
     fork=SystemCase(
         system_base="multiprocTCPBase",
@@ -165,11 +171,16 @@ async def test_system(case: SystemCase, event_loop: asyncio.AbstractEventLoop) -
     try:
         want_capabilities = copy.deepcopy(WANT_CAPABILITIES)
         want_capabilities.update(case.want_capabilities)
+
         for name, value in want_capabilities.items():
             assert system.capabilities.get(name) == value
 
+        if cfg.admin_ports:
+            want_ports = set(cfg.admin_ports)
+            assert system.capabilities.get("Admin Port") in want_ports
+
         ctx = actors.get_actor_context()
-        assert ctx.loop_interval == case.loop_interval
+        assert ctx.cfg.loop_interval == case.loop_interval
 
         assert isinstance(system, actors.ActorSystem)
         destination = await actors.create_actor(actors.AsyncActor)

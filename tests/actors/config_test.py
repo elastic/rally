@@ -37,7 +37,7 @@ class FromConfigCase:
     system_base: SystemBase = DEFAULT_SYSTEM_BASE
     fallback_system_base: SystemBase | None = DEFAULT_FALLBACK_SYSTEM_BASE
     ip: str = DEFAULT_IP
-    admin_ports: range | int = DEFAULT_ADMIN_PORTS
+    admin_ports: range | None = DEFAULT_ADMIN_PORTS
     coordinator_ip: str = DEFAULT_COORDINATOR_IP
     process_startup_method: str | None = DEFAULT_PROCESS_STARTUP_METHOD
     want_name: str | None = None

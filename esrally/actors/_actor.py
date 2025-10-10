@@ -24,7 +24,7 @@ from typing import Any, TypeVar
 
 from thespian import actors  # type: ignore[import-untyped]
 
-from esrally import types
+from esrally import config, exceptions
 from esrally.actors._config import ActorConfig
 from esrally.actors._context import (
     ActorContext,
@@ -44,7 +44,6 @@ from esrally.actors._proto import (
     Response,
     RunningTaskResponse,
 )
-from esrally.config import init_config
 
 LOG = logging.getLogger(__name__)
 
@@ -278,6 +277,12 @@ class AsyncActor(actors.ActorTypeDispatcher):
         self._loop: asyncio.AbstractEventLoop = asyncio.get_event_loop() or asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         logging.setLogRecordFactory(ActorLogRecord)
+        # A default configuration is required when using "spawn" process creation method for parts that requiring it
+        # (like ActorRequestContext). When using "fork" the parent process already set one of us.
+        try:
+            config.get_config()
+        except exceptions.ConfigError:
+            config.init_config(ActorConfig())
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}@{self.myAddress}"
@@ -290,10 +295,9 @@ class AsyncActor(actors.ActorTypeDispatcher):
     def receiveUnrecognizedMessage(self, message: Any, sender: actors.ActorAddress) -> None:
         raise TypeError(f"Received unrecognized message: {message}")
 
-    def receiveMsg_Config(self, cfg: types.Config, sender: actors.ActorAddress) -> None:
-        cfg = ActorConfig.from_config(cfg)
+    def receiveMsg_ActorConfig(self, cfg: ActorConfig, sender: actors.ActorAddress) -> None:
         LOG.debug("Received configuration message: %s", cfg)
-        init_config(cfg, force=True)
+        config.init_config(cfg, force=True)
         self.wakeupAfter(cfg.loop_interval, self._RUN_PENDING_TASKS)
 
     def receiveMsg_ActorExitRequest(self, request: actors.ActorExitRequest, sender: actors.ActorAddress) -> None:

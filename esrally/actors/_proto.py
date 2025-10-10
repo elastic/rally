@@ -24,7 +24,7 @@ from typing import Any
 from thespian import actors  # type: ignore[import-untyped]
 from typing_extensions import Self
 
-from esrally import config, types
+from esrally.actors._config import ActorConfig
 
 
 @dataclasses.dataclass
@@ -74,7 +74,7 @@ class MessageRequest(Request):
 class ActorInitRequest(MessageRequest):
     """It is sent by create_actor function just after an actor accepting ActorInitRequest is created."""
 
-    cfg: types.Config = dataclasses.field(default_factory=config.get_config)
+    cfg: ActorConfig = dataclasses.field(default_factory=ActorConfig.from_config)
 
 
 @dataclasses.dataclass
