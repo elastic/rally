@@ -56,9 +56,7 @@ def create(cfg: types.Config, sources, distribution, car, plugins=None):
         es_src_dir = os.path.join(_src_dir(cfg), _config_value(src_config, "elasticsearch.src.subdir"))
 
         if source_build_method == "docker":
-            builder = DockerBuilder(
-                src_dir=es_src_dir, release_build=source_build_release, log_dir=paths.logs(), client=docker.from_env()
-            )
+            builder = DockerBuilder(src_dir=es_src_dir, release_build=source_build_release, log_dir=paths.logs(), client=docker.from_env())
         else:
             raw_build_jdk = car.mandatory_var("build.jdk")
             try:
@@ -418,7 +416,7 @@ class ElasticsearchSourceSupplier:
             system_build_command_var = "system.build_command.arch" if self.template_renderer.arch != "x86_64" else "system.build_command"
             if getattr(self.builder, "release_build", None) and self.builder.release_build is True:
                 system_build_command_var += ".no-snapshot"
-            else: 
+            else:
                 console.warn("Building a SNAPSHOT version of Elasticsearch, source.build.release was not set")
 
             commands.append(self.template_renderer.render(self.car.mandatory_var(system_build_command_var)))

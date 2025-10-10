@@ -729,7 +729,10 @@ class TestElasticsearchSourceSupplier:
             "default",
             root_path=None,
             config_paths=[],
-            variables={"clean_command": "./gradlew clean", "system.build_command.arch.no-snapshot": "./gradlew -Dbuild.snapshot=false assemble"},
+            variables={
+                "clean_command": "./gradlew clean",
+                "system.build_command.arch.no-snapshot": "./gradlew -Dbuild.snapshot=false assemble",
+            },
         )
         builder = mock.create_autospec(supplier.Builder, release_build=True)
         renderer = supplier.TemplateRenderer(version="abc", arch="aarch64")

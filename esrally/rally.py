@@ -377,7 +377,7 @@ def create_arg_parser():
     )
     build_parser.add_argument(
         "--source-build-release",
-        help=f"Build a release version of Elasticsearch from sources.",
+        help="Build a release version of Elasticsearch from sources.",
         default=False,
         action="store_true",
     )
