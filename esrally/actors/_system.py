@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import atexit
 import itertools
 import logging
 import os
@@ -48,7 +49,7 @@ def get_actor_system() -> actors.ActorSystem:
     return get_actor_context().actor_system
 
 
-def init_actor_system(cfg: types.Config | None = None) -> actors.ActorSystem:
+def init_actor_system(cfg: types.Config | None = None, auto_clean: bool = True) -> actors.ActorSystem:
     """It initializes the actor system using given configuration.
 
     To provide a custom configuration create and customize one with ActorConfig class. Example:
@@ -85,8 +86,8 @@ def init_actor_system(cfg: types.Config | None = None) -> actors.ActorSystem:
     if not isinstance(ctx.handler, actors.ActorSystem):
         raise ActorContextError("Context handler is not an ActorSystem")
 
-    # if sys.platform == "darwin" and sys.version_info < (3, 12):
-    #     selectors.DefaultSelector = selectors.SelectSelector
+    if auto_clean:
+        atexit.register(ctx.shutdown)
 
     set_actor_context(ctx)
     LOG.info("Actor system initialized.")

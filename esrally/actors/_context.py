@@ -118,7 +118,7 @@ class ActorContext:
     """
 
     # handler represents the target actor or actor system this context is wrapping.
-    handler: actors.ActorTypeDispatcher | actors.ActorSystem
+    handler: actors.ActorTypeDispatcher | actors.ActorSystem | None
 
     # pending_results maps the future results by request ID used for receiving request responses.
     pending_results: dict[str, asyncio.Future[Any]] = dataclasses.field(default_factory=dict)
@@ -148,17 +148,22 @@ class ActorContext:
 
     def shutdown(self):
         """It shuts down the actor o actor system handler of this context."""
-        if isinstance(self.handler, actors.ActorSystem):
-            LOG.warning("Shutting down actor system: %s...", self.handler)
-            self.handler.shutdown()
+        if self.handler is None:
             return
+        try:
+            if isinstance(self.handler, actors.ActorSystem):
+                LOG.warning("Shutting down actor system: %s...", self.handler)
+                self.handler.shutdown()
+                return
 
-        if isinstance(self.handler, actors.Actor):
-            LOG.warning("Shutting down actor: %s...", self.handler)
-            self.handler.send(self.handler.myAddress, actors.ActorExitRequest())
-            return
+            if isinstance(self.handler, actors.Actor):
+                LOG.warning("Shutting down actor: %s...", self.handler)
+                self.handler.send(self.handler.myAddress, actors.ActorExitRequest())
+                return
 
-        raise NotImplementedError("Cannot shutdown actor context")
+            raise NotImplementedError("Cannot shutdown actor context")
+        finally:
+            self.handler = None
 
     async def create_actor(
         self,
@@ -169,6 +174,7 @@ class ActorContext:
         message: Any | None = None,
     ) -> actors.ActorAddress:
         """It creates a new actor in the current actor context."""
+        assert self.handler is not None
 
         # It obtains an ActorConfig object to forward it to the new actor.
         if cfg is None:
@@ -210,6 +216,8 @@ class ActorContext:
 
     def request(self, destination: actors.ActorAddress, message: Any, *, timeout: float | None = None) -> asyncio.Future:
         """It sends a request using the actor or actor system handler of this context and returns an awaitable future result."""
+        assert self.handler is not None
+
         req_id = getattr(message, "req_id", "") or str(uuid.uuid4())
         request: Request = Request.from_message(message, timeout=timeout, req_id=req_id)
         future = self.pending_results.get(req_id)
@@ -260,7 +268,7 @@ class ActorContext:
 
             async def listen_for_result() -> Any:
                 # It consumes response messages or poison errors until we get the response for this request.
-                while not future.done():
+                while self.handler and not future.done():
                     await asyncio.sleep(0)  # It runs the event loop before listening for messages again.
                     response = self.handler.listen(timeout=min_timeout(request.timeout, loop_interval))
                     self.receive_message(response, destination)
