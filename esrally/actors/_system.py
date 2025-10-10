@@ -90,15 +90,24 @@ def init_actor_system(cfg: types.Config | None = None) -> actors.ActorSystem:
 
 
 def context_from_config(cfg: types.Config | None = None) -> ActorContext:
+    """Creates a new actor context, with its actor system, from given configuration.
+
+    :param cfg: configuration object to be used.
+    :return: Created actor context.
+    """
     cfg = ActorConfig.from_config(cfg)
+
+    # It will try configured system base first, fall back one later, if different.
     system_bases = [cfg.system_base]
     if cfg.fallback_system_base not in system_bases:
         system_bases.append(cfg.fallback_system_base)
 
     first_error: Exception | None = None
     for system_base in system_bases:
+
         admin_ports: Iterable[int | None] = [None]
         if system_base == "multiprocTCPBase" and cfg.admin_ports:
+            # It will try using provided ports first, then a random one as fallback in case of issues.
             admin_ports = itertools.chain(cfg.admin_ports, admin_ports)
 
         for admin_port in admin_ports:
@@ -110,8 +119,8 @@ def context_from_config(cfg: types.Config | None = None) -> ActorContext:
                     coordinator_ip=cfg.coordinator_ip,
                     process_startup_method=cfg.process_startup_method,
                 )
-                return ActorContext(handler=system, cfg=cfg)
             except actors.InvalidActorAddress as ex:
+
                 first_error = first_error or ex
                 if admin_port is not None:
                     LOG.exception("Failed setting up actor system with system base '%s' and admin port %s", system_base, admin_port)
@@ -121,6 +130,10 @@ def context_from_config(cfg: types.Config | None = None) -> ActorContext:
                 LOG.exception("Failed setting up actor system with system base '%s'", system_base)
                 first_error = first_error or ex
                 break  # It tries the next system base
+
+            # It succeeded crating an actor system. The configuration passed to the context will be forwarded to all
+            # actors created within this context.
+            return ActorContext(handler=system, cfg=cfg)
 
     raise first_error or RuntimeError(f"Could not initialize actor system with system base '{cfg.system_base}'")
 
