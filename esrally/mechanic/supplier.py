@@ -40,7 +40,7 @@ def create(cfg: types.Config, sources, distribution, car, plugins=None):
     caching_enabled = cfg.opts("source", "cache", mandatory=False, default_value=True)
     revisions = _extract_revisions(cfg.opts("mechanic", "source.revision", mandatory=sources))
     source_build_method = cfg.opts("mechanic", "source.build.method", mandatory=False, default_value="default")
-    source_build_snapshot = cfg.opts("mechanic", "source.build.snapshot", mandatory=False, default_value=True)
+    source_build_release = cfg.opts("mechanic", "source.build.release", mandatory=False, default_value=False)
     distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
     supply_requirements = _supply_requirements(sources, distribution, plugins, revisions, distribution_version)
     build_needed = any(build for _, _, build in supply_requirements.values())
@@ -57,7 +57,7 @@ def create(cfg: types.Config, sources, distribution, car, plugins=None):
 
         if source_build_method == "docker":
             builder = DockerBuilder(
-                src_dir=es_src_dir, build_snapshot=source_build_snapshot, log_dir=paths.logs(), client=docker.from_env()
+                src_dir=es_src_dir, release_build=source_build_release, log_dir=paths.logs(), client=docker.from_env()
             )
         else:
             raw_build_jdk = car.mandatory_var("build.jdk")
@@ -67,7 +67,7 @@ def create(cfg: types.Config, sources, distribution, car, plugins=None):
                 raise exceptions.SystemSetupError(f"Car config key [build.jdk] is invalid: [{raw_build_jdk}] (must be int)")
             builder = Builder(
                 build_jdk=build_jdk,
-                build_snapshot=source_build_snapshot,
+                release_build=source_build_release,
                 src_dir=es_src_dir,
                 log_dir=paths.logs(),
             )
@@ -415,11 +415,11 @@ class ElasticsearchSourceSupplier:
             commands.append(self.template_renderer.render(self.car.mandatory_var("clean_command")))
 
             # There are no 'x86_64' specific gradle build commands
-            system_build_variable = "system.build_command.arch" if self.template_renderer.arch != "x86_64" else "system.build_command"
-            if self.builder.build_snapshot is False:
-                system_build_variable += ".no-snapshot"
+            system_build_command_var = "system.build_command.arch" if self.template_renderer.arch != "x86_64" else "system.build_command"
+            if self.builder.release_build is True:
+                system_build_command_var += ".no-snapshot"
 
-            commands.append(self.template_renderer.render(self.car.mandatory_var(system_build_variable)))
+            commands.append(self.template_renderer.render(self.car.mandatory_var(system_build_command_var)))
 
             self.builder.build(commands)
 
@@ -784,10 +784,10 @@ class Builder:
     It is not intended to be used directly but should be triggered by its mechanic.
     """
 
-    def __init__(self, src_dir, build_jdk=None, build_snapshot=None, log_dir=None):
+    def __init__(self, src_dir, build_jdk=None, release_build=None, log_dir=None):
         self.src_dir = src_dir
         self.build_jdk = build_jdk
-        self.build_snapshot = build_snapshot
+        self.release_build = release_build
         self._java_home = None
         self.log_dir = log_dir
         self.logger = logging.getLogger(__name__)
@@ -826,12 +826,12 @@ class Builder:
 
 
 class DockerBuilder:
-    def __init__(self, src_dir, build_jdk=None, build_snapshot=None, log_dir=None, client=None):
+    def __init__(self, src_dir, build_jdk=None, release_build=None, log_dir=None, client=None):
         self.client = client
         self.src_dir = src_dir
         self.build_jdk = build_jdk
         self.log_dir = log_dir
-        self.build_snapshot = build_snapshot
+        self.release_build = release_build
         io.ensure_dir(self.log_dir)
         self.log_file = os.path.join(self.log_dir, "build.log")
         self.logger = logging.getLogger(__name__)
