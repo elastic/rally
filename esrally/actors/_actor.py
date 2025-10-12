@@ -175,6 +175,7 @@ class ActorRequestContext(ActorContext):
 
         if isinstance(request, ActorInitRequest):
             # It receives configuration after actor creation.
+            self.cfg = request.cfg
             response = self.dispatch_message(request.cfg)
             if response is not None:
                 raise TypeError(f"Unexpected response from actor configuration handler: {response!r}, want None")
@@ -300,7 +301,7 @@ class AsyncActor(actors.ActorTypeDispatcher):
         :return:
         """
         ctx = ActorRequestContext(handler=self, pending_results=self._pending_results, loop=self._loop, pending_tasks=self._pending_tasks)
-        with enter_actor_context(ctx) as ctx:
+        with enter_actor_context(ctx):
             ctx.receive_message(message, sender)
 
     def receiveUnrecognizedMessage(self, message: Any, sender: actors.ActorAddress) -> None:

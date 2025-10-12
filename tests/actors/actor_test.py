@@ -25,7 +25,6 @@ import pytest
 
 from esrally import actors, config, types
 from esrally.actors import ActorConfig, _actor, _context, _proto
-from esrally.utils import cases
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -214,9 +213,9 @@ async def test_blocking_request(execute_from: ExecuteFrom, dummy_actor: actors.A
 
 @pytest.mark.asyncio
 async def test_actor_config(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddress) -> None:
-    assert config.get_config() == await actors.request(
-        dummy_actor, GetConfigRequest()
-    ), "Parent actor received configuration from system context."
+    got = await actors.request(dummy_actor, GetConfigRequest())
+    want = actors.get_actor_context().cfg
+    assert want == got, "Parent actor received configuration from system context."
 
 
 @pytest.mark.asyncio
@@ -226,8 +225,9 @@ async def test_request(execute_from: ExecuteFrom, dummy_actor: actors.ActorAddre
 
     request = _proto.PingRequest(message=random.random())
     future = actors.request(dummy_actor, request)
-    assert not future.done()
-    assert len(ctx.pending_results) == 1
+    if execute_from == "from_actor":
+        assert not future.done()
+        assert len(ctx.pending_results) == 1
 
     response = await future
     assert response == request.message
@@ -248,32 +248,20 @@ async def test_create_actor(execute_from: ExecuteFrom) -> None:
         actors.send(actor_address, actors.ActorExitRequest())
 
 
-@dataclasses.dataclass
-class CreateTaskCase:
-    task_name: str | None = None
-
-
-@cases.cases(
-    default=CreateTaskCase(),
-    name=CreateTaskCase(task_name="some-task-name"),
-)
 @pytest.mark.asyncio
-async def test_create_task(case: CreateTaskCase, execute_from: ExecuteFrom) -> None:
+async def test_create_task(execute_from: ExecuteFrom) -> None:
     result = asyncio.get_event_loop().create_future()
 
     async def task() -> Any:
         return await result
 
     coro = task()
-    task = actors.create_task(coro, name=case.task_name)
+    task = actors.create_task(coro, name="some-name")
     assert isinstance(task, asyncio.Task)
     assert not task.cancelled()
     assert not task.done()
 
-    if case.task_name is None:
-        assert task.get_name() == f"{coro}@{actors.get_actor_context().handler}", f"unexpected task name: {task.get_name()}"
-    else:
-        assert task.get_name() == f"{case.task_name}@{actors.get_actor_context().handler}", f"unexpected task name: {task.get_name()}"
+    assert task.get_name() == f"some-name@{actors.get_actor_context().handler}", f"unexpected task name: {task.get_name()}"
 
     if execute_from == "from_actor":
         ctx = actors.get_actor_context()

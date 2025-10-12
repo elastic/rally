@@ -261,7 +261,7 @@ class ActorContext:
             # send the request, but short enough to periodically run the event loop and process request timeouts, async
             # tasks and futures callbacks.
             loop_interval = self.cfg.loop_interval
-            response = self.handler.ask(destination, request, timeout=min_timeout(request.timeout, 0))
+            response = self.handler.ask(destination, request, timeout=min_timeout(request.timeout, loop_interval))
             self.receive_message(response, destination)
             if future.done():
                 return future
