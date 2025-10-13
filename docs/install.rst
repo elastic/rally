@@ -18,7 +18,7 @@ Rally does not support Windows and is only actively tested on macOS and Linux. I
 Python
 ~~~~~~
 
-* Python 3.9-3.12 available as ``python3`` on the path. Verify with: ``python3 --version``.
+* Python (from version 3.10.x to version 3.13.x) available as ``python3`` on the system executable path. Please verify with: ``python3 --version``.
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 

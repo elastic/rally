@@ -14,8 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
 import argparse
 import datetime
 import logging
@@ -50,6 +48,7 @@ from esrally import (
     types,
     version,
 )
+from esrally.driver.driver import OnErrorBehavior
 from esrally.mechanic import mechanic, team
 from esrally.tracker import tracker
 from esrally.utils import console, convert, io, net, opts, process, versions
@@ -695,9 +694,11 @@ def create_arg_parser():
     )
     race_parser.add_argument(
         "--on-error",
-        choices=["continue", "abort"],
-        help="Controls how Rally behaves on response errors (default: continue).",
-        default="continue",
+        type=OnErrorBehavior,
+        choices=list(OnErrorBehavior),
+        help="Controls how Rally behaves on response errors (default: continue). 'continue-on-network' will retry on network errors"
+        "(e.g., connection refused).",
+        default=OnErrorBehavior.CONTINUE,
     )
     race_parser.add_argument(
         "--telemetry",
