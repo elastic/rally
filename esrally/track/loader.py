@@ -550,7 +550,7 @@ class Downloader:
         # It joins manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
         data_url = f"{base_url.rstrip('/')}/{file_name}"
         if self.storage_config is not None:
-            manager = storage.transfer_manager(self.storage_config)
+            manager = storage.init_transfer_manager(cfg=self.storage_config)
             LOG.info("Downloading data from [%s] to [%s] using transfer manager...", data_url, target_path)
             try:
                 manager.get(data_url, target_path, size_in_bytes).wait()
