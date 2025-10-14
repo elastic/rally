@@ -121,7 +121,7 @@ class AdapterRegistry:
         self._classes: list[type[Adapter]] = []
         self._adapters: dict[type[Adapter], Adapter] = {}
         self._lock = threading.Lock()
-        self._cfg = StorageConfig.from_config(cfg)
+        self._cfg = cfg
         for name in self._cfg.adapters:
             try:
                 self.register_class(name)

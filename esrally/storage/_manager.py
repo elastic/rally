@@ -72,15 +72,12 @@ class TransferManager:
 
         if cfg.max_workers < 1:
             raise ValueError(f"invalid max_workers: {cfg.max_workers} < 1")
-        # self._max_workers = cfg.max_workers
 
         if cfg.max_connections < 1:
             raise ValueError(f"invalid max_connections: {cfg.max_connections} < 1")
-        # self._max_connections = cfg.max_connections
 
         if cfg.multipart_size < 1024 * 1024:
             raise ValueError(f"invalid multipart_size: {cfg.multipart_size} < {1024 * 1024}")
-        # self._multipart_size = cfg.multipart_size
 
         if cfg.monitor_interval <= 0:
             raise ValueError(f"invalid monitor interval: {cfg.monitor_interval} <= 0")
