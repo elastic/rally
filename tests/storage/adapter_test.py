@@ -23,16 +23,16 @@ from unittest import mock
 import pytest
 from typing_extensions import Self
 
-from esrally import config, types
+from esrally import types
+from esrally.storage import StorageConfig
 from esrally.storage._adapter import Adapter, AdapterRegistry
-from esrally.storage._config import AnyConfig
 from esrally.utils.cases import cases
 
 
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig) -> Self:
+    def from_config(cls, cfg: types.Config) -> Self:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 
@@ -66,12 +66,12 @@ class ExampleAdapterWithPath(MockAdapter, ABC):
 
 @pytest.fixture()
 def cfg() -> types.Config:
-    cfg = config.Config()
-    cfg.add(
-        config.Scope.application,
-        "storage",
-        "storage.adapters",
-        f"{__name__}:ExampleAdapterWithPath,{__name__}:ExampleAdapter,{__name__}:HTTPSAdapter,{__name__}:HTTPAdapter",
+    cfg = StorageConfig()
+    cfg.adapters = (
+        f"{__name__}:ExampleAdapterWithPath",
+        f"{__name__}:ExampleAdapter",
+        f"{__name__}:HTTPSAdapter",
+        f"{__name__}:HTTPAdapter",
     )
     return cfg
 

@@ -16,41 +16,37 @@
 # under the License.
 from __future__ import annotations
 
+import dataclasses
 import os
-from collections.abc import Iterator
-from dataclasses import dataclass
+from collections.abc import Generator
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 
-from esrally import config, types
+from esrally import types
 from esrally.storage import _manager
-from esrally.storage._adapter import Head
+from esrally.storage._adapter import DummyAdapter, Head
+from esrally.storage._config import StorageConfig
+from esrally.storage._executor import DummyExecutor
 from esrally.storage._manager import (
     TransferManager,
+    get_transfer_manager,
+    init_transfer_manager,
     shutdown_transfer_manager,
-    transfer_manager,
 )
-from esrally.storage.testing import DummyAdapter, DummyExecutor
 from esrally.utils.cases import cases
 
 
-@pytest.fixture(scope="function", params=[None, "some-name"])
+@pytest.fixture(scope="function")
 def cfg(request, tmpdir: os.PathLike) -> types.Config:
-    cfg = config.Config(config_name=request.param)
-    cfg.add(
-        config.Scope.application,
-        "storage",
-        "storage.adapters",
-        f"{__name__}:StorageAdapter",
-    )
-    cfg.add(config.Scope.application, "storage", "storage.local_dir", str(tmpdir))
+    cfg = StorageConfig()
+    cfg.adapters = (f"{__name__}:StorageAdapter",)
+    cfg.local_dir = str(tmpdir)
     return cfg
 
 
 @pytest.fixture(scope="function")
-def dummy_executor(monkeypatch: pytest.MonkeyPatch) -> Iterator[DummyExecutor]:
+def dummy_executor(monkeypatch: pytest.MonkeyPatch) -> Generator[DummyExecutor]:
     executor = DummyExecutor()
     monkeypatch.setattr(_manager, "executor_from_config", lambda cfg: executor)
     try:
@@ -60,12 +56,12 @@ def dummy_executor(monkeypatch: pytest.MonkeyPatch) -> Iterator[DummyExecutor]:
 
 
 @pytest.fixture
-def manager(cfg: types.Config, dummy_executor: DummyExecutor) -> Iterator[TransferManager]:
-    manager = TransferManager.from_config(cfg)
+def manager(cfg: types.Config, dummy_executor: DummyExecutor) -> Generator[TransferManager]:
+    manager = init_transfer_manager(cfg=cfg)
     try:
         yield manager
     finally:
-        manager.shutdown()
+        shutdown_transfer_manager()
 
 
 SIMPLE_URL = "http://example.com"
@@ -73,15 +69,14 @@ SIMPLE_DATA = b"example document"
 SIMPLE_HEAD = Head(url=SIMPLE_URL, content_length=len(SIMPLE_DATA))
 
 
+@dataclasses.dataclass
 class StorageAdapter(DummyAdapter):
 
-    HEADS = (SIMPLE_HEAD,)
-    DATA = {
-        SIMPLE_URL: SIMPLE_DATA,
-    }
+    heads: dict[str, Head] = dataclasses.field(default_factory=lambda: {SIMPLE_URL: SIMPLE_HEAD})
+    data: dict[str, bytes] = dataclasses.field(default_factory=lambda: {SIMPLE_URL: SIMPLE_DATA})
 
 
-@dataclass
+@dataclasses.dataclass
 class GetCase:
     url: str
     path: os.PathLike | str | None = None
@@ -129,30 +124,25 @@ def test_get(case: GetCase, manager: TransferManager, dummy_executor: DummyExecu
         assert os.path.getsize(tr.path) == case.document_length
 
 
-@pytest.fixture(scope="function")
-def managers() -> Iterator[dict[str | None, TransferManager]]:
-    with patch("esrally.storage._manager._MANAGERS", {}) as managers:
-        yield managers
+@pytest.fixture(scope="function", autouse=True)
+def cleanup_transfer_manager():
+    shutdown_transfer_manager()
+    yield
+    shutdown_transfer_manager()
 
 
-def test_transfer_manager(cfg: types.Config, tmpdir: os.PathLike, managers: dict[str | None, TransferManager]) -> None:
-    assert cfg.name not in managers
+def test_transfer_manager(tmpdir: os.PathLike, cfg: StorageConfig) -> None:
+    manager = init_transfer_manager(cfg=cfg)
+    assert isinstance(manager, TransferManager)
 
-    got = transfer_manager(cfg)
-    assert isinstance(got, TransferManager)
-    assert got is managers[cfg.name]
-
-    tr = got.get(url=SIMPLE_URL, document_length=len(SIMPLE_DATA))
-    assert tr.wait(timeout=60.0)
+    tr = manager.get(url=SIMPLE_URL, document_length=len(SIMPLE_DATA))
+    assert tr.wait(timeout=10.0)
     assert os.path.exists(tr.path)
     assert os.path.getsize(tr.path) == len(SIMPLE_DATA)
 
-    assert got is transfer_manager(cfg)
-    assert got is transfer_manager(cfg.name)
-    assert got is managers[cfg.name]
+    assert manager is get_transfer_manager()
 
-    assert shutdown_transfer_manager(cfg.name)
-    assert cfg.name not in managers
+    shutdown_transfer_manager()
 
-    assert not shutdown_transfer_manager(cfg.name)
-    assert cfg.name not in managers
+    with pytest.raises(RuntimeError):
+        assert get_transfer_manager()

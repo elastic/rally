@@ -16,7 +16,7 @@
 # under the License.
 import json
 import logging
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Iterator, Mapping, MutableMapping
 from datetime import datetime
 from typing import Any
 
@@ -26,8 +26,9 @@ import urllib3
 from requests.structures import CaseInsensitiveDict
 from typing_extensions import Self
 
-from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError, Writable
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG, AnyConfig, StorageConfig
+from esrally import types
+from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError
+from esrally.storage._config import StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 
 LOG = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ LOG = logging.getLogger(__name__)
 class Session(requests.Session):
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
         return cls(max_retries=parse_max_retries(cfg.max_retries))
 
@@ -56,16 +57,15 @@ class HTTPAdapter(Adapter):
         return url.startswith("http://") or url.startswith("https://")
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
-        session = Session.from_config(cfg)
-        return cls(session=session, chunk_size=cfg.chunk_size)
+        return cls(session=Session.from_config(cfg), chunk_size=cfg.chunk_size)
 
-    def __init__(self, session: requests.Session | None = None, chunk_size: int = DEFAULT_STORAGE_CONFIG.chunk_size):
+    def __init__(self, session: requests.Session | None = None, chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE):
         if session is None:
             session = requests.Session()
-        self.chunk_size = chunk_size
         self.session = session
+        self.chunk_size = chunk_size
 
     def head(self, url: str) -> Head:
         with self.session.head(url, allow_redirects=True) as res:
@@ -74,22 +74,23 @@ class HTTPAdapter(Adapter):
             res.raise_for_status()
         return head_from_headers(url, res.headers)
 
-    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
+    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
         headers: MutableMapping[str, str] = CaseInsensitiveDict()
-        head_to_headers(want, headers)
-        with self.session.get(url, stream=True, allow_redirects=True, headers=headers) as res:
-            if res.status_code == 503:
-                raise ServiceUnavailableError()
-            res.raise_for_status()
+        head_to_headers(check_head, headers)
+        res = self.session.get(url, stream=True, allow_redirects=True, headers=headers)
+        if res.status_code == 503:
+            raise ServiceUnavailableError()
+        res.raise_for_status()
 
-            got = head_from_headers(url, res.headers)
-            if want is not None:
-                want.check(got)
+        head = head_from_headers(url, res.headers)
+        if check_head is not None:
+            check_head.check(head)
 
-            for chunk in res.iter_content(self.chunk_size):
-                if chunk:
-                    stream.write(chunk)
-        return got
+        def iter_content() -> Iterator[bytes]:
+            with res:
+                yield from res.iter_content(chunk_size=self.chunk_size)
+
+        return head, iter_content()
 
 
 _ACCEPT_RANGES_HEADER = "Accept-Ranges"
@@ -113,9 +114,10 @@ def head_from_headers(url: str, headers: Mapping[str, Any]) -> Head:
 
 
 def head_to_headers(head: Head | None, headers: MutableMapping[str, str]) -> None:
-    if head is not None:
-        date_to_headers(head.date, headers)
-        ranges_to_headers(head.ranges, headers)
+    if head is None:
+        return
+    date_to_headers(head.date, headers)
+    ranges_to_headers(head.ranges, headers)
 
 
 def date_to_headers(date: datetime | None, headers: MutableMapping[str, str]) -> None:
@@ -217,7 +219,7 @@ def parse_max_retries(max_retries: str | int | urllib3.Retry) -> urllib3.Retry |
     if isinstance(max_retries, str):
         max_retries = max_retries.strip()
         if not max_retries:
-            max_retries = DEFAULT_STORAGE_CONFIG.max_retries
+            max_retries = StorageConfig.DEFAULT_MAX_RETRIES
         try:
             max_retries = int(max_retries)
         except ValueError:

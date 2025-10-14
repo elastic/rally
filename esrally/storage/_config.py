@@ -14,104 +14,137 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
-
-import dataclasses
 import logging
-from typing import Any, Union
+from collections.abc import Iterable
+from typing import Any
 
-from typing_extensions import Self
-
-from esrally import config, types
+from esrally import config
 from esrally.utils import convert
 
 LOG = logging.getLogger(__name__)
 
-AnyConfig = Union["StorageConfig", types.Config, str, None]
 
+class StorageConfig(config.Config):
 
-@dataclasses.dataclass
-class StorageConfig:
-
-    config_name: str | None = None
-    adapters: tuple[str, ...] = (
+    DEFAULT_ADAPTERS = (
         "esrally.storage._aws:S3Adapter",
         "esrally.storage._http:HTTPAdapter",
     )
-    aws_profile: str = ""
-    chunk_size: int = 64 * 1024
-    local_dir: str = "~/.rally/storage"
-    max_connections: int = 4
-    max_retries: int | str = 10
-    max_workers: int = 32
-    mirror_files: tuple[str, ...] = ("~/.rally/storage-mirrors.json",)
-    monitor_interval: float = 2.0  # number of seconds
-    multipart_size: int = 8 * 1024 * 1024  # number of bytes
-    random_seed: Any = None
-    head_ttl: float = 60.0
-    resolve_ttl: float = 60.0
-    thread_name_prefix: str = "esrally.storage.transfer-worker"
 
-    @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
-        if isinstance(cfg, cls):
-            return cfg
+    @property
+    def adapters(self) -> tuple[str, ...]:
+        return convert.to_strings(self.opts("storage", "storage.adapters", self.DEFAULT_ADAPTERS, False))
 
-        if cfg is None or isinstance(cfg, str):
-            cfg = config.Config(cfg)
-            try:
-                cfg.load_config(auto_upgrade=True)
-            except FileNotFoundError as ex:
-                LOG.warning("failed to load storage config from file (name='%s'): %s", cfg.name, ex)
+    @adapters.setter
+    def adapters(self, value: Iterable[str] | None) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.adapters", convert.to_strings(value))
 
-        if not isinstance(cfg, config.Config):
-            raise TypeError(f"invalid config type: '{type(cfg)}', want '{types.Config}'")
+    DEFAULT_AWS_PROFILE = None
 
-        return cls(
-            config_name=cfg.name,
-            adapters=convert.to_strings(
-                cfg.opts(section="storage", key="storage.adapters", default_value=DEFAULT_STORAGE_CONFIG.adapters, mandatory=False)
-            ),
-            aws_profile=cfg.opts(
-                "storage", "storage.aws.profile", default_value=DEFAULT_STORAGE_CONFIG.aws_profile, mandatory=False
-            ).strip(),
-            chunk_size=int(cfg.opts("storage", "storage.http.chunk_size", DEFAULT_STORAGE_CONFIG.chunk_size, False)),
-            local_dir=cfg.opts(section="storage", key="storage.local_dir", default_value=DEFAULT_STORAGE_CONFIG.local_dir, mandatory=False),
-            max_connections=int(
-                cfg.opts(
-                    section="storage", key="storage.max_connections", default_value=DEFAULT_STORAGE_CONFIG.max_connections, mandatory=False
-                )
-            ),
-            max_retries=cfg.opts("storage", "storage.http.max_retries", DEFAULT_STORAGE_CONFIG.max_retries, mandatory=False),
-            max_workers=int(
-                cfg.opts(section="storage", key="storage.max_workers", default_value=DEFAULT_STORAGE_CONFIG.max_workers, mandatory=False)
-            ),
-            mirror_files=convert.to_strings(
-                cfg.opts(section="storage", key="storage.mirror_files", default_value=DEFAULT_STORAGE_CONFIG.mirror_files, mandatory=False)
-            ),
-            monitor_interval=float(
-                cfg.opts(
-                    section="storage",
-                    key="storage.monitor_interval",
-                    default_value=DEFAULT_STORAGE_CONFIG.monitor_interval,
-                    mandatory=False,
-                )
-            ),
-            multipart_size=int(
-                cfg.opts(
-                    section="storage", key="storage.multipart_size", default_value=DEFAULT_STORAGE_CONFIG.multipart_size, mandatory=False
-                )
-            ),
-            random_seed=cfg.opts(
-                section="storage", key="storage.random_seed", default_value=DEFAULT_STORAGE_CONFIG.random_seed, mandatory=False
-            ),
-            head_ttl=float(
-                cfg.opts(section="storage", key="storage.head_ttl", default_value=DEFAULT_STORAGE_CONFIG.head_ttl, mandatory=False)
-            ),
-            resolve_ttl=float(
-                cfg.opts(section="storage", key="storage.resolve_ttl", default_value=DEFAULT_STORAGE_CONFIG.head_ttl, mandatory=False)
-            ),
-        )
+    @property
+    def aws_profile(self) -> str | None:
+        return self.opts("storage", "storage.aws.profile", self.DEFAULT_AWS_PROFILE, False)
 
+    @aws_profile.setter
+    def aws_profile(self, value: str | None) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.aws.profile", value)
 
-DEFAULT_STORAGE_CONFIG = StorageConfig()
+    DEFAULT_CHUNK_SIZE = 64 * 1024
+
+    @property
+    def chunk_size(self) -> int:
+        return int(self.opts("storage", "storage.chunk_size", self.DEFAULT_CHUNK_SIZE, False))
+
+    @chunk_size.setter
+    def chunk_size(self, value: int) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.chunk_size", value)
+
+    DEFAULT_LOCAL_DIR = "~/.rally/storage"
+
+    @property
+    def local_dir(self) -> str:
+        return self.opts("storage", "storage.local_dir", self.DEFAULT_LOCAL_DIR, False)
+
+    @local_dir.setter
+    def local_dir(self, value: str) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.local_dir", value)
+
+    DEFAULT_MAX_CONNECTIONS = 4
+
+    @property
+    def max_connections(self) -> int:
+        return int(self.opts("storage", "storage.max_connections", self.DEFAULT_MAX_CONNECTIONS, False))
+
+    @max_connections.setter
+    def max_connections(self, value: int) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.max_connections", value)
+
+    DEFAULT_MAX_RETRIES = 3
+
+    @property
+    def max_retries(self) -> int | str:
+        return self.opts("storage", "storage.http.max_retries", self.DEFAULT_MAX_RETRIES, False)
+
+    @max_retries.setter
+    def max_retries(self, value: int | str) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.http.max_retries", value)
+
+    DEFAULT_MAX_WORKERS = 16
+
+    @property
+    def max_workers(self) -> int:
+        return int(self.opts("storage", "storage.max_workers", self.DEFAULT_MAX_WORKERS, False))
+
+    @max_workers.setter
+    def max_workers(self, value: int) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.max_workers", value)
+
+    DEFAULT_MIRROR_FILES = ("~/.rally/storage-mirrors.json",)
+
+    @property
+    def mirror_files(self) -> tuple[str, ...]:
+        return convert.to_strings(self.opts("storage", "storage.mirror_files", self.DEFAULT_MIRROR_FILES, False))
+
+    @mirror_files.setter
+    def mirror_files(self, value: Iterable[str] | None) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.mirror_files", convert.to_strings(value))
+
+    DEFAULT_MONITOR_INTERVAL = 4.0
+
+    @property
+    def monitor_interval(self) -> float:
+        return self.opts("storage", "storage.monitor_interval", self.DEFAULT_MONITOR_INTERVAL, False)
+
+    @monitor_interval.setter
+    def monitor_interval(self, value: float) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.monitor_interval", value)
+
+    DEFAULT_MULTIPART_SIZE = 8 * 1024 * 1024
+
+    @property
+    def multipart_size(self) -> int:
+        return int(self.opts("storage", "storage.multipart_size", self.DEFAULT_MULTIPART_SIZE, False))
+
+    @multipart_size.setter
+    def multipart_size(self, value: int) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.multipart_size", value)
+
+    DEFAULT_RANDOM_SEED = None
+
+    @property
+    def random_seed(self) -> Any:
+        return self.opts("storage", "storage.random_seed", self.DEFAULT_RANDOM_SEED, False)
+
+    @random_seed.setter
+    def random_seed(self, value: Any) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.random_seed", value)
+
+    DEFAULT_CACHE_TTL = 60.0
+
+    @property
+    def cache_ttl(self) -> float:
+        return self.opts("storage", "storage.cache_ttl", self.DEFAULT_CACHE_TTL, False)
+
+    @cache_ttl.setter
+    def cache_ttl(self, value: float) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.cache_ttl", value)

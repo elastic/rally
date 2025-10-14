@@ -15,14 +15,16 @@
 # specific language governing permissions and limitations
 # under the License.
 import atexit
+import contextvars
 import logging
 import os
 import threading
 
 from typing_extensions import Self
 
+from esrally import types
 from esrally.storage._client import Client
-from esrally.storage._config import AnyConfig, StorageConfig
+from esrally.storage._config import StorageConfig
 from esrally.storage._executor import Executor, executor_from_config
 from esrally.storage._transfer import Transfer
 from esrally.utils.threads import ContinuousTimer
@@ -34,15 +36,13 @@ class TransferManager:
     """It creates and perform file transfer operations in background."""
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
         """It creates a TransferManager with initialization values taken from given configuration."""
         cfg = StorageConfig.from_config(cfg)
-        client = Client.from_config(cfg)
-        executor = executor_from_config(cfg)
         return cls(
             cfg=cfg,
-            client=client,
-            executor=executor,
+            client=Client.from_config(cfg),
+            executor=executor_from_config(cfg),
         )
 
     def __init__(
@@ -91,12 +91,17 @@ class TransferManager:
         with self._lock:
             transfers = self._transfers
             self._transfers = []
+        LOG.info("Shutting down transfer manager...")
         for tr in transfers:
             try:
+                if tr.finished:
+                    continue
+                LOG.warning("Cancelling transfer: %s...", tr)
                 tr.close()
             except Exception as ex:
                 LOG.error("error closing transfer: %s, %s", tr.url, ex)
         self._monitor_timer.cancel()
+        LOG.info("Project manager shut down.")
 
     def get(self, url: str, path: os.PathLike | str | None = None, document_length: int | None = None) -> Transfer:
         """It starts a new transfer of a file from a remote url to a local path.
@@ -171,42 +176,34 @@ class TransferManager:
         LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
 
 
-def config_and_name(cfg: AnyConfig = None) -> tuple[AnyConfig, str | None]:
-    if cfg is None:
-        return cfg, None
-    if isinstance(cfg, str):
-        return cfg, cfg.strip() or None
-    cfg = StorageConfig.from_config(cfg)
-    return cfg, cfg.config_name
+_MANAGER = contextvars.ContextVar[TransferManager | None](f"{__name__}.transfer_manager", default=None)
 
 
-_MANAGERS_LOCK = threading.Lock()
-_MANAGERS: dict[str | None, TransferManager] = {}
-
-
-def transfer_manager(cfg: AnyConfig = None) -> TransferManager:
-    with _MANAGERS_LOCK:
-        cfg, name = config_and_name(cfg)
-        manager = _MANAGERS.get(name)
-        if manager is None:
-            cfg = StorageConfig.from_config(cfg)
-            manager = TransferManager.from_config(cfg)
-            _MANAGERS[cfg.config_name] = manager
-            atexit.register(manager.shutdown)
-            LOG.debug("transfer manager initialized: cfg=%s", cfg)
-        elif (cfg := StorageConfig.from_config(cfg)) != manager.cfg:
-            manager.cfg = cfg
-            LOG.debug("transfer manager configuration updated: cfg=%s", cfg)
+def init_transfer_manager(*, cfg: types.Config | None = None, shutdown_at_exit: bool = True) -> TransferManager:
+    manager = _MANAGER.get()
+    if manager is not None:
         return manager
 
+    # Initialize transfer manager.
+    cfg = StorageConfig.from_config(cfg)
+    manager = TransferManager.from_config(cfg)
+    _MANAGER.set(manager)
 
-def shutdown_transfer_manager(cfg: AnyConfig = None) -> bool:
-    with _MANAGERS_LOCK:
-        cfg, name = config_and_name(cfg)
-        manager = _MANAGERS.pop(name, None)
-        if manager is None:
-            LOG.debug("transfer manager not initialized: %s", name)
-            return False
-        LOG.debug("shutting down transfer manager: %s", name)
-        manager.shutdown()
-        return True
+    if shutdown_at_exit:
+        atexit.register(manager.shutdown)
+    return manager
+
+
+def get_transfer_manager() -> TransferManager:
+    manager = _MANAGER.get()
+    if manager is None:
+        raise RuntimeError("Transfer manager not initialized.")
+    return manager
+
+
+def shutdown_transfer_manager() -> None:
+    manager = _MANAGER.get()
+    if manager is None:
+        return
+    _MANAGER.set(None)
+    return manager.shutdown()

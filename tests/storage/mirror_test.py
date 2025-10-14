@@ -21,8 +21,7 @@ import os.path
 
 import pytest
 
-from esrally import config, types
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG
+from esrally.storage._config import StorageConfig
 from esrally.storage._mirror import MirrorList
 from esrally.utils import cases
 
@@ -37,31 +36,36 @@ MIRRORS = {
 MIRROR_FILES = os.path.join(os.path.dirname(__file__), "mirrors.json")
 
 
+def storage_config(**kwargs) -> StorageConfig:
+    cfg = StorageConfig()
+    for k, v in kwargs.items():
+        setattr(cfg, k, v)
+    return cfg
+
+
 @dataclasses.dataclass()
 class FromConfigCase:
-    opts: dict[types.Key, str]
+    cfg: StorageConfig
     want_error: type[Exception] | None = None
-    want_mirror_files: set[str] = DEFAULT_STORAGE_CONFIG.mirror_files
+    want_mirror_files: set[str] = dataclasses.field(default_factory=lambda: set(StorageConfig.DEFAULT_MIRROR_FILES))
     want_urls: dict[str, set[str]] | None = None
 
 
 @pytest.fixture(autouse=True)
 def patch_default_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(DEFAULT_STORAGE_CONFIG, "mirror_files", tuple())
+    monkeypatch.setattr(StorageConfig, "DEFAULT_MIRROR_FILES", tuple())
 
 
 @cases.cases(
-    default=FromConfigCase({}, want_urls={}),
-    mirror_files=FromConfigCase({"storage.mirror_files": MIRROR_FILES}, want_urls={f"{BASE_URL}/": {f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"}}),
-    invalid_mirror_files=FromConfigCase({"storage.mirror_files": "<!invalid-file-path!>"}, want_urls={}),
+    default=FromConfigCase(storage_config(), want_urls={}),
+    mirror_files=FromConfigCase(
+        storage_config(mirror_files=MIRROR_FILES), want_urls={f"{BASE_URL}/": {f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"}}
+    ),
+    invalid_mirror_files=FromConfigCase(storage_config(mirror_files="<!invalid-file-path!>"), want_urls={}),
 )
 def test_from_config(case: FromConfigCase, monkeypatch):
-    cfg = config.Config()
-    for k, v in case.opts.items():
-        cfg.add(config.Scope.application, "storage", k, v)
-
     try:
-        got_mirrors = MirrorList.from_config(cfg)
+        got_mirrors = MirrorList.from_config(case.cfg)
         got_error = None
     except Exception as ex:
         got_mirrors = None

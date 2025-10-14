@@ -19,7 +19,8 @@ from typing import Protocol, runtime_checkable
 
 from typing_extensions import Self
 
-from esrally.storage._config import AnyConfig, StorageConfig
+from esrally import types
+from esrally.storage._config import StorageConfig
 
 
 @runtime_checkable
@@ -47,10 +48,35 @@ class Executor(Protocol):
 class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor, Executor):
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
-        return cls(max_workers=cfg.max_workers, thread_name_prefix=cfg.thread_name_prefix)
+        return cls(max_workers=cfg.max_workers, thread_name_prefix=__name__)
 
 
-def executor_from_config(cfg: AnyConfig = None) -> ThreadPoolExecutor:
+def executor_from_config(cfg: types.Config | None = None) -> ThreadPoolExecutor:
     return ThreadPoolExecutor.from_config(cfg)
+
+
+class DummyExecutor(Executor):
+
+    def __init__(self):
+        self.tasks: list[tuple] | None = []
+
+    def submit(self, fn, /, *args, **kwargs):
+        """Submits a callable to be executed with the given arguments.
+
+        Schedules the callable to be executed as fn(*args, **kwargs).
+        """
+        if self.tasks is None:
+            raise RuntimeError("Executor already closed")
+        self.tasks.append((fn, args, kwargs))
+
+    def execute_tasks(self):
+        if self.tasks is None:
+            raise RuntimeError("Executor already closed")
+        tasks, self.tasks = self.tasks, []
+        for fn, args, kwargs in tasks:
+            fn(*args, **kwargs)
+
+    def shutdown(self):
+        self.tasks = None

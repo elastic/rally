@@ -14,9 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
 
-from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 Section = Literal[
     "actor",
@@ -158,8 +157,8 @@ Key = Literal[
     "src.root.dir",
     "storage.adapters",
     "storage.aws.profile",
-    "storage.head_ttl",
-    "storage.http.chunk_size",
+    "storage.cache_ttl",
+    "storage.chunk_size",
     "storage.http.max_retries",
     "storage.local_dir",
     "storage.max_connections",
@@ -168,7 +167,6 @@ Key = Literal[
     "storage.monitor_interval",
     "storage.multipart_size",
     "storage.random_seed",
-    "storage.resolve_ttl",
     "target.arch",
     "target.os",
     "team.path",
@@ -182,7 +180,6 @@ Key = Literal[
     "user.tags",
     "values",
 ]
-_Config = TypeVar("_Config", bound="Config")
 
 
 @runtime_checkable
@@ -192,9 +189,11 @@ class Config(Protocol):
 
     def add(self, scope, section: Section, key: Key, value: Any) -> None: ...
 
-    def add_all(self, source: _Config, section: Section) -> None: ...
+    def add_all(self, source: "Config", section: Section) -> None: ...
 
     def opts(self, section: Section, key: Key, default_value=None, mandatory: bool = True) -> Any: ...
+
+    def all_sections(self) -> list[Section]: ...
 
     def all_opts(self, section: Section) -> dict: ...
 

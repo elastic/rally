@@ -19,15 +19,16 @@ from __future__ import annotations
 import logging
 import os
 import urllib.parse
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 import boto3
 from botocore.response import StreamingBody
 from typing_extensions import Self
 
-from esrally.storage._adapter import Adapter, Head, Writable
-from esrally.storage._config import DEFAULT_STORAGE_CONFIG, AnyConfig, StorageConfig
+from esrally import types
+from esrally.storage._adapter import Adapter, Head
+from esrally.storage._config import StorageConfig
 from esrally.storage._http import (
     head_to_headers,
     parse_accept_ranges,
@@ -46,20 +47,20 @@ class S3Adapter(Adapter):
         return url.startswith("s3://")
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig = None) -> Self:
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
         return cls(aws_profile=cfg.aws_profile, chunk_size=cfg.chunk_size)
 
     def __init__(
         self,
-        aws_profile: str = DEFAULT_STORAGE_CONFIG.aws_profile,
-        chunk_size: int = DEFAULT_STORAGE_CONFIG.chunk_size,
+        aws_profile: str | None = StorageConfig.DEFAULT_AWS_PROFILE,
+        chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE,
         s3_client: S3Client | None = None,
     ) -> None:
         if chunk_size < 0:
             raise ValueError("Chunk size must be positive")
         self.chunk_size = chunk_size
-        self.aws_profile = aws_profile.strip() or None
+        self.aws_profile = aws_profile
         self._s3_client = s3_client
 
     def head(self, url: str) -> Head:
@@ -67,24 +68,19 @@ class S3Adapter(Adapter):
         res = self._s3.head_object(Bucket=address.bucket, Key=address.key)
         return head_from_response(url, res)
 
-    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
+    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
         headers: dict[str, Any] = {}
-        head_to_headers(want, headers)
+        head_to_headers(check_head, headers)
 
         address = S3Address.from_url(url)
         res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
-        got = head_from_response(url, res)
-        if want is not None:
-            want.check(got)
+        head = head_from_response(url, res)
+        if check_head is not None:
+            check_head.check(head)
         body: StreamingBody | None = res.get("Body")
         if body is None:
             raise RuntimeError("S3 client returned no body.")
-        for chunk in body.iter_chunks(self.chunk_size):
-            if chunk:
-                stream.write(chunk)
-        return got
-
-    _s3_client = None
+        return head, body.iter_chunks(self.chunk_size)
 
     @property
     def _s3(self) -> S3Client:

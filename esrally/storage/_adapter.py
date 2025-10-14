@@ -16,18 +16,20 @@
 # under the License.
 from __future__ import annotations
 
+import copy
+import dataclasses
 import datetime
 import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Container
-from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from collections.abc import Container, Iterator
+from typing import Any
 
 from typing_extensions import Self
 
-from esrally.storage._config import AnyConfig, StorageConfig
+from esrally import types
+from esrally.storage._config import StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet
 
 LOG = logging.getLogger(__name__)
@@ -37,17 +39,10 @@ class ServiceUnavailableError(Exception):
     """It is raised when an adapter refuses providing service for example because of too many requests"""
 
 
-@runtime_checkable
-class Writable(Protocol):
-
-    def write(self, data: bytes) -> None:
-        pass
-
-
 _HEAD_CHECK_IGNORE = frozenset(["url"])
 
 
-@dataclass
+@dataclasses.dataclass
 class Head:
     url: str | None = None
     content_length: int | None = None
@@ -83,7 +78,7 @@ class Adapter(ABC):
 
     @classmethod
     @abstractmethod
-    def from_config(cls, cfg: AnyConfig) -> Self:
+    def from_config(cls, cfg: types.Config) -> Self:
         """Default `Adapter` objects factory method used to create adapters from `esrally` client.
 
         Default implementation will ignore `cfg` parameter. It can be overridden from `Adapter` implementations that
@@ -101,34 +96,28 @@ class Adapter(ABC):
         """
 
     @abstractmethod
-    def get(self, url: str, stream: Writable, want: Head | None = None) -> Head:
+    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
         """It downloads a remote bucket object to a local file path.
 
         :param url: it represents the URL of the remote file object.
-        :param stream: it represents the local file stream where to write data to.
-        :param want: it allows to specify optional parameters:
+        :param check_head: it allows to specify optional parameters:
             - range: portion of the file to transfer (it must be empty or a continuous range).
             - content_length: the number of bytes to transfer.
             - crc32c the CRC32C checksum of the file.
             - date: the date the file has been modified.
         :raises ServiceUnavailableError: in case on temporary service failure.
+        :returns: a tuple containing the Head of the remote file, and the iterator of bytes received from the service.
         """
-
-
-ADAPTER_CLASS_NAMES = [
-    "esrally.storage._aws:S3Adapter",
-    "esrally.storage._http:HTTPAdapter",
-]
 
 
 class AdapterRegistry:
     """AdapterClassRegistry allows to register classes of adapters to be selected according to the target URL."""
 
     @classmethod
-    def from_config(cls, cfg: AnyConfig) -> Self:
+    def from_config(cls, cfg: types.Config) -> Self:
         return cls(StorageConfig.from_config(cfg))
 
-    def __init__(self, cfg: StorageConfig | None = None) -> None:
+    def __init__(self, cfg: StorageConfig) -> None:
         self._classes: list[type[Adapter]] = []
         self._adapters: dict[type[Adapter], Adapter] = {}
         self._lock = threading.Lock()
@@ -170,3 +159,37 @@ class AdapterRegistry:
 
         self._adapters[cls] = adapter = cls.from_config(self._cfg)
         return adapter
+
+
+@dataclasses.dataclass
+class DummyAdapter(Adapter):
+    heads: dict[str, Head] = dataclasses.field(default_factory=dict)
+    data: dict[str, bytes] = dataclasses.field(default_factory=dict)
+
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return True
+
+    @classmethod
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
+        return cls()
+
+    def head(self, url: str) -> Head:
+        try:
+            return copy.copy(self.heads[url])
+        except KeyError:
+            raise FileNotFoundError from None
+
+    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+        ranges: RangeSet = NO_RANGE
+        if check_head is not None:
+            ranges = check_head.ranges
+            if len(ranges) > 1:
+                raise NotImplementedError("len(head.ranges) > 1")
+
+        data = self.data[url]
+        if ranges:
+            data = data[ranges.start : ranges.end]
+
+        head = Head(url, content_length=ranges.size, ranges=ranges, document_length=len(data))
+        return head, iter((data,))
