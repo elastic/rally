@@ -667,6 +667,17 @@ You can use this distribution repository with the name "in_house_snapshot" as fo
 
 This will benchmark the latest 7.0.0 snapshot build of Elasticsearch.
 
+``source-build-method``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Method with which to build Elasticsearch and plugins from sources. Supported values are: ``default`` and ``docker``.
+
+``source-build-release``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Determines whether to build a release version of Elasticsearch. By default, Rally builds a snapshot version. Default: ``false``.
+Provide the ``--source-build-release`` flag to build a release version.
+
 ``report-format``
 ~~~~~~~~~~~~~~~~~
 
