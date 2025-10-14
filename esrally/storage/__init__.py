@@ -19,5 +19,7 @@ from esrally.storage._config import StorageConfig
 from esrally.storage._manager import (
     TransferManager,
     get_transfer_manager,
+    init_transfer_manager,
     shutdown_transfer_manager,
 )
+from esrally.storage._transfer import Transfer

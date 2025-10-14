@@ -287,9 +287,11 @@ class Transfer:
                 else:
                     check_head = Head(content_length=self._document_length, crc32c=self._crc32c)
                 head, content = self.client.get(self.url, check_head=check_head)
-                if head.document_length is not None:
+                # When ranges are not given, then content_length replaces document_length.
+                document_length = head.document_length or head.content_length
+                if document_length:
                     # It checks the size of the file it downloaded the data from.
-                    self.document_length = head.document_length
+                    self.document_length = document_length
                 if head.crc32c is not None:
                     # It checks the crc32c check sum of the file it downloaded the data from.
                     self.crc32c = head.crc32c

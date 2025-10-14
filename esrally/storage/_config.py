@@ -89,7 +89,7 @@ class StorageConfig(config.Config):
     def max_retries(self, value: int | str) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.http.max_retries", value)
 
-    DEFAULT_MAX_WORKERS = 16
+    DEFAULT_MAX_WORKERS = 64
 
     @property
     def max_workers(self) -> int:

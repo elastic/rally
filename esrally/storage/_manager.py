@@ -68,7 +68,7 @@ class TransferManager:
             os.makedirs(local_dir)
         self._local_dir = local_dir
 
-        self._transfers: list[Transfer] = []
+        self._transfers: dict[str, Transfer] = {}
 
         if cfg.max_workers < 1:
             raise ValueError(f"invalid max_workers: {cfg.max_workers} < 1")
@@ -90,9 +90,9 @@ class TransferManager:
     def shutdown(self):
         with self._lock:
             transfers = self._transfers
-            self._transfers = []
+            self._transfers = {}
         LOG.info("Shutting down transfer manager...")
-        for tr in transfers:
+        for tr in transfers.values():
             try:
                 if tr.finished:
                     continue
@@ -116,6 +116,11 @@ class TransferManager:
         # This also ensures the path is a string
         path = os.path.normpath(os.path.expanduser(path))
 
+        tr = self._transfers.get(path)
+        if tr is not None:
+            tr.start()
+            return tr
+
         head = self._client.head(url)
         if document_length is not None and head.content_length != document_length:
             raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
@@ -133,7 +138,7 @@ class TransferManager:
         # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
         # the allowed per-transfer connections.
         with self._lock:
-            self._transfers.append(tr)
+            self._transfers[tr.path] = tr
         self._update_transfers()
         tr.start()
         return tr
@@ -155,13 +160,13 @@ class TransferManager:
         """It executes periodic update operations on every unfinished transfer."""
         with self._lock:
             # It first removes finished transfers.
-            self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
+            self._transfers = transfers = {tr.path: tr for tr in self._transfers.values() if not tr.finished}
             if not transfers:
                 return
 
         # It updates max_connections value for each transfer
         max_connections = self.max_connections
-        for tr in transfers:
+        for tr in transfers.values():
             # It updates the limit of the number of connections for every transfer because it varies in function of
             # the number of transfers in progress.
             tr.max_connections = max_connections
@@ -173,7 +178,7 @@ class TransferManager:
             tr.start()
 
         # It logs updated statistics for every transfer.
-        LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
+        LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers.values()))
 
 
 _MANAGER = contextvars.ContextVar[TransferManager | None](f"{__name__}.transfer_manager", default=None)

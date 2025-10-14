@@ -199,12 +199,14 @@ class Client:
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
         if check_head is None:
-            check_head = None
+            resolve_head = None
         elif check_head.ranges:
-            check_head = Head(accept_ranges=True, content_length=check_head.document_length, date=check_head.date, crc32c=check_head.crc32c)
+            resolve_head = Head(
+                accept_ranges=True, content_length=check_head.document_length, date=check_head.date, crc32c=check_head.crc32c
+            )
         else:
-            check_head = Head(content_length=check_head.content_length, date=check_head.date, crc32c=check_head.crc32c)
-        for got in self.resolve(url, check_head=check_head):
+            resolve_head = Head(content_length=check_head.content_length, date=check_head.date, crc32c=check_head.crc32c)
+        for got in self.resolve(url, check_head=resolve_head):
             assert got.url is not None
             adapter = self._adapters.get(got.url)
             connections = self._server_connections(got.url)
