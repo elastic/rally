@@ -153,6 +153,7 @@ Key = Literal[
     "skip.telemetry",
     "snapshot.cache",
     "source.build.method",
+    "source.build.release",
     "source.revision",
     "src.root.dir",
     "storage.adapters",
