@@ -166,10 +166,9 @@ Configuration options are:
   Here is an example of valid value for http(s) adapter::
 
     [storage]
-    storage.adapters = esrally.storage._http:HTTPAdapter
+    storage.adapters = esrally.storage:HTTPAdapter,esrally.storage:S3Adapter
 
-
-  At this point in time `esrally.storage._http:HTTPAdapter` and `esrally.storage._http:HTTPAdapter` are the only
+  At this point in time `esrally.storage:HTTPAdapter` and `esrally.storage:S3Adapter` are the only
   known `Adapter` implementations intended for public use and they are both enabled by default. So it is required
   to edit this option for special customizations (like for example remove one of them or adding a new
   custom implementation for accessing a special infrastructure server).
