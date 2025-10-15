@@ -520,7 +520,7 @@ class FileOffsetTable:
         """
         return self.exists() and os.path.getmtime(self.offset_table_path) >= os.path.getmtime(self.data_file_path)
 
-    def try_download_from_corpus_location(self, corpus_base_url: Optional[str] = None) -> bool:
+    def try_download_from_corpus_location(self, corpus_base_url: str|None) -> bool:
         """
         Attempts to download a pre-computed offset file from the corpus location.
 
@@ -631,7 +631,7 @@ class FileOffsetTable:
         os.remove(f"{data_file_path}.offset")
 
 
-def prepare_file_offset_table(data_file_path: str, corpus_base_url: Optional[str] = None) -> Optional[int]:
+def prepare_file_offset_table(data_file_path: str, corpus_base_url: str|None) -> int|None:
     """
     Creates a file that contains a mapping from line numbers to file offsets for the provided path. This file is used internally by
     #skip_lines(data_file_path, data_file) to speed up line skipping.
