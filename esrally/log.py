@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 import copy
-import importlib
 import json
 import logging
 import logging.config
@@ -219,29 +218,24 @@ def post_configure_actor_logging():
 
     if LOG is not logging.getLogger(__name__):
         # It just detected that all pre-existing loggers have been forgotten after changing manager.
-        # Here we try to replace their per-module references with those created from the new manager.
-        updated: list[str] = []
-        lost: set[str] = set()
+        # It replaces attributes values of those loggers with the attributes with loggers created by the new manager.
+        # In this way old logger should behave as new ones, behaving as the same.
+        recovered: list[str] = []
+        lost: list[str] = []
         for name, old_logger in LOG.manager.loggerDict.items():
-            if isinstance(old_logger, logging.PlaceHolder):
-                continue
-            lost.add(name)
-            try:
-                module = importlib.import_module(name)
-            except ImportError:
-                continue
-            for attribute_name in dir(module):
-                value = getattr(module, attribute_name, None)
-                if value is old_logger:
-                    setattr(module, attribute_name, logging.getLogger(name))
-                    lost.remove(name)
-                    updated.append(name)
-                    continue
+            if not isinstance(old_logger, logging.Logger):
+                continue  # Skip place holders and adapters
+            new_logger = logging.getLogger(name)
+            if type(new_logger) is type(old_logger):
+                old_logger.__dict__ = new_logger.__dict__
+                recovered.append(name)
+            else:
+                lost.append(name)
 
+        if recovered:
+            LOG.debug("Recovered loggers from old manager: %s", ", ".join(recovered))
         if lost:
-            LOG.debug("Old per-module logger references lost: %s", lost)
-        if updated:
-            LOG.debug("Old per-module logger references updated: %s", updated)
+            LOG.warning("Lost loggers from old manager: %s", ", ".join(lost))
 
 
 def configure_logging():
