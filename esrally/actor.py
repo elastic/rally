@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import logging
+import os
 import socket
 import traceback
 import typing
@@ -112,6 +113,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         log.post_configure_actor_logging()
         self.logger = logging.getLogger(__name__)
         console.set_assume_tty(assume_tty=False)
+        LOG.info("Actor initialized: cls=%s, pid=%s", type(self).__name__, os.getpid())
 
     # The method name is required by the actor framework
     # noinspection PyPep8Naming

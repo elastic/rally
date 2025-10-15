@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "disable_existing_loggers": false,
   "formatters": {
     "normal": {
       "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
