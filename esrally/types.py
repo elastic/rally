@@ -15,10 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Any, Literal, Protocol, TypeVar
+from typing import Any, Literal, Protocol, runtime_checkable
 
 Section = Literal[
     "actor",
+    "actors",
     "benchmarks",
     "client",
     "defaults",
@@ -44,6 +45,13 @@ Section = Literal[
 ]
 Key = Literal[
     "actor.process.startup.method",
+    "actors.admin_ports",
+    "actors.coordinator_ip",
+    "actors.fallback_system_base",
+    "actors.ip",
+    "actors.loop_interval",
+    "actors.process_startup_method",
+    "actors.system_base",
     "add.chart_name",
     "add.chart_type",
     "add.config.option",
@@ -179,15 +187,20 @@ Key = Literal[
     "user.tags",
     "values",
 ]
-_Config = TypeVar("_Config", bound="Config")
 
 
+@runtime_checkable
 class Config(Protocol):
+
+    name: str | None = None
+
     def add(self, scope, section: Section, key: Key, value: Any) -> None: ...
 
-    def add_all(self, source: _Config, section: Section) -> None: ...
+    def add_all(self, source: "Config", section: Section) -> None: ...
 
     def opts(self, section: Section, key: Key, default_value=None, mandatory: bool = True) -> Any: ...
+
+    def all_sections(self) -> list[Section]: ...
 
     def all_opts(self, section: Section) -> dict: ...
 

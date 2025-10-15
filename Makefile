@@ -172,7 +172,7 @@ clean-docs: venv
 
 # It runs unit tests using the default python interpreter version.
 test: venv
-	uv run -- pytest -s $(or $(ARGS), tests/)
+	uv run -- pytest -s --full-trace $(or $(ARGS), tests/)
 
 # It runs unit tests using all supported python versions.
 test-all: test-3.10 test-3.11 test-3.12 test-3.13

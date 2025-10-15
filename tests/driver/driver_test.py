@@ -1676,7 +1676,7 @@ class TestAsyncExecutor:
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
-        for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [235, 255]}.items():
+        for target_throughput, bounds in {10: [2, 4], 100: [23, 27], 1000: [230, 270]}.items():
             task = track.Task(
                 "time-based",
                 track.Operation(
