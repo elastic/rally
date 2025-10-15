@@ -50,8 +50,8 @@ def config_path(tmpdir, config: dict[str, Any]) -> str:
     return path
 
 
-def test_add_missing_loggers_to_config_missing(template: dict[str, Any], config: dict[str, Any], config_path: str) -> None:
-    log.add_missing_loggers_to_config(config_path=config_path)
+def test_update_logger_config(template: dict[str, Any], config: dict[str, Any], config_path: str) -> None:
+    log.update_logger_config(config_path=config_path)
 
     with open(config_path) as fd:
         got = json.load(fd)

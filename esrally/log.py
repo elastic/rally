@@ -14,7 +14,8 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import copy
+import importlib
 import json
 import logging
 import logging.config
@@ -26,6 +27,8 @@ import ecs_logging
 
 from esrally import paths
 from esrally.utils import collections, io
+
+LOG = logging.getLogger(__name__)
 
 
 # pylint: disable=unused-argument
@@ -113,27 +116,37 @@ CONFIG_PATH = log_config_path()
 TEMPLATE_PATH = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
 
 
-def add_missing_loggers_to_config(
+def update_logger_config(
     *,
     config_path: str = CONFIG_PATH,
     template_path: str = TEMPLATE_PATH,
 ):
-    """It appends any missing top level loggers found in resources/logging.json to current log configuration."""
+    """It appends any missing top level loggers found in resources/logging.json to current log configuration.
+
+    It also ensures "disable_existing_loggers" is set to False by default.
+    """
 
     with open(template_path, encoding="UTF-8") as fd:
-        missing_loggers: dict[str, typing.Any] = json.load(fd)["loggers"]
+        template: dict[str, typing.Any] = json.load(fd)
 
     with open(config_path, encoding="UTF-8") as fd:
-        config: dict[str, typing.Any] = json.load(fd)
+        original: dict[str, typing.Any] = json.load(fd)
 
-    config_loggers = config.setdefault("loggers", {})
-    for found_logger in config_loggers:
-        missing_loggers.pop(found_logger, None)
+    if original == template:
+        return
 
-    if missing_loggers:
-        config_loggers.update(missing_loggers)
+    updated = copy.deepcopy(original)
+    updated.setdefault("disable_existing_loggers", template.get("disable_existing_loggers", False))
+
+    template_loggers = template.get("loggers", {})
+    config_loggers = updated.setdefault("loggers", template_loggers)
+    for name, logger in template_loggers.items():
+        config_loggers.setdefault(name, logger)
+
+    if original != updated:
+        LOG.info("Update logging configuration file with new values from template: '%s' -> '%s'", template_path, config_path)
         with open(config_path, "w", encoding="UTF-8") as fd:
-            json.dump(config, fd, indent=2)
+            json.dump(updated, fd, indent=2)
 
 
 def install_default_log_config():
@@ -152,7 +165,7 @@ def install_default_log_config():
             with open(source_path, encoding="UTF-8") as src:
                 contents = src.read()
                 target.write(contents)
-    add_missing_loggers_to_config()
+    update_logger_config()
     io.ensure_dir(paths.logs())
 
 
@@ -203,6 +216,32 @@ def post_configure_actor_logging():
         for lgr, cfg in load_configuration()["loggers"].items():
             if "level" in cfg:
                 logging.getLogger(lgr).setLevel(cfg["level"])
+
+    if LOG is not logging.getLogger(__name__):
+        # It just detected that all pre-existing loggers have been forgotten after changing manager.
+        # Here we try to replace their per-module references with those created from the new manager.
+        updated: list[str] = []
+        lost: set[str] = set()
+        for name, old_logger in LOG.manager.loggerDict.items():
+            if isinstance(old_logger, logging.PlaceHolder):
+                continue
+            lost.add(name)
+            try:
+                module = importlib.import_module(name)
+            except ImportError:
+                continue
+            for attribute_name in dir(module):
+                value = getattr(module, attribute_name, None)
+                if value is old_logger:
+                    setattr(module, attribute_name, logging.getLogger(name))
+                    lost.remove(name)
+                    updated.append(name)
+                    continue
+
+        if lost:
+            LOG.debug("Old per-module logger references lost: %s", lost)
+        if updated:
+            LOG.debug("Old per-module logger references updated: %s", updated)
 
 
 def configure_logging():
