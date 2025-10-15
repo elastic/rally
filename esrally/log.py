@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import copy
 import importlib
 import json
 import logging
@@ -21,7 +22,6 @@ import logging.config
 import os
 import time
 import typing
-from copy import deepcopy
 
 import ecs_logging
 
@@ -121,7 +121,10 @@ def update_logger_config(
     config_path: str = CONFIG_PATH,
     template_path: str = TEMPLATE_PATH,
 ):
-    """It appends any missing top level loggers found in resources/logging.json to current log configuration."""
+    """It appends any missing top level loggers found in resources/logging.json to current log configuration.
+
+    It also ensures "disable_existing_loggers" is set to False by default.
+    """
 
     with open(template_path, encoding="UTF-8") as fd:
         template: dict[str, typing.Any] = json.load(fd)
@@ -132,7 +135,7 @@ def update_logger_config(
     if original == template:
         return
 
-    updated = deepcopy(original)
+    updated = copy.deepcopy(original)
     updated.setdefault("disable_existing_loggers", template.get("disable_existing_loggers", False))
 
     template_loggers = template.get("loggers", {})
@@ -215,9 +218,9 @@ def post_configure_actor_logging():
                 logging.getLogger(lgr).setLevel(cfg["level"])
 
     if LOG is not logging.getLogger(__name__):
-        updated: list[str] = []
         # It just detected that all pre-existing loggers have been forgotten after changing manager.
-        # Here we try to replace them with those created from the new manager.
+        # Here we try to replace their per-module references with those created from the new manager.
+        updated: list[str] = []
         lost: set[str] = set()
         for name, old_logger in LOG.manager.loggerDict.items():
             if isinstance(old_logger, logging.PlaceHolder):
