@@ -307,21 +307,9 @@ This section specifies how tracks corpora files has to be fetched. Available opt
 * ``track.downloader.multipart_enabled`` if `true`, it will enable the use the new multipart `esrally.storage` package for
   downloading corpora files. For more configuration options please have a look to the `[storage]` configuration section.
 
-  NOTES:
+.. warning::
 
-  * The storage module is still experimental and its use should be limited for now.
-
-  * There are know issues of compatibility of this implementation with thespian actor library on Linux and OSX because
-    it uses by default `fork` as process startup method. To workaround this issue please use this option as in the
-    following example.
-
-  Example::
-
-      [actor]
-      actor.process.startup.method = spawn
-
-      [track]
-      track.downloader.multipart_enabled = true
+    Transfers manager implementation is experimental and under active development. Enable it only if you actually need it.
 
 
 tracks
