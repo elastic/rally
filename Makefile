@@ -113,7 +113,7 @@ install_pytest_rally_plugin: venv
 
 # Old legacy alias goals
 install: venv
-	uv run esrally --version
+	uv sync --locked --extra=develop
 
 reinstall: clean-venv
 	$(MAKE) venv
