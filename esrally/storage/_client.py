@@ -55,8 +55,12 @@ class CachedHead:
                 raise ValueError("cannot specify both head and error")
             self.head = head
         elif error is not None:
+            # It creates a CachedHeadError to wraps error with the stack trace sets to here. So it will be nice to see
+            # the chain of exceptions to understand what gone one when debugging an exception borrowed from the cache.
+            # The wrapping of the original error is required to allow triggering a special handling when the error is
+            # recovered from an old cached request, or is got from an actual request.
             try:
-                raise CachedHeadError("Cached exception") from error
+                raise CachedHeadError(f"Cached error: {error}") from error
             except CachedHeadError as ex:
                 self.error = ex
         else:
