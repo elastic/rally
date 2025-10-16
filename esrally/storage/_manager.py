@@ -98,7 +98,7 @@ class TransferManager:
             except Exception as ex:
                 LOG.error("error closing transfer: %s, %s", tr.url, ex)
         self._monitor_timer.cancel()
-        LOG.info("Project manager shut down.")
+        LOG.info("Transfer manager shut down.")
 
     def get(self, url: str, path: os.PathLike | str | None = None, document_length: int | None = None) -> Transfer:
         """It starts a new transfer of a file from a remote url to a local path.
