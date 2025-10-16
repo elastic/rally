@@ -18,9 +18,11 @@ import copy
 import json
 import logging
 import logging.config
+import logging.handlers
 import os
 import time
-import typing
+from collections.abc import Callable
+from typing import Any
 
 import ecs_logging
 
@@ -31,7 +33,7 @@ LOG = logging.getLogger(__name__)
 
 
 # pylint: disable=unused-argument
-def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.Formatter:
+def configure_utc_formatter(*args: Any, **kwargs: Any) -> logging.Formatter:
     """
     Logging formatter that renders timestamps UTC, or in the local system time zone when the user requests it.
     """
@@ -45,30 +47,30 @@ def configure_utc_formatter(*args: typing.Any, **kwargs: typing.Any) -> logging.
     return formatter
 
 
-MutatorType = typing.Callable[[logging.LogRecord, dict[str, typing.Any]], None]
+MutatorType = Callable[[logging.LogRecord, dict[str, Any]], None]
 
 
 class RallyEcsFormatter(ecs_logging.StdlibFormatter):
     def __init__(
         self,
-        *args: typing.Any,
-        mutators: typing.Optional[list[MutatorType]] = None,
-        **kwargs: typing.Any,
+        *args: Any,
+        mutators: list[MutatorType] | None = None,
+        **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
         self.mutators = mutators or []
 
-    def format_to_ecs(self, record: logging.LogRecord) -> dict[str, typing.Any]:
+    def format_to_ecs(self, record: logging.LogRecord) -> dict[str, Any]:
         log_dict = super().format_to_ecs(record)
         self.apply_mutators(record, log_dict)
         return log_dict
 
-    def apply_mutators(self, record: logging.LogRecord, log_dict: dict[str, typing.Any]) -> None:
+    def apply_mutators(self, record: logging.LogRecord, log_dict: dict[str, Any]) -> None:
         for mutator in self.mutators:
             mutator(record, log_dict)
 
 
-def rename_actor_fields(record: logging.LogRecord, log_dict: dict[str, typing.Any]) -> None:
+def rename_actor_fields(record: logging.LogRecord, log_dict: dict[str, Any]) -> None:
     fields = {}
     if log_dict.get("actorAddress"):
         fields["address"] = log_dict.pop("actorAddress")
@@ -83,7 +85,7 @@ def rename_actor_fields(record: logging.LogRecord, log_dict: dict[str, typing.An
 
 
 # Special case for asyncio fields as they are not part of the standard ECS log dict
-def rename_async_fields(record: logging.LogRecord, log_dict: dict[str, typing.Any]) -> None:
+def rename_async_fields(record: logging.LogRecord, log_dict: dict[str, Any]) -> None:
     fields = {}
     if hasattr(record, "taskName") and record.taskName is not None:
         fields["task"] = record.taskName
@@ -91,7 +93,7 @@ def rename_async_fields(record: logging.LogRecord, log_dict: dict[str, typing.An
         collections.deep_update(log_dict, {"python": {"asyncio": fields}})
 
 
-def configure_ecs_formatter(*args: typing.Any, **kwargs: typing.Any) -> ecs_logging.StdlibFormatter:
+def configure_ecs_formatter(*args: Any, **kwargs: Any) -> ecs_logging.StdlibFormatter:
     """
     ECS Logging formatter
     """
@@ -126,10 +128,10 @@ def update_logger_config(
     """
 
     with open(template_path, encoding="UTF-8") as fd:
-        template: dict[str, typing.Any] = json.load(fd)
+        template: dict[str, Any] = json.load(fd)
 
     with open(config_path, encoding="UTF-8") as fd:
-        original: dict[str, typing.Any] = json.load(fd)
+        original: dict[str, Any] = json.load(fd)
 
     if original == template:
         return
@@ -137,8 +139,8 @@ def update_logger_config(
     updated = copy.deepcopy(original)
     updated.setdefault("disable_existing_loggers", template.get("disable_existing_loggers", False))
 
-    template_loggers = template.get("loggers", {})
-    config_loggers = updated.setdefault("loggers", template_loggers)
+    template_loggers: dict[str, Any] = template.get("loggers", {})
+    config_loggers: dict[str, Any] = updated.setdefault("loggers", template_loggers)
     for name, logger in template_loggers.items():
         config_loggers.setdefault(name, logger)
 
@@ -156,10 +158,10 @@ def install_default_log_config():
     It also ensures that the default log path has been created so log files
     can be successfully opened in that directory.
     """
-    log_config = log_config_path()
+    log_config: str = log_config_path()
     if not io.exists(log_config):
         io.ensure_dir(io.dirname(log_config))
-        source_path = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
+        source_path: str = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
         with open(log_config, "w", encoding="UTF-8") as target:
             with open(source_path, encoding="UTF-8") as src:
                 contents = src.read()
@@ -169,23 +171,23 @@ def install_default_log_config():
 
 
 # pylint: disable=unused-argument
-def configure_file_handler(*args, **kwargs) -> logging.Handler:
+def configure_file_handler(*, filename: str, encoding: str = "UTF-8", delay: bool = False, **kwargs: Any) -> logging.Handler:
     """
     Configures the WatchedFileHandler supporting expansion of `~` and `${LOG_PATH}` to the user's home and the log path respectively.
     """
-    filename = kwargs.pop("filename").replace("${LOG_PATH}", paths.logs())
-    return logging.handlers.WatchedFileHandler(filename=filename, encoding=kwargs["encoding"], delay=kwargs.get("delay", False))
+    filename = filename.replace("${LOG_PATH}", paths.logs())
+    return logging.handlers.WatchedFileHandler(filename=filename, encoding=encoding, delay=delay, **kwargs)
 
 
-def configure_profile_file_handler(*args, **kwargs) -> logging.Handler:
+def configure_profile_file_handler(*, filename: str, encoding: str = "UTF-8", delay: bool = False, **kwargs: Any) -> logging.Handler:
     """
     Configures the FileHandler supporting expansion of `~` and `${LOG_PATH}` to the user's home and the log path respectively.
     """
-    filename = kwargs.pop("filename").replace("${LOG_PATH}", paths.logs())
-    return logging.FileHandler(filename=filename, encoding=kwargs["encoding"], delay=kwargs.get("delay", False))
+    filename = filename.replace("${LOG_PATH}", paths.logs())
+    return logging.FileHandler(filename=filename, encoding=encoding, delay=delay, **kwargs)
 
 
-def load_configuration():
+def load_configuration() -> dict[str, Any]:
     """
     Loads the logging configuration. This is a low-level method and usually
     `configure_logging()` should be used instead.
@@ -196,7 +198,7 @@ def load_configuration():
         return json.load(f)
 
 
-def post_configure_actor_logging():
+def post_configure_actor_logging() -> None:
     """
     Reconfigures all loggers in actor processes.
 
@@ -219,35 +221,39 @@ def post_configure_actor_logging():
     if LOG.manager is not logging.root.manager:
         # It just detected that all pre-existing loggers have been forgotten after changing manager.
 
-        # Redirect messages to the same handlers as the new root handler.
+        # Redirect messages to the same handlers as the new root handler. This way as the very last resort lost logger
+        # will still emit messages to the same destination.
         LOG.root.handlers = logging.root.handlers
 
+        # For debugging purpose it we will finally report all recovered logger names here.
         recovered: list[str] = []
-        lost: list[str] = []
 
-        # It replaces attributes values of those loggers with the attributes with loggers created by the new manager.
-        # In this way old logger should behave as new ones, and dispatch records to the new root logger.
+        # It replaces attributes values of pre-existing loggers with the attributes of loggers created by the new manager.
+        # In this way old logger should behave as the new ones, and dispatch records to the new root logger.
         LOG.__dict__ = logging.getLogger(__name__).__dict__
-        for name, old_logger in LOG.manager.loggerDict.items():
+        lost: dict[str, Any] = LOG.manager.loggerDict
+        for name, old_logger in sorted(lost.items()):
             if not isinstance(old_logger, logging.Logger):
+                # It filters out for instance place-holders.
+                lost.pop(name)
                 continue  # Skip place holders and adapters
             new_logger = logging.getLogger(name)
-            if type(new_logger) is type(old_logger):
-                old_logger.__dict__ = new_logger.__dict__
-                recovered.append(name)
-            else:
-                LOG.warning("Old logger lost: %s (type(new_logger) is not type(old_logger))", name)
-                lost.append(name)
+            if type(new_logger) is not type(old_logger):
+                continue
+            old_logger.__dict__ = new_logger.__dict__
+            recovered.append(name)
+            lost.pop(name)
 
+        # This ensures this monkey patching will not occur twice.
         assert LOG.manager is logging.root.manager
 
         if recovered:
             LOG.debug("Recovered loggers from old manager: %s", ", ".join(recovered))
         if lost:
-            LOG.warning("Lost loggers from old manager: %s", ", ".join(lost))
+            LOG.warning("Lost loggers from old manager: %s", lost)
 
 
-def configure_logging():
+def configure_logging() -> None:
     """
     Configures logging for the current process.
     """
