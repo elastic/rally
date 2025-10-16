@@ -62,12 +62,6 @@ class TransferManager:
         self._client = client
         self._executor = executor
         self._lock = threading.Lock()
-
-        local_dir = os.path.expanduser(cfg.local_dir)
-        if not os.path.isdir(local_dir):
-            os.makedirs(local_dir)
-        self._local_dir = local_dir
-
         self._transfers: dict[str, Transfer] = {}
 
         if cfg.max_workers < 1:
@@ -112,6 +106,7 @@ class TransferManager:
             path = os.path.join(self.cfg.local_dir, url)
         # This also ensures the path is a string
         path = os.path.normpath(os.path.expanduser(path))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
 
         tr = self._transfers.get(path)
         if tr is not None:
