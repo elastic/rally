@@ -74,7 +74,7 @@ class Adapter(ABC):
     @classmethod
     @abstractmethod
     def match_url(cls, url: str) -> bool:
-        """It returns a canonical URL in case this adapter accepts the URL, None otherwise."""
+        """It returns whenever this adapter is able to accept this URL."""
 
     @classmethod
     @abstractmethod
