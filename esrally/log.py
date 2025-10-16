@@ -207,16 +207,15 @@ def post_configure_actor_logging() -> None:
     # see configure_logging()
     logging.captureWarnings(True)
 
-    # at this point we can assume that a log configuration exists. It has been created already during startup.
-    logger_configuration = load_configuration()
-    if "root" in logger_configuration and "level" in logger_configuration["root"]:
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logger_configuration["root"]["level"])
+    # At this point we can assume that a log configuration exists. It has been created already during startup.
+    config = load_configuration()
+    if root_config := config.get("root"):
+        if level := root_config.get("level"):
+            logging.root.setLevel(level)
 
-    if "loggers" in logger_configuration:
-        for lgr, cfg in load_configuration()["loggers"].items():
-            if "level" in cfg:
-                logging.getLogger(lgr).setLevel(cfg["level"])
+    for name, cfg in config.get("loggers", {}).items():
+        if level := cfg.get("level"):
+            logging.getLogger(name).setLevel(level)
 
     if LOG.manager is not logging.root.manager:
         # It just detected that all pre-existing loggers have been forgotten after changing manager.
