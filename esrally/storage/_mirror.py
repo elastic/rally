@@ -42,7 +42,6 @@ class MirrorList:
         urls: Mapping[str, Iterable[str]] | None = None,
     ):
         self._cfg = cfg
-        self._mirror_files: tuple[str, ...] = tuple()
         self._urls: dict[str, set] = defaultdict(set)
         mirror_files = set(convert.to_strings(mirror_files))
         if cfg is not None:

@@ -39,7 +39,11 @@ LOG = logging.getLogger(__name__)
 
 
 class CachedHeadError(Exception):
-    pass
+    """CachedHeadError is intended to wrap another exception.
+
+    It is being raised when an attempt is made to retrieve a head from the cache to handle the case of recent past
+    failure fetching the same head.
+    """
 
 
 @dataclass
