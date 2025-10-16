@@ -78,6 +78,8 @@ If the scheduler also needs access to the parameter source, provide a ``paramete
 task's parameter source into this property.
 """
 
+LOG = logging.getLogger(__name__)
+
 
 def scheduler_for(task: esrally.track.Task):
     """
@@ -86,7 +88,6 @@ def scheduler_for(task: esrally.track.Task):
     :param task: The current task for which a scheduler is needed.
     :return: An initialized scheduler instance.
     """
-    logger = logging.getLogger(__name__)
     if run_unthrottled(task):
         return Unthrottled()
 
@@ -98,13 +99,13 @@ def scheduler_for(task: esrally.track.Task):
 
     # for backwards-compatibility - treat existing schedulers as top-level schedulers
     if is_legacy_scheduler(scheduler_class):
-        logger.warning("Scheduler [%s] implements a deprecated API. Please adapt it.", scheduler_class)
+        LOG.warning("Scheduler [%s] implements a deprecated API. Please adapt it.", scheduler_class)
         return LegacyWrappingScheduler(task, scheduler_class)
     elif is_simple_scheduler(scheduler_class):
-        logger.debug("Treating [%s] for [%s] as a simple scheduler.", scheduler_class, task)
+        LOG.debug("Treating [%s] for [%s] as a simple scheduler.", scheduler_class, task)
         return UnitAwareScheduler(task, scheduler_class)
     else:
-        logger.debug("Treating [%s] for [%s] as non-simple scheduler.", scheduler_class, task)
+        LOG.debug("Treating [%s] for [%s] as non-simple scheduler.", scheduler_class, task)
         return scheduler_class(task)
 
 
@@ -144,18 +145,17 @@ def register_scheduler(name, scheduler):
     :param scheduler: Either a unary function ``float`` -> ``float`` or a class with the same interface as ``Scheduler``.
 
     """
-    logger = logging.getLogger(__name__)
     if name in __SCHEDULERS:
         raise exceptions.SystemSetupError("A scheduler with the name [%s] is already registered." % name)
     # we'd rather use callable() but this will erroneously also classify a class as callable...
     if isinstance(scheduler, types.FunctionType):
-        logger.warning("Function-based schedulers are deprecated. Please reimplement [%s] as a class.", str(scheduler))
-        logger.debug("Registering function [%s] for [%s].", str(scheduler), str(name))
+        LOG.warning("Function-based schedulers are deprecated. Please reimplement [%s] as a class.", str(scheduler))
+        LOG.debug("Registering function [%s] for [%s].", str(scheduler), str(name))
 
         # lazy initialize a delegating scheduler
         __SCHEDULERS[name] = lambda _: DelegatingScheduler(scheduler)
     else:
-        logger.debug("Registering object [%s] for [%s].", str(scheduler), str(name))
+        LOG.debug("Registering object [%s] for [%s].", str(scheduler), str(name))
         __SCHEDULERS[name] = scheduler
 
 
@@ -290,7 +290,7 @@ class UnitAwareScheduler(Scheduler):
                 if expected_unit == "ops/s":
                     weight = 1
                     if self.first_request:
-                        logging.getLogger(__name__).warning(
+                        LOG.warning(
                             "Task [%s] throttles based on [%s] but reports [%s]. Please specify the target throughput in [%s] instead.",
                             self.task,
                             expected_unit,

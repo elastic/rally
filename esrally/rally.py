@@ -376,6 +376,12 @@ def create_arg_parser():
         choices=["docker", "default"],
         default="default",
     )
+    build_parser.add_argument(
+        "--source-build-release",
+        help="Build a release version of Elasticsearch from sources.",
+        default=False,
+        action="store_true",
+    )
 
     download_parser = subparsers.add_parser("download", help="Downloads an artifact")
     download_parser.add_argument(
@@ -524,6 +530,12 @@ def create_arg_parser():
         help="Method with which to build Elasticsearch and plugins from source",
         choices=["docker", "default"],
         default="default",
+    )
+    install_parser.add_argument(
+        "--source-build-release",
+        help="Build a release version of Elasticsearch from sources.",
+        default=False,
+        action="store_true",
     )
     install_parser.add_argument(
         "--installation-id",
@@ -818,7 +830,7 @@ def create_arg_parser():
     add_parser.add_argument(
         "configuration",
         metavar="configuration",
-        help="The configuration for which Rally should add records. " "Possible values are: annotation",
+        help="The configuration for which Rally should add records. Possible values are: annotation",
         choices=["annotation"],
     )
     add_parser.add_argument(
@@ -1159,6 +1171,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.release", args.source_build_release)
             cfg.add(config.Scope.applicationOverride, "mechanic", "target.os", args.target_os)
             cfg.add(config.Scope.applicationOverride, "mechanic", "target.arch", args.target_arch)
             configure_mechanic_params(args, cfg)
@@ -1174,6 +1187,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.release", args.source_build_release)
             cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
