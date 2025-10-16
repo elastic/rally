@@ -551,8 +551,8 @@ class FileOffsetTable:
             net.download(remote_offset_url, self.offset_table_path)
             logger.info("Successfully downloaded offset file from [%s]", remote_offset_url)
             return True
-        except BaseException as be:
-            logger.debug("Download failed: %s", str(be))
+        except Exception as e:
+            logger.debug("Download failed: %s", str(e))
             return False
 
     def __enter__(self) -> Self:
