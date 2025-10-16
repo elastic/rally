@@ -305,7 +305,7 @@ track
 This section specifies how tracks corpora files has to be fetched. Available options are:
 
 * ``track.downloader.multipart_enabled`` if `true`, it will enable the use the new multipart `esrally.storage` package for
-  downloading corpora files. For more configuration options please have a look to the `[storage]` configuration section.
+  downloading corpora files. For more configuration options please have a look to the `storage`_ configuration section.
 
 .. warning::
 
