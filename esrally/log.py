@@ -216,12 +216,18 @@ def post_configure_actor_logging():
             if "level" in cfg:
                 logging.getLogger(lgr).setLevel(cfg["level"])
 
-    if LOG is not logging.getLogger(__name__):
+    if LOG.manager is not logging.root.manager:
         # It just detected that all pre-existing loggers have been forgotten after changing manager.
-        # It replaces attributes values of those loggers with the attributes with loggers created by the new manager.
-        # In this way old logger should behave as new ones, behaving as the same.
+
+        # Redirect messages to the same handlers as the new root handler.
+        LOG.root.handlers = logging.root.handlers
+
         recovered: list[str] = []
         lost: list[str] = []
+
+        # It replaces attributes values of those loggers with the attributes with loggers created by the new manager.
+        # In this way old logger should behave as new ones, and dispatch records to the new root logger.
+        LOG.__dict__ = logging.getLogger(__name__).__dict__
         for name, old_logger in LOG.manager.loggerDict.items():
             if not isinstance(old_logger, logging.Logger):
                 continue  # Skip place holders and adapters
@@ -230,7 +236,10 @@ def post_configure_actor_logging():
                 old_logger.__dict__ = new_logger.__dict__
                 recovered.append(name)
             else:
+                LOG.warning("Old logger lost: %s (type(new_logger) is not type(old_logger))", name)
                 lost.append(name)
+
+        assert LOG.manager is logging.root.manager
 
         if recovered:
             LOG.debug("Recovered loggers from old manager: %s", ", ".join(recovered))

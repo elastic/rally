@@ -111,7 +111,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         self.received_responses = []
         self.status = None
         log.post_configure_actor_logging()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(type(self).__module__)
         console.set_assume_tty(assume_tty=False)
         LOG.info("Actor initialized: cls=%s, pid=%s", type(self).__name__, os.getpid())
 
