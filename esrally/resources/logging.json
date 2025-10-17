@@ -64,13 +64,11 @@
     "level": "INFO"
   },
   "loggers": {
+    "esrally.log": {
+      "level": "DEBUG"
+    },
     "elasticsearch": {
-      "handlers": [
-        "rally_log_handler",
-        "rally_json_handler"
-      ],
-      "level": "WARNING",
-      "propagate": false
+      "level": "WARNING"
     },
     "rally.profile": {
       "handlers": [
@@ -80,12 +78,7 @@
       "propagate": false
     },
     "elastic_transport": {
-      "handlers": [
-        "rally_log_handler",
-        "rally_json_handler"
-      ],
-      "level": "WARNING",
-      "propagate": false
+      "level": "WARNING"
     }
   }
 }
