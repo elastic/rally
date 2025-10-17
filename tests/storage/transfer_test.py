@@ -25,11 +25,12 @@ from urllib.parse import urlparse
 import pytest
 
 from esrally.config import Config
-from esrally.storage._adapter import Head, Writable
+from esrally.storage._adapter import Head
 from esrally.storage._client import Client
+from esrally.storage._config import StorageConfig
+from esrally.storage._executor import DummyExecutor
 from esrally.storage._range import rangeset
-from esrally.storage._transfer import MAX_CONNECTIONS, Transfer
-from esrally.storage.testing import DummyExecutor
+from esrally.storage._transfer import Transfer
 from esrally.utils.cases import cases
 
 URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
@@ -41,16 +42,15 @@ MISMATCH_CRC32C = "invalid-crc32c-checksum"
 
 class DummyClient(Client):
 
-    def head(self, url: str, ttl: float | None = None) -> Head:
+    def head(self, url: str, *, cache_ttl: float | None = None) -> Head:
         return Head(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
         data = DATA
-        if head is not None and head.ranges:
-            data = data[head.ranges.start : head.ranges.end]
-        if data:
-            stream.write(data)
-        return Head(url, ranges=head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
+        if check_head is not None and check_head.ranges:
+            data = data[check_head.ranges.start : check_head.ranges.end]
+        head = Head(url, ranges=check_head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
+        return head, iter((data,))
 
 
 @pytest.fixture
@@ -69,7 +69,7 @@ class TransferCase:
     document_length: int | None = len(DATA)
     crc32c: str = CRC32C
     multipart_size: int | None = None
-    max_connections: int = MAX_CONNECTIONS
+    max_connections: int = StorageConfig.DEFAULT_MAX_CONNECTIONS
     want_init_error: type[Exception] | None = None
     want_init_todo: str = "0-1023"
     want_init_done: str = ""
@@ -92,13 +92,12 @@ class TransferCase:
     ),
     # It tests multipart working when multipart_size < content_length.
     multipart_size=TransferCase(multipart_size=128, want_final_done="0-127", want_final_todo="128-1023", want_final_written="0-127"),
-    # It tests multipart working when multipart_size < content_length.
+    # It tests mismatching document length.
     mismatching_document_length=TransferCase(
-        want_final_done="0-49",
+        want_final_todo="0-49",
         want_init_todo="0-49",
         document_length=50,
         want_init_document_length=50,
-        want_final_written="0-49",
         want_final_document_length=50,
         want_final_error=RuntimeError,
     ),

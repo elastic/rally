@@ -24,8 +24,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
-from collections.abc import Generator
-from typing import Callable, Optional
+from collections.abc import Callable, Generator
 
 import jinja2
 import jinja2.exceptions
@@ -33,7 +32,16 @@ import jsonschema
 import tabulate
 from jinja2 import meta
 
-from esrally import PROGRAM_NAME, config, exceptions, paths, time, types, version
+from esrally import (
+    PROGRAM_NAME,
+    config,
+    exceptions,
+    paths,
+    storage,
+    time,
+    types,
+    version,
+)
 from esrally.track import params, track
 from esrally.track.track import Parallel
 from esrally.utils import (
@@ -48,6 +56,8 @@ from esrally.utils import (
     repo,
     serverless,
 )
+
+LOG = logging.getLogger(__name__)
 
 
 class TrackSyntaxError(exceptions.InvalidSyntax):
@@ -91,13 +101,16 @@ class TrackProcessor(abc.ABC):
 
 
 class TrackProcessorRegistry:
+
+    @classmethod
+    def from_config(cls, cfg: config.Config):
+        return cls(cfg)
+
     def __init__(self, cfg: types.Config):
         self.required_processors = [TaskFilterTrackProcessor(cfg), ServerlessFilterTrackProcessor(cfg), TestModeTrackProcessor(cfg)]
         self.track_processors = []
-        self.offline = cfg.opts("system", "offline.mode")
-        self.test_mode = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
-        self.base_config = cfg
-        self.custom_configuration = False
+        self.base_config: types.Config = cfg
+        self.custom_configuration: bool = False
 
     def register_track_processor(self, processor):
         if not self.custom_configuration:
@@ -109,7 +122,7 @@ class TrackProcessorRegistry:
         if hasattr(processor, "cfg"):
             processor.cfg = self.base_config
         if hasattr(processor, "downloader"):
-            processor.downloader = Downloader(self.offline, self.test_mode)
+            processor.downloader = Downloader.from_config(cfg=self.base_config)
         if hasattr(processor, "decompressor"):
             processor.decompressor = Decompressor()
         self.track_processors.append(processor)
@@ -247,12 +260,12 @@ def _load_single_track(cfg: types.Config, track_repository, track_name, install_
             processor.on_after_load_track(current_track)
         return current_track
     except FileNotFoundError as e:
-        logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
+        LOG.exception("Cannot load track [%s]", track_name)
         raise exceptions.SystemSetupError(
             f"Cannot load track [{track_name}]. List the available tracks with [{PROGRAM_NAME} list tracks]."
         ) from e
-    except BaseException:
-        logging.getLogger(__name__).exception("Cannot load track [%s]", track_name)
+    except Exception:
+        LOG.exception("Cannot load track [%s]", track_name)
         raise
 
 
@@ -278,7 +291,7 @@ def load_track_plugins(
     """
     repo = track_repo(cfg, fetch=force_update, update=force_update)
     track_plugin_path = repo.track_dir(track_name)
-    logging.getLogger(__name__).debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
+    LOG.debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
     plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
 
     if plugin_reader.can_load():
@@ -455,7 +468,7 @@ class DefaultTrackPreparator(TrackProcessor):
     def __init__(self):
         super().__init__()
         # just declare here, will be injected later
-        self.cfg: Optional[types.Config] = None
+        self.cfg: types.Config | None = None
         self.downloader = None
         self.decompressor = None
         self.track = None
@@ -465,9 +478,7 @@ class DefaultTrackPreparator(TrackProcessor):
         for document_set in corpus.documents:
             if document_set.is_bulk:
                 data_root = data_dir(cfg, track.name, corpus.name)
-                logging.getLogger(__name__).info(
-                    "Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root
-                )
+                LOG.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root)
                 if len(data_root) == 1:
                     preparator.prepare_document_set(document_set, data_root[0])
                 # attempt to prepare everything in the current directory and fallback to the corpus directory
@@ -482,8 +493,6 @@ class DefaultTrackPreparator(TrackProcessor):
 
 
 class Decompressor:
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
 
     def decompress(self, archive_path, documents_path, uncompressed_size):
         if uncompressed_size:
@@ -494,7 +503,7 @@ class Decompressor:
         else:
             msg = f"Decompressing track data from [{archive_path}] to [{documents_path}] ... "
 
-        console.info(msg, end="", flush=True, logger=self.logger)
+        console.info(msg, end="", flush=True, logger=LOG)
         io.decompress(archive_path, io.dirname(archive_path))
         console.println("[OK]")
         if not os.path.isfile(documents_path):
@@ -511,51 +520,76 @@ class Decompressor:
 
 
 class Downloader:
-    def __init__(self, offline, test_mode):
+
+    @classmethod
+    def from_config(cls, cfg: types.Config):
+        offline: bool = convert.to_bool(cfg.opts("system", "offline.mode", mandatory=False, default_value=False))
+        test_mode: bool = convert.to_bool(cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False))
+        use_transfer_manager: bool = convert.to_bool(
+            cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=False)
+        )
+        storage_config: storage.StorageConfig | None = None
+        if use_transfer_manager:
+            storage_config = storage.StorageConfig.from_config(cfg)
+        return cls(offline=offline, test_mode=test_mode, storage_config=storage_config)
+
+    def __init__(self, offline: bool, test_mode: bool, storage_config: storage.StorageConfig | None = None):
         self.offline = offline
         self.test_mode = test_mode
-        self.logger = logging.getLogger(__name__)
+        self.storage_config = storage_config
 
-    def download(self, base_url, target_path, size_in_bytes):
+    def download(self, base_url: str, target_path: str, size_in_bytes: int | None = None) -> None:
         file_name = os.path.basename(target_path)
-
         if not base_url:
             raise exceptions.DataError("Cannot download data because no base URL is provided.")
         if self.offline:
             raise exceptions.SystemSetupError(f"Cannot find [{target_path}]. Please disable offline mode and retry.")
 
-        if base_url.endswith("/"):
-            separator = ""
+        # It joins manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
+        data_url = f"{base_url.rstrip('/')}/{file_name}"
+        if self.storage_config is not None:
+            manager = storage.init_transfer_manager(cfg=self.storage_config)
+            LOG.info("Downloading data from [%s] to [%s] using transfer manager...", data_url, target_path)
+            try:
+                manager.get(data_url, target_path, size_in_bytes).wait()
+                LOG.info("Downloaded data from [%s] to [%s] using transfer manager.", data_url, target_path)
+                return
+            except FileNotFoundError as ex:
+                if self.test_mode:
+                    raise exceptions.DataError(
+                        "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
+                    ) from None
+                raise exceptions.DataError(f"Cannot download data from '{data_url}' using transfer manager.") from ex
+            except Exception as ex:
+                raise exceptions.DataError(f"Cannot download data from '{data_url}' using transfer manager.") from ex
         else:
-            separator = "/"
-        # join manually as `urllib.parse.urljoin` does not work with S3 or GS URL schemes.
-        data_url = f"{base_url}{separator}{file_name}"
-        try:
             io.ensure_dir(os.path.dirname(target_path))
             if size_in_bytes:
-                self.logger.info("Downloading data from [%s] (%s) to [%s].", data_url, pretty.size(size_in_bytes), target_path)
+                LOG.info("Downloading data from [%s] (%s) to [%s].", data_url, pretty.size(size_in_bytes), target_path)
             else:
-                self.logger.info("Downloading data from [%s] to [%s].", data_url, target_path)
+                LOG.info("Downloading data from [%s] to [%s].", data_url, target_path)
 
             # we want to have a bit more accurate download progress as these files are typically very large
             progress = net.Progress("[INFO] Downloading track data", accuracy=1)
-            net.download(data_url, target_path, size_in_bytes, progress_indicator=progress)
-            progress.finish()
-            self.logger.info("Downloaded data from [%s] to [%s].", data_url, target_path)
-        except urllib.error.HTTPError as e:
-            if e.code == 404 and self.test_mode:
-                raise exceptions.DataError(
-                    "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
-                ) from None
+            try:
+                net.download(data_url, target_path, size_in_bytes, progress_indicator=progress)
+            except urllib.error.HTTPError as e:
+                if e.code == 404 and self.test_mode:
+                    raise exceptions.DataError(
+                        "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
+                    ) from None
 
-            msg = f"Could not download [{data_url}] to [{target_path}]"
-            if e.reason:
-                msg += f" (HTTP status: {e.code}, reason: {e.reason})"
-            else:
-                msg += f" (HTTP status: {e.code})"
-            raise exceptions.DataError(msg) from e
-        except urllib.error.URLError as e:
-            raise exceptions.DataError(f"Could not download [{data_url}] to [{target_path}].") from e
+                msg = f"Could not download [{data_url}] to [{target_path}]"
+                if e.reason:
+                    msg += f" (HTTP status: {e.code}, reason: {e.reason})"
+                else:
+                    msg += f" (HTTP status: {e.code})"
+                raise exceptions.DataError(msg) from e
+            except urllib.error.URLError as e:
+                raise exceptions.DataError(f"Could not download [{data_url}] to [{target_path}].") from e
+
+            progress.finish()
+            LOG.info("Downloaded data from [%s] to [%s].", data_url, target_path)
 
         if not os.path.isfile(target_path):
             raise exceptions.SystemSetupError(
@@ -706,14 +740,13 @@ class TemplateSource:
         self.source = source
         self.fileglobber = fileglobber
         self.assembled_source = None
-        self.logger = logging.getLogger(__name__)
 
     def load_template_from_file(self):
         loader = jinja2.FileSystemLoader(self.base_path)
         try:
             base_track = loader.get_source(jinja2.Environment(), self.template_file_name)
         except jinja2.TemplateNotFound:
-            self.logger.exception("Could not load track from [%s].", self.template_file_name)
+            LOG.exception("Could not load track from [%s].", self.template_file_name)
             raise TrackSyntaxError(f"Could not load track from '{self.template_file_name}'")
         self.assembled_source = self.replace_includes(self.base_path, base_track[0])
 
@@ -848,7 +881,6 @@ def render_template_from_file(template_file_name, template_vars, complete_track_
 
 class TaskFilterTrackProcessor(TrackProcessor):
     def __init__(self, cfg: types.Config):
-        self.logger = logging.getLogger(__name__)
         include_tasks = cfg.opts("track", "include.tasks", mandatory=False)
         exclude_tasks = cfg.opts("track", "exclude.tasks", mandatory=False)
 
@@ -904,10 +936,10 @@ class TaskFilterTrackProcessor(TrackProcessor):
                         if self._filter_out_match(leaf_task):
                             leafs_to_remove.append(leaf_task)
                     for leaf_task in leafs_to_remove:
-                        self.logger.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
+                        LOG.info("Removing sub-task [%s] from challenge [%s] due to task filter.", leaf_task, challenge)
                         task.remove_task(leaf_task)
             for task in tasks_to_remove:
-                self.logger.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
+                LOG.info("Removing task [%s] from challenge [%s] due to task filter.", task, challenge)
                 challenge.remove_task(task)
 
         return track
@@ -915,7 +947,6 @@ class TaskFilterTrackProcessor(TrackProcessor):
 
 class ServerlessFilterTrackProcessor(TrackProcessor):
     def __init__(self, cfg: types.Config):
-        self.logger = logging.getLogger(__name__)
         self.serverless_mode = convert.to_bool(cfg.opts("driver", "serverless.mode", mandatory=False, default_value=False))
         self.serverless_operator = convert.to_bool(cfg.opts("driver", "serverless.operator", mandatory=False, default_value=False))
 
@@ -924,7 +955,7 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
             return not operation.run_on_serverless
 
         if operation.type == "raw-request":
-            self.logger.info("Treating raw-request operation for operation [%s] as public.", operation.name)
+            LOG.info("Treating raw-request operation for operation [%s] as public.", operation.name)
 
         try:
             op = track.OperationType.from_hyphenated_string(operation.type)
@@ -934,7 +965,7 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
             else:
                 return op.serverless_status < serverless.Status.Public
         except KeyError:
-            self.logger.info("Treating user-provided operation type [%s] for operation [%s] as public.", operation.type, operation.name)
+            LOG.info("Treating user-provided operation type [%s] for operation [%s] as public.", operation.type, operation.name)
             return False
 
     def on_after_load_track(self, track):
@@ -962,23 +993,21 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
 class TestModeTrackProcessor(TrackProcessor):
     def __init__(self, cfg: types.Config):
         self.test_mode_enabled = cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False)
-        self.logger = logging.getLogger(__name__)
 
     def on_after_load_track(self, track):
         if not self.test_mode_enabled:
             return track
-        self.logger.info("Preparing track [%s] for test mode.", str(track))
+        LOG.info("Preparing track [%s] for test mode.", str(track))
         for corpus in track.corpora:
             for document_set in corpus.documents:
                 # TODO #341: Should we allow this for snapshots too?
                 if document_set.is_bulk:
                     if document_set.number_of_documents > 1000:
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug(
-                                "Reducing corpus size to 1000 documents in corpus [%s], uncompressed source file [%s]",
-                                corpus.name,
-                                document_set.document_file,
-                            )
+                        LOG.debug(
+                            "Reducing corpus size to 1000 documents in corpus [%s], uncompressed source file [%s]",
+                            corpus.name,
+                            document_set.document_file,
+                        )
 
                         document_set.number_of_documents = 1000
 
@@ -1000,13 +1029,12 @@ class TestModeTrackProcessor(TrackProcessor):
                         document_set.compressed_size_in_bytes = None
                         document_set.uncompressed_size_in_bytes = None
                     else:
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug(
-                                "Maintaining existing size of %d documents in corpus [%s], uncompressed source file [%s]",
-                                document_set.number_of_documents,
-                                corpus.name,
-                                document_set.document_file,
-                            )
+                        LOG.debug(
+                            "Maintaining existing size of %d documents in corpus [%s], uncompressed source file [%s]",
+                            document_set.number_of_documents,
+                            corpus.name,
+                            document_set.document_file,
+                        )
 
         for challenge in track.challenges:
             for task in challenge.schedule:
@@ -1016,26 +1044,18 @@ class TestModeTrackProcessor(TrackProcessor):
                     # at least one iteration for each client.
                     if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
                         count = leaf_task.clients
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug("Resetting warmup iterations to %d for [%s]", count, str(leaf_task))
+                        LOG.debug("Resetting warmup iterations to %d for [%s]", count, leaf_task)
                         leaf_task.warmup_iterations = count
                     if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
                         count = leaf_task.clients
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug("Resetting measurement iterations to %d for [%s]", count, str(leaf_task))
+                        LOG.debug("Resetting measurement iterations to %d for [%s]", count, leaf_task)
                         leaf_task.iterations = count
                     if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
                         leaf_task.warmup_time_period = 0
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug(
-                                "Resetting warmup time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.warmup_time_period
-                            )
+                        LOG.debug("Resetting warmup time period for [%s] to [%d] seconds.", leaf_task, leaf_task.warmup_time_period)
                     if leaf_task.time_period is not None and leaf_task.time_period > 10:
                         leaf_task.time_period = 10
-                        if self.logger.isEnabledFor(logging.DEBUG):
-                            self.logger.debug(
-                                "Resetting measurement time period for [%s] to [%d] seconds.", str(leaf_task), leaf_task.time_period
-                            )
+                        LOG.debug("Resetting measurement time period for [%s] to [%d] seconds.", leaf_task, leaf_task.time_period)
 
                     # Keep throttled to expose any errors but increase the target throughput for short execution times.
                     if leaf_task.target_throughput:
@@ -1093,7 +1113,6 @@ class TrackFileReader:
             build_flavor=self.build_flavor,
             serverless_operator=self.serverless_operator,
         )
-        self.logger = logging.getLogger(__name__)
 
     def read(self, track_name, track_spec_file, mapping_dir):
         """
@@ -1105,7 +1124,7 @@ class TrackFileReader:
         :return: A corresponding track instance if the track file is valid.
         """
 
-        self.logger.info("Reading track specification file [%s].", track_spec_file)
+        LOG.info("Reading track specification file [%s].", track_spec_file)
         # render the track to a temporary file instead of dumping it into the logs. It is easier to check for error messages
         # involving lines numbers and it also does not bloat Rally's log file so much.
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
@@ -1119,18 +1138,18 @@ class TrackFileReader:
                 )
                 with open(tmp.name, "w", encoding="utf-8") as f:
                     f.write(rendered)
-                self.logger.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
+                LOG.info("Final rendered track for '%s' has been written to '%s'.", track_spec_file, tmp.name)
                 track_spec = json.loads(rendered)
             except jinja2.exceptions.TemplateSyntaxError as te:
-                self.logger.exception("Could not load [%s] due to Jinja Syntax Exception.", track_spec_file)
+                LOG.exception("Could not load [%s] due to Jinja Syntax Exception.", track_spec_file)
                 msg = f"Could not load '{track_spec_file}' due to Jinja Syntax Exception. "
                 msg += f"The track file ({tmp.name}) likely hasn't been written."
                 raise TrackSyntaxError(msg, te)
             except jinja2.exceptions.TemplateNotFound:
-                self.logger.exception("Could not load [%s]", track_spec_file)
+                LOG.exception("Could not load [%s]", track_spec_file)
                 raise exceptions.SystemSetupError(f"Track {track_name} does not exist")
             except json.JSONDecodeError as e:
-                self.logger.exception("Could not load [%s].", track_spec_file)
+                LOG.exception("Could not load [%s].", track_spec_file)
                 msg = f"Could not load '{track_spec_file}': {str(e)}."
                 if e.doc and e.lineno > 0 and e.colno > 0:
                     line_idx = e.lineno - 1
@@ -1144,7 +1163,7 @@ class TrackFileReader:
                 msg += f"The complete track has been written to '{tmp.name}' for diagnosis."
                 raise TrackSyntaxError(msg)
             except Exception as e:
-                self.logger.exception("Could not load [%s].", track_spec_file)
+                LOG.exception("Could not load [%s].", track_spec_file)
                 msg = f"Could not load '{track_spec_file}'. The complete track has been written to '{tmp.name}' for diagnosis."
                 raise TrackSyntaxError(msg, e)
 
@@ -1182,7 +1201,7 @@ class TrackFileReader:
             params_list = ",".join(opts.double_quoted_list_of(sorted(internal_user_defined_track_params)))
             err_msg = f"Some of your track parameter(s) {params_list} are defined by Rally and cannot be modified.\n"
 
-            self.logger.critical(err_msg)
+            LOG.critical(err_msg)
             # also dump the message on the console
             console.println(err_msg)
             raise exceptions.TrackConfigError(f"Reserved track parameters {sorted(internal_user_defined_track_params)}.")
@@ -1210,7 +1229,7 @@ class TrackFileReader:
                 )
             )
 
-            self.logger.critical(err_msg)
+            LOG.critical(err_msg)
             # also dump the message on the console
             console.println(err_msg)
             raise exceptions.TrackConfigError(f"Unused track parameters {sorted(unused_user_defined_track_params)}.")
@@ -1240,9 +1259,9 @@ class TrackPluginReader:
             # every module needs to have a register() method
             for module in root_modules:
                 module.register(self)
-        except BaseException:
-            msg = "Could not register track plugin at [%s]" % self.loader.root_path
-            logging.getLogger(__name__).exception(msg)
+        except Exception:
+            msg = f"Could not register track plugin at [{self.loader.root_path}]"
+            LOG.exception(msg)
             raise exceptions.SystemSetupError(msg)
 
     def register_param_source(self, name, param_source):
@@ -1290,7 +1309,6 @@ class TrackSpecificationReader:
         self.complete_track_params = complete_track_params
         self.selected_challenge = selected_challenge
         self.source = source
-        self.logger = logging.getLogger(__name__)
 
     def __call__(self, track_name, track_specification, mapping_dir, spec_file=None):
         self.name = track_name
@@ -1410,7 +1428,7 @@ class TrackSpecificationReader:
         return track.IndexTemplate(name, index_pattern, template_content, delete_matching_indices)
 
     def _load_template(self, contents, description):
-        self.logger.info("Loading template [%s].", description)
+        LOG.info("Loading template [%s].", description)
         register_all_params_in_track(contents, self.complete_track_params)
         try:
             rendered = render_template(
@@ -1420,7 +1438,7 @@ class TrackSpecificationReader:
             )
             return json.loads(rendered)
         except Exception as e:
-            self.logger.exception("Could not load file template for %s.", description)
+            LOG.exception("Could not load file template for %s.", description)
             raise TrackSyntaxError("Could not load file template for '%s'" % description, str(e))
 
     def _create_corpora(self, corpora_specs, indices, data_streams):
@@ -1807,9 +1825,9 @@ class TrackSpecificationReader:
             op = track.OperationType.from_hyphenated_string(op_type_name)
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
-            self.logger.debug("Using built-in operation type [%s] for operation [%s].", op_type_name, op_name)
+            LOG.debug("Using built-in operation type [%s] for operation [%s].", op_type_name, op_name)
         except KeyError:
-            self.logger.info("Using user-provided operation type [%s] for operation [%s].", op_type_name, op_name)
+            LOG.info("Using user-provided operation type [%s] for operation [%s].", op_type_name, op_name)
 
         try:
             return track.Operation(name=op_name, meta_data=meta_data, operation_type=op_type_name, params=params, param_source=param_source)
