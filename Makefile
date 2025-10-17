@@ -113,7 +113,6 @@ install_pytest_rally_plugin: venv
 
 # Old legacy alias goals
 install: venv
-	uv sync --locked --extra=develop
 
 reinstall: clean-venv
 	$(MAKE) venv
@@ -159,14 +158,14 @@ format: lint
 
 # It build project documentation.
 docs: venv
-	uv run $(MAKE) -C docs/ html
+	$(VENV_ACTIVATE); $(MAKE) -C docs/ html
 
 serve-docs: venv
-	uv run $(MAKE) -C docs/ serve
+	$(VENV_ACTIVATE); $(MAKE) -C docs/ serve
 
 # It cleans project documentation.
 clean-docs: venv
-	uv run $(MAKE) -C docs/ clean
+	$(VENV_ACTIVATE); $(MAKE) -C docs/ clean
 
 
 # --- Unit tests goals ---
