@@ -105,6 +105,9 @@ def no_retry(f, actor_name):
 
 
 class RallyActor(thespian.actors.ActorTypeDispatcher):
+
+    _initialized = False
+
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         self.children: list[thespian.actors.ActorAddress] = []
@@ -113,6 +116,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
         log.post_configure_actor_logging()
         self.logger = logging.getLogger(type(self).__module__)
         console.set_assume_tty(assume_tty=False)
+        self._initialized = True
         LOG.info("Actor initialized: cls=%s, pid=%s", type(self).__name__, os.getpid())
 
     # The method name is required by the actor framework
@@ -125,6 +129,13 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
                 # A mismatch by is not a problem by itself as long as at least one actor system instance matches the requirements.
                 return False
         return True
+
+    def receiveMessage(self, message, sender):
+        if not self._initialized:
+            log.post_configure_actor_logging()
+            LOG.error("RallyActor.__init___() method never called.")
+            raise RuntimeError("Actor was not initialized yet.")
+        super().receiveMessage(message, sender)
 
     def transition_when_all_children_responded(self, sender, msg, expected_status, new_status, transition):
         """

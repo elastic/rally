@@ -130,6 +130,8 @@ develop = [
     "types-urllib3==1.26.19",
     "types-requests<2.32.0",
     "types-jsonschema==3.2.0",
+    # Python dead library removed in version 3.13 and used to build Rally docs.
+    "standard-imghdr==3.13.0",
 ]
 
 [dependency-groups]

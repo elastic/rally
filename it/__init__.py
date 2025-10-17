@@ -26,6 +26,7 @@ import socket
 import subprocess
 import tempfile
 import time
+from collections.abc import Generator
 
 import pytest
 
@@ -288,6 +289,8 @@ def fresh_log_file():
         yield log_file
 
 
-def check_log_line_present(log_file, text):
+def find_log_lines(log_file, text) -> Generator[str]:
     with open(log_file) as f:
-        return any(text in line for line in f)
+        for line in f:
+            if text in line:
+                yield line

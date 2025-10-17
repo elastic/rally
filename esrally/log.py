@@ -198,6 +198,10 @@ def load_configuration() -> dict[str, Any]:
         return json.load(f)
 
 
+_OLD_ROOT = logging.Logger.root
+_OLD_MANAGER = logging.Logger.manager
+
+
 def post_configure_actor_logging() -> None:
     """
     Reconfigures all loggers in actor processes.
@@ -207,50 +211,46 @@ def post_configure_actor_logging() -> None:
     # see configure_logging()
     logging.captureWarnings(True)
 
-    # at this point we can assume that a log configuration exists. It has been created already during startup.
-    logger_configuration = load_configuration()
-    if "root" in logger_configuration and "level" in logger_configuration["root"]:
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logger_configuration["root"]["level"])
+    # At this point we can assume that a log configuration exists. It has been created already during startup.
+    config = load_configuration()
+    if root_config := config.get("root"):
+        if level := root_config.get("level"):
+            logging.root.setLevel(level)
 
-    if "loggers" in logger_configuration:
-        for lgr, cfg in load_configuration()["loggers"].items():
-            if "level" in cfg:
-                logging.getLogger(lgr).setLevel(cfg["level"])
+    for name, cfg in config.get("loggers", {}).items():
+        if level := cfg.get("level"):
+            logging.getLogger(name).setLevel(level)
 
-    if LOG.manager is not logging.root.manager:
-        # It just detected that all pre-existing loggers have been forgotten after changing manager.
+    # For debugging purpose it we will finally report all recovered logger names here.
+    recovered: list[str] = []
+
+    root = logging.Logger.root
+    manager = logging.Logger.manager
+    if root is not _OLD_ROOT or manager is not _OLD_MANAGER:
+        # It replaces attributes values of pre-existing loggers with the attributes of loggers created by the new manager.
+        # In this way old logger should behave as the new ones, and dispatch records to the new root logger.
+        old_loggers: dict[str, Any] = _OLD_MANAGER.loggerDict
+        for name, old_logger in sorted(old_loggers.items()):
+            if not isinstance(old_logger, logging.Logger):
+                # It filters out for instance place-holders.
+                old_loggers.pop(name)
+                continue  # Skip place holders and adapters
+            logger = logging.getLogger(name)
+            old_logger.__class__ = logger.__class__
+            old_logger.__dict__ = logger.__dict__
+            recovered.append(name)
+            old_loggers.pop(name)
 
         # Redirect messages to the same handlers as the new root handler. This way as the very last resort lost logger
         # will still emit messages to the same destination.
-        LOG.root.handlers = logging.root.handlers
-
-        # For debugging purpose it we will finally report all recovered logger names here.
-        recovered: list[str] = []
-
-        # It replaces attributes values of pre-existing loggers with the attributes of loggers created by the new manager.
-        # In this way old logger should behave as the new ones, and dispatch records to the new root logger.
-        LOG.__dict__ = logging.getLogger(__name__).__dict__
-        lost: dict[str, Any] = LOG.manager.loggerDict
-        for name, old_logger in sorted(lost.items()):
-            if not isinstance(old_logger, logging.Logger):
-                # It filters out for instance place-holders.
-                lost.pop(name)
-                continue  # Skip place holders and adapters
-            new_logger = logging.getLogger(name)
-            if type(new_logger) is not type(old_logger):
-                continue
-            old_logger.__dict__ = new_logger.__dict__
-            recovered.append(name)
-            lost.pop(name)
-
-        # This ensures this monkey patching will not occur twice.
-        assert LOG.manager is logging.root.manager
-
+        _OLD_MANAGER.__dict__ = manager.__dict__
+        _OLD_MANAGER.__class__ = manager.__class__
+        _OLD_ROOT.__dict__ = root.__dict__
+        _OLD_ROOT.__class__ = root.__class__
         if recovered:
             LOG.debug("Recovered loggers from old manager: %s", ", ".join(recovered))
-        if lost:
-            LOG.warning("Lost loggers from old manager: %s", lost)
+        if old_loggers:
+            LOG.warning("Lost loggers from old manager: %s", old_loggers)
 
 
 def configure_logging() -> None:
