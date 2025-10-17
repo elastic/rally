@@ -64,9 +64,6 @@
     "level": "INFO"
   },
   "loggers": {
-    "esrally.log": {
-      "level": "DEBUG"
-    },
     "elasticsearch": {
       "level": "WARNING"
     },
