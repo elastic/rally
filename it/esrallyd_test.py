@@ -53,4 +53,4 @@ def test_elastic_transport_module_does_not_log_at_info_level(cfg, fresh_log_file
         f'--distribution-version={dist} --track="geonames" --include-tasks=delete-index '
         f"--test-mode --car=4gheap,trial-license --target-hosts=127.0.0.1:{port} ",
     )
-    assert list(it.find_log_lines(fresh_log_file, "elastic_transport.transport INFO")) == []
+    assert it.find_log_line(fresh_log_file, "elastic_transport.transport INFO") is None

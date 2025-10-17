@@ -289,6 +289,12 @@ def fresh_log_file():
         yield log_file
 
 
+def find_log_line(log_file, text) -> str | None:
+    for line in find_log_lines(log_file, text):
+        return line
+    return None
+
+
 def find_log_lines(log_file, text) -> Generator[str]:
     with open(log_file) as f:
         for line in f:
