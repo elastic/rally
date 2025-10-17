@@ -113,8 +113,7 @@ def shell_cmd(command_line):
 
 def command_in_docker(command_line, python_version):
     docker_command = f"docker run --rm -v {ROOT_DIR}:/rally_ro:ro python:{python_version} bash -c '{command_line}'"
-
-    return shell_cmd(docker_command)
+    return subprocess.run(docker_command, shell=True, check=True).returncode
 
 
 def wait_until_port_is_free(port_number=39200, timeout=120):
