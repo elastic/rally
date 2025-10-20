@@ -94,7 +94,7 @@ class TransferManager:
         self._monitor_timer.cancel()
         LOG.info("Transfer manager shut down.")
 
-    def get(self, url: str, path: os.PathLike | str | None = None, document_length: int | None = None) -> Transfer:
+    def get(self, url: str, *, path: os.PathLike | str | None = None, document_length: int | None = None, start: bool = True) -> Transfer:
         """It starts a new transfer of a file from a remote url to a local path.
 
         :param url: remote file address.
@@ -108,9 +108,10 @@ class TransferManager:
         path = os.path.normpath(os.path.expanduser(path))
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        tr = self._transfers.get(path)
+        tr = self._transfers.get(url)
         if tr is not None:
-            tr.start()
+            if start:
+                tr.start()
             return tr
 
         head = self._client.head(url)
@@ -124,15 +125,18 @@ class TransferManager:
             executor=self._executor,
             multipart_size=self.cfg.multipart_size,
             crc32c=head.crc32c,
+            local_dir=self.cfg.local_dir,
         )
 
-        # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
-        # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
-        # the allowed per-transfer connections.
         with self._lock:
-            self._transfers[tr.path] = tr
-        self._update_transfers()
-        tr.start()
+            self._transfers[tr.url] = tr
+
+        if start:
+            # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
+            # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
+            # the allowed per-transfer connections.
+            self._update_transfers()
+            tr.start()
         return tr
 
     def monitor(self):
@@ -152,7 +156,7 @@ class TransferManager:
         """It executes periodic update operations on every unfinished transfer."""
         with self._lock:
             # It first removes finished transfers.
-            self._transfers = transfers = {tr.path: tr for tr in self._transfers.values() if not tr.finished}
+            self._transfers = transfers = {tr.url: tr for tr in self._transfers.values() if not tr.finished}
             if not transfers:
                 return
 

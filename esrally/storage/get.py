@@ -16,7 +16,9 @@
 # under the License.
 from __future__ import annotations
 
+import argparse
 import logging
+import os
 import sys
 import time
 import urllib
@@ -27,21 +29,28 @@ LOG = logging.getLogger("esrally.storage")
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    urls = sys.argv[1:]
-    if not urls:
-        sys.stderr.write(f"usage: python3 '{sys.argv[0]}' <url> [urls]\n")
-        raise sys.exit(1)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
     cfg = StorageConfig()
     cfg.load_config()
+
+    parser = argparse.ArgumentParser(description="Download files from remote storage service.")
+    parser.add_argument(
+        "--local-dir", dest="local_dir", type=str, default=cfg.local_dir, help="destination directory for files to be downloaded"
+    )
+    parser.add_argument("urls", type=str, nargs="+")
+    args = parser.parse_args()
+
+    if args.local_dir:
+        cfg.local_dir = args.local_dir
+
     manager = init_transfer_manager(cfg=cfg)
 
-    all: dict[str, Transfer | None] = {normalise_url(url): None for url in urls}
+    all: dict[str, Transfer | None] = {normalise_url(url): None for url in args.urls}
     try:
         unfinished = set(all)
         while unfinished:
-            LOG.info("Downloading files: \n - %s", "\n - ".join(f"{u}: {(s := all.get(u)) and s.progress or '?'}%" for u in unfinished))
+            LOG.info("Downloading files: \n - %s", "\n - ".join(f"{u}: {(s := all.get(u)) and s.progress or 0.:.2f}%" for u in unfinished))
             for url in list(unfinished):
                 transfer: Transfer = manager.get(url)
                 assert isinstance(transfer, Transfer)

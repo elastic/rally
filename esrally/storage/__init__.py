@@ -23,4 +23,5 @@ from esrally.storage._manager import (
     init_transfer_manager,
     shutdown_transfer_manager,
 )
-from esrally.storage._transfer import Transfer
+from esrally.storage._range import Range, rangeset
+from esrally.storage._transfer import Transfer, transfer_status_path

@@ -16,10 +16,10 @@
 # under the License.
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 from collections.abc import Iterator
-from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import pytest
@@ -62,7 +62,7 @@ def executor() -> Iterator[DummyExecutor]:
         executor.shutdown()
 
 
-@dataclass()
+@dataclasses.dataclass()
 class TransferCase:
     url: str = URL
     todo: str = ""
@@ -79,6 +79,7 @@ class TransferCase:
     want_final_todo: str = ""
     want_final_written: str = ""
     want_final_document_length: int = len(DATA)
+    want_mirror_failures: dict[str, str] = dataclasses.field(default_factory=dict)
     resume: bool = True
     resume_status: dict[str, str] | None = None
 
@@ -209,6 +210,7 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
     assert status["url"] == case.url
     assert status["document_length"] == case.want_final_document_length
     assert status["done"] == case.want_final_done
+    assert status["mirror_failures"] == case.want_mirror_failures
 
     # It verifies the transfer can be resumed from the file status
     transfer2 = Transfer(

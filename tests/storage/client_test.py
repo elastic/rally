@@ -29,7 +29,7 @@ import pytest
 
 from esrally.config import Config
 from esrally.storage._adapter import DummyAdapter, Head
-from esrally.storage._client import CachedHeadError, Client
+from esrally.storage._client import CachedHeadError, Client, MirrorFailure
 from esrally.storage._config import StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 from esrally.utils.cases import cases
@@ -53,6 +53,7 @@ MIRRORED_NO_RANGE_URL = f"{MIRRORED_NO_RANGE_BASE_URL}/apm/span.json.bz2"
 MIRRORED_NO_RANGE_HEAD = Head(url=MIRRORED_NO_RANGE_URL, content_length=len(SOME_BODY), accept_ranges=False)
 
 NOT_FOUND_BASE_URL = "https://example.com/not-found"
+NOT_FOUND_URL = f"{NOT_FOUND_BASE_URL}/apm/span.json.bz2"
 
 HEADS = (
     SOME_HEAD,
@@ -190,20 +191,53 @@ class ResolveCase:
     content_length: int | None = None
     accept_ranges: bool | None = None
     cache_ttl: float = 60.0
+    want_mirror_failures: list = dataclasses.field(default_factory=list)
 
 
 @cases(
     unmirrored=ResolveCase(url=SOME_URL, want=[SOME_HEAD]),
-    mirrored=ResolveCase(url=MIRRORING_URL, want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]),
-    document_length=ResolveCase(
-        url=MIRRORING_URL, content_length=len(SOME_BODY), want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]
+    mirrored=ResolveCase(
+        url=MIRRORING_URL,
+        want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD],
+        want_mirror_failures=[MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:")],
     ),
-    mismatching_document_length=ResolveCase(url=MIRRORING_URL, content_length=10, want=[]),
-    accept_ranges=ResolveCase(url=MIRRORING_URL, accept_ranges=True, want=[MIRRORING_HEAD, MIRRORED_HEAD]),
+    document_length=ResolveCase(
+        url=MIRRORING_URL,
+        content_length=len(SOME_BODY),
+        want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD],
+        want_mirror_failures=[MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:")],
+    ),
+    mismatching_document_length=ResolveCase(
+        url=MIRRORING_URL,
+        content_length=10,
+        want=[],
+        want_mirror_failures=[
+            MirrorFailure(
+                url=MIRRORING_URL,
+                mirror_url=MIRRORED_NO_RANGE_URL,
+                error="ValueError:unexpected 'content_length': got 30, want 10",
+            ),
+            MirrorFailure(url=MIRRORING_URL, mirror_url=MIRRORED_URL, error="ValueError:unexpected 'content_length': got 30, want 10"),
+            MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:"),
+        ],
+    ),
+    accept_ranges=ResolveCase(
+        url=MIRRORING_URL,
+        accept_ranges=True,
+        want=[MIRRORING_HEAD, MIRRORED_HEAD],
+        want_mirror_failures=[
+            MirrorFailure(
+                url=MIRRORING_URL,
+                mirror_url=MIRRORED_NO_RANGE_URL,
+                error="ValueError:unexpected 'accept_ranges': got False, want True",
+            ),
+            MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:"),
+        ],
+    ),
     reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=[]),
     zero_ttl=ResolveCase(url=SOME_URL, cache_ttl=0.0, want=[SOME_HEAD]),
 )
-def test_resolve(case: ResolveCase, client: Client) -> None:
+def test_resolve(case: ResolveCase, client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
     check_head = Head(content_length=case.content_length, accept_ranges=case.accept_ranges)
     got = sorted(client.resolve(case.url, check_head=check_head, cache_ttl=case.cache_ttl), key=lambda h: str(h.url))
     want = sorted(case.want, key=lambda h: str(h.url))
@@ -214,6 +248,10 @@ def test_resolve(case: ResolveCase, client: Client) -> None:
             assert g is client.head(url=g.url, cache_ttl=case.cache_ttl), "obtained head wasn't cached"
         else:
             assert g is not client.head(url=g.url, cache_ttl=case.cache_ttl), "obtained head was cached"
+    got_mirror_failures = client.mirror_failures(case.url)
+    for f in got_mirror_failures:
+        f.timestamp = 0.0
+    assert sorted(client.mirror_failures(case.url), key=str) == case.want_mirror_failures
 
 
 @dataclasses.dataclass

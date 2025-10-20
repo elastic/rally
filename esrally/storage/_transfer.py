@@ -27,7 +27,7 @@ from contextlib import contextmanager
 from typing import BinaryIO
 
 from esrally.storage._adapter import Head, ServiceUnavailableError
-from esrally.storage._client import Client
+from esrally.storage._client import Client, MirrorFailure
 from esrally.storage._config import StorageConfig
 from esrally.storage._executor import Executor
 from esrally.storage._range import (
@@ -50,6 +50,10 @@ class TransferStatus(enum.Enum):
     DONE = 3
     CANCELLED = 4
     FAILED = 5
+
+
+def transfer_status_path(local_dir: str, url: str) -> str:
+    return os.path.normpath(os.path.expanduser(os.path.join(local_dir, url))) + ".status"
 
 
 class Transfer:
@@ -84,6 +88,7 @@ class Transfer:
         max_connections: int = StorageConfig.DEFAULT_MAX_CONNECTIONS,
         resume: bool = True,
         crc32c: str | None = None,
+        local_dir: str = StorageConfig.DEFAULT_LOCAL_DIR,
     ):
         """
         :param client: The client to use to download file parts from a remote service.
@@ -130,7 +135,9 @@ class Transfer:
         self._lock = threading.Lock()
         self._resumed_size = 0
         self._crc32c = crc32c
-        if resume and os.path.isfile(self.path + ".status"):
+        self._local_dir = local_dir
+        self._mirror_failures: dict[str, str] = {}
+        if resume and os.path.isfile(transfer_status_path(local_dir, url)):
             try:
                 self._resume_status()
             except Exception as ex:
@@ -194,17 +201,21 @@ class Transfer:
             self._executor.submit(self._run)
             return True
 
+    @property
+    def mirror_failures(self) -> dict[str, str]:
+        return self._mirror_failures
+
     def _resume_status(self):
         if not os.path.isfile(self.path):
             # There is no file to recover interrupted transfer to.
             raise FileNotFoundError(f"target file not found: {self.path}")
 
-        status_filename = self.path + ".status"
+        status_filename = transfer_status_path(self._local_dir, self.url)
         if not os.path.isfile(status_filename):
             # There is no file to read status data from.
             raise FileNotFoundError(f"status file not found: {status_filename}")
 
-        with open(self.path + ".status") as fd:
+        with open(status_filename) as fd:
             document = json.load(fd)
             if not isinstance(document, Mapping):
                 # Invalid file format.
@@ -216,6 +227,10 @@ class Transfer:
             raise ValueError(f"url field not found in status file: {status_filename}")
         if url != self.url:
             raise ValueError(f"mismatching url in status file: '{status_filename}', got '{url}', want '{self.url}'")
+
+        path = document.get("path")
+        if path is None or os.path.normpath(path) != self.path:
+            raise ValueError(f"mismatching file path in status file: '{status_filename}', got '{path}', want '{self.path}'")
 
         # It checks the document length to ensure the file was the same version.
         document_length = document.get("document_length")
@@ -245,17 +260,24 @@ class Transfer:
         if not self._todo:
             # There is nothing more to do.
             self._finished.set()
+        self._mirror_failures = document.get("mirror_failures", {})
 
     def save_status(self):
         """It updates the status file."""
+        self._mirror_failures: dict[str, str] = {f.mirror_url: f.error for f in self.client.mirror_failures(self.url)}
         document = {
             "url": self.url,
+            "path": self.path,
             "document_length": self.document_length,
             "done": str(self.done),
             "crc32c": self.crc32c,
+            # Mirror failures is intended to be consumed by a tool in charge to upload downloaded files that was missing
+            # in any mirror server to keep it in sync with source file repository.
+            "mirror_failures": self._mirror_failures,
         }
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        with open(self.path + ".status", "w") as fd:
+        status_filename = transfer_status_path(self._local_dir, self.url)
+        os.makedirs(os.path.dirname(status_filename), exist_ok=True)
+        with open(status_filename, "w") as fd:
             json.dump(document, fd)
 
     def _run(self):
