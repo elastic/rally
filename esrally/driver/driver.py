@@ -1543,19 +1543,16 @@ class Sample:
                 timing = t.pop("dependent_timing")
                 meta_data = self._merge(self.request_meta_data, t)
                 if isinstance(timing, dict):
-                    timing = [timing]
-                for sub_timing in timing:
-                    st = sub_timing.pop("dependent_timing", None)
                     yield Sample(
                         self.client_id,
-                        st["absolute_time"],
-                        st["request_start"],
+                        timing["absolute_time"],
+                        timing["request_start"],
                         self.task_start,
                         self.task,
                         self.sample_type,
                         meta_data,
                         0,
-                        st["service_time"],
+                        timing["service_time"],
                         0,
                         0,
                         self.total_ops,
@@ -1563,9 +1560,32 @@ class Sample:
                         self.time_period,
                         self.percent_completed,
                         None,
-                        st["operation"],
-                        st["operation-type"],
+                        timing["operation"],
+                        timing["operation-type"],
                     )
+                else:
+                    for sub_timing in timing:
+                        st = sub_timing.pop("dependent_timing", None)
+                        yield Sample(
+                            self.client_id,
+                            st["absolute_time"],
+                            st["request_start"],
+                            self.task_start,
+                            self.task,
+                            self.sample_type,
+                            meta_data,
+                            0,
+                            st["service_time"],
+                            0,
+                            0,
+                            self.total_ops,
+                            self.total_ops_unit,
+                            self.time_period,
+                            self.percent_completed,
+                            None,
+                            st["operation"],
+                            st["operation-type"],
+                        )
 
     def __repr__(self, *args, **kwargs):
         return (
