@@ -27,7 +27,8 @@ from contextlib import contextmanager
 from typing import BinaryIO
 
 from esrally.storage._adapter import Head, ServiceUnavailableError
-from esrally.storage._client import MAX_CONNECTIONS, Client
+from esrally.storage._client import Client
+from esrally.storage._config import StorageConfig
 from esrally.storage._executor import Executor
 from esrally.storage._range import (
     MAX_LENGTH,
@@ -49,9 +50,6 @@ class TransferStatus(enum.Enum):
     DONE = 3
     CANCELLED = 4
     FAILED = 5
-
-
-MULTIPART_SIZE = 8 * 1024 * 1024
 
 
 class Transfer:
@@ -83,7 +81,7 @@ class Transfer:
         todo: RangeSet = NO_RANGE,
         done: RangeSet = NO_RANGE,
         multipart_size: int | None = None,
-        max_connections: int = MAX_CONNECTIONS,
+        max_connections: int = StorageConfig.DEFAULT_MAX_CONNECTIONS,
         resume: bool = True,
         crc32c: str | None = None,
     ):
@@ -107,7 +105,7 @@ class Transfer:
                 multipart_size = MAX_LENGTH
             else:
                 # By default, it will enable multipart with a hardcoded size.
-                multipart_size = MULTIPART_SIZE
+                multipart_size = StorageConfig.DEFAULT_MULTIPART_SIZE
         if not todo:
             # By default, it will transfer the whole file.
             todo = Range(0, MAX_LENGTH)
@@ -282,15 +280,24 @@ class Transfer:
                     self.start()
                 assert isinstance(fd, FileWriter)
                 # It downloads the part of the file from a remote location.
-                head = self.client.get(
-                    self.url, fd, head=Head(ranges=fd.ranges, document_length=self._document_length, crc32c=self._crc32c)
-                )
-                if head.document_length is not None:
+                if fd.ranges:
+                    check_head = Head(
+                        ranges=fd.ranges, content_length=fd.ranges.size, document_length=self._document_length, crc32c=self._crc32c
+                    )
+                else:
+                    check_head = Head(content_length=self._document_length, crc32c=self._crc32c)
+                head, content = self.client.get(self.url, check_head=check_head)
+                # When ranges are not given, then content_length replaces document_length.
+                document_length = head.document_length or head.content_length
+                if document_length:
                     # It checks the size of the file it downloaded the data from.
-                    self.document_length = head.document_length
+                    self.document_length = document_length
                 if head.crc32c is not None:
                     # It checks the crc32c check sum of the file it downloaded the data from.
                     self.crc32c = head.crc32c
+                for chunk in content:
+                    if chunk:
+                        fd.write(chunk)
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
             cancelled = True
@@ -346,7 +353,7 @@ class Transfer:
                 # cancelled.
                 fd.close()
             except Exception as ex:
-                LOG.warning("error closing file descriptor %r: %s", fd.path, ex)
+                LOG.error("error closing file descriptor %r: %s", fd.path, ex)
 
     @contextmanager
     def _open(self) -> Iterator[FileDescriptor | None]:

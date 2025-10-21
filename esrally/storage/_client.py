@@ -22,108 +22,142 @@ import time
 import urllib.parse
 from collections import defaultdict, deque
 from collections.abc import Iterator
+from dataclasses import dataclass
 from random import Random
 from typing import NamedTuple
 
 from typing_extensions import Self
 
 from esrally import types
-from esrally.storage._adapter import (
-    AdapterRegistry,
-    Head,
-    ServiceUnavailableError,
-    Writable,
-)
+from esrally.storage._adapter import AdapterRegistry, Head, ServiceUnavailableError
+from esrally.storage._config import StorageConfig
 from esrally.storage._mirror import MirrorList
 from esrally.utils import pretty
 from esrally.utils.threads import WaitGroup, WaitGroupLimitError
 
 LOG = logging.getLogger(__name__)
 
-MIRRORS_FILES = "~/.rally/storage-mirrors.json"
-MAX_CONNECTIONS = 4
-RANDOM = Random(time.monotonic_ns())
+
+class CachedHeadError(Exception):
+    """CachedHeadError is intended to wrap another exception.
+
+    It is being raised when an attempt is made to retrieve a head from the cache to handle the case of recent past
+    failure fetching the same head.
+    """
+
+
+@dataclass
+class CachedHead:
+    timestamp: float
+    head: Head | None = None
+    error: Exception | None = None
+
+    def __init__(self, timestamp: float, /, head: Head | None = None, error: Exception | None = None):
+        self.timestamp = timestamp
+        if head is not None:
+            if error is not None:
+                raise ValueError("cannot specify both head and error")
+            self.head = head
+        elif error is not None:
+            # It creates a CachedHeadError to wraps error with the stack trace sets to here. So it will be nice to see
+            # the chain of exceptions to understand what gone one when debugging an exception borrowed from the cache.
+            # The wrapping of the original error is required to allow triggering a special handling when the error is
+            # recovered from an old cached request, or is got from an actual request.
+            try:
+                raise CachedHeadError(f"Cached error: {error}") from error
+            except CachedHeadError as ex:
+                self.error = ex
+        else:
+            raise ValueError("must specify either head or error")
+
+    def get(self, *, cache_ttl: float | None = None) -> Head:
+        if cache_ttl is not None:
+            if time.monotonic() > self.timestamp + cache_ttl:
+                raise TimeoutError("cached head has expired")
+        if self.error is not None:
+            raise self.error
+        assert self.head is not None
+        return self.head
 
 
 class Client:
     """It handles client instances allocation allowing reusing pre-allocated instances from the same thread."""
 
     @classmethod
-    def from_config(
-        cls, cfg: types.Config, adapters: AdapterRegistry | None = None, mirrors: MirrorList | None = None, random: Random | None = None
-    ) -> Self:
-        if adapters is None:
-            adapters = AdapterRegistry.from_config(cfg)
-        if mirrors is None:
-            mirrors = MirrorList.from_config(cfg)
-        if random is None:
-            random_seed = cfg.opts(section="storage", key="storage.random_seed", default_value=None, mandatory=False)
-            if random_seed is None:
-                random = RANDOM
-            else:
-                random = Random(random_seed)
-        max_connections = int(cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False))
-        return cls(adapters=adapters, mirrors=mirrors, random=random, max_connections=max_connections)
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
+        cfg = StorageConfig.from_config(cfg)
+        return cls(
+            adapters=AdapterRegistry.from_config(cfg),
+            mirrors=MirrorList.from_config(cfg),
+            random=Random(cfg.random_seed),
+            max_connections=cfg.max_connections,
+            cache_ttl=cfg.cache_ttl,
+        )
 
     def __init__(
         self,
         adapters: AdapterRegistry,
         mirrors: MirrorList,
-        random: Random,
-        max_connections: int = MAX_CONNECTIONS,
+        random: Random | None = None,
+        max_connections: int = StorageConfig.DEFAULT_MAX_CONNECTIONS,
+        cache_ttl: float = StorageConfig.DEFAULT_CACHE_TTL,
     ):
         self._adapters: AdapterRegistry = adapters
-        self._cached_heads: dict[str, tuple[Head | Exception, float]] = {}
+        self._cached_heads: dict[str, CachedHead] = {}
         self._connections: dict[str, WaitGroup] = defaultdict(lambda: WaitGroup(max_count=max_connections))
         self._lock = threading.Lock()
         self._mirrors: MirrorList = mirrors
-        self._random: Random = random
+        self._random: Random = random or Random(StorageConfig.DEFAULT_RANDOM_SEED)
         self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
+        self._cache_ttl: float = cache_ttl
 
     @property
     def adapters(self):
         return self._adapters
 
-    def head(self, url: str, ttl: float | None = None) -> Head:
+    def head(self, url: str, *, cache_ttl: float | None = None) -> Head:
         """It gets remote file headers."""
-
-        start_time = time.monotonic()
-        if ttl is not None:
+        if cache_ttl is None:
+            cache_ttl = self._cache_ttl
+        if cache_ttl > 0.0:
             # when time-to-leave is given, it looks up for pre-cached head first
             try:
-                value, last_time = self._cached_heads[url]
-            except KeyError:
+                return self._cached_heads[url].get(cache_ttl=cache_ttl)
+            except (KeyError, TimeoutError):
+                # no cached head, or it has expired.
                 pass
-            else:
-                if start_time <= last_time + ttl:
-                    # cached value or error is enough recent to be used.
-                    return _head_or_raise(value)
 
-        adapter = self._adapters.get(url)
+        start_time = time.monotonic()
         try:
-            value = adapter.head(url)
+            adapter = self._adapters.get(url)
+            head = adapter.head(url)
+            error = None
         except Exception as ex:
-            LOG.error("Failed to fetch remote head for file: %s, %s", url, ex)
-            value = ex
-        end_time = time.monotonic()
+            head = None
+            error = ex
+        finally:
+            end_time = time.monotonic()
 
         with self._lock:
             # It records per-server time statistics.
             self._stats[_server_key(url)].append(ServerStats(url, start_time, end_time))
             # The cached value could be an exception, or a head. In this way it will not retry previously failed
             # urls until the TTL expires.
-            self._cached_heads[url] = value, start_time
+            self._cached_heads[url] = CachedHead(start_time, head=head, error=error)
 
-        return _head_or_raise(value)
+        if error is not None:
+            raise error
+        assert head is not None
+        return head
 
-    def resolve(self, url: str, check: Head | None, ttl: float = 60.0) -> Iterator[Head]:
+    def resolve(self, url: str, *, check_head: Head | None = None, cache_ttl: float | None = None) -> Iterator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
         :param url: the remote file URL at its mirrored source location.
-        :param check: extra parameters to mach remote heads.
+        :param check_head: extra parameters to mach remote heads.
             - document_length: if not none it will filter out mirrors which file has an unexpected document lengths.
             - crc32c: if not none it will filter out mirrors which file has an unexpected crc32c checksum.
             - accept_ranges: if True it will filter out mirrors that are not supporting ranges.
-        :param ttl: the time to live value (in seconds) to use for cached heads retrieval.
+        :param cache_ttl: the time to live value (in seconds) to use for cached heads retrieval.
         :return: iterator over mirror URLs
         """
 
@@ -142,61 +176,63 @@ class Client:
                 urls.sort(key=lambda u: weights[u])
                 LOG.debug("resolve '%s': mirror urls: %s", url, urls)
 
-            if url not in urls:
-                # It ensures source URL is in the list so that it will be used as fall back when any mirror works.
-                urls.append(url)
-
-        if len(urls) > 1:
-            LOG.debug("resolved mirror URLs for URL '%s': %s", url, urls)
+        if url not in urls:
+            # It ensures source URL is in the list so that it will be used as fall back when any mirror works.
+            urls.append(url)
 
         for u in urls:
             try:
-                got = self.head(u, ttl=ttl)
+                got = self.head(u, cache_ttl=cache_ttl)
+                if check_head is not None:
+                    check_head.check(got)
+            except CachedHeadError:
+                # The error was previously cached, therefore it has been already logged.
+                pass
             except Exception as ex:
-                # The exception is already logged by head method before caching it.
-                LOG.error("Failed to fetch remote head for file: %s, %s", u, ex)
-                continue
-            if check is not None:
-                try:
-                    check.check(got)
-                except ValueError as ex:
-                    LOG.debug("unexpected mirrored file (url='%s'): %s", url, ex)
-                    continue
-            yield got
+                if u == url:
+                    LOG.warning("Failed to get head from original URL: '%s', %s", u, ex)
+                else:
+                    LOG.warning("Failed to get head from mirror URL: '%s', %s", u, ex)
+            else:
+                yield got
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
         """It downloads a remote bucket object to a local file path.
 
         :param url: the URL of the remote file.
-        :param stream: the destination file stream where to write data to.
-        :param head: extra params for getting the file:
+        :param check_head: extra params for getting the file:
             - document_length: the document length of the file to transfer.
             - crc32c: the crc32c checksum of the file to transfer.
             - ranges: the portion of the file to transfer.
         :raises ServiceUnavailableError: in case on temporary service failure.
         """
-        for got in self.resolve(url, check=head):
-            if got.url is None:
-                LOG.error("resolved mirror URL is None: %s", url)
-                continue
+        if check_head is None:
+            resolve_head = None
+        elif check_head.ranges:
+            resolve_head = Head(
+                accept_ranges=True, content_length=check_head.document_length, date=check_head.date, crc32c=check_head.crc32c
+            )
+        else:
+            resolve_head = Head(content_length=check_head.content_length, date=check_head.date, crc32c=check_head.crc32c)
+        for got in self.resolve(url, check_head=resolve_head):
+            assert got.url is not None
+            adapter = self._adapters.get(got.url)
             connections = self._server_connections(got.url)
             try:
                 connections.add(1)
             except WaitGroupLimitError:
-                LOG.debug("connection limit exceeded: url='%s'", url)
+                LOG.debug("connection limit exceeded for url '%s'", url)
                 continue
-            adapter = self._adapters.get(got.url)
             try:
-                return adapter.get(url, stream, head=head)
+                return adapter.get(got.url, check_head=check_head)
             except ServiceUnavailableError as ex:
-                LOG.debug("service unavailable error received: url='%s' %s", url, ex)
+                LOG.warning("service unavailable error received: url='%s' %s", url, ex)
                 with self._lock:
                     # It corrects the maximum number of connections for this server.
                     connections.max_count = max(1, connections.count)
             finally:
                 connections.done()
-
-        raise ServiceUnavailableError(f"no service available for getting URL '{url}'")
+        raise ServiceUnavailableError(f"no connections available for getting URL '{url}'")
 
     def _server_connections(self, url: str) -> WaitGroup:
         with self._lock:

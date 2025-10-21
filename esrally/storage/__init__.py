@@ -14,13 +14,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from esrally.storage._adapter import AdapterRegistry, Head
-from esrally.storage._client import Client
-from esrally.storage._executor import Executor, ThreadPoolExecutor
-from esrally.storage._http import HTTPAdapter
+from esrally.storage._adapter import Adapter, AdapterRegistry, Head
+from esrally.storage._config import StorageConfig
 from esrally.storage._manager import (
     TransferManager,
+    get_transfer_manager,
     init_transfer_manager,
-    quit_transfer_manager,
-    transfer_manager,
+    shutdown_transfer_manager,
 )
+from esrally.storage._transfer import Transfer

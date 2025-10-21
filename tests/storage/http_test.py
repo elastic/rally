@@ -16,6 +16,7 @@
 # under the License.
 from __future__ import annotations
 
+import dataclasses
 import io
 from dataclasses import dataclass
 from typing import Any
@@ -25,17 +26,10 @@ import pytest
 from requests import Response, Session
 from requests.structures import CaseInsensitiveDict
 
-from esrally.config import Config, Scope
-from esrally.storage._adapter import Head, Writable
-from esrally.storage._http import (
-    CHUNK_SIZE,
-    MAX_RETRIES,
-    HTTPAdapter,
-    head_from_headers,
-    ranges_to_headers,
-)
+from esrally.storage._adapter import Head
+from esrally.storage._config import StorageConfig
 from esrally.storage._range import rangeset
-from esrally.types import Key
+from esrally.storage.http import HTTPAdapter, head_from_headers, ranges_to_headers
 from esrally.utils.cases import cases
 
 URL = "https://example.com"
@@ -45,7 +39,6 @@ CONTENT_LENGTH_HEADER = {"Content-Length": "512"}
 CONTENT_RANGE_HEADER = {"Content-Range": "bytes 3-20/128", "Content-Length": "18"}
 X_GOOG_HASH_CRC32C_HEADER = {"X-Goog-Hash": "crc32c=some-checksum"}
 X_AMZ_CHECKSUM_CRC32C_HEADER = {"x-amz-checksum-crc32c": "some-checksum"}
-DATA = "some-data"
 
 
 @pytest.fixture()
@@ -56,10 +49,10 @@ def session() -> Session:
 def response(
     headers: dict[str, str] | None = None,
     status_code: int = 200,
-    data: str = "",
+    data: bytes = b"",
 ):
     res = Response()
-    res.raw = io.StringIO(data)
+    res.raw = io.BytesIO(data)
     res.status_code = status_code
     res.headers = CaseInsensitiveDict()
     if headers is not None:
@@ -92,13 +85,13 @@ def test_head(case: HeadCase, session: Session) -> None:
     assert head == case.want
 
 
-@dataclass()
+@dataclasses.dataclass
 class GetCase:
     response: Response
-    want: Head
+    want_head: Head
     url: str = URL
     ranges: str = ""
-    want_data: str = ""
+    want_data: list[bytes] = dataclasses.field(default_factory=list)
     want_request_range: str = ""
 
 
@@ -106,7 +99,7 @@ class GetCase:
     default=GetCase(response(), Head(URL)),
     accept_ranges=GetCase(response(ACCEPT_RANGES_HEADER), Head(URL, accept_ranges=True)),
     content_length=GetCase(response(CONTENT_LENGTH_HEADER), Head(URL, content_length=512)),
-    read_data=GetCase(response(data="some_data"), Head(URL), want_data="some_data"),
+    read_data=GetCase(response(data=b"some_data"), Head(URL), want_data=[b"some_data"]),
     ranges=GetCase(
         response(CONTENT_RANGE_HEADER),
         Head(URL, content_length=18, ranges=rangeset("3-20"), document_length=128),
@@ -119,13 +112,9 @@ class GetCase:
 def test_get(case: GetCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
     session.get.return_value = case.response
-    stream = create_autospec(Writable, spec_set=True, instance=True)
-    head = adapter.get(case.url, stream, head=Head(ranges=rangeset(case.ranges)))
-    assert head == case.want
-    if case.want_data:
-        stream.write.assert_called_once_with(case.want_data)
-    else:
-        assert not stream.write.called
+    head, data = adapter.get(case.url, check_head=Head(ranges=rangeset(case.ranges)))
+    assert head == case.want_head
+    assert list(data) == case.want_data
     want_request_headers = {}
     if case.want_request_range:
         want_request_headers["range"] = case.want_request_range
@@ -147,7 +136,6 @@ class RangesToHeadersCase:
     multipart=RangesToHeadersCase("1-5,7-10", want_errors=(NotImplementedError,)),
 )
 def test_ranges_to_headers(case: RangesToHeadersCase) -> None:
-    # pylint: disable=protected-access
     got: dict[str, Any] = {}
     try:
         ranges_to_headers(rangeset(case.ranges), got)
@@ -176,7 +164,6 @@ class HeadFromHeadersCase:
     x_amz_checksum=HeadFromHeadersCase(X_AMZ_CHECKSUM_CRC32C_HEADER, Head(URL, crc32c="some-checksum")),
 )
 def test_head_from_headers(case: HeadFromHeadersCase):
-    # pylint: disable=protected-access
     try:
         got = head_from_headers(url=case.url, headers=case.headers)
     except Exception as ex:
@@ -187,27 +174,31 @@ def test_head_from_headers(case: HeadFromHeadersCase):
         assert got == case.want
 
 
+def storage_config(**kwargs: Any) -> StorageConfig:
+    cfg = StorageConfig()
+    for k, v in kwargs.items():
+        setattr(cfg, k, v)
+    return cfg
+
+
 @dataclass()
 class FromConfigCase:
-    opts: dict[Key, str]
-    want_chunk_size: int = CHUNK_SIZE
-    want_max_retries: int = MAX_RETRIES
+    cfg: StorageConfig
+    want_chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE
+    want_max_retries: int = StorageConfig.DEFAULT_MAX_RETRIES
     want_backoff_factor: int = 0
 
 
 @cases(
-    default=FromConfigCase({}),
-    chunk_size=FromConfigCase({"storage.http.chunk_size": "10"}, want_chunk_size=10),
-    max_retries=FromConfigCase({"storage.http.max_retries": "3"}, want_max_retries=3),
+    default=FromConfigCase(storage_config()),
+    chunk_size=FromConfigCase(storage_config(chunk_size=10), want_chunk_size=10),
+    max_retries=FromConfigCase(storage_config(max_retries="3"), want_max_retries=3),
     max_retries_yml=FromConfigCase(
-        {"storage.http.max_retries": '{"total": 5, "backoff_factor": 5}'}, want_max_retries=5, want_backoff_factor=5
+        storage_config(max_retries='{"total": 5, "backoff_factor": 5}'), want_max_retries=5, want_backoff_factor=5
     ),
 )
 def test_from_config(case: FromConfigCase) -> None:
-    cfg = Config()
-    for k, v in case.opts.items():
-        cfg.add(Scope.application, "storage", k, v)
-    adapter = HTTPAdapter.from_config(cfg)
+    adapter = HTTPAdapter.from_config(case.cfg)
     assert isinstance(adapter, HTTPAdapter)
     assert adapter.chunk_size == case.want_chunk_size
     retry = adapter.session.adapters["https://"].max_retries

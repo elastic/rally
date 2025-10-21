@@ -16,7 +16,7 @@
 # under the License.
 import enum
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import TypeVar
 
 
@@ -230,3 +230,12 @@ def to_bool(value: str | bool) -> bool:
     elif value in ["False", "false", "No", "no", "f", "n", "0", False]:
         return False
     raise ValueError(f"Cannot convert [{value}] to bool.")
+
+
+def to_strings(values: Iterable[str] | None) -> tuple[str, ...]:
+    if not values:
+        return tuple()
+    if isinstance(values, str):
+        # It parses adapter names when it has been defined as a single string.
+        return tuple(str(values).replace(" ", "").split(","))
+    return tuple(values)

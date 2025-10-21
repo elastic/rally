@@ -37,7 +37,7 @@ class ContinuousTimer(threading.Thread):
         super().__init__(name=name, daemon=daemon)
         if interval <= 0:
             raise ValueError("interval must be strictly positive")
-        self._interval = interval
+        self.interval = interval
         self._function = function
         self._finished = threading.Event()
 
@@ -47,10 +47,10 @@ class ContinuousTimer(threading.Thread):
 
     def run(self):
         """It executes the function every interval seconds until the timer is cancelled."""
-        self._finished.wait(self._interval)
+        self._finished.wait(self.interval)
         while not self._finished.is_set():
             self._function()
-            self._finished.wait(self._interval)
+            self._finished.wait(self.interval)
 
     def wait(self, timeout: float | None) -> bool:
         return self._finished.wait(timeout=timeout)
