@@ -29,7 +29,7 @@ from typing_extensions import Self
 from esrally import types
 from esrally.storage._adapter import Adapter, Head
 from esrally.storage._config import StorageConfig
-from esrally.storage._http import (
+from esrally.storage.http import (
     head_to_headers,
     parse_accept_ranges,
     parse_content_range,
