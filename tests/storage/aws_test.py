@@ -25,9 +25,9 @@ import boto3
 import pytest
 
 from esrally.storage._adapter import Head
-from esrally.storage._aws import S3Adapter, S3Client, head_from_response
 from esrally.storage._config import StorageConfig
 from esrally.storage._range import rangeset
+from esrally.storage.aws import S3Adapter, S3Client, head_from_response
 from esrally.utils.cases import cases
 
 SOME_BUCKET = "some-example"

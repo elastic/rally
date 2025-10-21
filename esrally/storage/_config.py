@@ -27,7 +27,7 @@ LOG = logging.getLogger(__name__)
 class StorageConfig(config.Config):
 
     DEFAULT_ADAPTERS = (
-        "esrally.storage:S3Adapter",
+        "esrally.storage.aws:S3Adapter",
         "esrally.storage:HTTPAdapter",
     )
 
