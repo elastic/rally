@@ -166,9 +166,9 @@ Configuration options are:
   Here is an example of valid value for http(s) adapter::
 
     [storage]
-    storage.adapters = esrally.storage:HTTPAdapter,esrally.storage:S3Adapter
+    storage.adapters = esrally.storage.http:HTTPAdapter,esrally.storage.aws:S3Adapter
 
-  At this point in time ``esrally.storage:HTTPAdapter`` and ``esrally.storage:S3Adapter`` are the only
+  At this point in time ``esrally.storage.http:HTTPAdapter`` and ``esrally.storage.aws:S3Adapter`` are the only
   known ``Adapter`` implementations intended for public use and they are both enabled by default. So it is required
   to edit this option for special customizations (like for example remove one of them or adding a new
   custom implementation for accessing a special infrastructure server).
@@ -216,7 +216,7 @@ Configuration options are:
   are not mirrored or they have a different size from the source one. The client will prefer endpoints with the lower
   latency measured by fetching the headers of the file.
 
-* ``storage.monitor_interval`` represents the time interval (in seconds) `TransferManager` should wait for consecutive
+* ``storage.monitor_interval`` represents the time interval (in seconds) ``TransferManager`` should wait for consecutive
   monitor operations (log transfer and connections statistics, adjust the maximum number of connections, etc.).
 
 * ``storage.multipart_size`` When the file size measured in bytes is greater than this value the file is split in chunk
@@ -234,6 +234,11 @@ HTTP Adapter
 ************
 
 This adapter can be used only to download files from public HTTP or HTTPS servers.
+
+It must be listed in the ``storage.adapters`` option::
+
+    [storage]
+    storage.adapters = esrally.storage.http:HTTPAdapter
 
 * ``storage.http.max_retries`` is used to configure the maximum number of retries for making HTTP adapter requests.
   It accepts a numeric value to simply specify total number of retries. Examples::
@@ -259,6 +264,11 @@ S3 buckets as mirror for track file downloads.
 It requires `Boto3 Client`_ to be installed and it accepts only URLs with the following format::
 
   s3://<bucket-name>/[<object-key-prefix>]
+
+It must be listed in the ``storage.adapters`` option::
+
+    [storage]
+    storage.adapters = esrally.storage.aws:S3Adapter
 
 In the case the boto3 client is not installed, and S3 buckets are publicly readable without authentication, you can use
 the HTTP adapter instead, for example by using the following URL format::
@@ -304,7 +314,7 @@ track
 
 This section specifies how tracks corpora files has to be fetched. Available options are:
 
-* ``track.downloader.multipart_enabled`` if `true`, it will enable the use the new multipart `esrally.storage` package for
+* ``track.downloader.multipart_enabled`` if ``true``, it will enable the use the new multipart ``esrally.storage`` package for
   downloading corpora files. For more configuration options please have a look to the `storage`_ configuration section.
 
 .. warning::
