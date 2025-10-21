@@ -127,9 +127,9 @@ class Client:
                 # no cached head, or it has expired.
                 pass
 
-        adapter = self._adapters.get(url)
         start_time = time.monotonic()
         try:
+            adapter = self._adapters.get(url)
             head = adapter.head(url)
             error = None
         except Exception as ex:
