@@ -27,7 +27,7 @@ from contextlib import contextmanager
 from typing import BinaryIO
 
 from esrally.storage._adapter import Head, ServiceUnavailableError
-from esrally.storage._client import Client, MirrorFailure
+from esrally.storage._client import Client
 from esrally.storage._config import StorageConfig
 from esrally.storage._executor import Executor
 from esrally.storage._range import (
@@ -264,7 +264,7 @@ class Transfer:
 
     def save_status(self):
         """It updates the status file."""
-        self._mirror_failures: dict[str, str] = {f.mirror_url: f.error for f in self.client.mirror_failures(self.url)}
+        self._mirror_failures = {f.mirror_url: f.error for f in self.client.mirror_failures(self.url)}
         document = {
             "url": self.url,
             "path": self.path,

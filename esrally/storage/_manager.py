@@ -128,15 +128,15 @@ class TransferManager:
             local_dir=self.cfg.local_dir,
         )
 
-        with self._lock:
-            self._transfers[tr.url] = tr
-
         if start:
             # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
             # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
             # the allowed per-transfer connections.
+            with self._lock:
+                self._transfers[tr.url] = tr
             self._update_transfers()
             tr.start()
+
         return tr
 
     def monitor(self):

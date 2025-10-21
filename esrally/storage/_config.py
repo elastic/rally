@@ -28,7 +28,7 @@ class StorageConfig(config.Config):
 
     DEFAULT_ADAPTERS = (
         "esrally.storage.aws:S3Adapter",
-        "esrally.storage:HTTPAdapter",
+        "esrally.storage.http:HTTPAdapter",
     )
 
     @property
