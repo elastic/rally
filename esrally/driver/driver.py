@@ -1566,6 +1566,7 @@ class Sample:
                 else:
                     for sub_timing in timing:
                         st = sub_timing.pop("dependent_timing", None)
+                        sub_meta_data = self._merge(meta_data, sub_timing)
                         yield Sample(
                             self.client_id,
                             st["absolute_time"],
@@ -1573,7 +1574,7 @@ class Sample:
                             self.task_start,
                             self.task,
                             self.sample_type,
-                            meta_data,
+                            sub_meta_data,
                             0,
                             st["service_time"],
                             0,
