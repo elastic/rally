@@ -26,6 +26,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from typing import BinaryIO
 
+from esrally import types
 from esrally.storage._adapter import Head, ServiceUnavailableError
 from esrally.storage._client import Client
 from esrally.storage._config import StorageConfig
@@ -51,9 +52,8 @@ class TransferStatus(enum.Enum):
     CANCELLED = 4
     FAILED = 5
 
-
-def transfer_status_path(local_dir: str, url: str) -> str:
-    return os.path.normpath(os.path.expanduser(os.path.join(local_dir, url))) + ".status"
+    def __str__(self):
+        return str(self.name)
 
 
 class Transfer:
@@ -79,16 +79,16 @@ class Transfer:
         self,
         client: Client,
         url: str,
-        path: str,
         executor: Executor,
         document_length: int | None,
+        path: str | None = None,
         todo: RangeSet = NO_RANGE,
         done: RangeSet = NO_RANGE,
         multipart_size: int | None = None,
         max_connections: int = StorageConfig.DEFAULT_MAX_CONNECTIONS,
         resume: bool = True,
         crc32c: str | None = None,
-        local_dir: str = StorageConfig.DEFAULT_LOCAL_DIR,
+        cfg: types.Config | None = None,
     ):
         """
         :param client: The client to use to download file parts from a remote service.
@@ -118,9 +118,14 @@ class Transfer:
             # It limits the parts of the file to transfer to the document length.
             todo &= Range(0, document_length)
 
+        # This also ensures the path is a string
+        if path is not None:
+            path = os.path.normpath(os.path.expanduser(path))
+
         self.client = client
         self.url = url
-        self.path = path
+        self.cfg = StorageConfig.from_config(cfg)
+        self._path = path
         self._document_length = document_length
         self._max_connections = max_connections
         self._started = threads.TimedEvent()
@@ -135,15 +140,33 @@ class Transfer:
         self._lock = threading.Lock()
         self._resumed_size = 0
         self._crc32c = crc32c
-        self._local_dir = local_dir
         self._mirror_failures: dict[str, str] = {}
-        if resume and os.path.isfile(transfer_status_path(local_dir, url)):
+        if resume and self.status_file_path and os.path.isfile(self.status_file_path):
             try:
                 self._resume_status()
             except Exception as ex:
                 LOG.error("Failed to resume transfer: %s", ex)
             else:
                 LOG.info("resumed from existing status: %s", self.info())
+
+    @property
+    def status_file_path(self) -> str:
+        return self.cfg.transfer_status_path(self.url)
+
+    @property
+    def path(self) -> str:
+        if self._path is None:
+            self._path = self.cfg.transfer_file_path(self.url)
+        return self._path
+
+    @path.setter
+    def path(self, value: str) -> None:
+        path = os.path.normpath(os.path.expanduser(value))
+        if self._path == path:
+            return
+        if self._path is not None:
+            raise ValueError(f"mismatching file path: got '{value}', expected '{self._path}'")
+        self._path = path
 
     @property
     def document_length(self) -> int | None:
@@ -158,7 +181,7 @@ class Transfer:
         if self._document_length == value:
             return
         if self._document_length is not None:
-            raise RuntimeError(f"mismatching document length: got {value}, want {self._document_length}")
+            raise ValueError(f"mismatching document length: got '{value}', expected '{self._document_length}'")
         with self._lock:
             self._document_length = value
             # It ensures to finish requesting file parts as soon it reaches the expected document length.
@@ -183,8 +206,10 @@ class Transfer:
                 # connection in another thread.
                 self.start()
 
-    def start(self) -> bool:
+    def start(self, todo: RangeSet = NO_RANGE) -> bool:
         with self._lock:
+            if todo:
+                self._todo |= todo - self._done
             if not self._todo or self._finished:
                 # There are no more tasks to do.
                 return False
@@ -203,14 +228,10 @@ class Transfer:
 
     @property
     def mirror_failures(self) -> dict[str, str]:
-        return self._mirror_failures
+        return dict(self._mirror_failures)
 
     def _resume_status(self):
-        if not os.path.isfile(self.path):
-            # There is no file to recover interrupted transfer to.
-            raise FileNotFoundError(f"target file not found: {self.path}")
-
-        status_filename = transfer_status_path(self._local_dir, self.url)
+        status_filename = self.status_file_path
         if not os.path.isfile(status_filename):
             # There is no file to read status data from.
             raise FileNotFoundError(f"status file not found: {status_filename}")
@@ -219,23 +240,27 @@ class Transfer:
             document = json.load(fd)
             if not isinstance(document, Mapping):
                 # Invalid file format.
-                raise ValueError(f"mismatching status file format: got {type(document)}, want dict")
+                raise ValueError(f"mismatching status file format: got {type(document)}, expected dict")
 
         # It checks the remote URL to ensure the file was downloaded from the same location.
         url = document.get("url")
         if url is None:
-            raise ValueError(f"url field not found in status file: {status_filename}")
+            raise ValueError(f"url field not found in status file: '{status_filename}'")
         if url != self.url:
-            raise ValueError(f"mismatching url in status file: '{status_filename}', got '{url}', want '{self.url}'")
+            raise ValueError(f"mismatching url in status file: '{status_filename}', got '{url}', expected '{self.url}'")
 
         path = document.get("path")
-        if path is None or os.path.normpath(path) != self.path:
-            raise ValueError(f"mismatching file path in status file: '{status_filename}', got '{path}', want '{self.path}'")
+        if path is not None:
+            self.path = path
+
+        if not os.path.isfile(self.path):
+            # There is no file to recover interrupted transfer to.
+            raise FileNotFoundError(f"target file not found: {self.path}")
 
         # It checks the document length to ensure the file was the same version.
         document_length = document.get("document_length")
         if document_length is None:
-            raise ValueError(f"document_length field not found in status file: {status_filename}")
+            raise ValueError(f"document_length field not found in status file: '{status_filename}'")
         self.document_length = document_length
 
         # It checks the crc32c checksum to ensure the file was the same version.
@@ -275,7 +300,7 @@ class Transfer:
             # in any mirror server to keep it in sync with source file repository.
             "mirror_failures": self._mirror_failures,
         }
-        status_filename = transfer_status_path(self._local_dir, self.url)
+        status_filename = self.status_file_path
         os.makedirs(os.path.dirname(status_filename), exist_ok=True)
         with open(status_filename, "w") as fd:
             json.dump(document, fd)
@@ -317,6 +342,7 @@ class Transfer:
                 if head.crc32c is not None:
                     # It checks the crc32c check sum of the file it downloaded the data from.
                     self.crc32c = head.crc32c
+                LOG.debug("Downloading file fragment from '%s' to '%s' (range=%s)...", head.url, self.path, head.ranges)
                 for chunk in content:
                     if chunk:
                         fd.write(chunk)

@@ -1,0 +1,11 @@
+{
+  "mirrors": [
+    {
+      "sources": ["https://rally-tracks.elastic.co/"],
+      "destinations": [
+        "https://storage.googleapis.com/invalid-rally-tracks/"
+      ],
+      "labels": { "provider": "gc", "region": "us"}
+    }
+  ]
+}

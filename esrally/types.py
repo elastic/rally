@@ -157,6 +157,7 @@ Key = Literal[
     "source.revision",
     "src.root.dir",
     "storage.adapters",
+    "storage.base_url",
     "storage.aws.profile",
     "storage.cache_ttl",
     "storage.chunk_size",

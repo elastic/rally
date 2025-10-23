@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import logging
+import os
 from collections.abc import Iterable
 from typing import Any
 
@@ -49,6 +50,16 @@ class StorageConfig(config.Config):
     def aws_profile(self, value: str | None) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.aws.profile", value)
 
+    DEFAULT_BASE_URL = "https://rally-tracks.elastic.co/"
+
+    @property
+    def base_url(self) -> str:
+        return self.opts("storage", "storage.base_url", self.DEFAULT_BASE_URL, False)
+
+    @base_url.setter
+    def base_url(self, value: str) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.base_url", value)
+
     DEFAULT_CHUNK_SIZE = 64 * 1024
 
     @property
@@ -59,7 +70,7 @@ class StorageConfig(config.Config):
     def chunk_size(self, value: int) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.chunk_size", value)
 
-    DEFAULT_LOCAL_DIR = "~/.rally/storage"
+    DEFAULT_LOCAL_DIR = os.environ.get("RALLY_STORAGE_LOCAL_DIR", "~/.rally/storage")
 
     @property
     def local_dir(self) -> str:
@@ -68,6 +79,13 @@ class StorageConfig(config.Config):
     @local_dir.setter
     def local_dir(self, value: str) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.local_dir", value)
+
+    def transfer_file_path(self, url: str) -> str:
+        path = os.path.join(self.local_dir, url)
+        return os.path.normpath(os.path.expanduser(path))
+
+    def transfer_status_path(self, url: str) -> str:
+        return self.transfer_file_path(url) + ".status"
 
     DEFAULT_MAX_CONNECTIONS = 4
 
@@ -99,7 +117,7 @@ class StorageConfig(config.Config):
     def max_workers(self, value: int) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.max_workers", value)
 
-    DEFAULT_MIRROR_FILES = ("~/.rally/storage-mirrors.json",)
+    DEFAULT_MIRROR_FILES = os.environ.get("RALLY_STORAGE_MIRROR_FILES", "~/.rally/storage-mirrors.json")
 
     @property
     def mirror_files(self) -> tuple[str, ...]:

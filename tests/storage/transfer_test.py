@@ -24,7 +24,6 @@ from urllib.parse import urlparse
 
 import pytest
 
-from esrally.config import Config
 from esrally.storage._adapter import Head
 from esrally.storage._client import Client
 from esrally.storage._config import StorageConfig
@@ -32,6 +31,7 @@ from esrally.storage._executor import DummyExecutor
 from esrally.storage._range import rangeset
 from esrally.storage._transfer import Transfer
 from esrally.utils.cases import cases
+from tests.storage import local_dir
 
 URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
 MISMATCH_URL = "https://rally-tracks.elastic.co/apm/span.json.gz"
@@ -100,7 +100,7 @@ class TransferCase:
         document_length=50,
         want_init_document_length=50,
         want_final_document_length=50,
-        want_final_error=RuntimeError,
+        want_final_error=ValueError,
     ),
     # It tests multipart working when multipart_size < content_length.
     no_document_length=TransferCase(want_init_document_length=None, want_init_todo="0-", want_final_done="0-1023", document_length=None),
@@ -130,21 +130,23 @@ class TransferCase:
         resume_status={"done": "128-255", "url": URL, "document_length": len(DATA), "crc32c": MISMATCH_CRC32C}, want_final_done="0-1023"
     ),
 )
-def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLike) -> None:
+def test_transfer(case: TransferCase, executor: DummyExecutor, local_dir: str, tmpdir) -> None:
     """It tests the execution of one single task (a single download step).
 
     :param case: the transfer case to be tested.
     :param executor: a dummy single-thread executor that allows to execute only tasks that have already been submitted.
     :param tmpdir: the temporary directory to use for this test case.
     """
-    client = DummyClient.from_config(Config())
+    cfg = StorageConfig()
+    client = DummyClient.from_config(cfg)
 
     path = os.path.join(str(tmpdir), os.path.basename(urlparse(case.url).path))
-    status_path = path + ".status"
+    status_path = cfg.transfer_status_path(case.url)
     if case.resume_status is not None:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as fd:
             fd.write(b"\0" * 1024)
+        os.makedirs(os.path.dirname(status_path), exist_ok=True)
         with open(status_path, "w") as fd:
             json.dump(case.resume_status, fd)
     try:
@@ -159,6 +161,7 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
             max_connections=case.max_connections,
             resume=case.resume,
             crc32c=case.crc32c,
+            cfg=cfg,
         )
     except Exception as exc:
         assert case.want_init_error is not None
@@ -172,6 +175,7 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
     assert transfer.todo == rangeset(case.want_init_todo)
     assert transfer.done == rangeset(case.want_init_done)
     assert transfer.document_length == case.want_init_document_length
+    assert transfer.status_file_path == status_path
 
     # It submits a single test task for execution.
     transfer.start()
@@ -214,7 +218,13 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, tmpdir: os.PathLi
 
     # It verifies the transfer can be resumed from the file status
     transfer2 = Transfer(
-        client=client, url=case.url, path=path, document_length=case.document_length, todo=rangeset(case.todo), executor=executor
+        client=client,
+        url=case.url,
+        path=path,
+        document_length=case.document_length,
+        todo=rangeset(case.todo),
+        executor=executor,
+        cfg=cfg,
     )
     assert transfer2.path == path
     assert transfer2.url == transfer.url

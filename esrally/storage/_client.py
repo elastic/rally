@@ -203,7 +203,7 @@ class Client:
                     continue
 
                 # It saves mirror failures so that we can later fix the failure after benchmark execution on CI.
-                LOG.info("Failed to get head from mirror URL: '%s' -> '%s': %s", url, u, ex)
+                LOG.warning("Failed to get head from mirror URL: '%s': %s", u, ex)
                 self._mirror_failures[url][u] = MirrorFailure(
                     url=url, error=f"{type(ex).__name__}:{ex}", mirror_url=u, timestamp=time.time()
                 )
