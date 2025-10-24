@@ -32,6 +32,8 @@ def glob_modules(path: Path, pattern, *args, **kwargs):
         if not file.match("*.py"):
             continue
         pyfile = file.relative_to(path)
+        if pyfile.name == "__main__.py":
+            continue
         modpath = pyfile.parent if pyfile.name == "__init__.py" else pyfile.with_suffix("")
         yield import_module(str(modpath).replace(sep, "."))
 

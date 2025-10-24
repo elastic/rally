@@ -106,6 +106,28 @@ jobs:
             /home/runner/.rally/benchmarks/races/**/*.log
           if-no-files-found: error
 
+  storage-manager:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.22"
+      - name: Run Storage manager test cases.
+        run: make it ARGS=it/storage
+      - uses: elastic/es-perf-github-status@v2
+        if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
+        with:
+          slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack_channel: ${{ secrets.SLACK_CHANNEL }}
+          status: FAILED
+
+
   install-with-pyenv:
     runs-on: ubuntu-22.04
 

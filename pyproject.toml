@@ -142,6 +142,7 @@ dev = [
 [project.scripts]
 esrally = "esrally.rally:main"
 esrallyd = "esrally.rallyd:main"
+esrally-storage = "esrally.storage._cli:main"
 
 [project.urls]
 "Changelog" = "https://github.com/elastic/rally/blob/master/CHANGELOG.md"
