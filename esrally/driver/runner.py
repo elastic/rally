@@ -105,6 +105,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.TransformStats, Retry(TransformStats()), async_runner=True)
     register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
+    register_runner(track.OperationType.RunUntil, Retry(RunUntil()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -3048,3 +3049,74 @@ class Retry(Runner, Delegator):
 
     def __repr__(self, *args, **kwargs):
         return "retryable %s" % repr(self.delegate)
+
+
+class RunUntil(Runner):
+    """
+    Performs an API call until a target value is seen.
+    """
+
+    async def __call__(self, es, params):
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
+        es.return_raw_response()
+        path = mandatory(params, "path", self)
+        method = params.get("method", "GET")
+        body = params.get("body", None)
+        json_path = mandatory(params, "json-path", self)
+        criterion = mandatory(params, "criterion", self)
+        check_interval = params.get("check-interval", 60)
+        if criterion.get("operator") not in ["exists", "not_exists", "eq", "neq", "gte", "lte"]:
+            raise ValueError(f"Unsupported operator: {criterion.get('operator')}")
+        if criterion.get("operator") in ["eq", "neq", "gte", "lte"] and "value" not in criterion:
+            raise ValueError(f"Criterion operator {criterion.get('operator')} requires a 'value' field.")
+
+        complete = False
+        while not complete:
+            response = await es.perform_request(
+                method=method,
+                path=path,
+                headers=headers,
+                body=body,
+                params=request_params,
+            )
+            value = parse(response, [json_path])
+            raw_value: str | int | float = value.get(json_path)
+            if not raw_value:
+                continue
+            complete = self.compare_value(criterion, raw_value)
+            if not complete:
+                self.logger.debug("Criterion not met, retrying...")
+                await asyncio.sleep(check_interval)  # wait before retrying
+
+    def compare_value(self, criterion: dict, value: str | int | float) -> bool:
+        """
+        Compare a value against a criterion using the specified operator.
+
+        Args:
+            criterion (dict): Dictionary containing 'operator' and optionally 'value' keys.
+                Supported operators: 'exists', 'not_exists', 'gte', 'lte', 'eq', 'neq'.
+            value: The actual value to compare against the criterion.
+
+        Returns:
+            bool: True if the criterion is met, False otherwise.
+        """
+        operator = criterion.get("operator")
+        target_value: int | float = criterion.get("value", -1)
+        return_value = False
+        if operator == "exists":
+            return_value = value is not None
+        elif operator == "not_exists":
+            return_value = value is None
+        elif operator == "gte":
+            return_value = int(value) >= int(target_value)
+        elif operator == "lte":
+            return_value = int(value) <= int(target_value)
+        elif operator == "eq":
+            return_value = int(value) == int(target_value)
+        elif operator == "neq":
+            return_value = int(value) != int(target_value)
+        return return_value
+
+    def __repr__(self, *args, **kwargs):
+        return "run-until"
