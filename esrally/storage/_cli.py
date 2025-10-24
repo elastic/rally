@@ -30,7 +30,10 @@ LOG = logging.getLogger(__name__)
 
 def main():
     cfg = storage.StorageConfig()
-    cfg.load_config()
+    try:
+        cfg.load_config()
+    except FileNotFoundError:
+        LOG.info("No configuration file found, using default configuration")
 
     parser = argparse.ArgumentParser(description="Interacts with ES Rally remote storage services.")
     subparsers = parser.add_subparsers(dest="command")
