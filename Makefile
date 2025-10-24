@@ -56,6 +56,7 @@ check-all: all
 	lint \
 	format \
 	pre-commit \
+	precommit \
 	install-pre-commit \
 	docs \
 	serve-docs \
@@ -139,7 +140,7 @@ lint: venv
 	uv run -- pre-commit run --all-files
 
 # It run all linters on changed files using pre-commit.
-pre-commit: venv
+precommit pre-commit: venv
 	uv run -- pre-commit run
 
 # It install a pre-commit hook in the project .git dir so modified files are checked before creating every commit.

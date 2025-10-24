@@ -741,6 +741,8 @@ class OperationType(Enum):
     TransformStats = (55, AdminStatus.Yes, serverless.Status.Public)
     CreateIlmPolicy = (56, AdminStatus.Yes, serverless.Status.Blocked)
     DeleteIlmPolicy = (57, AdminStatus.Yes, serverless.Status.Blocked)
+    # this is classed the same as RawRequest, but could potentially be used to call endpoints that are blocked
+    RunUntil = (58, AdminStatus.No, serverless.Status.Public)
 
     def __init__(self, id: int, admin_status: AdminStatus, serverless_status: serverless.Status):
         self.id = id
