@@ -130,7 +130,21 @@ class LsCase:
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
     ),
-    urls_after_get=LsCase(
+    path_after_get=LsCase(
+        ["ls", FIRST_PATH],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output={
+            FIRST_URL: {
+                "status": "INITIALIZED",
+                "done": "0-63",
+                "finished": False,
+            }
+        },
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
+    url_after_get=LsCase(
         ["ls", FIRST_URL],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={

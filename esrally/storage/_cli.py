@@ -69,13 +69,16 @@ def main():
 
 
 def ls(cfg: types.Config, args: argparse.Namespace) -> None:
+    cfg = storage.StorageConfig.from_config(cfg)
+
     manager = storage.init_transfer_manager(cfg=cfg)
     urls: list[str] = []
     if args.command == "ls":
-        urls.extend(normalise_url(url) for u in (args.urls or []) if (url := u.strip()))
+        urls.extend(normalise_url(url, base_url=cfg.base_url) for u in (args.urls or []) if (url := u.strip()))
     try:
         transfers: list[storage.Transfer] = manager.list(urls=urls, start=False)
-    except FileNotFoundError:
+    except FileNotFoundError as ex:
+        LOG.warning("Failed to list transfers: %s", ex)
         LOG.info("No transfers found.")
         sys.exit(1)
     except Exception as ex:
