@@ -19,11 +19,14 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os.path
+import subprocess
 import sys
 import time
 import urllib
 
 from esrally import storage, types
+from esrally.storage._transfer import TransferStatus
 
 LOG = logging.getLogger(__name__)
 
@@ -53,6 +56,10 @@ def main():
     get_parser.add_argument("--resume", action="store_true", help="It resumes interrupted downloads")
     get_parser.add_argument("--mirrors", type=str, default="", nargs="*", help="It will look for mirror services in given mirror file.")
 
+    put_parser = subparsers.add_parser("put", help="Upload file(s) to mirror server.")
+    put_parser.add_argument("urls", type=str, nargs="*")
+    put_parser.add_argument("target", type=str)
+
     args = parser.parse_args()
     logging_level = (args.quiet - args.verbose) * (logging.INFO - logging.DEBUG) + logging.INFO
     logging.basicConfig(level=logging_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -64,6 +71,8 @@ def main():
             ls(cfg, args)
         case "get":
             get(cfg, args)
+        case "put":
+            put(cfg, args)
         case _:
             LOG.critical("Invalid command: %r", args.command)
             sys.exit(3)
@@ -154,6 +163,47 @@ def get(cfg: types.Config, args: argparse.Namespace) -> None:
         LOG.critical("Files download failed. Errors:\n%s", json.dumps(errors, indent=2, sort_keys=True))
         sys.exit(1)
     LOG.info("All transfers done.")
+
+
+def put(cfg: types.Config, args: argparse.Namespace) -> None:
+    cfg = storage.StorageConfig.from_config(cfg)
+
+    manager = storage.init_transfer_manager(cfg=cfg)
+
+    urls: list[str] = []
+    if args.urls:
+        urls = [normalise_url(url, base_url=cfg.base_url) for u in args.urls if (url := u.strip())]
+    try:
+        transfers = [tr for tr in manager.list(urls=urls, start=False) if tr.status == TransferStatus.DONE]
+    except FileNotFoundError as ex:
+        LOG.warning("Unable to list transfer files: %s", ex)
+        sys.exit(1)
+
+    if not transfers:
+        LOG.warning("No finished transfers found.")
+        sys.exit(1)
+
+    failures: dict[str, str] = {}
+    base_url = cfg.base_url
+    for tr in transfers:
+        url = tr.url
+        target = args.target
+        if url.startswith(base_url):
+            target += os.path.dirname(f"/{url[len(base_url):]}")
+
+        command = ["rclone", "copy", tr.path, target]
+        LOG.debug("Running command: %s", " ".join(command))
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError as ex:
+            LOG.error("Failed running command: %s", ex)
+            failures[tr.url] = str(ex)
+
+    if failures:
+        LOG.critical("Failed transfers: %s", json.dumps(failures, indent=2, sort_keys=True))
+        sys.exit(3)
+
+    LOG.info("Finished transfer(s).")
 
 
 def normalise_url(url: str, *, base_url: str | None = None) -> str:

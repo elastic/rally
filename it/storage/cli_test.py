@@ -328,3 +328,60 @@ def test_get(case: GetCase, tmpdir, local_dir: str, cfg: storage.StorageConfig, 
         assert got["document_length"] == head.content_length
         assert got["done"] == want["done"]
         assert got["mirror_failures"] == want.get("mirror_failures", {})
+
+
+@dataclasses.dataclass
+class PutCase:
+    args: list[str]
+    mirror_files: list[str] | None = None
+    after_get_params: dict[str, Any] | None = None
+    want_return_code: int = 0
+    want_stdout: bytes = b""
+    want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
+    want_files: list[str] = dataclasses.field(default_factory=list)
+
+
+@cases.cases(
+    no_urls=PutCase(
+        ["put", "target"],
+        want_return_code=1,
+    ),
+    no_urls_after_get=PutCase(
+        ["put", "target"],
+        after_get_params={"url": FIRST_URL},
+        want_return_code=0,
+        want_files=[f"./target/{FIRST_PATH}"],
+    ),
+)
+def test_put(case, cfg: storage.StorageConfig, client: storage.Client, tmpdir):
+    try:
+        subprocess.run(["which", "rclone"], check=True)
+    except subprocess.CalledProcessError:
+        LOG.critical("rclone is not installed")
+        pytest.skip("rclone is not installed")
+
+    if case.after_get_params is not None:
+        with storage.TransferManager.from_config(cfg) as manager:
+            manager.get(**case.after_get_params).wait(timeout=15)
+
+    cwd = str(tmpdir.mkdir("cwd"))
+    try:
+        result = subprocess.run(COMMAND + case.args, cwd=cwd, capture_output=True, check=not case.want_return_code)
+    except subprocess.CalledProcessError as ex:
+        LOG.critical("Command '%s' returned non-zero exit status %d", COMMAND, ex.returncode)
+        LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
+        raise
+
+    assert result.returncode == case.want_return_code
+    assert result.stdout == case.want_stdout
+    for line in case.want_stderr_lines:
+        assert line.encode("utf-8") in result.stderr
+
+    try:
+        find_result = subprocess.run(["find", ".", "-type", "f"], cwd=cwd, capture_output=True, check=not case.want_files)
+    except subprocess.CalledProcessError as ex:
+        LOG.critical("Command '%s' returned non-zero exit status %d", COMMAND, ex.returncode)
+        LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
+        raise
+
+    assert find_result.stdout.decode("utf-8").splitlines() == case.want_files
