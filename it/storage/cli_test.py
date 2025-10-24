@@ -20,7 +20,7 @@ import logging
 import os
 import subprocess
 import sys
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -82,6 +82,7 @@ class LsCase:
     args: list[str]
     mirror_files: list[str] | None = None
     after_get_params: dict[str, Any] | None = None
+    want_format: Literal["json", "ndjson"] = "json"
     want_return_code: int = 0
     want_output: dict[str, dict[str, Any]] | None = None
     want_stderr_lines: list[str] = dataclasses.field(default_factory=lambda: list(SUCCESS_LS_STDERR_LINES))
@@ -174,6 +175,21 @@ class LsCase:
             }
         },
     ),
+    ndjson_after_get_files=LsCase(
+        ["ls", "--ndjson", FIRST_URL],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output={
+            FIRST_URL: {
+                "status": "INITIALIZED",
+                "done": "0-63",
+                "finished": False,
+            }
+        },
+        want_format="ndjson",
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
 )
 def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
     if case.mirror_files:
@@ -193,7 +209,17 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
         assert b"" == result.stdout
         return
 
-    got_output = {got["url"]: got for got in json.loads(result.stdout)}
+    got_output: dict[str, dict] = {}
+    match case.want_format:
+        case "json":
+            got_output.update((got["url"], got) for got in json.loads(result.stdout))
+        case "ndjson":
+            for line in result.stdout.splitlines():
+                got = json.loads(line)
+                got_output[got["url"]] = got
+        case _:
+            pytest.fail(f"Unexpected output format: {case.want_format}")
+
     assert set(got_output) == set(case.want_output)
     for want_url, want in case.want_output.items():
         assert want_url in got_output

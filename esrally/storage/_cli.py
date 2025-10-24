@@ -45,12 +45,13 @@ def main():
 
     ls_parser = subparsers.add_parser("ls", help="List file(s) downloaded from ES Rally remote storage services.")
     ls_parser.add_argument("urls", type=str, nargs="*")
+    ls_parser.add_argument("--ndjson", action="store_true", help="It prints a JSON entry for each file, each separated by a newline.")
 
     get_parser = subparsers.add_parser("get", help="Download file(s) from ES Rally remote storage services.")
+    get_parser.add_argument("urls", type=str, nargs="*")
     get_parser.add_argument("--range", type=str, default="", help="It will only download given range of each file.")
     get_parser.add_argument("--resume", action="store_true", help="It resumes interrupted downloads")
     get_parser.add_argument("--mirrors", type=str, default="", nargs="*", help="It will look for mirror services in given mirror file.")
-    get_parser.add_argument("urls", type=str, nargs="*")
 
     args = parser.parse_args()
     logging_level = (args.quiet - args.verbose) * (logging.INFO - logging.DEBUG) + logging.INFO
@@ -102,6 +103,12 @@ def ls(cfg: types.Config, args: argparse.Namespace) -> None:
         }
         for tr in transfers
     ]
+
+    if args.command == "ls" and args.ndjson:
+        for o in output:
+            sys.stdout.write(f"{json.dumps(o)}\n")
+        return
+
     json.dump(output, sys.stdout, indent=2, sort_keys=True)
 
 
