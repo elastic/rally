@@ -31,7 +31,7 @@ from esrally.storage._executor import DummyExecutor
 from esrally.storage._range import rangeset
 from esrally.storage._transfer import Transfer
 from esrally.utils.cases import cases
-from tests.storage import local_dir
+from tests.storage import local_dir  # pylint: disable=unused-import
 
 URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
 MISMATCH_URL = "https://rally-tracks.elastic.co/apm/span.json.gz"

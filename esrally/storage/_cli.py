@@ -23,7 +23,7 @@ import sys
 import time
 import urllib
 
-from esrally import storage
+from esrally import storage, types
 
 LOG = logging.getLogger(__name__)
 
@@ -65,14 +65,14 @@ def main():
             sys.exit(3)
 
 
-def ls(cfg: storage.StorageConfig, args: argparse.Namespace) -> None:
+def ls(cfg: types.Config, args: argparse.Namespace) -> None:
     manager = storage.init_transfer_manager(cfg=cfg)
     urls: list[str] = []
     if args.command == "ls":
         urls.extend(normalise_url(url) for u in (args.urls or []) if (url := u.strip()))
     try:
         transfers: list[storage.Transfer] = manager.list(urls=urls, start=False)
-    except FileNotFoundError as ex:
+    except FileNotFoundError:
         LOG.info("No transfers found.")
         sys.exit(1)
     except Exception as ex:
@@ -99,7 +99,8 @@ def ls(cfg: storage.StorageConfig, args: argparse.Namespace) -> None:
     json.dump(output, sys.stdout, indent=2, sort_keys=True)
 
 
-def get(cfg: storage.StorageConfig, args: argparse.Namespace) -> None:
+def get(cfg: types.Config, args: argparse.Namespace) -> None:
+    cfg = storage.StorageConfig.from_config(cfg)
     if args.mirrors:
         cfg.mirror_files = args.mirrors
 

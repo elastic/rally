@@ -16,6 +16,7 @@
 # under the License.
 import dataclasses
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -25,6 +26,8 @@ import pytest
 
 from esrally import storage
 from esrally.utils import cases
+
+LOG = logging.getLogger(__name__)
 
 COMMAND = [sys.executable, "-m", storage.__name__]
 
@@ -258,8 +261,12 @@ def test_get(case: GetCase, tmpdir, local_dir: str, cfg: storage.StorageConfig, 
             manager.get(**case.after_get_params).wait(timeout=15)
 
     cwd = str(tmpdir.mkdir("cwd"))
-    result = subprocess.run(COMMAND + case.args, cwd=cwd, capture_output=True, check=not case.want_return_code)
-    print("\n" + result.stderr.decode("utf-8"))
+    try:
+        result = subprocess.run(COMMAND + case.args, cwd=cwd, capture_output=True, check=not case.want_return_code)
+    except subprocess.CalledProcessError as ex:
+        LOG.critical("Command '%s' returned non-zero exit status %d", COMMAND, ex.returncode)
+        LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
+        raise
 
     assert result.returncode == case.want_return_code
     assert result.stdout == case.want_stdout
