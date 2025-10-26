@@ -59,6 +59,7 @@ def main():
     put_parser = subparsers.add_parser("put", help="Upload file(s) to mirror server.")
     put_parser.add_argument("urls", type=str, nargs="*")
     put_parser.add_argument("target", type=str)
+    put_parser.add_argument("--mirror-failures", action="store_true", help="It upload only files that have recorded mirror failures.")
 
     args = parser.parse_args()
     logging_level = (args.quiet - args.verbose) * (logging.INFO - logging.DEBUG) + logging.INFO
@@ -88,7 +89,7 @@ def ls(cfg: types.Config, args: argparse.Namespace) -> None:
     try:
         transfers: list[storage.Transfer] = manager.list(urls=urls, start=False)
     except FileNotFoundError as ex:
-        LOG.warning("Failed to list transfers: %s", ex)
+        LOG.debug("Failed to list transfers: %s", ex)
         LOG.info("No transfers found.")
         sys.exit(1)
     except Exception as ex:
@@ -176,12 +177,21 @@ def put(cfg: types.Config, args: argparse.Namespace) -> None:
     try:
         transfers = [tr for tr in manager.list(urls=urls, start=False) if tr.status == TransferStatus.DONE]
     except FileNotFoundError as ex:
-        LOG.warning("Unable to list transfer files: %s", ex)
-        sys.exit(1)
+        LOG.warning("Failed to list status files: %s", ex)
+        return
+    except Exception as ex:
+        LOG.critical("Failed to list status files: %s", ex)
+        sys.exit(2)
 
     if not transfers:
-        LOG.warning("No finished transfers found.")
-        sys.exit(1)
+        LOG.info("No files to transfer.")
+        return
+
+    if args.mirror_failures:
+        transfers = [tr for tr in transfers if tr.mirror_failures]
+        if not transfers:
+            LOG.warning("No mirror failures.")
+            return
 
     failures: dict[str, str] = {}
     base_url = cfg.base_url

@@ -159,7 +159,7 @@ class LsCase:
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
     ),
-    after_get_with_bad_mirrors=LsCase(
+    after_mirror_failures=LsCase(
         ["ls", FIRST_URL],
         mirror_files=[BAD_MIRROR_FILES],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
@@ -344,16 +344,32 @@ class PutCase:
 @cases.cases(
     no_urls=PutCase(
         ["put", "target"],
-        want_return_code=1,
+        want_return_code=0,
     ),
-    no_urls_after_get=PutCase(
+    after_get=PutCase(
         ["put", "target"],
         after_get_params={"url": FIRST_URL},
         want_return_code=0,
         want_files=[f"./target/{FIRST_PATH}"],
     ),
+    mirror_failures=PutCase(
+        ["put", "target", "--mirror-failures"],
+        mirror_files=[BAD_MIRROR_FILES],
+        after_get_params={"url": FIRST_URL},
+        want_return_code=0,
+        want_files=[f"./target/{FIRST_PATH}"],
+    ),
+    no_mirror_failures=PutCase(
+        ["put", "target", "--mirror-failures"],
+        mirror_files=[GOOD_MIRROR_FILES],
+        after_get_params={"url": FIRST_URL},
+        want_return_code=0,
+    ),
 )
 def test_put(case, cfg: storage.StorageConfig, client: storage.Client, tmpdir):
+    if case.mirror_files:
+        cfg.mirror_files = case.mirror_files
+
     try:
         subprocess.run(["which", "rclone"], check=True)
     except subprocess.CalledProcessError:

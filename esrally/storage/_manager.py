@@ -169,7 +169,7 @@ class TransferManager:
             if not os.path.isdir(local_dir):
                 raise FileNotFoundError(f"local dir '{local_dir}' is not a directory")
 
-            find_status_files_command = ["find", "./", "-name", "*.status"]
+            find_status_files_command = ["find", ".", "-type", "f", "-name", "*.status"]
             try:
                 found_status_files = (
                     subprocess.run(find_status_files_command, check=True, cwd=local_dir, capture_output=True, shell=False)
