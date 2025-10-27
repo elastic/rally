@@ -551,7 +551,7 @@ class Downloader:
             manager = storage.init_transfer_manager(cfg=self.storage_config)
             LOG.info("Downloading data from [%s] to [%s] using transfer manager...", data_url, target_path)
             try:
-                manager.get(data_url, target_path, size_in_bytes).wait()
+                manager.get(data_url, path=target_path, document_length=size_in_bytes).wait()
                 LOG.info("Downloaded data from [%s] to [%s] using transfer manager.", data_url, target_path)
                 return
             except FileNotFoundError as ex:
