@@ -41,9 +41,6 @@ FIRST_URL = f"{BASE_URL}/{FIRST_PATH}"
 SECOND_PATH = "apm/documents.ndjson.bz2"
 SECOND_URL = f"{BASE_URL}/{SECOND_PATH}"
 
-SUCCESS_GET_STDERR_LINES = [f"INFO {LOGGER_NAME} All transfers done."]
-SUCCESS_LS_STDERR_LINES = []
-
 
 @pytest.fixture(autouse=True)
 def local_dir(monkeypatch: pytest.MonkeyPatch, tmpdir) -> str:
@@ -85,20 +82,18 @@ class LsCase:
     want_format: Literal["json", "ndjson"] = "json"
     want_return_code: int = 0
     want_output: dict[str, dict[str, Any]] | None = None
-    want_stderr_lines: list[str] = dataclasses.field(default_factory=lambda: list(SUCCESS_LS_STDERR_LINES))
+    want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
 
 
 @cases.cases(
     no_args=LsCase(
         [],
-        want_return_code=1,
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} No transfers found.",
         ],
     ),
     no_urls=LsCase(
         ["ls"],
-        want_return_code=1,
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} No transfers found.",
         ],
@@ -108,9 +103,9 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 1024)},
         want_output={
             FIRST_URL: {
-                "status": "INITIALIZED",
+                "status": "DONE",
                 "done": "0-1023",
-                "finished": False,
+                "finished": True,
             }
         },
         want_stderr_lines=[
@@ -122,9 +117,9 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 1024)},
         want_output={
             FIRST_URL: {
-                "status": "INITIALIZED",
+                "status": "DONE",
                 "done": "0-1023",
-                "finished": False,
+                "finished": True,
             }
         },
         want_stderr_lines=[
@@ -136,9 +131,9 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
-                "status": "INITIALIZED",
+                "status": "DONE",
                 "done": "0-63",
-                "finished": False,
+                "finished": True,
             }
         },
         want_stderr_lines=[
@@ -150,9 +145,9 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
-                "status": "INITIALIZED",
+                "status": "DONE",
                 "done": "0-63",
-                "finished": False,
+                "finished": True,
             }
         },
         want_stderr_lines=[
@@ -168,8 +163,8 @@ class LsCase:
         ],
         want_output={
             FIRST_URL: {
-                "finished": False,
-                "status": "INITIALIZED",
+                "finished": True,
+                "status": "DONE",
                 "done": "0-63",
                 "mirror_failures": {BAD_MIRROR_URL: f"FileNotFoundError:Can't get file head: {BAD_MIRROR_URL}"},
             }
@@ -180,9 +175,9 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
-                "status": "INITIALIZED",
+                "status": "DONE",
                 "done": "0-63",
-                "finished": False,
+                "finished": True,
             }
         },
         want_format="ndjson",
@@ -200,11 +195,7 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
             manager.get(**case.after_get_params).wait(timeout=15)
 
     cwd = str(tmpdir.mkdir("cwd"))
-    result = subprocess.run(COMMAND + case.args, cwd=cwd, capture_output=True, check=not case.want_return_code)
-    assert result.returncode == case.want_return_code, f"STDERR: {result.stderr}"
-    for line in case.want_stderr_lines:
-        assert line.encode("utf-8") in result.stderr
-
+    result = run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
     if not case.want_output:
         assert b"" == result.stdout
         return
@@ -238,7 +229,7 @@ class GetCase:
     after_get_params: dict[str, Any] | None = None
     want_return_code: int = 0
     want_stdout: bytes = b""
-    want_stderr_lines: list[str] = dataclasses.field(default_factory=lambda: list(SUCCESS_GET_STDERR_LINES))
+    want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
     want_status: dict[str, dict] = dataclasses.field(default_factory=dict)
 
 
@@ -246,49 +237,46 @@ class GetCase:
     no_urls=GetCase(["get"]),
     one_path=GetCase(
         ["get", FIRST_PATH],
-        want_stderr_lines=SUCCESS_GET_STDERR_LINES + [f"INFO {LOGGER_NAME} Download terminated: {FIRST_URL}"],
+        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
         want_status={FIRST_URL: {"done": "0-63457"}},
     ),
     one_url=GetCase(
         ["get", FIRST_URL],
-        want_stderr_lines=SUCCESS_GET_STDERR_LINES + [f"INFO {LOGGER_NAME} Download terminated: {FIRST_URL}"],
+        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
         want_status={FIRST_URL: {"done": "0-63457"}},
     ),
     two_urls=GetCase(
         ["get", "--range=0-1023", FIRST_URL, SECOND_PATH],
-        want_stderr_lines=SUCCESS_GET_STDERR_LINES
-        + [
-            f"INFO {LOGGER_NAME} Download terminated: {FIRST_URL}",
-            f"INFO {LOGGER_NAME} Download terminated: {SECOND_URL}",
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}",
+            f"INFO {LOGGER_NAME} Transfer finished: {SECOND_URL}",
         ],
         want_status={FIRST_URL: {"done": "0-1023"}, SECOND_URL: {"done": "0-1023"}},
     ),
     range=GetCase(
         ["get", "--range=1024-2043", FIRST_URL],
-        want_stderr_lines=SUCCESS_GET_STDERR_LINES + [f"INFO {LOGGER_NAME} Download terminated: {FIRST_URL}"],
+        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
         want_status={FIRST_URL: {"done": "1024-2043"}},
     ),
-    resume=GetCase(
-        ["get", "--resume"],
+    resume_after_get=GetCase(
+        ["get", "--range=-1024"],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(1024, 2048)},
-        want_stderr_lines=SUCCESS_GET_STDERR_LINES + [f"INFO {LOGGER_NAME} Download terminated: {FIRST_URL}"],
-        want_status={FIRST_URL: {"done": "0-63457"}},
+        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
+        want_status={FIRST_URL: {"done": "0-2047"}},
     ),
     good_mirrors=GetCase(
-        ["-v", "get", "--mirrors", GOOD_MIRROR_FILES, "--range=0-63,128-255", FIRST_URL],
-        want_stderr_lines=SUCCESS_GET_STDERR_LINES
-        + [
+        ["-v", f"--mirrors={GOOD_MIRROR_FILES}", "get", "--range=0-63,128-255", FIRST_URL],
+        want_stderr_lines=[
             f"DEBUG esrally.storage._transfer Downloading file fragment from '{GOOD_MIRROR_URL}'",
-            f"INFO {LOGGER_NAME} Download terminated: {FIRST_URL}",
+            f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}",
         ],
         want_status={FIRST_URL: {"done": "0-63,128-255"}},
     ),
     bad_mirrors=GetCase(
-        ["get", "--mirrors", BAD_MIRROR_FILES, "--range=-63", FIRST_URL],
-        want_stderr_lines=SUCCESS_GET_STDERR_LINES
-        + [
+        [f"--mirrors={BAD_MIRROR_FILES}", "get", "--range=0-63", FIRST_URL],
+        want_stderr_lines=[
             f"WARNING esrally.storage._client Failed to get head from mirror URL: '{BAD_MIRROR_URL}'",
-            f"INFO {LOGGER_NAME} Download terminated: {FIRST_URL}",
+            f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}",
         ],
         want_status={
             FIRST_URL: {"done": "0-63", "mirror_failures": {BAD_MIRROR_URL: f"FileNotFoundError:Can't get file head: {BAD_MIRROR_URL}"}}
@@ -301,23 +289,15 @@ def test_get(case: GetCase, tmpdir, local_dir: str, cfg: storage.StorageConfig, 
             manager.get(**case.after_get_params).wait(timeout=15)
 
     cwd = str(tmpdir.mkdir("cwd"))
-    try:
-        result = subprocess.run(COMMAND + case.args, cwd=cwd, capture_output=True, check=not case.want_return_code)
-    except subprocess.CalledProcessError as ex:
-        LOG.critical("Command '%s' returned non-zero exit status %d", COMMAND, ex.returncode)
-        LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
-        raise
+    result = run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
 
-    assert result.returncode == case.want_return_code
     assert result.stdout == case.want_stdout
-    for line in case.want_stderr_lines:
-        assert line.encode("utf-8") in result.stderr
 
     for want_url, want in case.want_status.items():
         want_path = cfg.transfer_file_path(want_url)
         assert os.path.isfile(want_path)
 
-        assert storage.rangeset(want["done"]).end == os.path.getsize(want_path)
+        assert os.path.getsize(want_path) == storage.rangeset(want["done"]).end
 
         with open(cfg.transfer_status_path(want_url), "rb") as fd:
             got = json.load(fd)
@@ -353,20 +333,20 @@ class PutCase:
         want_files=[f"./target/{FIRST_PATH}"],
     ),
     mirror_failures=PutCase(
-        ["put", "target", "--mirror-failures"],
+        ["--mirror-failures", "put", "target"],
         mirror_files=[BAD_MIRROR_FILES],
         after_get_params={"url": FIRST_URL},
         want_return_code=0,
         want_files=[f"./target/{FIRST_PATH}"],
     ),
     no_mirror_failures=PutCase(
-        ["put", "target", "--mirror-failures"],
+        ["--mirror-failures", "put", "target"],
         mirror_files=[GOOD_MIRROR_FILES],
         after_get_params={"url": FIRST_URL},
         want_return_code=0,
     ),
 )
-def test_put(case, cfg: storage.StorageConfig, client: storage.Client, tmpdir):
+def test_put(case: PutCase, cfg: storage.StorageConfig, client: storage.Client, tmpdir):
     if case.mirror_files:
         cfg.mirror_files = case.mirror_files
 
@@ -381,17 +361,11 @@ def test_put(case, cfg: storage.StorageConfig, client: storage.Client, tmpdir):
             manager.get(**case.after_get_params).wait(timeout=15)
 
     cwd = str(tmpdir.mkdir("cwd"))
-    try:
-        result = subprocess.run(COMMAND + case.args, cwd=cwd, capture_output=True, check=not case.want_return_code)
-    except subprocess.CalledProcessError as ex:
-        LOG.critical("Command '%s' returned non-zero exit status %d", COMMAND, ex.returncode)
-        LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
-        raise
+    result = run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
 
     assert result.returncode == case.want_return_code
     assert result.stdout == case.want_stdout
-    for line in case.want_stderr_lines:
-        assert line.encode("utf-8") in result.stderr
+    assert_lines_in_stderr(case.want_stderr_lines, result.stderr)
 
     try:
         find_result = subprocess.run(["find", ".", "-type", "f"], cwd=cwd, capture_output=True, check=not case.want_files)
@@ -401,3 +375,27 @@ def test_put(case, cfg: storage.StorageConfig, client: storage.Client, tmpdir):
         raise
 
     assert find_result.stdout.decode("utf-8").splitlines() == case.want_files
+
+
+def run_command(
+    args: list[str], cwd: str | None = None, want_return_cone: int = 0, want_stderr_lines: list[str] | None = None
+) -> subprocess.CompletedProcess:
+    result = subprocess.run(COMMAND + args, cwd=cwd, capture_output=True, check=False)
+    assert_equal_return_code(result.returncode, want_return_cone, stderr=result.stderr)
+    if want_stderr_lines:
+        assert_lines_in_stderr(want_stderr_lines, result.stderr)
+    return result
+
+
+def assert_lines_in_stderr(lines: list[str], stderr: bytes) -> None:
+    for line in lines:
+        if line.encode("utf-8") not in stderr:
+            pytest.fail(f"line non in STDERR: \n" f"{line}\n" "STDERR:\n" f"{stderr.decode('utf-8')}")
+
+
+def assert_equal_return_code(return_code: int, want_return_code: int = 0, *, stderr: bytes | None = None) -> None:
+    if return_code != want_return_code:
+        message = f"got return code {return_code}, want: {want_return_code}\n"
+        if stderr:
+            message += "\nSTDERR:\n" + stderr.decode("utf-8")
+        pytest.fail(message)

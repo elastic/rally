@@ -28,7 +28,7 @@ from esrally.storage._adapter import Head
 from esrally.storage._client import Client
 from esrally.storage._config import StorageConfig
 from esrally.storage._executor import DummyExecutor
-from esrally.storage._range import rangeset
+from esrally.storage._range import RangeSet, rangeset
 from esrally.storage._transfer import Transfer
 from esrally.utils.cases import cases
 from tests.storage import local_dir  # pylint: disable=unused-import
@@ -65,13 +65,13 @@ def executor() -> Iterator[DummyExecutor]:
 @dataclasses.dataclass()
 class TransferCase:
     url: str = URL
-    todo: str = ""
+    todo: str | None = None
     document_length: int | None = len(DATA)
     crc32c: str = CRC32C
     multipart_size: int | None = None
     max_connections: int = StorageConfig.DEFAULT_MAX_CONNECTIONS
     want_init_error: type[Exception] | None = None
-    want_init_todo: str = "0-1023"
+    want_init_todo: str = "-1023"
     want_init_done: str = ""
     want_init_document_length: int | None = len(DATA)
     want_final_error: type[Exception] | None = None
@@ -149,6 +149,9 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, local_dir: str, t
         os.makedirs(os.path.dirname(status_path), exist_ok=True)
         with open(status_path, "w") as fd:
             json.dump(case.resume_status, fd)
+    todo: RangeSet | None = None
+    if case.todo is not None:
+        todo = rangeset(case.todo)
     try:
         transfer = Transfer(
             client=client,
@@ -156,7 +159,7 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, local_dir: str, t
             document_length=case.document_length,
             path=path,
             executor=executor,
-            todo=rangeset(case.todo),
+            todo=todo,
             multipart_size=case.multipart_size,
             max_connections=case.max_connections,
             resume=case.resume,
@@ -222,7 +225,7 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, local_dir: str, t
         url=case.url,
         path=path,
         document_length=case.document_length,
-        todo=rangeset(case.todo),
+        todo=todo,
         executor=executor,
         cfg=cfg,
     )

@@ -82,7 +82,7 @@ class Transfer:
         executor: Executor,
         document_length: int | None,
         path: str | None = None,
-        todo: RangeSet = NO_RANGE,
+        todo: RangeSet | None = None,
         done: RangeSet = NO_RANGE,
         multipart_size: int | None = None,
         max_connections: int = StorageConfig.DEFAULT_MAX_CONNECTIONS,
@@ -111,16 +111,16 @@ class Transfer:
             else:
                 # By default, it will enable multipart with a hardcoded size.
                 multipart_size = StorageConfig.DEFAULT_MULTIPART_SIZE
-        if not todo:
-            # By default, it will transfer the whole file.
-            todo = Range(0, MAX_LENGTH)
-        if document_length is not None:
-            # It limits the parts of the file to transfer to the document length.
-            todo &= Range(0, document_length)
 
         # This also ensures the path is a string
         if path is not None:
             path = os.path.normpath(os.path.expanduser(path))
+
+        if todo is None:
+            todo = Range()
+
+        if document_length is not None:
+            todo &= Range(0, document_length)
 
         self.client = client
         self.url = url
@@ -206,10 +206,17 @@ class Transfer:
                 # connection in another thread.
                 self.start()
 
-    def start(self, todo: RangeSet = NO_RANGE) -> bool:
+    def start(self, todo: RangeSet | None = None) -> bool:
         with self._lock:
-            if todo:
-                self._todo |= todo - self._done
+            if todo is not None:
+                todo |= self._todo
+                todo -= self._done
+                if self._document_length is not None:
+                    todo &= Range(0, self._document_length)
+                self._todo = todo
+                if self._todo:
+                    self._errors = []
+                    self._finished.clear()
             if not self._todo or self._finished:
                 # There are no more tasks to do.
                 return False

@@ -22,6 +22,7 @@ import subprocess
 import threading
 from collections.abc import Iterable
 
+import urllib3.exceptions
 from typing_extensions import Self
 
 from esrally import types
@@ -110,9 +111,10 @@ class TransferManager:
         *,
         path: str | None = None,
         document_length: int | None = None,
+        crc32c: str | None = None,
         start: bool = True,
         local_dir: str | None = None,
-        todo: RangeSet = NO_RANGE,
+        todo: RangeSet | None = None,
     ) -> Transfer:
         """It starts a new transfer of a file from a remote url to a local path.
 
@@ -127,9 +129,19 @@ class TransferManager:
                 tr.start(todo=todo)
             return tr
 
-        head = self._client.head(url)
-        if document_length is not None and head.content_length != document_length:
-            raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
+        try:
+            head = self._client.head(url)
+        except urllib3.exceptions.NewConnectionError as ex:
+            LOG.error("Failed to get head: %s", ex)
+        else:
+            if document_length is None:
+                document_length = head.content_length
+            elif head.content_length != document_length:
+                raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
+            if crc32c is None:
+                crc32c = head.crc32c
+            elif head.crc32c != crc32c:
+                raise ValueError(f"mismatching crc32c: got {head.crc32c} bytes, wanted {crc32c} bytes")
 
         cfg = self.cfg
         if local_dir is not None:
@@ -140,11 +152,11 @@ class TransferManager:
             client=self._client,
             url=url,
             path=path,
-            document_length=head.content_length,
+            document_length=document_length,
+            todo=todo,
             executor=self._executor,
             multipart_size=self.cfg.multipart_size,
-            crc32c=head.crc32c,
-            todo=todo,
+            crc32c=crc32c,
             cfg=cfg,
         )
 
@@ -154,8 +166,8 @@ class TransferManager:
             # the allowed per-transfer connections.
             with self._lock:
                 self._transfers[tr.url] = tr
-            self._update_transfers()
             tr.start(todo=todo)
+            self._update_transfers()
 
         return tr
 
@@ -170,24 +182,24 @@ class TransferManager:
                 raise FileNotFoundError(f"local dir '{local_dir}' is not a directory")
 
             find_status_files_command = ["find", ".", "-type", "f", "-name", "*.status"]
-            try:
-                found_status_files = (
-                    subprocess.run(find_status_files_command, check=True, cwd=local_dir, capture_output=True, shell=False)
-                    .stdout.decode("utf-8")
-                    .strip()
-                    .split("\n")
-                )
-            except subprocess.CalledProcessError as ex:
-                raise FileNotFoundError(f"Unable to find any status file in {local_dir}: {ex}.\nError: {ex.stderr}") from ex
+            find_result = subprocess.run(find_status_files_command, cwd=local_dir, capture_output=True, shell=False, check=False)
+            found_status_files_output = find_result.stdout.decode("utf-8").strip()
+            if find_result.returncode != 0 or not found_status_files_output:
+                message = f"'.status' file not found in  '{local_dir}'"
+                stderr = find_result.stderr.strip().decode("utf-8")
+                if stderr:
+                    message += f"\nSTDERR:\n{stderr}"
+                LOG.info(message)
+                raise FileNotFoundError(message)
 
             urls = [
                 url[len("./") :][: -len(".status")].replace(":/", "://")
-                for f in found_status_files
+                for f in found_status_files_output.splitlines()
                 if (url := f.strip()).endswith(".status")
             ]
             if not urls:
                 raise FileNotFoundError(
-                    f"Unable to find any valid URL from status files: {found_status_files}.",
+                    f"Unable to find any valid URL from status files: {found_status_files_output}.",
                 )
         return [self.get(url, start=start, local_dir=local_dir, todo=todo) for url in urls]
 

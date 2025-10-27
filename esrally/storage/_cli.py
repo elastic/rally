@@ -20,15 +20,20 @@ import argparse
 import json
 import logging
 import os.path
+import shlex
 import subprocess
 import sys
 import time
 import urllib
+from typing import Literal
+from urllib.parse import urlparse
 
-from esrally import storage, types
-from esrally.storage._transfer import TransferStatus
+from esrally import storage
 
 LOG = logging.getLogger(__name__)
+
+
+LsFormat = Literal["json", "ndjson"]
 
 
 def main():
@@ -42,9 +47,10 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
     parser.add_argument("-v", "--verbose", action="count", required=False, default=0, help="Increase verbosity level.")
     parser.add_argument("-q", "--quiet", action="count", required=False, default=0, help="Decrease verbosity level.")
-    parser.add_argument(
-        "--local-dir", dest="local_dir", type=str, default=cfg.local_dir, help="destination directory for files to be downloaded"
-    )
+    parser.add_argument("--local-dir", type=str, default=cfg.local_dir, help="destination directory for downloading files")
+    parser.add_argument("--base-url", type=str, default=cfg.base_url, help="base URL for remote storage.")
+    parser.add_argument("--mirrors", type=str, default="", nargs="*", help="It will look for mirror services in given mirror file.")
+    parser.add_argument("--mirror-failures", action="store_true", help="It upload only files that have recorded mirror failures.")
 
     ls_parser = subparsers.add_parser("ls", help="List file(s) downloaded from ES Rally remote storage services.")
     ls_parser.add_argument("urls", type=str, nargs="*")
@@ -53,49 +59,73 @@ def main():
     get_parser = subparsers.add_parser("get", help="Download file(s) from ES Rally remote storage services.")
     get_parser.add_argument("urls", type=str, nargs="*")
     get_parser.add_argument("--range", type=str, default="", help="It will only download given range of each file.")
-    get_parser.add_argument("--resume", action="store_true", help="It resumes interrupted downloads")
-    get_parser.add_argument("--mirrors", type=str, default="", nargs="*", help="It will look for mirror services in given mirror file.")
 
     put_parser = subparsers.add_parser("put", help="Upload file(s) to mirror server.")
     put_parser.add_argument("urls", type=str, nargs="*")
-    put_parser.add_argument("target", type=str)
-    put_parser.add_argument("--mirror-failures", action="store_true", help="It upload only files that have recorded mirror failures.")
+    put_parser.add_argument("target_dir", type=str)
 
     args = parser.parse_args()
     logging_level = (args.quiet - args.verbose) * (logging.INFO - logging.DEBUG) + logging.INFO
     logging.basicConfig(level=logging_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+
     if args.local_dir:
         cfg.local_dir = args.local_dir
 
+    if args.base_url:
+        cfg.base_url = args.base_url
+
+    if args.mirrors:
+        cfg.mirror_files = args.mirrors
+
+    manager = storage.init_transfer_manager(cfg=cfg)
+    urls: list[str] = []
+    if args.command and args.urls:
+        urls.extend(normalise_url(url, base_url=cfg.base_url) for u in (args.urls or []) if (url := u.strip()))
+    try:
+        transfers: list[storage.Transfer] = manager.list(urls=urls, start=False)
+    except FileNotFoundError as ex:
+        if args.command and args.urls:
+            LOG.critical("Failed to list transfers: %s", ex)
+            sys.exit(1)
+        LOG.info("No transfers found.")
+        return
+    except Exception as ex:
+        LOG.critical("Failed to list transfers: %s", ex)
+        sys.exit(2)
+
+    if LOG.isEnabledFor(logging.DEBUG):
+        LOG.debug("Found %d transfer(s):\n%s", len(transfers), "\n".join(tr.info() for tr in transfers))
+
+    if args.base_url:
+        transfers = [tr for tr in transfers if tr.url.startswith(args.base_url.rstrip("/"))]
+        if not transfers:
+            LOG.info("No transfers with base URL: %s.", args.base_url)
+            return
+
+    if args.mirror_failures:
+        transfers = [tr for tr in transfers if tr.mirror_failures]
+        if not transfers:
+            LOG.info("No transfers with mirror failures.")
+            return
+
     match args.command:
+        case None:
+            ls(transfers)
         case "ls" | None:
-            ls(cfg, args)
+            fmt: LsFormat = "json"
+            if args.ndjson:
+                fmt = "ndjson"
+            ls(transfers, fmt=fmt)
         case "get":
-            get(cfg, args)
+            get(transfers, todo=storage.rangeset(args.range))
         case "put":
-            put(cfg, args)
+            put(transfers, args.target_dir, base_url=cfg.base_url)
         case _:
             LOG.critical("Invalid command: %r", args.command)
             sys.exit(3)
 
 
-def ls(cfg: types.Config, args: argparse.Namespace) -> None:
-    cfg = storage.StorageConfig.from_config(cfg)
-
-    manager = storage.init_transfer_manager(cfg=cfg)
-    urls: list[str] = []
-    if args.command == "ls":
-        urls.extend(normalise_url(url, base_url=cfg.base_url) for u in (args.urls or []) if (url := u.strip()))
-    try:
-        transfers: list[storage.Transfer] = manager.list(urls=urls, start=False)
-    except FileNotFoundError as ex:
-        LOG.debug("Failed to list transfers: %s", ex)
-        LOG.info("No transfers found.")
-        sys.exit(1)
-    except Exception as ex:
-        LOG.critical("Failed to list transfers: %s", ex)
-        sys.exit(2)
-
+def ls(transfers: list[storage.Transfer], *, fmt: LsFormat = "json") -> None:
     LOG.info("Found %d transfer(s).", len(transfers))
     output = [
         {
@@ -113,107 +143,77 @@ def ls(cfg: types.Config, args: argparse.Namespace) -> None:
         }
         for tr in transfers
     ]
-
-    if args.command == "ls" and args.ndjson:
+    if fmt == "ndjson":
         for o in output:
             sys.stdout.write(f"{json.dumps(o)}\n")
         return
-
     json.dump(output, sys.stdout, indent=2, sort_keys=True)
 
 
-def get(cfg: types.Config, args: argparse.Namespace) -> None:
-    cfg = storage.StorageConfig.from_config(cfg)
-    if args.mirrors:
-        cfg.mirror_files = args.mirrors
-
-    manager = storage.init_transfer_manager(cfg=cfg)
-
-    todo: storage.RangeSet = storage.rangeset(args.range) if args.range else storage.NO_RANGE
-
-    transfers: dict[str, storage.Transfer] = {}
-    if args.resume:
-        try:
-            transfers.update((tr.url, tr) for tr in manager.list(start=True, todo=todo))
-        except FileNotFoundError as ex:
-            LOG.critical("Unable to find any status file in local dir: %s. Error: %s", cfg.local_dir, ex)
-            sys.exit(1)
-
-    if args.urls:
-        urls = [normalise_url(url, base_url=cfg.base_url) for u in args.urls if (url := u.strip())]
-        try:
-            transfers.update((tr.url, tr) for tr in manager.list(urls=urls, start=True, todo=todo))
-        except FileNotFoundError as ex:
-            LOG.critical("Unable to start new transfers. Error: %s", ex)
-
+def get(transfers: list[storage.Transfer], *, todo: storage.RangeSet = storage.NO_RANGE) -> None:
     errors: dict[str, list[str]] = {}
-    while transfers:
-        LOG.info("Downloading files: \n - %s", "\n - ".join(f"{url}: {tr.progress or 0.:.2f}%" for url, tr in transfers.items()))
-        for url, tr in list(transfers.items()):
+
+    transferring: dict[str, storage.Transfer] = {}
+    for tr in transfers:
+        tr.start(todo=todo or storage.Range())
+        if tr.finished and not tr.errors:
+            LOG.debug("Transfer finished: '%s'.", tr.url)
+            continue
+
+        transferring[tr.url] = tr
+        LOG.debug("Transfer started: '%s'.", tr.url)
+
+    while transferring:
+        LOG.info("Downloading files: \n - %s", "\n - ".join(f"{url}: {tr.progress or 0.:.2f}%" for url, tr in transferring.items()))
+        for url, tr in list(transferring.items()):
             if tr.finished:
-                transfers.pop(url)
+                transferring.pop(url)
                 if tr.errors:
-                    LOG.error("Download failed: %s. Errors: %s", url, tr.errors)
+                    LOG.error("Transfer failed: %s. Errors: %s", url, tr.errors)
                     errors[url] = [str(e) for e in tr.errors]
                     continue
-                LOG.info("Download terminated: %s", url)
+                LOG.info("Transfer finished: %s", url)
                 continue
-        if transfers:
+        if transferring:
             time.sleep(2.0)
     if errors:
         LOG.critical("Files download failed. Errors:\n%s", json.dumps(errors, indent=2, sort_keys=True))
         sys.exit(1)
-    LOG.info("All transfers done.")
+    LOG.info("All transfers finished.")
 
 
-def put(cfg: types.Config, args: argparse.Namespace) -> None:
-    cfg = storage.StorageConfig.from_config(cfg)
+def put(transfers: list[storage.Transfer], target_dir: str, *, base_url: str | None = None) -> None:
+    target_dir = os.path.normpath(os.path.expanduser(target_dir))
+    commands: dict[str, list[str]] = {}
+    for tr in transfers:
+        url = tr.url
+        if base_url and url.startswith(base_url):
+            subdir = os.path.dirname(url[len(base_url) :]).strip("/")
+        else:
+            subdir = os.path.dirname(urlparse(url).path).strip("/")
+        if subdir:
+            target_dir += f"/{subdir}"
 
-    manager = storage.init_transfer_manager(cfg=cfg)
-
-    urls: list[str] = []
-    if args.urls:
-        urls = [normalise_url(url, base_url=cfg.base_url) for u in args.urls if (url := u.strip())]
-    try:
-        transfers = [tr for tr in manager.list(urls=urls, start=False) if tr.status == TransferStatus.DONE]
-    except FileNotFoundError as ex:
-        LOG.warning("Failed to list status files: %s", ex)
-        return
-    except Exception as ex:
-        LOG.critical("Failed to list status files: %s", ex)
-        sys.exit(2)
-
-    if not transfers:
+        commands[tr.url] = ["rclone", "copy", tr.path, target_dir]
+    if not commands:
         LOG.info("No files to transfer.")
         return
 
-    if args.mirror_failures:
-        transfers = [tr for tr in transfers if tr.mirror_failures]
-        if not transfers:
-            LOG.warning("No mirror failures.")
-            return
-
     failures: dict[str, str] = {}
-    base_url = cfg.base_url
-    for tr in transfers:
-        url = tr.url
-        target = args.target
-        if url.startswith(base_url):
-            target += os.path.dirname(f"/{url[len(base_url):]}")
-
-        command = ["rclone", "copy", tr.path, target]
-        LOG.debug("Running command: %s", " ".join(command))
+    for url, command in commands.items():
+        cmd = " ".join(shlex.quote(s) for s in command)
+        LOG.debug("Running command: '%s' ...", cmd)
         try:
             subprocess.run(command, check=True)
         except subprocess.CalledProcessError as ex:
-            LOG.error("Failed running command: %s", ex)
-            failures[tr.url] = str(ex)
+            LOG.error("Failed running command '%s': %s", cmd, ex)
+            failures[url] = f"'{cmd}' -> {ex}"
 
     if failures:
         LOG.critical("Failed transfers: %s", json.dumps(failures, indent=2, sort_keys=True))
         sys.exit(3)
 
-    LOG.info("Finished transfer(s).")
+    LOG.info("All transfers finished.")
 
 
 def normalise_url(url: str, *, base_url: str | None = None) -> str:
