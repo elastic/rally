@@ -3056,6 +3056,17 @@ class RunUntil(Runner):
     Performs an API call until a target value is seen.
     """
 
+    def __init__(self, *args, config=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.numerical_operators = {
+            "gte": lambda v, t: int(v) >= int(t),
+            "lte": lambda v, t: int(v) <= int(t),
+            "eq": lambda v, t: int(v) == int(t),
+            "neq": lambda v, t: int(v) != int(t),
+        }
+        self.operators = {"exists": lambda v, _: v is not None, "not_exists": lambda v, _: v is None, **self.numerical_operators}
+
     async def __call__(self, es, params):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
@@ -3065,10 +3076,10 @@ class RunUntil(Runner):
         body = params.get("body", None)
         json_path = mandatory(params, "json-path", self)
         criterion = mandatory(params, "criterion", self)
-        check_interval = params.get("check-interval", 60)
-        if criterion.get("operator") not in ["exists", "not_exists", "eq", "neq", "gte", "lte"]:
+        retry_wait_interval = params.get("retry-wait-interval", 60)
+        if criterion.get("operator") not in self.operators:
             raise ValueError(f"Unsupported operator: {criterion.get('operator')}")
-        if criterion.get("operator") in ["eq", "neq", "gte", "lte"] and "value" not in criterion:
+        if criterion.get("operator") in self.numerical_operators and "value" not in criterion:
             raise ValueError(f"Criterion operator {criterion.get('operator')} requires a 'value' field.")
 
         complete = False
@@ -3087,7 +3098,7 @@ class RunUntil(Runner):
             complete = self.compare_value(criterion, raw_value)
             if not complete:
                 self.logger.debug("Criterion not met, retrying...")
-                await asyncio.sleep(check_interval)  # wait before retrying
+                await asyncio.sleep(retry_wait_interval)  # wait before retrying
 
     def compare_value(self, criterion: dict, value: str | int | float) -> bool:
         """
@@ -3102,21 +3113,8 @@ class RunUntil(Runner):
             bool: True if the criterion is met, False otherwise.
         """
         operator = criterion.get("operator")
-        target_value: int | float = criterion.get("value", -1)
-        return_value = False
-        if operator == "exists":
-            return_value = value is not None
-        elif operator == "not_exists":
-            return_value = value is None
-        elif operator == "gte":
-            return_value = int(value) >= int(target_value)
-        elif operator == "lte":
-            return_value = int(value) <= int(target_value)
-        elif operator == "eq":
-            return_value = int(value) == int(target_value)
-        elif operator == "neq":
-            return_value = int(value) != int(target_value)
-        return return_value
+        target_value: int | float = criterion.get("value")
+        return self.operators[operator](value, target_value)
 
     def __repr__(self, *args, **kwargs):
         return "run-until"

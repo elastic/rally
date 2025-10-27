@@ -876,6 +876,8 @@ class OperationType(Enum):
             return OperationType.Downsample
         elif v == "esql":
             return OperationType.Esql
+        elif v == "run-until":
+            return OperationType.RunUntil
         else:
             raise KeyError(f"No enum value for [{v}]")
 
