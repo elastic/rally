@@ -33,7 +33,7 @@ from esrally import storage
 LOG = logging.getLogger(__name__)
 
 
-LsFormat = Literal["json", "ndjson"]
+LsFormat = Literal["json", "filebeat"]
 
 
 def main():
@@ -54,7 +54,7 @@ def main():
 
     ls_parser = subparsers.add_parser("ls", help="List file(s) downloaded from ES Rally remote storage services.")
     ls_parser.add_argument("urls", type=str, nargs="*")
-    ls_parser.add_argument("--ndjson", action="store_true", help="It prints a JSON entry for each file, each separated by a newline.")
+    ls_parser.add_argument("--filebeat", action="store_true", help="It prints a JSON entry for each file, each separated by a newline.")
 
     get_parser = subparsers.add_parser("get", help="Download file(s) from ES Rally remote storage services.")
     get_parser.add_argument("urls", type=str, nargs="*")
@@ -113,8 +113,8 @@ def main():
             ls(transfers)
         case "ls" | None:
             fmt: LsFormat = "json"
-            if args.ndjson:
-                fmt = "ndjson"
+            if args.filebeat:
+                fmt = "filebeat"
             ls(transfers, fmt=fmt)
         case "get":
             get(transfers, todo=storage.rangeset(args.range))
@@ -127,6 +127,7 @@ def main():
 
 def ls(transfers: list[storage.Transfer], *, fmt: LsFormat = "json") -> None:
     LOG.info("Found %d transfer(s).", len(transfers))
+
     output = [
         {
             "url": tr.url,
@@ -138,15 +139,19 @@ def ls(transfers: list[storage.Transfer], *, fmt: LsFormat = "json") -> None:
             "crc32": tr.crc32c,
             "done": str(tr.done),
             "mirror_failures": tr.mirror_failures,
+            "has_mirror_failures": bool(tr.mirror_failures),
             "todo": str(tr.todo),
             "finished": tr.finished,
         }
         for tr in transfers
     ]
-    if fmt == "ndjson":
+
+    if fmt == "filebeat":
         for o in output:
-            sys.stdout.write(f"{json.dumps(o)}\n")
+            line = json.dumps({"rally": {"storage": o}})
+            sys.stdout.write(f"{line}\n")
         return
+
     json.dump(output, sys.stdout, indent=2, sort_keys=True)
 
 

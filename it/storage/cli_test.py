@@ -79,7 +79,7 @@ class LsCase:
     args: list[str]
     mirror_files: list[str] | None = None
     after_get_params: dict[str, Any] | None = None
-    want_format: Literal["json", "ndjson"] = "json"
+    want_format: Literal["json", "filebeat"] = "json"
     want_return_code: int = 0
     want_output: dict[str, dict[str, Any]] | None = None
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
@@ -170,8 +170,8 @@ class LsCase:
             }
         },
     ),
-    ndjson_after_get_files=LsCase(
-        ["ls", "--ndjson", FIRST_URL],
+    filebeat_after_get_files=LsCase(
+        ["ls", "--filebeat", FIRST_URL],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
@@ -180,7 +180,7 @@ class LsCase:
                 "finished": True,
             }
         },
-        want_format="ndjson",
+        want_format="filebeat",
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
@@ -204,9 +204,9 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
     match case.want_format:
         case "json":
             got_output.update((got["url"], got) for got in json.loads(result.stdout))
-        case "ndjson":
+        case "filebeat":
             for line in result.stdout.splitlines():
-                got = json.loads(line)
+                got = json.loads(line)["rally"]["storage"]
                 got_output[got["url"]] = got
         case _:
             pytest.fail(f"Unexpected output format: {case.want_format}")
