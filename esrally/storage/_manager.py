@@ -18,14 +18,18 @@ import atexit
 import contextvars
 import logging
 import os
+import subprocess
 import threading
+from collections.abc import Iterable
 
+import urllib3.exceptions
 from typing_extensions import Self
 
 from esrally import types
 from esrally.storage._client import Client
 from esrally.storage._config import StorageConfig
 from esrally.storage._executor import Executor, executor_from_config
+from esrally.storage._range import NO_RANGE, RangeSet
 from esrally.storage._transfer import Transfer
 from esrally.utils.threads import ContinuousTimer
 
@@ -78,11 +82,18 @@ class TransferManager:
         self._monitor_timer = ContinuousTimer(interval=cfg.monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
         self._monitor_timer.start()
 
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.shutdown()
+        return False
+
     def shutdown(self):
         with self._lock:
             transfers = self._transfers
             self._transfers = {}
-        LOG.info("Shutting down transfer manager...")
+        LOG.debug("Shutting down transfer manager...")
         for tr in transfers.values():
             try:
                 if tr.finished:
@@ -92,9 +103,19 @@ class TransferManager:
             except Exception as ex:
                 LOG.error("error closing transfer: %s, %s", tr.url, ex)
         self._monitor_timer.cancel()
-        LOG.info("Transfer manager shut down.")
+        LOG.debug("Transfer manager shut down.")
 
-    def get(self, url: str, path: os.PathLike | str | None = None, document_length: int | None = None) -> Transfer:
+    def get(
+        self,
+        url: str,
+        *,
+        path: str | None = None,
+        document_length: int | None = None,
+        crc32c: str | None = None,
+        start: bool = True,
+        local_dir: str | None = None,
+        todo: RangeSet | None = None,
+    ) -> Transfer:
         """It starts a new transfer of a file from a remote url to a local path.
 
         :param url: remote file address.
@@ -102,38 +123,85 @@ class TransferManager:
         :param document_length: the expected file size in bytes.
         :return: started transfer object.
         """
-        if path is None:
-            path = os.path.join(self.cfg.local_dir, url)
-        # This also ensures the path is a string
-        path = os.path.normpath(os.path.expanduser(path))
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        tr = self._transfers.get(path)
+        tr = self._transfers.get(url)
         if tr is not None:
-            tr.start()
+            if start:
+                tr.start(todo=todo)
             return tr
 
-        head = self._client.head(url)
-        if document_length is not None and head.content_length != document_length:
-            raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
+        try:
+            head = self._client.head(url)
+        except urllib3.exceptions.NewConnectionError as ex:
+            LOG.error("Failed to get head: %s", ex)
+        else:
+            if document_length is None:
+                document_length = head.content_length
+            elif head.content_length != document_length:
+                raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
+            if crc32c is None:
+                crc32c = head.crc32c
+            elif head.crc32c != crc32c:
+                raise ValueError(f"mismatching crc32c: got {head.crc32c} bytes, wanted {crc32c} bytes")
+
+        cfg = self.cfg
+        if local_dir is not None:
+            cfg = StorageConfig.from_config(cfg)
+            cfg.local_dir = local_dir
+
         tr = Transfer(
             client=self._client,
             url=url,
             path=path,
-            document_length=head.content_length,
+            document_length=document_length,
+            todo=todo,
             executor=self._executor,
             multipart_size=self.cfg.multipart_size,
-            crc32c=head.crc32c,
+            crc32c=crc32c,
+            cfg=cfg,
         )
 
-        # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
-        # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
-        # the allowed per-transfer connections.
-        with self._lock:
-            self._transfers[tr.path] = tr
-        self._update_transfers()
-        tr.start()
+        if start:
+            # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
+            # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
+            # the allowed per-transfer connections.
+            with self._lock:
+                self._transfers[tr.url] = tr
+            tr.start(todo=todo)
+            self._update_transfers()
+
         return tr
+
+    def list(
+        self, *, urls: Iterable[str] | None = None, start: bool = False, local_dir: str | None = None, todo: RangeSet = NO_RANGE
+    ) -> list[Transfer]:
+        if not urls:
+            if local_dir is None:
+                local_dir = self.cfg.local_dir
+            local_dir = os.path.normpath(os.path.expanduser(local_dir))
+            if not os.path.isdir(local_dir):
+                raise FileNotFoundError(f"local dir '{local_dir}' is not a directory")
+
+            find_status_files_command = ["find", ".", "-type", "f", "-name", "*.status"]
+            find_result = subprocess.run(find_status_files_command, cwd=local_dir, capture_output=True, shell=False, check=False)
+            found_status_files_output = find_result.stdout.decode("utf-8").strip()
+            if find_result.returncode != 0 or not found_status_files_output:
+                message = f"'.status' file not found in  '{local_dir}'"
+                stderr = find_result.stderr.strip().decode("utf-8")
+                if stderr:
+                    message += f"\nSTDERR:\n{stderr}"
+                LOG.info(message)
+                raise FileNotFoundError(message)
+
+            urls = [
+                url[len("./") :][: -len(".status")].replace(":/", "://")
+                for f in found_status_files_output.splitlines()
+                if (url := f.strip()).endswith(".status")
+            ]
+            if not urls:
+                raise FileNotFoundError(
+                    f"Unable to find any valid URL from status files: {found_status_files_output}.",
+                )
+        return [self.get(url, start=start, local_dir=local_dir, todo=todo) for url in urls]
 
     def monitor(self):
         self._update_transfers()
@@ -152,7 +220,7 @@ class TransferManager:
         """It executes periodic update operations on every unfinished transfer."""
         with self._lock:
             # It first removes finished transfers.
-            self._transfers = transfers = {tr.path: tr for tr in self._transfers.values() if not tr.finished}
+            self._transfers = transfers = {tr.url: tr for tr in self._transfers.values() if not tr.finished}
             if not transfers:
                 return
 

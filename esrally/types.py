@@ -158,6 +158,7 @@ Key = Literal[
     "src.root.dir",
     "storage.adapters",
     "storage.aws.profile",
+    "storage.base_url",
     "storage.cache_ttl",
     "storage.chunk_size",
     "storage.http.max_retries",

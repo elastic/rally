@@ -80,6 +80,14 @@ class CachedHead:
         return self.head
 
 
+@dataclass
+class MirrorFailure:
+    url: str
+    mirror_url: str
+    error: str
+    timestamp: float = 0.0
+
+
 class Client:
     """It handles client instances allocation allowing reusing pre-allocated instances from the same thread."""
 
@@ -110,6 +118,7 @@ class Client:
         self._random: Random = random or Random(StorageConfig.DEFAULT_RANDOM_SEED)
         self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
         self._cache_ttl: float = cache_ttl
+        self._mirror_failures: dict[str, dict[str, MirrorFailure]] = defaultdict(dict)
 
     @property
     def adapters(self):
@@ -186,15 +195,30 @@ class Client:
                 if check_head is not None:
                     check_head.check(got)
             except CachedHeadError:
-                # The error was previously cached, therefore it has been already logged.
-                pass
+                # The error was previously cached, therefore it has been treated.
+                continue
             except Exception as ex:
                 if u == url:
                     LOG.warning("Failed to get head from original URL: '%s', %s", u, ex)
-                else:
-                    LOG.warning("Failed to get head from mirror URL: '%s', %s", u, ex)
-            else:
-                yield got
+                    continue
+
+                # It saves mirror failures so that we can later fix the failure after benchmark execution on CI.
+                LOG.warning("Failed to get head from mirror URL: '%s': %s", u, ex)
+                self._mirror_failures[url][u] = MirrorFailure(
+                    url=url, error=f"{type(ex).__name__}:{ex}", mirror_url=u, timestamp=time.time()
+                )
+                continue
+
+            if u != url and url in self._mirror_failures:
+                LOG.debug("Find valid mirror URL: '%s' -> '%s'", url, u)
+                # It eventually removes a temporary mirror failure that has fixed himself.
+                self._mirror_failures[url].pop(u, None)
+
+            yield got
+
+    def mirror_failures(self, url: str) -> list[MirrorFailure]:
+        """Returns failures that have been reported after fetching HEAD from mirror URLs."""
+        return list(self._mirror_failures[url].values())
 
     def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
         """It downloads a remote bucket object to a local file path.
