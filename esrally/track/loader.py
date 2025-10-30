@@ -382,7 +382,7 @@ class GitTrackRepository:
         tracks_dir = os.path.join(root, track_repositories)
 
         self.repo = repo_class(remote_url, tracks_dir, repo_name, "tracks", offline, fetch)
-        if update:
+        if update and not offline:
             if repo_revision:
                 # skip checkout if already on correct version.  this is helpful in case of multiple actors loading simultaneously.
                 if not self.repo.correct_revision(repo_revision):
