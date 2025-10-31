@@ -110,9 +110,11 @@ class GetCase:
 def test_get(case: GetCase, session: Session) -> None:
     adapter = HTTPAdapter(session=session)
     session.get.return_value = case.response
-    head, data = adapter.get(case.url, check_head=Head(ranges=rangeset(case.ranges)))
-    assert head == case.want_head
-    assert list(data) == case.want_data
+
+    with adapter.get(case.url, check_head=Head(ranges=rangeset(case.ranges))) as got:
+        assert got.head == case.want_head
+        assert list(got.chunks) == case.want_data
+
     want_request_headers = {}
     if case.want_request_range:
         want_request_headers["range"] = case.want_request_range

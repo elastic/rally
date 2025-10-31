@@ -71,13 +71,18 @@ def test_head(case: HeadCase, s3_client) -> None:
 
 
 class DummyBody:
+
     def __init__(self, body: bytes) -> None:
         self.body = body
+        self.closed = False
 
     def iter_chunks(self, chunk_size: int) -> Iterable[bytes]:
         while self.body:
             yield self.body[:chunk_size]
             self.body = self.body[chunk_size:]
+
+    def close(self) -> None:
+        self.closed = True
 
 
 SOME_DATA = b"some-data"
@@ -113,9 +118,9 @@ def test_get(case: GetCase, s3_client) -> None:
     case.response.setdefault("Body", DummyBody(b""))
     s3_client.get_object.return_value = case.response
     adapter = S3Adapter(s3_client=s3_client)
-    head, chunks = adapter.get(case.url, check_head=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
-    assert head == case.want_head
-    assert case.want_data == list(chunks)
+    with adapter.get(case.url, check_head=Head(content_length=case.content_length, ranges=rangeset(case.ranges))) as got:
+        assert got.head == case.want_head
+        assert list(got.chunks) == case.want_data
 
     kwargs = {}
     if case.want_range:

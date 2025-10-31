@@ -16,6 +16,8 @@
 # under the License.
 from __future__ import annotations
 
+import collections
+import dataclasses
 import enum
 import json
 import logging
@@ -54,6 +56,86 @@ class TransferStatus(enum.Enum):
 
     def __str__(self):
         return str(self.name)
+
+
+@dataclasses.dataclass
+class TransferStats:
+    # The number of requests.
+    request_count: int = 0
+
+    # The amount of bytes transferred.
+    transferred_bytes: int = 0
+
+    # The amount of time spent waiting for a response.
+    response_time: float = 0.0
+
+    # The amount of time spent receiving data.
+    read_time: float = 0.0
+
+    # The amount of time spent writing data.
+    write_time: float = 0.0
+
+    @property
+    def total_time(self) -> float:
+        """total_time represents the total mount of time spend performing this transfer."""
+        return self.response_time + self.read_time + self.write_time
+
+    @property
+    def average_latency(self) -> float:
+        """average_latency is computed as the average response time of each GET request."""
+        if self.request_count == 0:
+            return 0.0
+        return self.response_time / self.request_count
+
+    @property
+    def requests_per_second(self) -> float:
+        """requests_per_second is computed as the average number of GET requests per second."""
+        duration = self.total_time
+        if not duration:
+            return 0.0
+        return self.request_count / duration
+
+    @property
+    def throughput(self) -> float:
+        """throughput is computed as the average throughput of each GET request."""
+        if not self.total_time:
+            return 0.0
+        return self.transferred_bytes / self.total_time
+
+    @property
+    def read_throughput(self) -> float:
+        """throughput is computed as the average throughput of reading data of each GET request."""
+        if not self.read_time:
+            return 0.0
+        return self.transferred_bytes / self.read_time
+
+    @property
+    def write_throughput(self) -> float:
+        """throughput is computed as the average throughput of writing data of each GET request."""
+        if not self.write_time:
+            return 0.0
+        return self.transferred_bytes / self.write_time
+
+    def info(self) -> str:
+        return (
+            f"latency={pretty.duration(self.average_latency)}, throughput={pretty.size(self.throughput)} "
+            f"(read: {self.read_throughput}, write: {self.write_throughput})"
+        )
+
+    def add(
+        self,
+        *,
+        request_count: int = 0,
+        transferred_bytes: int = 0,
+        response_time: float = 0.0,
+        read_time: float = 0.0,
+        write_time: float = 0.0,
+    ) -> None:
+        self.request_count += request_count
+        self.transferred_bytes += transferred_bytes
+        self.response_time += response_time
+        self.read_time += read_time
+        self.write_time += write_time
 
 
 class Transfer:
@@ -141,6 +223,7 @@ class Transfer:
         self._resumed_size = 0
         self._crc32c = crc32c
         self._mirror_failures: dict[str, str] = {}
+        self._stats: dict[str, TransferStats] = collections.defaultdict(TransferStats)
         if resume and self.status_file_path and os.path.isfile(self.status_file_path):
             try:
                 self._resume_status()
@@ -287,12 +370,24 @@ class Transfer:
 
             self._done = self.done | done
             self._todo = self._todo - done
-        # Update the resumed size so that it will compute download speed only on the new parts.
+
+        # It updates the resumed size so that it will compute download speed only on the new parts.
         self._resumed_size = done.size
         if not self._todo:
             # There is nothing more to do.
             self._finished.set()
+
+        # It restores mirror failures.
         self._mirror_failures = document.get("mirror_failures", {})
+
+        # It restores transfer statistics.
+        for stats in document.get("stats", []):
+            if not isinstance(stats, dict):
+                raise ValueError(f"mismatching stats file format: got {type(stats)}, expected dict")
+            url = stats.get("url")
+            if url is None:
+                raise ValueError(f"url field not found in stats '{stats}' in status file: '{status_filename}'")
+            self._stats[url].add(**stats)
 
     def save_status(self):
         """It updates the status file."""
@@ -306,6 +401,7 @@ class Transfer:
             # Mirror failures is intended to be consumed by a tool in charge to upload downloaded files that was missing
             # in any mirror server to keep it in sync with source file repository.
             "mirror_failures": self._mirror_failures,
+            "stats": [dataclasses.asdict(s) for s in self._stats.values()],
         }
         status_filename = self.status_file_path
         os.makedirs(os.path.dirname(status_filename), exist_ok=True)
@@ -340,19 +436,43 @@ class Transfer:
                     )
                 else:
                     check_head = Head(content_length=self._document_length, crc32c=self._crc32c)
-                head, content = self.client.get(self.url, check_head=check_head)
-                # When ranges are not given, then content_length replaces document_length.
-                document_length = head.document_length or head.content_length
-                if document_length:
-                    # It checks the size of the file it downloaded the data from.
-                    self.document_length = document_length
-                if head.crc32c is not None:
-                    # It checks the crc32c check sum of the file it downloaded the data from.
-                    self.crc32c = head.crc32c
-                LOG.debug("Downloading file fragment from '%s' to '%s' (range=%s)...", head.url, self.path, head.ranges)
-                for chunk in content:
-                    if chunk:
-                        fd.write(chunk)
+
+                start_time = time.monotonic()
+                with self.client.get(self.url, check_head=check_head) as got:
+                    with self._lock:
+                        # Response time includes only:
+                        # - resolving the mirrored file URL(s);
+                        # - receiving the file headers.
+                        self._stats[got.head.url].add(request_count=1, response_time=time.monotonic() - start_time)
+
+                    # When ranges are not given, then content_length replaces document_length.
+                    document_length = got.head.document_length or got.head.content_length
+                    if document_length:
+                        # It checks the size of the file it downloaded the data from.
+                        self.document_length = document_length
+                    if got.head.crc32c is not None:
+                        # It checks the crc32c check sum of the file it downloaded the data from.
+                        self.crc32c = got.head.crc32c
+
+                    LOG.debug("Downloading file chunks from '%s' to '%s' (range=%s)...", got.head.url, self.path, got.head.ranges)
+                    while True:
+                        start_time = time.monotonic()
+                        try:
+                            chunk = next(got.chunks)
+                        except StopIteration:
+                            LOG.debug(
+                                "Stopped downloading file chunks from '%s' to '%s' (range=%s)", got.head.url, self.path, got.head.ranges
+                            )
+                            break
+                        read_time = time.monotonic() - start_time
+                        if chunk:
+                            fd.write(chunk)
+                        write_time = time.monotonic() - read_time
+                        with self._lock:
+                            # Read time includes the time spent receiving all chunks of data.
+                            # Write time includes the time spent writing all chunks of data.
+                            self._stats[got.head.url].add(transferred_bytes=len(chunk), read_time=read_time, write_time=write_time)
+
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
             cancelled = True
@@ -516,10 +636,12 @@ class Transfer:
         return (done.size - self._resumed_size) / self.duration.s()
 
     def info(self) -> str:
+        stats = "".join(f"  - {u}: {s.info()}\n" for u, s in self._stats.items())
         return (
             f"- {self.url} {self.progress:.0f}% "
             f"({pretty.size(self.done.size)} of {pretty.size(self.document_length)}) {self.duration} "
-            f"{pretty.size(self.average_speed)}/s {self.status.name} {self._workers.count} workers"
+            f"{pretty.size(self.average_speed)}/s {self.status.name} {self._workers.count} workers\n"
+            f"{stats}\n"
         )
 
     def wait(self, timeout: float | None = None) -> bool:
