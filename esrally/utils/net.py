@@ -111,7 +111,7 @@ def _download_from_s3_bucket(bucket_name, bucket_path, local_path, expected_size
     if expected_size_in_bytes is None:
         expected_size_in_bytes = bucket.Object(bucket_path).content_length
     progress_callback = S3ProgressAdapter(expected_size_in_bytes, progress_indicator) if progress_indicator else None
-    bucket.download_file(bucket_path, local_path, Callback=progress_callback, Config=boto3.s3.transfer.TransferConfig(use_threads=False))
+    bucket.download_file(bucket_path, local_path, Callback=progress_callback, Config=boto3.s3.transfer.TransferConfig(use_threads=True))
 
 
 def _build_gcs_object_url(bucket_name, bucket_path):
