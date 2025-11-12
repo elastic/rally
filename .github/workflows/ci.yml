@@ -86,7 +86,7 @@ jobs:
       - name: Check disk space before
         run: df -h
       - name: Run tests
-        run: RALLY_HOME=/mnt/rally make it_tracks_compat ARGS='-k "joins-esql-large"'
+        run: RALLY_HOME=/mnt/rally make it_tracks_compat
         timeout-minutes: 120
         env:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid
