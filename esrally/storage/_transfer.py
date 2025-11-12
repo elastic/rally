@@ -385,7 +385,7 @@ class Transfer:
             elif cancelled:
                 # It will submit any task for execution.
                 LOG.debug("task cancelled: %s", self.url)
-            elif not self.todo:
+            elif not self.todo and not self._workers.count:
                 # There is nothing more to do: the transfer has been completed with success.
                 if self._finished.set():
                     # Only the first task that enters here will write this message.
