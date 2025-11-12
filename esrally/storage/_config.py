@@ -137,7 +137,7 @@ class StorageConfig(config.Config):
     def monitor_interval(self, value: float) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.monitor_interval", value)
 
-    DEFAULT_MULTIPART_SIZE = 8 * 1024 * 1024
+    DEFAULT_MULTIPART_SIZE = 64 * 1024 * 1024
 
     @property
     def multipart_size(self) -> int:

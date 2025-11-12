@@ -79,7 +79,7 @@ MIRRORS = {
 
 
 def default_heads() -> dict[str, Head]:
-    return {h.url: h for h in HEADS if h.url is not None}
+    return {h.url: h for h in HEADS}
 
 
 def default_data() -> dict[str, bytes]:
@@ -243,7 +243,6 @@ def test_resolve(case: ResolveCase, client: Client, monkeypatch: pytest.MonkeyPa
     want = sorted(case.want, key=lambda h: str(h.url))
     assert got == want, "unexpected resolve result"
     for g in got:
-        assert g.url is not None, "unexpected resolve result"
         if case.cache_ttl > 0.0:
             assert g is client.head(url=g.url, cache_ttl=case.cache_ttl), "obtained head wasn't cached"
         else:
@@ -260,20 +259,20 @@ class GetCase:
     want_any: list[Head]
     ranges: RangeSet = NO_RANGE
     document_length: int = None
-    want_data: list[bytes] = dataclasses.field(default_factory=list)
+    want_chunks: list[bytes] = dataclasses.field(default_factory=list)
 
 
 @cases(
     regular=GetCase(
         SOME_URL,
         [Head(url=SOME_URL, content_length=len(SOME_BODY), document_length=len(SOME_BODY))],
-        want_data=[SOME_BODY],
+        want_chunks=[SOME_BODY],
     ),
     range=GetCase(
         SOME_URL,
         [Head(SOME_URL, content_length=30, accept_ranges=True, ranges=rangeset("0-29"), document_length=len(SOME_BODY))],
         ranges=rangeset("0-29"),
-        want_data=[SOME_BODY],
+        want_chunks=[SOME_BODY],
     ),
     mirrors=GetCase(
         MIRRORING_URL,
@@ -281,13 +280,13 @@ class GetCase:
             MIRRORED_HEAD,
             MIRRORED_NO_RANGE_HEAD,
         ],
-        want_data=[SOME_BODY],
+        want_chunks=[SOME_BODY],
     ),
 )
 def test_get(case: GetCase, client: Client) -> None:
-    head, chunks = client.get(case.url, check_head=Head(ranges=case.ranges, document_length=case.document_length))
-    assert [] != check_any(head, case.want_any)
-    assert case.want_data == list(chunks)
+    with client.get(case.url, check_head=Head(ranges=case.ranges, document_length=case.document_length)) as got:
+        assert check_any(got.head, case.want_any) != []
+        assert list(got.chunks) == case.want_chunks
 
 
 def check_any(head: Head, any_head: list[Head]) -> list[Head]:

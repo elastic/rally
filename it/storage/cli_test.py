@@ -267,7 +267,7 @@ class GetCase:
     good_mirrors=GetCase(
         ["-v", f"--mirrors={GOOD_MIRROR_FILES}", "get", "--range=0-63,128-255", FIRST_URL],
         want_stderr_lines=[
-            f"DEBUG esrally.storage._transfer Downloading file fragment from '{GOOD_MIRROR_URL}'",
+            f"DEBUG esrally.storage._transfer Downloading file chunks from '{GOOD_MIRROR_URL}'",
             f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}",
         ],
         want_status={FIRST_URL: {"done": "0-63,128-255"}},
