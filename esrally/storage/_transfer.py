@@ -26,7 +26,7 @@ import threading
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from esrally import types
 from esrally.storage._adapter import Head, ServiceUnavailableError
@@ -116,12 +116,6 @@ class TransferStats:
             return 0.0
         return self.transferred_bytes / self.write_time
 
-    def info(self) -> str:
-        return (
-            f"latency={pretty.duration(self.average_latency)}, throughput={pretty.size(self.throughput)} "
-            f"(read: {self.read_throughput}, write: {self.write_throughput})"
-        )
-
     def add(
         self,
         *,
@@ -136,6 +130,25 @@ class TransferStats:
         self.response_time += response_time
         self.read_time += read_time
         self.write_time += write_time
+
+    def pretty(self) -> dict[str, Any]:
+        details: dict[str, Any] = {
+            "bytes": pretty.size(self.transferred_bytes),
+            "requests": self.request_count,
+            "latency": pretty.duration(self.average_latency),
+            "duration": {
+                "total": pretty.duration(self.total_time),
+                "response": pretty.duration(self.response_time),
+                "read": pretty.duration(self.read_time),
+                "write": pretty.duration(self.write_time),
+            },
+            "throughput": {
+                "total": pretty.throughput(self.throughput),
+                "read": pretty.throughput(self.read_throughput),
+                "write": pretty.throughput(self.write_throughput),
+            },
+        }
+        return {k: v for k, v in details.items() if v}
 
 
 class Transfer:
@@ -230,7 +243,7 @@ class Transfer:
             except Exception as ex:
                 LOG.error("Failed to resume transfer: %s", ex)
             else:
-                LOG.info("resumed from existing status: %s", self.info())
+                LOG.debug("Transfer resumed from existing status:\n%s", self.info())
 
     @property
     def status_file_path(self) -> str:
@@ -384,7 +397,7 @@ class Transfer:
         for stats in document.get("stats", []):
             if not isinstance(stats, dict):
                 raise ValueError(f"mismatching stats file format: got {type(stats)}, expected dict")
-            url = stats.get("url")
+            url = stats.pop("url", None)
             if url is None:
                 raise ValueError(f"url field not found in stats '{stats}' in status file: '{status_filename}'")
             self._stats[url].add(**stats)
@@ -392,6 +405,9 @@ class Transfer:
     def save_status(self):
         """It updates the status file."""
         self._mirror_failures = {f.mirror_url: f.error for f in self.client.mirror_failures(self.url)}
+        with self._lock:
+            stats = [dict(url=u, **dataclasses.asdict(s)) for u, s in self._stats.items()]
+
         document = {
             "url": self.url,
             "path": self.path,
@@ -401,7 +417,7 @@ class Transfer:
             # Mirror failures is intended to be consumed by a tool in charge to upload downloaded files that was missing
             # in any mirror server to keep it in sync with source file repository.
             "mirror_failures": self._mirror_failures,
-            "stats": [dataclasses.asdict(s) for s in self._stats.values()],
+            "stats": stats,
         }
         status_filename = self.status_file_path
         os.makedirs(os.path.dirname(status_filename), exist_ok=True)
@@ -464,14 +480,16 @@ class Transfer:
                                 "Stopped downloading file chunks from '%s' to '%s' (range=%s)", got.head.url, self.path, got.head.ranges
                             )
                             break
-                        read_time = time.monotonic() - start_time
+                        read_time = time.monotonic()
                         if chunk:
                             fd.write(chunk)
-                        write_time = time.monotonic() - read_time
+                        write_time = time.monotonic()
                         with self._lock:
                             # Read time includes the time spent receiving all chunks of data.
                             # Write time includes the time spent writing all chunks of data.
-                            self._stats[got.head.url].add(transferred_bytes=len(chunk), read_time=read_time, write_time=write_time)
+                            self._stats[got.head.url].add(
+                                transferred_bytes=len(chunk), read_time=read_time - start_time, write_time=write_time - read_time
+                            )
 
         except StreamClosedError as ex:
             LOG.info("transfer cancelled: %s: %s", self.url, ex)
@@ -635,14 +653,23 @@ class Transfer:
             return 0.0
         return (done.size - self._resumed_size) / self.duration.s()
 
-    def info(self) -> str:
-        stats = "".join(f"  - {u}: {s.info()}\n" for u, s in self._stats.items())
-        return (
-            f"- {self.url} {self.progress:.0f}% "
-            f"({pretty.size(self.done.size)} of {pretty.size(self.document_length)}) {self.duration} "
-            f"{pretty.size(self.average_speed)}/s {self.status.name} {self._workers.count} workers\n"
-            f"{stats}\n"
-        )
+    def pretty(self, *, stats: bool = False, mirror_failures: bool = False) -> dict[str, Any]:
+        details: dict[str, Any] = {
+            "url": self.url,
+            "progress": f"{self.progress:.0f}%",
+            "done": pretty.size(self.done.size),
+            "size": pretty.size(self.document_length),
+            "status": str(self.status),
+            "workers": self._workers.count,
+            "duration": self.duration and pretty.duration(self.duration),
+            "throughput": self.average_speed and pretty.throughput(self.average_speed),
+            "stats": stats and {u: s.pretty() for u, s in self._stats.items()},
+            "mirror_failures": mirror_failures and self._mirror_failures,
+        }
+        return {k: v for k, v in details.items() if v}
+
+    def info(self, *, stats: bool = False, mirror_failures: bool = False) -> str:
+        return json.dumps(self.pretty(stats=stats, mirror_failures=mirror_failures), indent=2)
 
     def wait(self, timeout: float | None = None) -> bool:
         """It waits for transfer termination."""
