@@ -74,11 +74,11 @@ class StorageConfig(config.Config):
 
     @property
     def connect_timeout(self) -> float:
-        return float(self.opts("storage", "storage.connect_timeout", self.DEFAULT_CONNECT_TIMEOUT, False))
+        return float(self.opts("storage", "storage.http.connect_timeout", self.DEFAULT_CONNECT_TIMEOUT, False))
 
     @connect_timeout.setter
     def connect_timeout(self, value: float) -> None:
-        self.add(config.Scope.applicationOverride, "storage", "storage.connect_timeout", value)
+        self.add(config.Scope.applicationOverride, "storage", "storage.http.connect_timeout", value)
 
     DEFAULT_LOCAL_DIR = os.environ.get("RALLY_STORAGE_LOCAL_DIR", "~/.rally/storage")
 
@@ -171,11 +171,11 @@ class StorageConfig(config.Config):
 
     @property
     def read_timeout(self) -> float:
-        return float(self.opts("storage", "storage.read_timeout", self.DEFAULT_READ_TIMEOUT, False))
+        return float(self.opts("storage", "storage.http.read_timeout", self.DEFAULT_READ_TIMEOUT, False))
 
     @read_timeout.setter
     def read_timeout(self, value: float) -> None:
-        self.add(config.Scope.applicationOverride, "storage", "storage.read_timeout", value)
+        self.add(config.Scope.applicationOverride, "storage", "storage.http.read_timeout", value)
 
     DEFAULT_CACHE_TTL = 60.0
 

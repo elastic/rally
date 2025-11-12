@@ -240,6 +240,9 @@ It must be listed in the ``storage.adapters`` option::
     [storage]
     storage.adapters = esrally.storage.http:HTTPAdapter
 
+* ``storage.http.connect_timeout`` is used to specify the maximum number of seconds an HTTP connect operation could take
+  before giving up.
+
 * ``storage.http.max_retries`` is used to configure the maximum number of retries for making HTTP adapter requests.
   It accepts a numeric value to simply specify total number of retries. Examples::
 
@@ -253,6 +256,9 @@ It must be listed in the ``storage.adapters`` option::
     storage.http.max_retries = {"total": 5, "backoff_factor": 5}
 
   .. _urllib3.Retry: https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html
+
+* ``storage.http.read_timeout`` is used to specify the maximum number of seconds an HTTP read operation could take before
+  giving up.
 
 
 S3 Adapter
