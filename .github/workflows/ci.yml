@@ -86,7 +86,7 @@ jobs:
       - name: Check disk space before
         run: df -h
       - name: Run tests
-        run: RALLY_HOME=/mnt/rally make it_tracks_compat
+        run: make it_tracks_compat
         timeout-minutes: 120
         env:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid
@@ -106,8 +106,8 @@ jobs:
         with:
           name: rally-tracks-compat-logs
           path: |
-            /mnt/rally/.rally/logs/
-            /mnt/rally/.rally/benchmarks/races/**/*.log
+            /home/runner/.rally/logs/
+            /home/runner/.rally/benchmarks/races/**/*.log
           if-no-files-found: error
 
   install-with-pyenv:
