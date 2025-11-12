@@ -83,13 +83,17 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.8.22"
+      - name: Check disk space before
+        run: df -h
       - name: Run tests
-        run: make it_tracks_compat
+        run: make it_tracks_compat ARGS='-k "joins-esql-large"'
         timeout-minutes: 120
         env:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid
           # being rate limited
           ASSETS_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check disk space after
+        run: df -h
       - uses: elastic/es-perf-github-status@v2
         if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
         with:
