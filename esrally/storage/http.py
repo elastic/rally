@@ -97,8 +97,11 @@ class HTTPAdapter(Adapter):
             check_head.check(head)
 
         def iter_content() -> Iterator[bytes]:
-            with res:
-                yield from res.iter_content(chunk_size=self.chunk_size)
+            try:
+                with res:
+                    yield from res.iter_content(chunk_size=self.chunk_size)
+            except requests.exceptions.Timeout as ex:
+                raise TimeoutError(f"Timed out reading content from URL={url}: {ex}") from ex
 
         return head, iter_content()
 

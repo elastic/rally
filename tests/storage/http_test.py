@@ -18,9 +18,11 @@ import dataclasses
 import io
 from dataclasses import dataclass
 from typing import Any
+from unittest import mock
 from unittest.mock import create_autospec
 
 import pytest
+import requests.exceptions
 from requests import Response, Session
 from requests.structures import CaseInsensitiveDict
 
@@ -48,6 +50,7 @@ def response(
     headers: dict[str, str] | None = None,
     status_code: int = 200,
     data: bytes = b"",
+    read_error: Exception | None = None,
 ):
     res = Response()
     res.raw = io.BytesIO(data)
@@ -55,6 +58,8 @@ def response(
     res.headers = CaseInsensitiveDict()
     if headers is not None:
         res.headers.update(headers)
+    if read_error is not None:
+        res.iter_content = mock.create_autospec(res.iter_content, side_effect=read_error)
     return res
 
 
@@ -100,6 +105,7 @@ class GetCase:
     want_data: list[bytes] = dataclasses.field(default_factory=list)
     want_request_range: str = ""
     want_timeout: tuple[float, float] = (StorageConfig.DEFAULT_CONNECT_TIMEOUT, StorageConfig.DEFAULT_READ_TIMEOUT)
+    want_read_error: type[Exception] | None = None
 
 
 @cases(
@@ -121,6 +127,7 @@ class GetCase:
     read_timeout=GetCase(
         response(), Head(URL), cfg=storage_config(read_timeout=11.0), want_timeout=(StorageConfig.DEFAULT_CONNECT_TIMEOUT, 11.0)
     ),
+    raise_timeout=GetCase(response(read_error=requests.exceptions.Timeout()), Head(URL), want_read_error=TimeoutError),
 )
 def test_get(case: GetCase, session: Session) -> None:
     adapter = HTTPAdapter(
@@ -129,7 +136,11 @@ def test_get(case: GetCase, session: Session) -> None:
     session.get.return_value = case.response
     head, data = adapter.get(case.url, check_head=Head(ranges=rangeset(case.ranges)))
     assert head == case.want_head
-    assert list(data) == case.want_data
+    if case.want_read_error is None:
+        assert list(data) == case.want_data
+    else:
+        with pytest.raises(case.want_read_error):
+            list(data)
     want_request_headers = {}
     if case.want_request_range:
         want_request_headers["range"] = case.want_request_range

@@ -366,6 +366,9 @@ class Transfer:
             # In case of the count of concurrent tasks is greater than 1 then it forbids to reschedule it.
             cancelled = count > 1
             LOG.info("service unavailable: %s, workers=%d/%d: %s", self.url, count, max_count, ex)
+        except TimeoutError as ex:
+            # The client raised this error because it timed out waiting for answer from server.
+            LOG.info("transfer timed out (url=%s): %s", self.url, ex)
         except Exception as ex:
             # This error will brutally interrupt the transfer.
             LOG.exception("task failed: %s", self.url)
