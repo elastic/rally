@@ -83,6 +83,17 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.8.22"
+      - name: Free Disk Space
+        continue-on-error: true
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+          tool-cache: false
       - name: Check disk space before
         run: df -h
       - name: Run tests
