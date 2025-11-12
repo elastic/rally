@@ -443,7 +443,7 @@ class Transfer:
                         # After receiving data _document_length could have been changed reducing the range to download.
                         todo &= Range(0, self._document_length or MAX_LENGTH)
                         # It updates the status of the works with the completed part.
-                        done, todo = todo.split(fd.position)
+                        done, todo = todo.split(fd.transferred)
                         self._todo |= todo
                         self._done |= done
         finally:
