@@ -58,6 +58,13 @@ def response(
     return res
 
 
+def storage_config(**kwargs: Any) -> StorageConfig:
+    cfg = StorageConfig()
+    for k, v in kwargs.items():
+        setattr(cfg, k, v)
+    return cfg
+
+
 @dataclass()
 class HeadCase:
     response: Response
@@ -89,8 +96,10 @@ class GetCase:
     want_head: Head
     url: str = URL
     ranges: str = ""
+    cfg: StorageConfig = dataclasses.field(default_factory=storage_config)
     want_data: list[bytes] = dataclasses.field(default_factory=list)
     want_request_range: str = ""
+    want_timeout: tuple[float, float] = (StorageConfig.DEFAULT_CONNECT_TIMEOUT, StorageConfig.DEFAULT_READ_TIMEOUT)
 
 
 @cases(
@@ -106,9 +115,17 @@ class GetCase:
     ),
     x_goog_hash=GetCase(response(X_GOOG_HASH_CRC32C_HEADER), Head(URL, crc32c="some-checksum")),
     x_amz_checksum=GetCase(response(X_AMZ_CHECKSUM_CRC32C_HEADER), Head(URL, crc32c="some-checksum")),
+    connect_timeout=GetCase(
+        response(), Head(URL), cfg=storage_config(connect_timeout=13.0), want_timeout=(13.0, StorageConfig.DEFAULT_READ_TIMEOUT)
+    ),
+    read_timeout=GetCase(
+        response(), Head(URL), cfg=storage_config(read_timeout=11.0), want_timeout=(StorageConfig.DEFAULT_CONNECT_TIMEOUT, 11.0)
+    ),
 )
 def test_get(case: GetCase, session: Session) -> None:
-    adapter = HTTPAdapter(session=session)
+    adapter = HTTPAdapter(
+        session=session, chunk_size=case.cfg.chunk_size, connect_timeout=case.cfg.connect_timeout, read_timeout=case.cfg.read_timeout
+    )
     session.get.return_value = case.response
     head, data = adapter.get(case.url, check_head=Head(ranges=rangeset(case.ranges)))
     assert head == case.want_head
@@ -116,7 +133,9 @@ def test_get(case: GetCase, session: Session) -> None:
     want_request_headers = {}
     if case.want_request_range:
         want_request_headers["range"] = case.want_request_range
-    session.get.assert_called_once_with(case.url, stream=True, allow_redirects=True, headers=want_request_headers)
+    session.get.assert_called_once_with(
+        case.url, stream=True, allow_redirects=True, headers=want_request_headers, timeout=case.want_timeout
+    )
 
 
 @dataclass()
@@ -172,19 +191,14 @@ def test_head_from_headers(case: HeadFromHeadersCase):
         assert got == case.want
 
 
-def storage_config(**kwargs: Any) -> StorageConfig:
-    cfg = StorageConfig()
-    for k, v in kwargs.items():
-        setattr(cfg, k, v)
-    return cfg
-
-
 @dataclass()
 class FromConfigCase:
     cfg: StorageConfig
     want_chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE
     want_max_retries: int = StorageConfig.DEFAULT_MAX_RETRIES
     want_backoff_factor: int = 0
+    want_connect_timeout: float = StorageConfig.DEFAULT_CONNECT_TIMEOUT
+    want_read_timeout: float = StorageConfig.DEFAULT_READ_TIMEOUT
 
 
 @cases(
@@ -194,6 +208,8 @@ class FromConfigCase:
     max_retries_yml=FromConfigCase(
         storage_config(max_retries='{"total": 5, "backoff_factor": 5}'), want_max_retries=5, want_backoff_factor=5
     ),
+    connect_timeout=FromConfigCase(storage_config(connect_timeout=5.0), want_connect_timeout=5.0),
+    read_timeout=FromConfigCase(storage_config(read_timeout=7.0), want_read_timeout=7.0),
 )
 def test_from_config(case: FromConfigCase) -> None:
     adapter = HTTPAdapter.from_config(case.cfg)
@@ -202,3 +218,5 @@ def test_from_config(case: FromConfigCase) -> None:
     retry = adapter.session.adapters["https://"].max_retries
     assert retry.total == case.want_max_retries
     assert retry.backoff_factor == case.want_backoff_factor
+    assert adapter.connect_timeout == case.want_connect_timeout
+    assert adapter.read_timeout == case.want_read_timeout

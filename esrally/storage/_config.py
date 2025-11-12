@@ -70,6 +70,16 @@ class StorageConfig(config.Config):
     def chunk_size(self, value: int) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.chunk_size", value)
 
+    DEFAULT_CONNECT_TIMEOUT = 15.0
+
+    @property
+    def connect_timeout(self) -> float:
+        return float(self.opts("storage", "storage.connect_timeout", self.DEFAULT_CONNECT_TIMEOUT, False))
+
+    @connect_timeout.setter
+    def connect_timeout(self, value: float) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.connect_timeout", value)
+
     DEFAULT_LOCAL_DIR = os.environ.get("RALLY_STORAGE_LOCAL_DIR", "~/.rally/storage")
 
     @property
@@ -137,7 +147,7 @@ class StorageConfig(config.Config):
     def monitor_interval(self, value: float) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.monitor_interval", value)
 
-    DEFAULT_MULTIPART_SIZE = 8 * 1024 * 1024
+    DEFAULT_MULTIPART_SIZE = 128 * 1024 * 1024
 
     @property
     def multipart_size(self) -> int:
@@ -156,6 +166,16 @@ class StorageConfig(config.Config):
     @random_seed.setter
     def random_seed(self, value: Any) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.random_seed", value)
+
+    DEFAULT_READ_TIMEOUT = 10.0
+
+    @property
+    def read_timeout(self) -> float:
+        return float(self.opts("storage", "storage.read_timeout", self.DEFAULT_READ_TIMEOUT, False))
+
+    @read_timeout.setter
+    def read_timeout(self, value: float) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.read_timeout", value)
 
     DEFAULT_CACHE_TTL = 60.0
 
