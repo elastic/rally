@@ -473,23 +473,28 @@ class DefaultTrackPreparator(TrackProcessor):
         self.decompressor = None
         self.track = None
 
-    @staticmethod
-    def prepare_docs(cfg: types.Config, track, corpus, preparator):
-        for document_set in corpus.documents:
-            if document_set.is_bulk:
-                data_root = data_dir(cfg, track.name, corpus.name)
-                LOG.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root)
-                if len(data_root) == 1:
-                    preparator.prepare_document_set(document_set, data_root[0])
-                # attempt to prepare everything in the current directory and fallback to the corpus directory
-                elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
-                    preparator.prepare_document_set(document_set, data_root[1])
-
-    def on_prepare_track(self, track, data_root_dir) -> Generator[tuple[Callable, dict], None, None]:
+    def on_prepare_track(self, track, data_root_dir) -> Generator[tuple[Callable, dict]]:
         prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
         for corpus in used_corpora(track):
-            params = {"cfg": self.cfg, "track": track, "corpus": corpus, "preparator": prep}
-            yield DefaultTrackPreparator.prepare_docs, params
+            for document_set in corpus.documents:
+                if document_set.is_bulk:
+                    yield prepare_document, {
+                        "cfg": self.cfg,
+                        "track": track,
+                        "corpus": corpus,
+                        "preparator": prep,
+                        "document_set": document_set,
+                    }
+
+
+def prepare_document(cfg: types.Config, track, corpus, preparator, document_set):
+    data_root = data_dir(cfg, track.name, corpus.name)
+    LOG.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root)
+    if len(data_root) == 1:
+        preparator.prepare_document_set(document_set, data_root[0])
+    # attempt to prepare everything in the current directory and fallback to the corpus directory
+    elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
+        preparator.prepare_document_set(document_set, data_root[1])
 
 
 class Decompressor:
