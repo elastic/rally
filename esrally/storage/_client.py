@@ -241,21 +241,28 @@ class Client:
         for got in self.resolve(url, check_head=resolve_head):
             assert got.url is not None
             adapter = self._adapters.get(got.url)
-            connections = self._server_connections(got.url)
+            # wg keeps a counter of active connections to the same server. It is used to prevent allocating too many
+            # connections against the same mirror server.
+            wg = self._server_connections(got.url)
             try:
-                connections.add(1)
+                wg.add(1)
             except WaitGroupLimitError:
                 LOG.debug("connection limit exceeded for url '%s'", url)
                 continue
+
             try:
-                return adapter.get(got.url, check_head=check_head)
+                head, chunks = adapter.get(got.url, check_head=check_head)
             except ServiceUnavailableError as ex:
                 LOG.warning("service unavailable error received: url='%s' %s", url, ex)
                 with self._lock:
                     # It corrects the maximum number of connections for this server.
-                    connections.max_count = max(1, connections.count)
-            finally:
-                connections.done()
+                    wg.max_count = max(1, wg.count)
+                wg.done()
+                continue
+
+            # wg.iter() will call wg.done() once chunks iteration is terminated.
+            return head, wg.iter(chunks)
+
         raise ServiceUnavailableError(f"no connections available for getting URL '{url}'")
 
     def _server_connections(self, url: str) -> WaitGroup:

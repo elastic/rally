@@ -59,13 +59,23 @@ class HTTPAdapter(Adapter):
     @classmethod
     def from_config(cls, cfg: types.Config | None = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
-        return cls(session=Session.from_config(cfg), chunk_size=cfg.chunk_size)
+        return cls(
+            session=Session.from_config(cfg), chunk_size=cfg.chunk_size, connect_timeout=cfg.connect_timeout, read_timeout=cfg.read_timeout
+        )
 
-    def __init__(self, session: requests.Session | None = None, chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE):
+    def __init__(
+        self,
+        session: requests.Session | None = None,
+        chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE,
+        connect_timeout: float = StorageConfig.DEFAULT_CONNECT_TIMEOUT,
+        read_timeout: float = StorageConfig.DEFAULT_READ_TIMEOUT,
+    ):
         if session is None:
             session = requests.Session()
         self.session = session
         self.chunk_size = chunk_size
+        self.connect_timeout = connect_timeout
+        self.read_timeout = read_timeout
 
     def head(self, url: str) -> Head:
         with self.session.head(url, allow_redirects=True) as res:
@@ -77,7 +87,7 @@ class HTTPAdapter(Adapter):
     def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
         headers: MutableMapping[str, str] = CaseInsensitiveDict()
         head_to_headers(check_head, headers)
-        res = self.session.get(url, stream=True, allow_redirects=True, headers=headers)
+        res = self.session.get(url, stream=True, allow_redirects=True, headers=headers, timeout=(self.connect_timeout, self.read_timeout))
         if res.status_code == 503:
             raise ServiceUnavailableError()
         res.raise_for_status()
@@ -87,8 +97,11 @@ class HTTPAdapter(Adapter):
             check_head.check(head)
 
         def iter_content() -> Iterator[bytes]:
-            with res:
-                yield from res.iter_content(chunk_size=self.chunk_size)
+            try:
+                with res:
+                    yield from res.iter_content(chunk_size=self.chunk_size)
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as ex:
+                raise TimeoutError(f"Timed out reading content from URL={url}: {ex}") from ex
 
         return head, iter_content()
 
