@@ -17,8 +17,8 @@
 import sys
 import threading
 import time
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Generator, Iterable
+from typing import Any, TypeVar
 
 
 class ContinuousTimer(threading.Thread):
@@ -141,6 +141,9 @@ class WaitGroupLimitError(Exception):
         self.max_count = max_count
 
 
+T = TypeVar("T")
+
+
 class WaitGroup(TimedEvent):
     """It implements a go-lang style wait group on top of a timed event.
 
@@ -205,3 +208,10 @@ class WaitGroup(TimedEvent):
     def done(self) -> bool:
         """It subtracts 1 from `count`."""
         return self.add(-1)
+
+    def iter(self, iterable: Iterable[T]) -> Generator[T]:
+        """It iterates over `iterable` and sets to Done when done."""
+        try:
+            yield from iterable
+        finally:
+            self.done()
