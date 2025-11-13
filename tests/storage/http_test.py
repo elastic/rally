@@ -128,6 +128,7 @@ class GetCase:
         response(), Head(URL), cfg=storage_config(read_timeout=11.0), want_timeout=(StorageConfig.DEFAULT_CONNECT_TIMEOUT, 11.0)
     ),
     raise_timeout=GetCase(response(read_error=requests.exceptions.Timeout()), Head(URL), want_read_error=TimeoutError),
+    raise_connection_error=GetCase(response(read_error=requests.exceptions.ConnectionError()), Head(URL), want_read_error=TimeoutError),
 )
 def test_get(case: GetCase, session: Session) -> None:
     adapter = HTTPAdapter(
