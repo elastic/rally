@@ -204,7 +204,7 @@ def _download_http(url, local_path, expected_size_in_bytes=None, progress_indica
                 None,
             )
         try:
-            size_from_content_header = int(r.getheader("Content-Length", ""))
+            size_from_content_header = int(r.headers.get("Content-Length", ""))
             if expected_size_in_bytes is None:
                 expected_size_in_bytes = size_from_content_header
         except ValueError:
