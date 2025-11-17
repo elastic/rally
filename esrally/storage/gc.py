@@ -20,6 +20,7 @@ import os
 import queue
 import urllib.parse
 from collections.abc import Generator, Iterator
+from types import TracebackType
 from typing import Any
 
 from google.cloud import storage as gcs  # type: ignore[import-untyped]
@@ -89,15 +90,11 @@ class GSAdapter(storage.Adapter):
 
         def download_chunks():
             """It downloads file chunks to the buffer before shutdown it."""
-            try:
+            with buffer:
                 params: dict[str, Any] = {}
                 if ranges:
-                    params["start"] = ranges.start
-                    params["end"] = ranges.end - 1
+                    params.update(start=ranges.start, end=ranges.end - 1)
                 blob.download_to_file(client=self.client, file_obj=buffer, **params)
-            finally:
-                # It signal chunks iterator the download is terminated.
-                buffer.shutdown()
 
         # It runs the download in an executor threads which will put chunks to the buffer.
         fut = self.executor.submit(download_chunks)
@@ -107,7 +104,7 @@ class GSAdapter(storage.Adapter):
             try:
                 yield from buffer.iter_chunks(timeout=self.read_timeout)
             finally:
-                # Eventually raises exceptions produced in downloader thread.
+                # It eventually raises exceptions produced in downloader thread.
                 fut.result()
 
         return head, iter_chunks()
@@ -122,49 +119,40 @@ class GSAdapter(storage.Adapter):
         return blob
 
 
-class _BufferShutDown(RuntimeError):
-    pass
+class Buffer:
+    """It implements a file-like object to allow iterating chunks written by another thread."""
 
+    def __init__(self, maxsize: int) -> None:
+        self._queue: queue.Queue = queue.Queue(maxsize=maxsize)
+        self._closed = False
 
-class Buffer(queue.Queue[bytes]):
-    # shutdown() method has been existing only since Python 3.13. Here we mimic its behavior so that this queue works
-    # with earlier versions.
+    def __enter__(self) -> Self:
+        return self
 
-    ShutDown = getattr(queue, "ShutDown", _BufferShutDown)
-
-    def __init__(self, maxsize: int = 0) -> None:
-        super().__init__(maxsize)
-        self.is_shutdown = False
+    def __exit__(self, exc_type: type[BaseException], exc_val: Exception, exc_tb: TracebackType) -> None:
+        self.close()
 
     def write(self, data: bytes) -> None:
+        if self._closed:
+            raise RuntimeError("Buffer closed before writing data.")
         if data:
-            self.put(data)
+            self._queue.put(data)
 
-    def put(self, item: bytes, block: bool = True, timeout: float | None = None) -> None:
-        if self.is_shutdown:
-            raise self.ShutDown
-        super().put(item, block, timeout)
-
-    def get(self, block: bool = True, timeout: float | None = None) -> bytes:
-        chunk = super().get(block=block, timeout=timeout)
-        if not chunk and self.is_shutdown:
-            raise self.ShutDown
-        return chunk
-
-    def shutdown(self, _immediate: bool = False) -> None:
-        with self.mutex:
-            self.is_shutdown = True
-            self.not_full.notify()
-            self.not_empty.notify()
+    def close(self) -> None:
+        with self._queue.mutex:
+            if self._closed:
+                return
+            self._closed = True
+        self._queue.put(b"")
 
     def iter_chunks(self, timeout: float | None = None) -> Generator[bytes]:
         try:
-            while True:
-                yield self.get(timeout=timeout)
+            while chunk := self._queue.get(timeout=timeout):
+                yield chunk
         except queue.Empty:
-            raise TimeoutError("Timed out reading chunks")
-        except self.ShutDown:
-            pass
+            raise TimeoutError("Timed out reading chunks.")
+        if not self._closed:
+            raise RuntimeError("Buffer was not closed.")
 
 
 @dataclasses.dataclass
