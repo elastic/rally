@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import concurrent.futures
+import threading
 from typing import Protocol, runtime_checkable
 
 from typing_extensions import Self
@@ -53,8 +54,16 @@ class ThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor, Executor):
         return cls(max_workers=cfg.max_workers, thread_name_prefix=__name__)
 
 
-def executor_from_config(cfg: types.Config | None = None) -> ThreadPoolExecutor:
-    return ThreadPoolExecutor.from_config(cfg)
+_EXECUTOR: Executor | None = None
+_LOCK: threading.Lock = threading.Lock()
+
+
+def executor_from_config(cfg: types.Config | None = None) -> Executor:
+    global _EXECUTOR
+    with _LOCK:
+        if _EXECUTOR is None:
+            _EXECUTOR = ThreadPoolExecutor.from_config(cfg)
+    return _EXECUTOR
 
 
 class DummyExecutor(Executor):

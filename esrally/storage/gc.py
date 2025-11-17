@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import concurrent.futures
 import dataclasses
 import logging
 import os
@@ -27,7 +26,6 @@ from google.cloud import storage as gcs  # type: ignore[import-untyped]
 from typing_extensions import Self
 
 from esrally import storage, types
-from esrally.storage import Head
 
 LOG = logging.getLogger(__name__)
 
@@ -51,13 +49,13 @@ class GSAdapter(storage.Adapter):
         except Exception as ex:
             LOG.error("Failed to create Google Cloud Storage adapter: %s", ex)
             raise
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=cfg.max_workers)
+        executor = storage.executor_from_config(cfg)
         return cls(client=client, executor=executor, chunk_size=cfg.chunk_size)
 
     def __init__(
         self,
         client: gcs.Client,
-        executor: concurrent.futures.Executor,
+        executor: storage.Executor,
         chunk_size: int = storage.StorageConfig.DEFAULT_CHUNK_SIZE,
         user_project: str | None = None,
     ) -> None:
@@ -68,20 +66,20 @@ class GSAdapter(storage.Adapter):
         self.buffer_size = 10
         self.read_timeout = 10.0
 
-    def head(self, url: str) -> Head:
+    def head(self, url: str) -> storage.Head:
         blob = self._get_blob(url)
-        return Head(url=url, content_length=blob.size, accept_ranges=True, crc32c=blob.crc32c)
+        return storage.Head(url=url, content_length=blob.size, accept_ranges=True, crc32c=blob.crc32c)
 
-    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+    def get(self, url: str, *, check_head: storage.Head | None = None) -> tuple[storage.Head, Iterator[bytes]]:
         blob = self._get_blob(url)
         ranges = check_head and check_head.ranges or storage.NO_RANGE
         if len(ranges) > 1:
             raise ValueError("download range must be continuous")
 
         if ranges:
-            head = Head(url=url, content_length=ranges.size, document_length=blob.size, crc32c=blob.crc32c, ranges=ranges)
+            head = storage.Head(url=url, content_length=ranges.size, document_length=blob.size, crc32c=blob.crc32c, ranges=ranges)
         else:
-            head = Head(url=url, content_length=blob.size, crc32c=blob.crc32c)
+            head = storage.Head(url=url, content_length=blob.size, crc32c=blob.crc32c)
 
         if check_head is not None:
             check_head.check(head)
