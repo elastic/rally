@@ -101,12 +101,7 @@ class GSAdapter(storage.Adapter):
 
         def iter_chunks() -> Generator[bytes]:
             try:
-                while True:
-                    yield buffer.get(block=True, timeout=self.read_timeout)
-            except queue.Empty:
-                raise TimeoutError(f"Timed out reading chunks from {url}")
-            except queue.ShutDown:
-                pass
+                yield from buffer.iter_chunks(timeout=self.read_timeout)
             finally:
                 fut.result()
 
@@ -121,11 +116,49 @@ class GSAdapter(storage.Adapter):
         return blob
 
 
+class _BufferShutDown(RuntimeError):
+    pass
+
+
 class Buffer(queue.Queue[bytes]):
+    # shutdown() method has been existing only since Python 3.13. Here we mimic its behavior so that this queue works
+    # with earlier versions.
+
+    ShutDown = getattr(queue, "ShutDown", _BufferShutDown)
+
+    def __init__(self, maxsize: int = 0) -> None:
+        super().__init__(maxsize)
+        self.is_shutdown = False
 
     def write(self, data: bytes) -> None:
         if data:
             self.put(data)
+
+    def put(self, item: bytes, block: bool = True, timeout: float | None = None) -> None:
+        if self.is_shutdown:
+            raise self.ShutDown
+        super().put(item, block, timeout)
+
+    def get(self, block: bool = True, timeout: float | None = None) -> bytes:
+        chunk = super().get(block=block, timeout=timeout)
+        if not chunk and self.is_shutdown:
+            raise self.ShutDown
+        return chunk
+
+    def shutdown(self, _immediate: bool = False) -> None:
+        with self.mutex:
+            self.is_shutdown = True
+            self.not_full.notify()
+            self.not_empty.notify()
+
+    def iter_chunks(self, timeout: float | None = None) -> Generator[bytes]:
+        try:
+            while True:
+                yield self.get(timeout=timeout)
+        except queue.Empty:
+            raise TimeoutError("Timed out reading chunks")
+        except self.ShutDown:
+            pass
 
 
 @dataclasses.dataclass
