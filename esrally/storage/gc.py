@@ -84,30 +84,36 @@ class GSAdapter(storage.Adapter):
         if check_head is not None:
             check_head.check(head)
 
-        # It spawns a thread that reads data chunk by chunk and puts it in a buffer queue
+        # It spawns a thread that reads data chunk by chunk and puts it in a buffer queue.
         buffer = Buffer(maxsize=self.buffer_size)
-        params: dict[str, Any] = {}
-        if ranges:
-            params["start"] = ranges.start
-            params["end"] = ranges.end - 1
 
-        def download():
+        def download_chunks():
+            """It downloads file chunks to the buffer before shutdown it."""
             try:
+                params: dict[str, Any] = {}
+                if ranges:
+                    params["start"] = ranges.start
+                    params["end"] = ranges.end - 1
                 blob.download_to_file(client=self.client, file_obj=buffer, **params)
             finally:
+                # It signal chunks iterator the download is terminated.
                 buffer.shutdown()
 
-        fut = self.executor.submit(download)
+        # It runs the download in an executor threads which will put chunks to the buffer.
+        fut = self.executor.submit(download_chunks)
 
         def iter_chunks() -> Generator[bytes]:
+            """It gets chunks from the buffer."""
             try:
                 yield from buffer.iter_chunks(timeout=self.read_timeout)
             finally:
+                # Eventually raises exceptions produced in downloader thread.
                 fut.result()
 
         return head, iter_chunks()
 
     def _get_blob(self, url: str) -> gcs.Blob:
+        """It fetches file headers from server."""
         address = GSAddress.from_url(url)
         bucket = self.client.bucket(address.bucket, user_project=self.user_project)
         blob = bucket.get_blob(address.blob)
