@@ -21,6 +21,7 @@ from collections.abc import Generator
 from typing import Any
 from unittest import mock
 
+import google.auth.credentials
 import pytest
 import requests
 from google.cloud import storage as gcs
@@ -86,6 +87,12 @@ def response(**kwargs) -> dict[str, Any]:
 @pytest.fixture
 def client() -> gcs.Client:
     return gcs.Client(project=SOME_PROJECT)
+
+
+@pytest.fixture(autouse=True)
+def default_credentials(monkeypatch: pytest.MonkeyPatch):
+    credentials = mock.create_autospec(google.auth.credentials.Credentials, instance=True, universe_domain="googleapis.com")
+    monkeypatch.setattr(google.auth, "default", mock.create_autospec(google.auth.default, return_value=[credentials, None]))
 
 
 @pytest.fixture(scope="function")
