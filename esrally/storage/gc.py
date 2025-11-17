@@ -109,7 +109,8 @@ class GSAdapter(storage.Adapter):
                 raise TimeoutError(f"Timed out reading chunks from {url}")
             except queue.ShutDown:
                 pass
-            fut.result()
+            finally:
+                fut.result()
 
         return head, iter_chunks()
 
