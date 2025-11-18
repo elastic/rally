@@ -14,8 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import concurrent
-import concurrent.futures
 import dataclasses
 from collections.abc import Generator
 from typing import Any
@@ -95,15 +93,6 @@ def default_credentials(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(google.auth, "default", mock.create_autospec(google.auth.default, return_value=[credentials, None]))
 
 
-@pytest.fixture(scope="function")
-def executor() -> Generator[concurrent.futures.Executor]:
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
-    try:
-        yield executor
-    finally:
-        executor.shutdown()
-
-
 @cases(
     empty=HeadCase(response(), SOME_HEAD),
     content_length=HeadCase(response(size=1243), storage.Head(url=SOME_URL, content_length=1243, accept_ranges=True, crc32c=SOME_CRC32C)),
@@ -111,10 +100,10 @@ def executor() -> Generator[concurrent.futures.Executor]:
         response(crc32c="some-crc32c"), storage.Head(url=SOME_URL, crc32c="some-crc32c", content_length=SOME_SIZE, accept_ranges=True)
     ),
 )
-def test_head(case: HeadCase, client: gcs.Client, executor: concurrent.futures.Executor) -> None:
+def test_head(case: HeadCase, client: gcs.Client) -> None:
     # pylint: disable=protected-access
     client._connection.api_request = mock.create_autospec(client._connection.api_request, return_value=case.response)
-    adapter = gc.GSAdapter(client=client, executor=executor)
+    adapter = gc.GSAdapter(client=client)
     head = adapter.head(case.url)
     assert head == case.want
     client._connection.api_request.assert_called_once()
@@ -190,12 +179,12 @@ class GetCase:
         want_data=[b"some-data,s"],
     ),
 )
-def test_get(case: GetCase, client: gcs.Client, executor: concurrent.futures.Executor) -> None:
+def test_get(case: GetCase, client: gcs.Client) -> None:
     # pylint: disable=protected-access
     client._connection.api_request = mock.create_autospec(client._connection.api_request, return_value=case.response)
     client._http_internal = mock.create_autospec(requests.Session)
     client._http_internal.request.return_value = DummyResponse(body=case.data, ranges=storage.rangeset(case.ranges))
-    adapter = gc.GSAdapter(client=client, executor=executor)
+    adapter = gc.GSAdapter(client=client)
     head, chunks = adapter.get(case.url, check_head=storage.Head(content_length=case.content_length, ranges=storage.rangeset(case.ranges)))
     assert head == case.want_head
     assert case.want_data == list(chunks)

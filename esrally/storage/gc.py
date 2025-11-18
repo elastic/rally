@@ -17,21 +17,19 @@
 import dataclasses
 import logging
 import os
-import queue
 import urllib.parse
 from collections.abc import Generator, Iterator
-from types import TracebackType
-from typing import Any
 
-from google.cloud import storage as gcs  # type: ignore[import-untyped]
+from google.cloud import storage  # type: ignore[import-untyped]
 from typing_extensions import Self
 
-from esrally import storage, types
+from esrally import types
+from esrally.storage import NO_RANGE, Adapter, Head, StorageConfig
 
 LOG = logging.getLogger(__name__)
 
 
-class GSAdapter(storage.Adapter):
+class GSAdapter(Adapter):
 
     @classmethod
     def match_url(cls, url: str) -> bool:
@@ -43,116 +41,60 @@ class GSAdapter(storage.Adapter):
 
     @classmethod
     def from_config(cls, cfg: types.Config) -> Self:
-        cfg = storage.StorageConfig.from_config(cfg)
+        cfg = StorageConfig.from_config(cfg)
         LOG.debug("Creating Google Cloud Storage adapter from config: %s...", cfg)
         try:
-            client = gcs.Client(project=cfg.google_cloud_project)
+            client = storage.Client(project=cfg.google_cloud_project)
         except Exception as ex:
             LOG.error("Failed to create Google Cloud Storage adapter: %s", ex)
             raise
-        executor = storage.executor_from_config(cfg)
-        return cls(client=client, executor=executor, chunk_size=cfg.chunk_size)
+        return cls(client=client, chunk_size=cfg.chunk_size, user_project=cfg.google_cloud_user_project)
 
     def __init__(
         self,
-        client: gcs.Client,
-        executor: storage.Executor,
-        chunk_size: int = storage.StorageConfig.DEFAULT_CHUNK_SIZE,
-        user_project: str | None = None,
+        client: storage.Client,
+        chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE,
+        user_project: str | None = StorageConfig.DEFAULT_GOOGLE_CLOUD_USER_PROJECT,
+        connect_timeout: float = StorageConfig.DEFAULT_CONNECT_TIMEOUT,
+        read_timeout: float = StorageConfig.DEFAULT_READ_TIMEOUT,
     ) -> None:
         self.client = client
-        self.executor = executor
         self.chunk_size = chunk_size
         self.user_project = user_project
-        self.buffer_size = 10
-        self.read_timeout = 10.0
+        self.connect_timeout = connect_timeout
+        self.read_timeout = read_timeout
 
-    def head(self, url: str) -> storage.Head:
-        blob = self._get_blob(url)
-        return storage.Head(url=url, content_length=blob.size, accept_ranges=True, crc32c=blob.crc32c)
+    def blob(self, url: str, fetch: bool = True) -> storage.Blob:
+        b = GSAddress.from_url(url).blob(client=self.client, user_project=self.user_project)
+        if fetch:
+            b.reload(client=self.client, timeout=(self.connect_timeout, self.read_timeout))
+        return b
 
-    def get(self, url: str, *, check_head: storage.Head | None = None) -> tuple[storage.Head, Iterator[bytes]]:
-        blob = self._get_blob(url)
-        ranges = check_head and check_head.ranges or storage.NO_RANGE
+    def head(self, url: str) -> Head:
+        blob = self.blob(url)
+        return Head(url=url, content_length=blob.size, accept_ranges=True, crc32c=blob.crc32c)
+
+    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+        ranges = check_head and check_head.ranges or NO_RANGE
         if len(ranges) > 1:
             raise ValueError("download range must be continuous")
 
+        blob = self.blob(url)
         if ranges:
-            head = storage.Head(url=url, content_length=ranges.size, document_length=blob.size, crc32c=blob.crc32c, ranges=ranges)
+            head = Head(url=url, content_length=ranges.size, document_length=blob.size, crc32c=blob.crc32c, ranges=ranges)
         else:
-            head = storage.Head(url=url, content_length=blob.size, crc32c=blob.crc32c)
+            head = Head(url=url, content_length=blob.size, crc32c=blob.crc32c)
 
         if check_head is not None:
             check_head.check(head)
 
-        # It spawns a thread that reads data chunk by chunk and puts it in a buffer queue.
-        buffer = Buffer(maxsize=self.buffer_size)
-
-        def download_chunks():
-            """It downloads file chunks to the buffer before shutdown it."""
-            with buffer:
-                params: dict[str, Any] = {}
-                if ranges:
-                    params.update(start=ranges.start, end=ranges.end - 1)
-                blob.download_to_file(client=self.client, file_obj=buffer, **params)
-
-        # It runs the download in an executor threads which will put chunks to the buffer.
-        fut = self.executor.submit(download_chunks)
-
         def iter_chunks() -> Generator[bytes]:
             """It gets chunks from the buffer."""
-            try:
-                yield from buffer.iter_chunks(timeout=self.read_timeout)
-            finally:
-                # It eventually raises exceptions produced in downloader thread.
-                fut.result()
+            with blob.open("rb") as fd:
+                while chunk := fd.read(self.chunk_size):
+                    yield chunk
 
         return head, iter_chunks()
-
-    def _get_blob(self, url: str) -> gcs.Blob:
-        """It fetches file headers from server."""
-        address = GSAddress.from_url(url)
-        bucket = self.client.bucket(address.bucket, user_project=self.user_project)
-        blob = bucket.get_blob(address.blob)
-        if blob is None:
-            raise FileNotFoundError(f"No such blob: {address}")
-        return blob
-
-
-class Buffer:
-    """It implements a file-like object to allow iterating chunks written by another thread."""
-
-    def __init__(self, maxsize: int) -> None:
-        self._queue: queue.Queue = queue.Queue(maxsize=maxsize)
-        self._closed = False
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, exc_type: type[BaseException], exc_val: Exception, exc_tb: TracebackType) -> None:
-        self.close()
-
-    def write(self, data: bytes) -> None:
-        if self._closed:
-            raise RuntimeError("Buffer closed before writing data.")
-        if data:
-            self._queue.put(data)
-
-    def close(self) -> None:
-        with self._queue.mutex:
-            if self._closed:
-                return
-            self._closed = True
-        self._queue.put(b"")
-
-    def iter_chunks(self, timeout: float | None = None) -> Generator[bytes]:
-        try:
-            while chunk := self._queue.get(timeout=timeout):
-                yield chunk
-        except queue.Empty:
-            raise TimeoutError("Timed out reading chunks.")
-        if not self._closed:
-            raise RuntimeError("Buffer was not closed.")
 
 
 @dataclasses.dataclass
@@ -167,25 +109,35 @@ class GSAddress:
         u = urllib.parse.urlparse(url, scheme="gcs")
         hostname: str = u.netloc
         path: str = os.path.normpath(u.path).strip("/")
+        bucket_name: str
+        blob_name: str | None = None
         match u.scheme:
             case "gs":
-                bucket = hostname
-                blob = path
+                bucket_name = hostname
+                blob_name = path
             case "https":
                 if hostname != "storage.cloud.google.com":
                     raise ValueError(f"unexpected hostname: {url}")
-                if "/" not in path:
-                    raise ValueError(f"invalid file path: {url}")
-                bucket, blob = path.split("/", maxsplit=1)
+                if "/" in path:
+                    bucket_name, blob_name = path.split("/", maxsplit=1)
+                else:
+                    bucket_name = path
             case _:
                 raise ValueError(f"Unsupported scheme: {u.scheme}")
 
-        if not bucket:
+        if not bucket_name:
             raise ValueError(f"unspecified bucket name in URL: {url}")
-        if not blob:
-            raise ValueError(f"unspecified blob name in URL: {url}")
+        if blob_name:
+            blob_name = urllib.parse.unquote(blob_name)
+        else:
+            blob_name = None
+        return cls(bucket_name=bucket_name, blob_name=blob_name)
 
-        return cls(bucket=bucket, blob=blob)
+    bucket_name: str
+    blob_name: str | None = None
 
-    bucket: str
-    blob: str
+    def bucket(self, client: storage.Client | None = None, user_project: str | None = None) -> storage.Bucket:
+        return storage.Bucket(client=client, name=self.bucket_name, user_project=user_project)
+
+    def blob(self, client: storage.Client | None = None, user_project: str | None = None) -> storage.Blob:
+        return self.bucket(client=client, user_project=user_project).blob(self.blob_name)

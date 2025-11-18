@@ -91,6 +91,16 @@ class StorageConfig(config.Config):
     def google_cloud_project(self, value: str | None) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.gc.project", value)
 
+    DEFAULT_GOOGLE_CLOUD_USER_PROJECT: str | None = None
+
+    @property
+    def google_cloud_user_project(self) -> str | None:
+        return self.opts("storage", "storage.gc.project", self.DEFAULT_GOOGLE_CLOUD_USER_PROJECT, False)
+
+    @google_cloud_user_project.setter
+    def google_cloud_user_project(self, value: str | None) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.gc.user_project", value)
+
     DEFAULT_LOCAL_DIR = os.environ.get("RALLY_STORAGE_LOCAL_DIR", "~/.rally/storage")
 
     @property
