@@ -20,7 +20,8 @@ import os
 import shlex
 import subprocess
 import time
-from typing import IO, Callable, List, Mapping, Optional, Union
+from collections.abc import Iterable, Mapping
+from typing import IO, Callable, Optional, Union
 
 import psutil
 
@@ -38,7 +39,7 @@ def run_subprocess(command_line: str) -> int:
     return subprocess.call(command_line, shell=True)
 
 
-def run_subprocess_with_output(command_line: str, env: Optional[Mapping[str, str]] = None) -> List[str]:
+def run_subprocess_with_output(command_line: str, env: Optional[Mapping[str, str]] = None) -> list[str]:
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
@@ -173,13 +174,13 @@ def is_rally_process(p: psutil.Process) -> bool:
     )
 
 
-def find_all_other_rally_processes() -> List[psutil.Process]:
-    others: List[psutil.Process] = []
+def find_all_other_rally_processes() -> list[psutil.Process]:
+    others: list[psutil.Process] = []
     for_all_other_processes(is_rally_process, others.append)
     return others
 
 
-def redact_cmdline(cmdline: list) -> List[str]:
+def redact_cmdline(cmdline: list) -> list[str]:
     """
     Redact client options in cmdline as it contains sensitive information like passwords
     """
@@ -229,3 +230,28 @@ def kill_running_rally_instances() -> None:
         )
 
     kill_all(rally_process)
+
+
+def wait_for_child_processes(
+    timeout: Optional[float] = None,
+    callback: Optional[Callable[[psutil.Process], None]] = None,
+    list_callback: Optional[Callable[[Iterable[psutil.Process]], None]] = None,
+) -> bool:
+    """
+    Waits for all child processes to terminate.
+
+    :param timeout: The maximum time to wait for child processes to terminate (default: None).
+    :param callback: A callback to call as each child process terminates.
+        The callback will be passed the PID and the return code of the child process.
+    :param list_callback: A callback to tell caller about the child processes that are being waited for.
+
+    :return: False if no child processes found, True otherwise.
+    """
+    current = psutil.Process()
+    children = current.children(recursive=True)
+    if not children:
+        return False
+    if list_callback is not None:
+        list_callback(children)
+    psutil.wait_procs(children, timeout=timeout, callback=callback)
+    return True

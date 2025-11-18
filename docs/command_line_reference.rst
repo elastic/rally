@@ -573,6 +573,16 @@ and reference it when running Rally::
 
    esrally race --track=geonames --telemetry="node-stats" --telemetry-params="telemetry-params.json"
 
+``skip-telemetry``
+~~~~~~~~~~~~~~~~~~
+
+This command line flag is used to skip telemetry collection when running ``esrally stop`` for a node that has been started with the ``start`` subcommand. This is useful if you want to stop a node but don't want to collect telemetry data for it.
+
+**Example**
+
+ ::
+
+   esrally stop --installation-id=INSTALLATION_ID --skip-telemetry
 
 ``runtime-jdk``
 ~~~~~~~~~~~~~~~
@@ -656,6 +666,17 @@ You can use this distribution repository with the name "in_house_snapshot" as fo
    esrally race --track=geonames --distribution-repository=in_house_snapshot --distribution-version=7.0.0-SNAPSHOT
 
 This will benchmark the latest 7.0.0 snapshot build of Elasticsearch.
+
+``source-build-method``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Method with which to build Elasticsearch and plugins from sources. Supported values are: ``default`` and ``docker``.
+
+``source-build-release``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Determines whether to build a release version of Elasticsearch. By default, Rally builds a snapshot version. Default: ``false``.
+Provide the ``--source-build-release`` flag to build a release version.
 
 ``report-format``
 ~~~~~~~~~~~~~~~~~
@@ -832,14 +853,17 @@ Save the above responses as ``responses.json`` and execute a benchmark as follow
 ``on-error``
 ~~~~~~~~~~~~
 
+
 This option controls how Rally behaves when a response error occurs. The following values are possible:
 
 * ``continue``: (default) only records that an error has happened and will continue with the benchmark unless there is a fatal error. At the end of a race, errors show up in the "error rate" metric.
 * ``abort``: aborts the benchmark on the first request error with a detailed error message. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`.
+* ``continue-on-network``: As with ``continue``, but also continues on network errors (such as connection refused).
 
 .. attention::
 
-    The only error that is considered fatal is "Connection Refused" (`ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_).
+  With ``continue-on-network``, Rally continues on network errors (e.g., "Connection Refused"/`ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_). For other errors, behavior is the same as ``continue``. 
+  Use this option if you want Rally to be resilient to temporary network issues during a benchmark. Note that this will impact rally aborting in the case of a target Elasticsearch cluster being down.
 
 ``load-driver-hosts``
 ~~~~~~~~~~~~~~~~~~~~~
@@ -857,7 +881,9 @@ In the example, above Rally will generate load from the hosts ``10.17.20.5`` and
 ``target-hosts``
 ~~~~~~~~~~~~~~~~
 
-If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally to :doc:`benchmark a remote cluster </recipes>`, then you can specify a comma-delimited list of hosts:port pairs to which Rally should connect. The default value is ``127.0.0.1:9200``.
+If you run the ``benchmark-only`` :doc:`pipeline </pipelines>` or you want Rally to :doc:`benchmark a remote cluster </recipes>`, then you can specify a comma-delimited list of ``host:port`` pairs to which Rally should connect. The default value is ``127.0.0.1:9200``.
+
+If multiple Elasticsearch nodes are hidden behind a proxy, it is possible to add an optional URL prefix with ``host:port/path`` notation, e.g. ``1.2.3.4:9200/path``.
 
 **Example**
 
@@ -953,6 +979,15 @@ When you run ``esrally list races``, this will show up again::
 
 This will help you recognize a specific race when running ``esrally compare``.
 
+You can also filter races with user tags.
+
+**Example**
+
+ ::
+
+   esrally list races --track=pmc --user-tags="intention:github-issue-1234-baseline,gc:cms"
+
+
 .. note::
    This option used to be named `--user-tag` without an s, which was confusing as multiple tags are supported. While users are now encouraged to use `--user-tags` for clarity, Rally will continue to honor `--user-tag` in the future to avoid breaking backwards-compatibility.
 
@@ -1028,20 +1063,20 @@ Advanced topics
 Rally can also create client connections for multiple Elasticsearch clusters.
 This is only useful if you want to create :ref:`custom runners <adding_tracks_custom_runners>` that execute operations against multiple clusters, for example for `cross cluster search <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-cross-cluster-search.html>`_ or cross cluster replication.
 
-To define the host:port pairs for additional clusters with ``target-hosts`` you can specify either a JSON filename (ending in ``.json``) or an inline JSON string. The JSON object should be a collection of name:value pairs. ``name`` is string for the cluster name and there **must be** one ``default``.
+To define the ``host:port`` or ``host:port/path`` pairs for additional clusters with ``target-hosts`` you can specify either a JSON filename (ending in ``.json``) or an inline JSON string. The JSON object should be a collection of ``name:value`` pairs. The ``name`` is string for the cluster name and there **must be** one ``default``. The ``value`` is either a list of strings, or a list of dictionaries. The dictionary keys are ``host``, ``port`` and ``url_prefix``.
 
 Examples:
 
 * json file: ``--target-hosts="target_hosts1.json"``::
 
-    { "default": ["127.0.0.1:9200","10.127.0.3:19200"] }
+    { "default": ["127.0.0.1:9200","10.127.0.3:19200/path"] }
 
 * json file defining two clusters: ``--target-hosts="target_hosts2.json"``::
 
     {
       "default": [
         {"host": "127.0.0.1", "port": 9200},
-        {"host": "127.0.0.1", "port": 19200}
+        {"host": "127.0.0.3", "port": 19200, "url_prefix": "/path"}
       ],
       "remote":[
         {"host": "10.127.0.3", "port": 9200},

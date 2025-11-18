@@ -37,9 +37,9 @@ def test_elastic_transport_module_does_not_log_at_info_level(cfg, fresh_log_file
     'WARNING' to avoid perturbing benchmarking results due to the high volume of logging calls by the client itself.
 
     Unfortunately, due to the underlying double-fork behaviour of the ActorSystem, it's possible for this module's logger
-    threshold to be overriden and reset to the default 'INFO' level via eager top level imports (i.e at the top of a module).
+    threshold to be overridden and reset to the default 'INFO' level via eager top level imports (i.e at the top of a module).
 
-    Therefore we try to tightly control the imports of `elastic_transport` and `elasticsearch` throughout the codebase, but
+    Therefore, we try to tightly control the imports of `elastic_transport` and `elasticsearch` throughout the codebase, but
     it is very easy to reintroduce this 'bug' by simply putting the import statement in the 'wrong' spot, thus this IT
     attempts to ensure this doesn't happen.
 
@@ -53,4 +53,4 @@ def test_elastic_transport_module_does_not_log_at_info_level(cfg, fresh_log_file
         f'--distribution-version={dist} --track="geonames" --include-tasks=delete-index '
         f"--test-mode --car=4gheap,trial-license --target-hosts=127.0.0.1:{port} ",
     )
-    assert not it.check_log_line_present(fresh_log_file, "elastic_transport.transport INFO")
+    assert it.find_log_line(fresh_log_file, "elastic_transport.transport INFO") is None

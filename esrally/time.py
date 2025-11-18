@@ -16,7 +16,7 @@
 # under the License.
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 def to_epoch_millis(t):
@@ -82,6 +82,33 @@ def days_ago(start_date, end_date, date_format="%d-%m-%Y", default_tz=timezone.u
     start = _to_datetime(start_date, date_format, default_tz)
     end = _to_datetime(end_date, date_format, default_tz)
     return (end - start).days
+
+
+def get_start_date(the_date, date_format="%Y-%m-%d", default_tz=timezone.utc):
+    """
+    Return a formatted date string for a given date.
+
+    :param the_date: The date to format. May be a datetime instance, a unix timestamp or a string representation of a date.
+    :param date_format: The format to use for the date. Default: "%Y-%m-%d"
+    :param default_tz: Timezone to use for dates using unix timestamp. Default: timezone.UTC
+    :return: Returns a formatted date string.
+    """
+    start_date = _to_datetime(the_date, default_tz=default_tz)
+    return start_date.strftime(date_format)
+
+
+def get_end_date(start_date, duration_days=1, date_format="%Y-%m-%d", default_tz=timezone.utc):
+    """
+    Return a formatted date string for a given date plus a duration.
+
+    :param start_date: The date to start from. May be a datetime instance, a unix timestamp or a string representation of a date.
+    :param duration_days: The duration in days to add to the start date. Default: 1
+    :param date_format: The format to use for the date. Default: "%Y-%m-%d"
+    :param default_tz: Timezone to use for dates using unix timestamp. Default: timezone.UTC
+    :return: Returns a formatted date string.
+    """
+    end_date = _to_datetime(start_date, default_tz=default_tz) + timedelta(days=duration_days)
+    return end_date.strftime(date_format)
 
 
 class Clock:

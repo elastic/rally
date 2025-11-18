@@ -30,7 +30,7 @@ from functools import total_ordering
 from io import BytesIO
 from os.path import commonprefix
 from types import FunctionType
-from typing import List, Optional
+from typing import Optional
 
 import ijson
 
@@ -105,6 +105,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.TransformStats, Retry(TransformStats()), async_runner=True)
     register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
+    register_runner(track.OperationType.RunUntil, Retry(RunUntil()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -439,14 +440,6 @@ def mandatory(params, key, op):
             f"Parameter source for operation '{str(op)}' did not provide the mandatory parameter '{key}'. "
             f"Add it to your parameter source and try again."
         )
-
-
-# TODO: remove and use https://docs.python.org/3/library/stdtypes.html#str.removeprefix
-#  once Python 3.9 becomes the minimum version
-def remove_prefix(string, prefix):
-    if string.startswith(prefix):
-        return string[len(prefix) :]
-    return string
 
 
 def escape(v):
@@ -838,7 +831,7 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: List[str], lists: List[str] = None, objects: List[str] = None) -> dict:
+def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
@@ -1289,7 +1282,7 @@ class SearchAfterExtractor:
         # extracts e.g. '[1609780186, "2"]' from '"sort": [1609780186, "2"]'
         self.sort_pattern = re.compile(r"sort\":([^\]]*])")
 
-    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> (dict, List):
+    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> (dict, list):
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
         if get_point_in_time:
@@ -1322,7 +1315,7 @@ class SearchAfterExtractor:
 
 
 class CompositeAggExtractor:
-    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: List, hits_total: Optional[int]) -> dict:
+    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: list, hits_total: Optional[int]) -> dict:
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
         if get_point_in_time:
@@ -1819,7 +1812,7 @@ class ShrinkIndex(Runner):
             target_body["settings"]["index.routing.allocation.require._name"] = None
             target_body["settings"]["index.blocks.write"] = None
             # kick off the shrink operation
-            index_suffix = remove_prefix(source_index, source_indices_stem)
+            index_suffix = source_index.removeprefix(source_indices_stem)
             final_target_index = target_index if len(index_suffix) == 0 else target_index + index_suffix
             await es.indices.shrink(index=source_index, target=final_target_index, body=target_body)
 
@@ -2234,15 +2227,24 @@ class RestoreSnapshot(Runner):
     """
 
     async def __call__(self, es, params):
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
+
         wait_for_completion = params.get("wait-for-completion", False)
-        params.get("request-params", {}).update({"wait_for_completion": wait_for_completion})
-        api_kwargs = self._default_kw_params(params)
+        request_params.update({"wait_for_completion": wait_for_completion})
+
         repo = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
 
         # TODO: Replace 'perform_request' with 'SnapshotClient.restore()' when https://github.com/elastic/elasticsearch-py/issues/2168
         # is fixed
-        await es.perform_request(method="POST", path=f"/_snapshot/{repo}/{snapshot}/_restore", **api_kwargs)
+        await es.perform_request(
+            method="POST",
+            path=f"/_snapshot/{repo}/{snapshot}/_restore",
+            headers=headers,
+            body=params.get("body", {}),
+            params=request_params,
+        )
 
     def __repr__(self, *args, **kwargs):
         return "restore-snapshot"
@@ -2537,10 +2539,14 @@ class TransformStats(Runner):
 class SubmitAsyncSearch(Runner):
     async def __call__(self, es, params):
         request_params = params.get("request-params", {})
+
+        # defaults wait_for_completion_timeout = 0 to avoid sync fallback for fast searches
+        if "wait_for_completion_timeout" not in request_params:
+            request_params["wait_for_completion_timeout"] = 0
+
         response = await es.async_search.submit(body=mandatory(params, "body", self), index=params.get("index"), params=request_params)
 
         op_name = mandatory(params, "name", self)
-        # id may be None if the operation has already returned
         search_id = response.get("id")
         CompositeContext.put(op_name, search_id)
 
@@ -2552,7 +2558,6 @@ def async_search_ids(op_names):
     subjects = [op_names] if isinstance(op_names, str) else op_names
     for subject in subjects:
         subject_id = CompositeContext.get(subject)
-        # skip empty ids, searches have already completed
         if subject_id:
             yield subject_id, subject
 
@@ -2569,11 +2574,13 @@ class GetAsyncSearch(Runner):
             success = success and not is_running
             if not is_running:
                 stats[search] = {
-                    "hits": response["response"]["hits"]["total"]["value"],
-                    "hits_relation": response["response"]["hits"]["total"]["relation"],
                     "timed_out": response["response"]["timed_out"],
                     "took": response["response"]["took"],
                 }
+
+                if "total" in response["response"]["hits"].keys():
+                    stats[search]["hits"] = response["response"]["hits"]["total"]["value"]
+                    stats[search]["hits_relation"] = response["response"]["hits"]["total"]["relation"]
 
         return {
             # only count completed searches - there is one key per search id in `stats`
@@ -3084,3 +3091,72 @@ class Retry(Runner, Delegator):
 
     def __repr__(self, *args, **kwargs):
         return "retryable %s" % repr(self.delegate)
+
+
+class RunUntil(Runner):
+    """
+    Performs an API call until a target value is seen.
+    """
+
+    def __init__(self, *args, config=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.numerical_operators = {
+            "gte": lambda v, t: int(v) >= int(t),
+            "lte": lambda v, t: int(v) <= int(t),
+            "eq": lambda v, t: int(v) == int(t),
+            "neq": lambda v, t: int(v) != int(t),
+        }
+        self.operators = {"exists": lambda v, _: v is not None, "not_exists": lambda v, _: v is None, **self.numerical_operators}
+
+    async def __call__(self, es, params):
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
+        es.return_raw_response()
+        path = mandatory(params, "path", self)
+        method = params.get("method", "GET")
+        body = params.get("body", None)
+        json_path = mandatory(params, "json-path", self)
+        criterion = mandatory(params, "criterion", self)
+        retry_wait_interval = params.get("retry-wait-interval", 60)
+        if criterion.get("operator") not in self.operators:
+            raise ValueError(f"Unsupported operator: {criterion.get('operator')}")
+        if criterion.get("operator") in self.numerical_operators and "value" not in criterion:
+            raise ValueError(f"Criterion operator {criterion.get('operator')} requires a 'value' field.")
+
+        complete = False
+        while not complete:
+            response = await es.perform_request(
+                method=method,
+                path=path,
+                headers=headers,
+                body=body,
+                params=request_params,
+            )
+            value = parse(response, [json_path])
+            raw_value: str | int | float = value.get(json_path)
+            if not raw_value:
+                continue
+            complete = self.compare_value(criterion, raw_value)
+            if not complete:
+                self.logger.debug("Criterion not met, retrying...")
+                await asyncio.sleep(retry_wait_interval)  # wait before retrying
+
+    def compare_value(self, criterion: dict, value: str | int | float) -> bool:
+        """
+        Compare a value against a criterion using the specified operator.
+
+        Args:
+            criterion (dict): Dictionary containing 'operator' and optionally 'value' keys.
+                Supported operators: 'exists', 'not_exists', 'gte', 'lte', 'eq', 'neq'.
+            value: The actual value to compare against the criterion.
+
+        Returns:
+            bool: True if the criterion is met, False otherwise.
+        """
+        operator = criterion.get("operator")
+        target_value: int | float = criterion.get("value")
+        return self.operators[operator](value, target_value)
+
+    def __repr__(self, *args, **kwargs):
+        return "run-until"

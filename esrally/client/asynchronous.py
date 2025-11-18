@@ -19,7 +19,8 @@ import asyncio
 import json
 import logging
 import warnings
-from typing import Any, Iterable, List, Mapping, Optional
+from collections.abc import Iterable, Mapping
+from typing import Any, Optional
 
 import aiohttp
 from aiohttp import BaseConnector, RequestInfo
@@ -63,7 +64,7 @@ class StaticTransport:
 
 
 class StaticConnector(BaseConnector):
-    async def _create_connection(self, req: "ClientRequest", traces: List["Trace"], timeout: "ClientTimeout") -> ResponseHandler:
+    async def _create_connection(self, req: "ClientRequest", traces: list["Trace"], timeout: "ClientTimeout") -> ResponseHandler:
         handler = ResponseHandler(self._loop)
         handler.transport = StaticTransport()
         handler.protocol = ""
@@ -77,7 +78,7 @@ class StaticRequest(aiohttp.ClientRequest):
         self.response = self.response_class(
             self.method,
             self.original_url,
-            writer=self._writer,  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            writer=self._writer,
             continue100=self._continue,
             timer=self._timer,
             request_info=self.request_info,
@@ -111,7 +112,7 @@ class StaticResponse(aiohttp.ClientResponse):
         continue100: Optional["asyncio.Future[bool]"],
         timer: BaseTimerContext,
         request_info: RequestInfo,
-        traces: List["Trace"],
+        traces: list["Trace"],
         loop: asyncio.AbstractEventLoop,
         session: "ClientSession",
     ) -> None:

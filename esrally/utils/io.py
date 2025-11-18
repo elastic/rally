@@ -26,24 +26,9 @@ import shutil
 import subprocess
 import tarfile
 import zipfile
+from collections.abc import Collection, Mapping, Sequence
 from types import TracebackType
-from typing import (
-    IO,
-    Any,
-    AnyStr,
-    Callable,
-    Collection,
-    Generic,
-    List,
-    Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    Union,
-    overload,
-)
+from typing import IO, Any, AnyStr, Callable, Generic, Literal, Optional, overload
 
 import zstandard
 
@@ -105,7 +90,7 @@ class FileSource(Generic[AnyStr]):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
+        self, exc_type: Optional[type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
     ) -> Literal[False]:
         self.close()
         return False
@@ -127,7 +112,7 @@ class MmapSource:
         self.mm: Optional[mmap.mmap] = None
 
     def open(self) -> Self:
-        self.f = open(self.file_name, mode="r+b")
+        self.f = open(self.file_name, mode="rb")
         self.mm = mmap.mmap(self.f.fileno(), 0, access=mmap.ACCESS_READ)
         self.mm.madvise(mmap.MADV_SEQUENTIAL)
 
@@ -170,7 +155,7 @@ class MmapSource:
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
+        self, exc_type: Optional[type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
     ) -> Literal[False]:
         self.close()
         return False
@@ -252,7 +237,7 @@ class StringAsFileSource:
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
+        self, exc_type: Optional[type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
     ) -> Literal[False]:
         self.close()
         return False
@@ -350,7 +335,7 @@ def decompress(zip_name: str, target_directory: str) -> None:
     """
     _, extension = splitext(zip_name)
     if extension == ".zip":
-        _do_decompress(target_directory, zipfile.ZipFile(zip_name))
+        _do_zip_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
         decompressor_args = ["pbzip2", "-d", "-k", "-m10000", "-c"]
         decompressor_lib_bz2 = bz2.open
@@ -364,12 +349,12 @@ def decompress(zip_name: str, target_directory: str) -> None:
         decompressor_lib_gzip = gzip.open
         _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib_gzip)
     elif extension in [".tar", ".tar.gz", ".tgz", ".tar.bz2"]:
-        _do_decompress(target_directory, tarfile.open(zip_name))
+        _do_tar_decompress(target_directory, tarfile.open(zip_name))
     else:
         raise RuntimeError("Unsupported file extension [%s]. Cannot decompress [%s]" % (extension, zip_name))
 
 
-def _do_decompress_manually(target_directory: str, filename: str, decompressor_args: List[str], decompressor_lib: Callable) -> None:
+def _do_decompress_manually(target_directory: str, filename: str, decompressor_args: list[str], decompressor_lib: Callable) -> None:
     decompressor_bin = decompressor_args[0]
     base_path_without_extension = basename(splitext(filename)[0])
 
@@ -385,7 +370,7 @@ def _do_decompress_manually(target_directory: str, filename: str, decompressor_a
 
 
 def _do_decompress_manually_external(
-    target_directory: str, filename: str, base_path_without_extension: str, decompressor_args: List[str]
+    target_directory: str, filename: str, base_path_without_extension: str, decompressor_args: list[str]
 ) -> bool:
     with open(os.path.join(target_directory, base_path_without_extension), "wb") as new_file:
         try:
@@ -410,16 +395,20 @@ def _do_decompress_manually_with_lib(target_directory: str, filename: str, compr
         compressed_file.close()
 
 
-def _do_decompress(target_directory: str, compressed_file: Union[zipfile.ZipFile, tarfile.TarFile]) -> None:
+def _do_tar_decompress(target_directory: str, compressed_file: tarfile.TarFile) -> None:
+    try:
+        compressed_file.extractall(path=target_directory, filter="tar")
+    except Exception:
+        raise RuntimeError(f"Could not decompress provided archive [{compressed_file.name!r}]. Please check if it is a valid tar file.")
+    finally:
+        compressed_file.close()
+
+
+def _do_zip_decompress(target_directory: str, compressed_file: zipfile.ZipFile) -> None:
     try:
         compressed_file.extractall(path=target_directory)
-    except BaseException:
-        if isinstance(compressed_file, zipfile.ZipFile):
-            raise RuntimeError(
-                f"Could not decompress provided archive [{compressed_file.filename}]. Please check if it is a valid zip file."
-            )
-        if isinstance(compressed_file, tarfile.TarFile):
-            raise RuntimeError(f"Could not decompress provided archive [{compressed_file.name!r}]. Please check if it is a valid tar file.")
+    except Exception:
+        raise RuntimeError(f"Could not decompress provided archive [{compressed_file.filename}]. Please check if it is a valid zip file.")
     finally:
         compressed_file.close()
 
@@ -471,7 +460,7 @@ def escape_path(path: str) -> str:
     return path.replace("\\", "\\\\")
 
 
-def splitext(file_name: str) -> Tuple[str, str]:
+def splitext(file_name: str) -> tuple[str, str]:
     if file_name.endswith(".tar.gz"):
         return file_name[0:-7], file_name[-7:]
     elif file_name.endswith(".tar.bz2"):
@@ -539,7 +528,7 @@ class FileOffsetTable:
         assert self.offset_file is not None, "File offset table must be opened in a context manager block."
         print(f"{line_number};{offset}", file=self.offset_file)
 
-    def find_closest_offset(self, target_line_number: int) -> Tuple[int, int]:
+    def find_closest_offset(self, target_line_number: int) -> tuple[int, int]:
         """
         Determines the offset in bytes for the line L in the corresponding data file with the following properties:
 
@@ -565,7 +554,7 @@ class FileOffsetTable:
         return prior_offset, prior_remaining_lines
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
+        self, exc_type: Optional[type[BaseException]], exc: Optional[BaseException], traceback: Optional[TracebackType]
     ) -> Literal[False]:
         assert self.offset_file is not None, "File offset table must be opened in a context manager block."
         self.offset_file.close()

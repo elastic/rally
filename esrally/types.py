@@ -15,9 +15,10 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Any, Literal, Protocol, TypeVar
+from typing import Any, Literal, Protocol, runtime_checkable
 
 Section = Literal[
+    "actor",
     "benchmarks",
     "client",
     "defaults",
@@ -32,6 +33,7 @@ Section = Literal[
     "race",
     "reporting",
     "source",
+    "storage",
     "system",
     "teams",
     "telemetry",
@@ -41,6 +43,7 @@ Section = Literal[
     "unit-test",
 ]
 Key = Literal[
+    "actor.process.startup.method",
     "add.chart_name",
     "add.chart_type",
     "add.config.option",
@@ -63,9 +66,11 @@ Key = Literal[
     "cluster.name",
     "config.version",
     "data_streams",
+    "datastore.api_key",
     "datastore.host",
     "datastore.number_of_replicas",
     "datastore.number_of_shards",
+    "datastore.overwrite_existing_templates",
     "datastore.password",
     "datastore.port",
     "datastore.probe.cluster_version",
@@ -94,6 +99,8 @@ Key = Literal[
     "list.from_date",
     "list.max_results",
     "list.races.benchmark_name",
+    "list.races.format",
+    "list.races.user_tags",
     "list.to_date",
     "load_driver_hosts",
     "local.dataset.cache",
@@ -143,31 +150,54 @@ Key = Literal[
     "serverless.mode",
     "serverless.operator",
     "skip.rest.api.check",
+    "skip.telemetry",
     "snapshot.cache",
     "source.build.method",
+    "source.build.release",
     "source.revision",
     "src.root.dir",
+    "storage.adapters",
+    "storage.aws.profile",
+    "storage.base_url",
+    "storage.cache_ttl",
+    "storage.chunk_size",
+    "storage.http.connect_timeout",
+    "storage.http.max_retries",
+    "storage.http.read_timeout",
+    "storage.local_dir",
+    "storage.max_connections",
+    "storage.max_workers",
+    "storage.mirror_files",
+    "storage.monitor_interval",
+    "storage.multipart_size",
+    "storage.random_seed",
     "target.arch",
     "target.os",
     "team.path",
     "team.repository.dir",
     "test.mode.enabled",
     "time.start",
+    "track.downloader.multipart_enabled",
     "track.name",
     "track.path",
     "track.repository.dir",
     "user.tags",
     "values",
 ]
-_Config = TypeVar("_Config", bound="Config")
 
 
+@runtime_checkable
 class Config(Protocol):
+
+    name: str | None = None
+
     def add(self, scope, section: Section, key: Key, value: Any) -> None: ...
 
-    def add_all(self, source: _Config, section: Section) -> None: ...
+    def add_all(self, source: "Config", section: Section) -> None: ...
 
     def opts(self, section: Section, key: Key, default_value=None, mandatory: bool = True) -> Any: ...
+
+    def all_sections(self) -> list[Section]: ...
 
     def all_opts(self, section: Section) -> dict: ...
 

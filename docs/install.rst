@@ -18,23 +18,11 @@ Rally does not support Windows and is only actively tested on macOS and Linux. I
 Python
 ~~~~~~
 
-* Python 3.8 or better available as ``python3`` on the path. Verify with: ``python3 --version``.
+* Python (from version 3.10.x to version 3.13.x) available as ``python3`` on the system executable path. Please verify with: ``python3 --version``.
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 
-We recommend to use `pyenv <https://github.com/pyenv/pyenv>`_ to manage installation of Python. For details refer to their `installation instructions <https://github.com/pyenv/pyenv#installation>`_ and **ensure that all of** `pyenv's prerequisites <https://github.com/pyenv/pyenv/wiki/common-build-problems#prerequisites>`_ are installed.
-
-Once ``pyenv`` is installed, install a compatible Python version::
-
-    # Install Python
-    pyenv install {MIN_PY_VER}
-
-    # select that version for the current user
-    # see https://github.com/pyenv/pyenv/blob/master/COMMANDS.md#pyenv-global for details
-    pyenv global {MIN_PY_VER}
-
-    # Upgrade pip
-    python3 -m pip install --user --upgrade pip
+If you need multiple Python versions, consider using `uv <https://github.com/astral-sh/uv>`_. For details refer to their `installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_.
 
 git
 ~~~

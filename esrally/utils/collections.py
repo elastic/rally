@@ -14,7 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Any, Generator, Mapping
+import copy
+from collections.abc import Generator, Mapping
+from typing import Any
 
 
 def merge_dicts(d1: Mapping[str, Any], d2: Mapping[str, Any]) -> Generator[Any, None, Any]:
@@ -37,3 +39,35 @@ def merge_dicts(d1: Mapping[str, Any], d2: Mapping[str, Any]) -> Generator[Any, 
             yield k, d1[k]
         else:
             yield k, d2[k]
+
+
+def deep_update(orig_dict: Mapping[str, Any], *updates: Mapping[str, Any]) -> None:
+    """
+    Recursively updates a `dict` with other dicts in place.
+
+    NOTE: This function has different semantics than `merge_dicts` as it does not merge lists.
+
+    For example:
+        ```python
+        d1 = {"foo": [1, 2, 3]}
+        d2 = {"foo": [3, 4, 5]}
+        merged = merge_dicts(d1, d2))
+
+        updated = copy.deepcopy(d1)
+        deep_update(updated, d2)
+
+        assert merged == {"foo": [1, 2, 3, 4, 5]}
+        assert updated == {"foo": [3, 4, 5]}
+        ```
+
+    :param orig_dict: The original dict. May be empty.
+    :param updates: The dicts to update originale dict with. May be empty.
+    """
+    for update in updates:
+        if update is None:
+            continue
+        for k, v in update.items():
+            if k in orig_dict and isinstance(orig_dict[k], Mapping) and isinstance(v, Mapping):
+                deep_update(orig_dict[k], v)
+            else:
+                orig_dict[k] = copy.deepcopy(v)

@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 import collections
 import datetime
 import glob
@@ -33,7 +32,7 @@ from enum import Enum, IntEnum
 import tabulate
 
 from esrally import client, config, exceptions, paths, time, types, version
-from esrally.utils import console, convert, io, versions
+from esrally.utils import console, convert, io, pretty, versions
 
 
 class EsClient:
@@ -46,6 +45,9 @@ class EsClient:
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
         self.retryable_status_codes = [502, 503, 504, 429]
+
+    def get_template(self, name):
+        return self.guarded(self._client.indices.get_index_template, name=name)
 
     def put_template(self, name, template):
         tmpl = json.loads(template)
@@ -218,35 +220,46 @@ class EsClient:
                 raise exceptions.RallyError(msg)
 
 
+DATASTORE_API_KEY: str = os.environ.get("RALLY_REPORTING_DATASTORE_API_KEY", "")
+DATASTORE_USER: str = os.environ.get("RALLY_REPORTING_DATASTORE_USER", "")
+DATASTORE_PASSWORD: str = os.environ.get("RALLY_REPORTING_DATASTORE_PASSWORD", "")
+
+
 class EsClientFactory:
     """
     Abstracts how the Elasticsearch client is created. Intended for testing.
     """
 
-    def __init__(self, cfg: types.Config):
+    def __init__(self, cfg: types.Config, client_factory=client.EsClientFactory):
         self._config = cfg
         host = self._config.opts("reporting", "datastore.host")
         port = self._config.opts("reporting", "datastore.port")
         hosts = [{"host": host, "port": port}]
         secure = convert.to_bool(self._config.opts("reporting", "datastore.secure"))
-        user = self._config.opts("reporting", "datastore.user")
+        user: str = DATASTORE_USER or self._config.opts("reporting", "datastore.user", default_value="", mandatory=False)
+        api_key: str = DATASTORE_API_KEY or self._config.opts("reporting", "datastore.api_key", default_value="", mandatory=False)
+        password: str = DATASTORE_PASSWORD or self._config.opts("reporting", "datastore.password", default_value="", mandatory=False)
         distribution_version = None
         distribution_flavor = None
-        try:
-            password = os.environ["RALLY_REPORTING_DATASTORE_PASSWORD"]
-        except KeyError:
-            try:
-                password = self._config.opts("reporting", "datastore.password")
-            except exceptions.ConfigError:
+
+        # Resolve the authentication method.
+        if user:
+            if api_key:
                 raise exceptions.ConfigError(
-                    "No password configured through [reporting] configuration or RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
-                ) from None
+                    "Both basic authentication (username/password) and API key are provided. Please provide only one authentication method."
+                )
+            if not password:
+                raise exceptions.ConfigError(
+                    "No password configured through [reporting] configuration or "
+                    "RALLY_REPORTING_DATASTORE_PASSWORD environment variable."
+                )
 
         verify = self._config.opts("reporting", "datastore.ssl.verification_mode", default_value="full", mandatory=False) != "none"
         ca_path = self._config.opts("reporting", "datastore.ssl.certificate_authorities", default_value=None, mandatory=False)
         self.probe_version = self._config.opts("reporting", "datastore.probe.cluster_version", default_value=True, mandatory=False)
 
         # Instead of duplicating code, we're just adapting the metrics store specific properties to match the regular client options.
+
         client_options = {
             "use_ssl": secure,
             "verify_certs": verify,
@@ -254,9 +267,11 @@ class EsClientFactory:
         }
         if ca_path:
             client_options["ca_certs"] = ca_path
-        if user and password:
+        if user:
             client_options["basic_auth_user"] = user
             client_options["basic_auth_password"] = password
+        elif api_key:
+            client_options["api_key"] = api_key
 
         # TODO #1335: Use version-specific support for metrics stores after 7.8.0.
         if self.probe_version:
@@ -265,7 +280,7 @@ class EsClientFactory:
             )
             self._cluster_version = distribution_version
 
-        factory = client.EsClientFactory(
+        factory = client_factory(
             hosts=hosts,
             client_options=client_options,
             distribution_version=distribution_version,
@@ -898,8 +913,7 @@ class EsMetricsStore(MetricsStore):
         self._index = self.index_name()
         # reduce a bit of noise in the metrics cluster log
         if create:
-            # always update the mapping to the latest version
-            self._client.put_template("rally-metrics", self._get_template())
+            self._ensure_index_template()
             if not self._client.exists(index=self._index):
                 self._client.create_index(index=self._index)
             else:
@@ -912,6 +926,34 @@ class EsMetricsStore(MetricsStore):
 
         # ensure we can search immediately after opening
         self._client.refresh(index=self._index)
+
+    def _ensure_index_template(self):
+        new_template: str = self._get_template()
+
+        old_template: dict | None = None
+        if self._client.template_exists("rally-metrics"):
+            for t in self._client.get_template("rally-metrics").body.get("index_templates", []):
+                old_template = t.get("index_template", {}).get("template", {})
+                break
+
+        if old_template is None:
+            self.logger.info(
+                "Create index template:\n%s",
+                pretty.dump(json.loads(new_template).get("template", {}), pretty.Flag.FLAT_DICT),
+            )
+        else:
+            diff = pretty.diff(old_template, json.loads(new_template).get("template", {}), pretty.Flag.FLAT_DICT)
+            if diff == "":
+                self.logger.debug("Keep existing template (it is identical)")
+                return
+            if not convert.to_bool(
+                self._config.opts(section="reporting", key="datastore.overwrite_existing_templates", default_value=False, mandatory=False)
+            ):
+                self.logger.debug("Keep existing template (datastore.overwrite_existing_templates = false):\n%s", diff)
+                return
+            self.logger.warning("Overwrite existing index template (datastore.overwrite_existing_templates = true):\n%s", diff)
+
+        self._client.put_template("rally-metrics", new_template)
 
     def index_name(self):
         ts = time.from_iso8601(self._race_timestamp)
@@ -1314,47 +1356,56 @@ def list_races(cfg: types.Config):
         else:
             return None
 
-    races = []
-    for race in race_store(cfg).list():
-        races.append(
-            [
-                race.race_id,
-                time.to_iso8601(race.race_timestamp),
-                race.track,
-                race.challenge_name,
-                race.car_name,
-                race.distribution_version,
-                race.revision,
-                race.rally_version,
-                race.track_revision,
-                race.team_revision,
-                format_dict(race.user_tags),
-            ]
-        )
-
-    if len(races) > 0:
-        console.println("\nRecent races:\n")
-        console.println(
-            tabulate.tabulate(
-                races,
-                headers=[
-                    "Race ID",
-                    "Race Timestamp",
-                    "Track",
-                    "Challenge",
-                    "Car",
-                    "ES Version",
-                    "Revision",
-                    "Rally Version",
-                    "Track Revision",
-                    "Team Revision",
-                    "User Tags",
-                ],
+    output_format: str = cfg.opts("system", "list.races.format")
+    if output_format == "text":
+        races = []
+        for race in race_store(cfg).list():
+            races.append(
+                [
+                    race.race_id,
+                    time.to_iso8601(race.race_timestamp),
+                    race.track,
+                    race.challenge_name,
+                    race.car_name,
+                    race.distribution_version,
+                    race.revision,
+                    race.rally_version,
+                    race.track_revision,
+                    race.team_revision,
+                    format_dict(race.user_tags),
+                ]
             )
-        )
+
+        if len(races) > 0:
+            console.println("\nRecent races:\n")
+            console.println(
+                tabulate.tabulate(
+                    races,
+                    headers=[
+                        "Race ID",
+                        "Race Timestamp",
+                        "Track",
+                        "Challenge",
+                        "Car",
+                        "ES Version",
+                        "Revision",
+                        "Rally Version",
+                        "Track Revision",
+                        "Team Revision",
+                        "User Tags",
+                    ],
+                )
+            )
+        else:
+            console.println("")
+            console.println("No recent races found.")
+
+    elif output_format == "json":
+        d = {"races": [race.as_dict() for race in race_store(cfg).list()]}
+        console.println(json.dumps(d, indent=2))
+
     else:
-        console.println("")
-        console.println("No recent races found.")
+        raise exceptions.RallyAssertionError(f"Unknown output format [{output_format}]")
 
 
 def create_race(cfg: types.Config, track, challenge, track_revision=None):
@@ -1479,11 +1530,15 @@ class Race:
             },
         }
         if self.results:
-            d["results"] = self.results.as_dict()
+            if hasattr(self.results, "as_dict"):
+                d["results"] = self.results.as_dict()
+            else:
+                d["results"] = self.results
         if self.track_revision:
             d["track-revision"] = self.track_revision
-        if not self.challenge.auto_generated:
-            d["challenge"] = self.challenge_name
+        if self.challenge:
+            if not hasattr(self.challenge, "auto_generated") or not self.challenge.auto_generated:
+                d["challenge"] = self.challenge_name
         if self.track_params:
             d["track-params"] = self.track_params
         if self.car_params:
@@ -1599,6 +1654,9 @@ class RaceStore:
     def _benchmark_name(self):
         return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
 
+    def _user_tags(self) -> dict:
+        return self.cfg.opts("system", "list.races.user_tags", default_value={}, mandatory=False)
+
     def _race_timestamp(self):
         return self.cfg.opts("system", "add.race_timestamp")
 
@@ -1705,6 +1763,9 @@ class FileRaceStore(RaceStore):
         pattern = "%Y%m%d"
         from_date = self._from_date()
         to_date = self._to_date()
+        challenge = self._challenge()
+        user_tags = self._user_tags()
+
         for result in results:
             # noinspection PyBroadException
             try:
@@ -1723,6 +1784,10 @@ class FileRaceStore(RaceStore):
             races = filter(lambda r: r.race_timestamp.date() >= datetime.datetime.strptime(from_date, pattern).date(), races)
         if to_date:
             races = filter(lambda r: r.race_timestamp.date() <= datetime.datetime.strptime(to_date, pattern).date(), races)
+        if challenge:
+            races = filter(lambda r: r.challenge == challenge, races)
+        if user_tags:
+            races = filter(lambda r: all(r.user_tags.get(k) == v for k, v in user_tags.items()), races)
 
         return sorted(races, key=lambda r: r.race_timestamp, reverse=True)
 
@@ -1884,6 +1949,7 @@ class EsRaceStore(RaceStore):
         from_date = self._from_date()
         to_date = self._to_date()
         challenge = self._challenge()
+        user_tags = self._user_tags()
 
         filters = [
             {
@@ -1916,8 +1982,9 @@ class EsRaceStore(RaceStore):
                 {"bool": {"should": [{"term": {"user-tags.benchmark-name": name}}, {"term": {"user-tags.name": name}}]}}
             )
         if challenge:
-            query["query"]["bool"]["filter"].append({"bool": {"should": [{"term": {"challenge": challenge}}]}})
-
+            query["query"]["bool"]["filter"].append({"term": {"challenge": challenge}})
+        if user_tags:
+            query["query"]["bool"]["filter"].extend([{"term": {f"user-tags.{k}": v}} for k, v in user_tags.items()])
         result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+

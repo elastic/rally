@@ -16,108 +16,213 @@
 # under the License.
 
 SHELL := /bin/bash
+
 # We assume an active virtualenv for development
-PYENV_REGEX := .pyenv/shims
-PY_BIN := python3
-# https://github.com/pypa/pip/issues/5599
-PIP_WRAPPER := $(PY_BIN) -m pip
-export PY38 := $(shell jq -r '.python_versions.PY38' .ci/variables.json)
-export PY39 := $(shell jq -r '.python_versions.PY39' .ci/variables.json)
-export PY310 := $(shell jq -r '.python_versions.PY310' .ci/variables.json)
-export PY311 := $(shell jq -r '.python_versions.PY311' .ci/variables.json)
-export PY312 := $(shell jq -r '.python_versions.PY312' .ci/variables.json)
-export HATCH_VERSION := $(shell jq -r '.prerequisite_versions.HATCH' .ci/variables.json)
-export HATCHLING_VERSION := $(shell jq -r '.prerequisite_versions.HATCHLING' .ci/variables.json)
-export PIP_VERSION := $(shell jq -r '.prerequisite_versions.PIP' .ci/variables.json)
-export WHEEL_VERSION := $(shell jq -r '.prerequisite_versions.WHEEL' .ci/variables.json)
-VIRTUAL_ENV ?= .venv
+VIRTUAL_ENV := $(or $(VIRTUAL_ENV),.venv$(if $(PY_VERSION),-$(PY_VERSION)))
 VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
-VENV_ACTIVATE := . $(VENV_ACTIVATE_FILE)
-VEPYTHON := $(VIRTUAL_ENV)/bin/$(PY_BIN)
-PYENV_ERROR := "\033[0;31mIMPORTANT\033[0m: Please install pyenv.\n"
-PYENV_PREREQ_HELP := "\033[0;31mIMPORTANT\033[0m: please type \033[0;31mpyenv init\033[0m, follow the instructions there and restart your terminal before proceeding any further.\n"
-VE_MISSING_HELP := "\033[0;31mIMPORTANT\033[0m: Couldn't find $(PWD)/$(VIRTUAL_ENV); have you executed make venv-create?\033[0m\n"
+VENV_ACTIVATE := source $(VENV_ACTIVATE_FILE)
 
-prereq:
-	pyenv install --skip-existing $(PY38)
-	pyenv install --skip-existing $(PY39)
-	pyenv install --skip-existing $(PY310)
-	pyenv install --skip-existing $(PY311)
-	pyenv install --skip-existing $(PY312)
-	pyenv local $(PY312)
-	@# Ensure all Python versions are registered for this project
-	@ jq -r '.python_versions | [.[] | tostring] | join("\n")' .ci/variables.json > .python-version
-	-@ printf $(PYENV_PREREQ_HELP)
+PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
+export UV_PYTHON := $(PY_VERSION)
+export UV_PROJECT_ENVIRONMENT := $(VIRTUAL_ENV)
 
-venv-create:
-	@if [[ ! -x $$(command -v pyenv) ]]; then \
-		printf $(PYENV_ERROR); \
-		exit 1; \
-	fi;
-	@if [[ ! -f $(VENV_ACTIVATE_FILE) ]]; then \
-		eval "$$(pyenv init -)" && eval "$$(pyenv init --path)" && $(PY_BIN) -mvenv $(VIRTUAL_ENV); \
-		printf "Created python3 venv under $(PWD)/$(VIRTUAL_ENV).\n"; \
-	fi;
+PRE_COMMIT_HOOK_PATH := .git/hooks/pre-commit
 
-check-venv:
-	@if [[ ! -f $(VENV_ACTIVATE_FILE) ]]; then \
-	printf $(VE_MISSING_HELP); \
+LOG_CI_LEVEL := INFO
+
+# --- Global goals ---
+
+all: lint test it
+
+clean: clean-others clean-docs
+
+check-all: all
+
+.PHONY: \
+	all \
+	clean \
+	check-all \
+	uv \
+	uv-add \
+	uv-lock \
+	venv \
+	clean-venv \
+	install_pytest_rally_plugin \
+	install \
+	reinstall \
+	venv-destroy \
+	clean-others \
+	clean-pycache \
+	lint \
+	format \
+	pre-commit \
+	precommit \
+	install-pre-commit \
+	docs \
+	serve-docs \
+	clean-docs \
+	test \
+	test-all \
+	test-3.10 \
+	test-3.11 \
+	test-3.12 \
+	test-3.13 \
+	it \
+	it_serverless \
+	it_tracks_compat \
+	benchmark \
+	release-checks \
+	release \
+	sh
+
+# --- uv goals ---
+
+# It checks uv is installed.
+uv:
+	@if [[ ! -x $$(command -v uv) ]]; then \
+		printf "Please install uv by running the following outside of a virtual environment (https://docs.astral.sh/uv/getting-started/installation/)"; \
 	fi
 
-install-user: venv-create
-	. $(VENV_ACTIVATE_FILE); $(PY_BIN) -m ensurepip --upgrade --default-pip 
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install --upgrade hatch==$(HATCH_VERSION) hatchling==$(HATCHLING_VERSION) pip==$(PIP_VERSION) wheel==$(WHEEL_VERSION)
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .
+# It adds a list of packages to the project.
+uv-add:
+ifndef ARGS
+	$(error Missing arguments. Use make uv-add ARGS="...")
+endif
+	uv add $$ARGS
 
-install: install-user
-	# Also install development dependencies
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install -e .[develop]
-	. $(VENV_ACTIVATE_FILE); $(PIP_WRAPPER) install git+https://github.com/elastic/pytest-rally.git
+# It updates the uv lock file.
+uv-lock:
+	uv lock
 
 
-clean: nondocs-clean docs-clean
+# --- venv goals ---
 
-nondocs-clean:
+# It creates the project virtual environment.
+venv: uv $(VENV_ACTIVATE_FILE)
+
+$(VENV_ACTIVATE_FILE):
+	uv venv --allow-existing --seed
+	uv sync --locked --extra=develop
+
+# It delete the project virtual environment from disk.
+clean-venv:
+	rm -fR '$(VIRTUAL_ENV)'
+
+# It installs the Rally PyTest plugin.
+install_pytest_rally_plugin: venv
+	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
+
+# Old legacy alias goals
+install: venv
+	uv sync --locked --extra=develop
+
+reinstall: clean-venv
+	$(MAKE) venv
+
+venv-destroy: clean-venv
+
+
+# --- Other goals ---
+
+# It delete many temporary files types.
+clean-others: clean-pycache
 	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
 
-docs-clean:
-	cd docs && $(MAKE) clean
-
 # Avoid conflicts between .pyc/pycache related files created by local Python interpreters and other interpreters in Docker
-python-caches-clean:
+clean-pycache:
 	-@find . -name "__pycache__" -prune -exec rm -rf -- \{\} \;
 
-lint: check-venv
-	@. $(VENV_ACTIVATE_FILE); pre-commit run --all-files
 
-# pre-commit run also formats files, but let's keep `make format` for convenience
+# --- Linter goals ---
+
+# It run all linters on all files using pre-commit.
+lint: venv
+	uv run -- pre-commit run --all-files
+
+# It run all linters on changed files using pre-commit.
+precommit pre-commit: venv
+	uv run -- pre-commit run
+
+# It install a pre-commit hook in the project .git dir so modified files are checked before creating every commit.
+install-pre-commit: $(PRE_COMMIT_HOOK_PATH)
+
+$(PRE_COMMIT_HOOK_PATH):
+	mkdir -p $(dir $@)
+	echo '#!/usr/bin/env $(SHELL)' > '$@'
+	echo 'make pre-commit' >> '$@'
+	chmod ugo+x '$@'
+
+# pre-commit run also formats files, but let's keep `make format` for convenience.
 format: lint
 
-docs: check-venv
-	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) html
 
-serve-docs: check-venv
-	@. $(VENV_ACTIVATE_FILE); cd docs && $(MAKE) serve
+# --- Doc goals ---
 
-test: check-venv
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.8
-	. $(VENV_ACTIVATE_FILE); nox -s test-3.12
+# It build project documentation.
+docs: venv
+	uv run $(MAKE) -C docs/ html
 
-# checks min and max python versions
-it: check-venv python-caches-clean
-	. $(VENV_ACTIVATE_FILE); nox -s it-3.8
-	. $(VENV_ACTIVATE_FILE); nox -s it-3.12
+serve-docs: venv
+	uv run $(MAKE) -C docs/ serve
 
-check-all: lint test it
+# It cleans project documentation.
+clean-docs: venv
+	uv run $(MAKE) -C docs/ clean
 
-benchmark: check-venv
-	. $(VENV_ACTIVATE_FILE); pytest benchmarks/
 
-release-checks: check-venv
-	. $(VENV_ACTIVATE_FILE); ./release-checks.sh $(release_version) $(next_version)
+# --- Unit tests goals ---
+
+# It runs unit tests using the default python interpreter version.
+test: venv
+	uv run -- pytest -s $(or $(ARGS), tests/)
+
+# It runs unit tests using all supported python versions.
+test-all: test-3.10 test-3.11 test-3.12 test-3.13
+
+# It runs unit tests using Python 3.10.
+test-3.10:
+	$(MAKE) test PY_VERSION=3.10
+
+# It runs unit tests using Python 3.11.
+test-3.11:
+	$(MAKE) test PY_VERSION=3.11
+
+# It runs unit tests using Python 3.12.
+test-3.12:
+	$(MAKE) test PY_VERSION=3.12
+
+# It runs unit tests using Python 3.13.
+test-3.13:
+	$(MAKE) test PY_VERSION=3.13
+
+
+# --- Integration tests goals ---
+
+# It runs integration tests.
+it: venv
+	$(MAKE) test ARGS=$(or $(ARGS),it/)
+
+# It runs serverless integration tests.
+it_serverless: install_pytest_rally_plugin
+	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_serverless it/track_repo_compatibility $(ARGS)
+
+# It runs rally_tracks_compat integration tests.
+it_tracks_compat: install_pytest_rally_plugin
+	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
+
+# It runs benchmark tests.
+benchmark: venv
+	$(MAKE) test ARGS=benchmarks/
+
+# --- Release goals ---
+
+release-checks: venv
+	$(VENV_ACTIVATE); ./release-checks.sh $(release_version) $(next_version)
 
 # usage: e.g. make release release_version=0.9.2 next_version=0.9.3
-release: check-venv release-checks clean docs lint test it
-	. $(VENV_ACTIVATE_FILE); ./release.sh $(release_version) $(next_version)
+release: venv release-checks clean docs lint test it
+	$(VENV_ACTIVATE); ./release.sh $(release_version) $(next_version)
 
-.PHONY: install clean nondocs-clean docs-clean python-caches-clean lint format docs serve-docs test it check-all benchmark release release-checks prereq venv-create check-env
+# This is a shortcut for creating a shell running inside the project virtual environment.
+sh:
+	$(VENV_ACTIVATE); sh

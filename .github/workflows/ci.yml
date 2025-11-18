@@ -19,15 +19,16 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: pyproject.toml
-      - name: "Install dependencies"
-        run: python -m pip install .[develop]
-      - uses: pre-commit/action@v3.0.0
+          python-version: "3.13"
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.22"
+      - name: Run tests
+        run: make lint
       - uses: elastic/es-perf-github-status@v2
         if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
         with:
@@ -39,24 +40,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
         os:
-          - macos-13
+          - macos-latest
           - ubuntu-latest
 
     runs-on: ${{ matrix.os }}
-    name: unit ${{ fromJson('{"macos-13":"macOS","ubuntu-latest":"Ubuntu"}')[matrix.os] }} ${{ matrix.python-version }}
+    name: unit ${{ fromJson('{"macos-latest":"macOS","ubuntu-latest":"Ubuntu"}')[matrix.os] }} ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
-      - name: "Install dependencies"
-        run: python -m pip install --upgrade nox
-      - name: "Run tests"
-        run: nox -s test-${{matrix.python-version}}
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.22"
+      - name: Run tests
+        run: make test-${{matrix.python-version}}
       - uses: elastic/es-perf-github-status@v2
         if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
         with:
@@ -68,27 +69,45 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Check public IP address
+        run: curl -4s ifconfig.me
+        continue-on-error: true
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: pyproject.toml
-      - uses: actions/setup-java@v3
+          python-version: "3.13"
+      - uses: actions/setup-java@v4
         with:
           distribution: "temurin"
-          java-version: "17"
-      - run: echo "JAVA17_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
+          java-version: "21"
+      - run: echo "JAVA21_HOME=$JAVA_HOME_21_X64" >> $GITHUB_ENV
       - run: echo "JAVA11_HOME=$JAVA_HOME_11_X64" >> $GITHUB_ENV
-      - name: "Install dependencies"
-        run: python -m pip install --upgrade nox
-      - name: "Run tests"
-        run: nox -s rally_tracks_compat
-        timeout-minutes: 120
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.22"
+      - name: Free Disk Space
+        continue-on-error: true
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+          tool-cache: false
+      - name: Check disk space before
+        run: df -h
+      - name: Run tests
+        run: make it_tracks_compat
+        timeout-minutes: 160
         env:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid
           # being rate limited
           ASSETS_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check disk space after
+        run: df -h
       - uses: elastic/es-perf-github-status@v2
         if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
         with:
@@ -96,7 +115,7 @@ jobs:
           slack_channel: ${{ secrets.SLACK_CHANNEL }}
           status: FAILED
       # Artifact will show up under "Artifacts" in the "Summary" page of runs
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: rally-tracks-compat-logs

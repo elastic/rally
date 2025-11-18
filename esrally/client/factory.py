@@ -36,7 +36,8 @@ class EsClientFactory:
         def host_string(host):
             # protocol can be set at either host or client opts level
             protocol = "https" if client_options.get("use_ssl") or host.get("use_ssl") else "http"
-            return f"{protocol}://{host['host']}:{host['port']}"
+            path = host.get("url_prefix", "")
+            return f"{protocol}://{host['host']}:{host['port']}{path}"
 
         self.hosts = [host_string(h) for h in hosts]
         self.client_options = dict(client_options)
@@ -78,7 +79,7 @@ class EsClientFactory:
                 self.ssl_context.verify_mode = ssl.CERT_NONE
                 self.client_options["ssl_show_warn"] = False
 
-                self.logger.warning(
+                self.logger.debug(
                     "User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark."
                 )
             else:

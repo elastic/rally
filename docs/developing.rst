@@ -6,7 +6,7 @@ Prerequisites
 
 Install the following software packages:
 
-* pyenv installed, Follow the instructions in the output of ``pyenv init`` to setup your shell and then restart it before proceeding. For more details please refer to the pyenv `installation instructions <https://github.com/pyenv/pyenv#installation>`_.
+* `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ 
 * JDK version required to build Elasticsearch. Please refer to the `build setup requirements <https://github.com/elastic/elasticsearch/blob/main/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase>`_.
 * `Docker <https://docs.docker.com/install/>`_ and on Linux additionally `docker-compose <https://docs.docker.com/compose/install/>`_.
 * `jq <https://stedolan.github.io/jq/download/>`_
@@ -25,7 +25,6 @@ Installation Instructions for Development
 
     git clone https://github.com/elastic/rally.git
     cd rally
-    make prereq
     make install
     source .venv/bin/activate
     ./rally --help
@@ -33,7 +32,7 @@ Installation Instructions for Development
 IDE Setup
 ---------
 
-Rally uses automatic code formatters. They're enforced by ``make lint`` and you can apply then by running ``make format``.
+Rally uses automatic code formatters. You can apply them by running ``make format``.
 
 However, consider using editor integrations to do it automatically: you'll need to configure `black <https://black.readthedocs.io/en/stable/integrations/editors.html>`_ and `isort <https://github.com/PyCQA/isort/wiki/isort-Plugins>`_.
 

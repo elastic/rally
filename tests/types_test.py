@@ -20,24 +20,22 @@ from configparser import ConfigParser
 from importlib import import_module
 from inspect import getsourcelines, isclass, signature
 from os.path import sep
-from pathlib import Path as _Path
+from pathlib import Path
 from types import FunctionType
 from typing import Optional, get_args
 
 from esrally import types
 
 
-class Path(_Path):
-    # needs to populate _flavour manually because Path.__new__() doesn't for subclasses
-    _flavour = _Path()._flavour  # pylint: disable=W0212
-
-    def glob_modules(self, pattern, *args, **kwargs):
-        for file in self.glob(pattern, *args, **kwargs):
-            if not file.match("*.py"):
-                continue
-            pyfile = file.relative_to(self)
-            modpath = pyfile.parent if pyfile.name == "__init__.py" else pyfile.with_suffix("")
-            yield import_module(str(modpath).replace(sep, "."))
+def glob_modules(path: Path, pattern, *args, **kwargs):
+    for file in path.glob(pattern, *args, **kwargs):
+        if not file.match("*.py"):
+            continue
+        pyfile = file.relative_to(path)
+        if pyfile.name == "__main__.py":
+            continue
+        modpath = pyfile.parent if pyfile.name == "__init__.py" else pyfile.with_suffix("")
+        yield import_module(str(modpath).replace(sep, "."))
 
 
 project_root = Path(__file__).parent / ".."
@@ -125,6 +123,6 @@ def assert_annotations(obj, ident, *expects):
 
 class TestConfigTypeHint:
     def test_esrally_module_annotations(self):
-        for module in project_root.glob_modules("esrally/**/*.py"):
-            assert_annotations(module, "cfg", types.Config)
+        for module in glob_modules(project_root, "esrally/**/*.py"):
+            assert_annotations(module, "cfg", types.Config, "types.Config", "types.Config | None", types.Config | None)
             assert_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)

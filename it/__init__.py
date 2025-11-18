@@ -26,6 +26,7 @@ import socket
 import subprocess
 import tempfile
 import time
+from collections.abc import Generator
 
 import pytest
 
@@ -113,8 +114,7 @@ def shell_cmd(command_line):
 
 def command_in_docker(command_line, python_version):
     docker_command = f"docker run --rm -v {ROOT_DIR}:/rally_ro:ro python:{python_version} bash -c '{command_line}'"
-
-    return shell_cmd(docker_command)
+    return subprocess.run(docker_command, shell=True, check=True).returncode
 
 
 def wait_until_port_is_free(port_number=39200, timeout=120):
@@ -250,7 +250,7 @@ def build_docker_image():
 
     command = (
         f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE "
-        f"-f {ROOT_DIR}/docker/Dockerfiles/Dockerfile-dev {ROOT_DIR}"
+        f"-f {ROOT_DIR}/docker/Dockerfiles/dev/Dockerfile {ROOT_DIR}"
     )
 
     if process.run_subprocess_with_logging(command, env=env_variables) != 0:
@@ -288,6 +288,9 @@ def fresh_log_file():
         yield log_file
 
 
-def check_log_line_present(log_file, text):
+def find_log_line(log_file, text) -> str | None:
     with open(log_file) as f:
-        return any(text in line for line in f)
+        for line in f:
+            if text in line:
+                return line
+    return None

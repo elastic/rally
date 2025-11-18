@@ -147,7 +147,7 @@ class TestSourceRepository:
         s.fetch("@2023-04-20T11:09:12Z")
 
         mock_is_working_copy.assert_called_with("/src")
-        mock_pull_ts.assert_called_with("/src", "2023-04-20T11:09:12Z", remote="origin", branch="main")
+        mock_pull_ts.assert_called_with("/src", "2023-04-20T11:09:12Z", remote="origin", branch="main", default_branch="main")
         mock_head_revision.assert_called_with("/src")
 
     @mock.patch("esrally.utils.git.fetch", autospec=True)
@@ -692,6 +692,22 @@ class TestElasticsearchSourceSupplier:
 
         builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
 
+    def test_build_release(self):
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={"clean_command": "./gradlew clean", "system.build_command.no-snapshot": "./gradlew -Dbuild.snapshot=false assemble"},
+        )
+        builder = mock.create_autospec(supplier.Builder, release_build=True)
+        renderer = supplier.TemplateRenderer(version="abc", arch="x86_64")
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
+        )
+        es.prepare()
+
+        builder.build.assert_called_once_with(["./gradlew clean", "./gradlew -Dbuild.snapshot=false assemble"])
+
     def test_build_arm(self):
         car = team.Car(
             "default",
@@ -707,6 +723,25 @@ class TestElasticsearchSourceSupplier:
         es.prepare()
 
         builder.build.assert_called_once_with(["./gradlew clean", "./gradlew assemble"])
+
+    def test_build_arm_release(self):
+        car = team.Car(
+            "default",
+            root_path=None,
+            config_paths=[],
+            variables={
+                "clean_command": "./gradlew clean",
+                "system.build_command.arch.no-snapshot": "./gradlew -Dbuild.snapshot=false assemble",
+            },
+        )
+        builder = mock.create_autospec(supplier.Builder, release_build=True)
+        renderer = supplier.TemplateRenderer(version="abc", arch="aarch64")
+        es = supplier.ElasticsearchSourceSupplier(
+            revision="abc", es_src_dir="/src", remote_url="", car=car, builder=builder, template_renderer=renderer
+        )
+        es.prepare()
+
+        builder.build.assert_called_once_with(["./gradlew clean", "./gradlew -Dbuild.snapshot=false assemble"])
 
     def test_raises_error_on_missing_car_variable(self):
         car = team.Car(

@@ -19,8 +19,9 @@ import importlib.util
 import logging
 import os
 import sys
+from collections.abc import Collection, Iterator
 from types import ModuleType
-from typing import Collection, Iterator, Tuple, Union
+from typing import Union
 
 from esrally import exceptions
 from esrally.utils import io
@@ -50,7 +51,7 @@ class ComponentLoader:
         self.recurse = recurse
         self.logger = logging.getLogger(__name__)
 
-    def _modules(self, module_paths: Collection[str], component_name: str, root_path: str) -> Iterator[Tuple[str, str]]:
+    def _modules(self, module_paths: Collection[str], component_name: str, root_path: str) -> Iterator[tuple[str, str]]:
         for path in module_paths:
             for filename in os.listdir(path):
                 name, ext = os.path.splitext(filename)
@@ -63,6 +64,7 @@ class ComponentLoader:
 
     def _load_component(self, component_name: str, module_dirs: Collection[str], root_path: str) -> ModuleType:
         # precondition: A module with this name has to exist provided that the caller has called #can_load() before.
+        root_module: ModuleType | None = None
         root_module_name = "%s.%s" % (component_name, self.component_entry_point)
         for name, p in self._modules(module_dirs, component_name, root_path):
             self.logger.debug("Loading module [%s]: %s", name, p)
@@ -75,6 +77,8 @@ class ComponentLoader:
             spec.loader.exec_module(m)
             if name == root_module_name:
                 root_module = m
+        if root_module is None:
+            raise RuntimeError(f"Could not find root module: '{root_module_name}'")
         return root_module
 
     def can_load(self):
