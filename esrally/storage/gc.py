@@ -48,24 +48,28 @@ class GSAdapter(Adapter):
         except Exception as ex:
             LOG.error("Failed to create Google Cloud Storage adapter: %s", ex)
             raise
-        return cls(client=client, chunk_size=cfg.chunk_size, user_project=cfg.google_cloud_user_project)
+        return cls(client=client, chunk_size=cfg.chunk_size, user_project=cfg.google_cloud_user_project, multipart_size=cfg.multipart_size)
 
     def __init__(
         self,
         client: storage.Client,
         chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE,
+        multipart_size: int = StorageConfig.DEFAULT_MULTIPART_SIZE,
         user_project: str | None = StorageConfig.DEFAULT_GOOGLE_CLOUD_USER_PROJECT,
         connect_timeout: float = StorageConfig.DEFAULT_CONNECT_TIMEOUT,
         read_timeout: float = StorageConfig.DEFAULT_READ_TIMEOUT,
     ) -> None:
         self.client = client
         self.chunk_size = chunk_size
+        self.multipart_size = multipart_size
         self.user_project = user_project
         self.connect_timeout = connect_timeout
         self.read_timeout = read_timeout
 
     def blob(self, url: str, fetch: bool = True) -> storage.Blob:
-        b = GSAddress.from_url(url).blob(client=self.client, user_project=self.user_project)
+        # chunk_size value has to be multiple of 256K
+        chunk_size = self.multipart_size + (self.multipart_size % (1024 * 256))
+        b = GSAddress.from_url(url).blob(client=self.client, user_project=self.user_project, chunk_size=chunk_size)
         if fetch:
             b.reload(client=self.client, timeout=(self.connect_timeout, self.read_timeout))
         return b
@@ -90,9 +94,16 @@ class GSAdapter(Adapter):
 
         def iter_chunks() -> Generator[bytes]:
             """It gets chunks from the buffer."""
-            with blob.open("rb") as fd:
-                while chunk := fd.read(self.chunk_size):
-                    yield chunk
+            if ranges:
+                pos, end = ranges.start, ranges.end
+            else:
+                pos, end = 0, blob.size
+
+            while pos < end:
+                with blob.open("rb") as fd:
+                    while pos < end and (chunk := fd.read(min(self.chunk_size, end - pos))):
+                        pos += len(chunk)
+                        yield chunk
 
         return head, iter_chunks()
 
@@ -139,5 +150,5 @@ class GSAddress:
     def bucket(self, client: storage.Client | None = None, user_project: str | None = None) -> storage.Bucket:
         return storage.Bucket(client=client, name=self.bucket_name, user_project=user_project)
 
-    def blob(self, client: storage.Client | None = None, user_project: str | None = None) -> storage.Blob:
-        return self.bucket(client=client, user_project=user_project).blob(self.blob_name)
+    def blob(self, client: storage.Client | None = None, user_project: str | None = None, chunk_size: int | None = None) -> storage.Blob:
+        return self.bucket(client=client, user_project=user_project).blob(self.blob_name, chunk_size=chunk_size)

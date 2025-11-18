@@ -15,28 +15,23 @@
 # specific language governing permissions and limitations
 # under the License.
 import dataclasses
-from collections.abc import Generator
-from typing import Any
+import io
 from unittest import mock
 
-import google.auth.credentials
 import pytest
-import requests
-from google.cloud import storage as gcs
-from typing_extensions import Self
+from google.cloud import storage
 
-from esrally import storage
-from esrally.storage import gc
+from esrally.storage import Head, gc, rangeset
 from esrally.utils.cases import cases
 
 SOME_PROJECT = "elastic-performance-testing"
 SOME_BUCKET = "rally-tracks"
 SOME_BLOB = "apm/documents-1k.ndjson.bz2"
 SOME_URL = f"gs://{SOME_BUCKET}/{SOME_BLOB}"
-SOME_SIZE = 63458
+SOME_DATA = b"some-data,"
+SOME_SIZE = len(SOME_DATA) * 10
 SOME_CRC32C = "83jA8A=="
-
-SOME_HEAD = storage.Head(
+SOME_HEAD = Head(
     url=SOME_URL,
     content_length=SOME_SIZE,
     accept_ranges=True,
@@ -44,116 +39,81 @@ SOME_HEAD = storage.Head(
 )
 
 
-DEFAULT_RESPONSE = {
-    # pylint: disable=line-too-long
-    "bucket": SOME_BUCKET,
-    "contentType": "application/octet-stream",
-    "crc32c": SOME_CRC32C,
-    "etag": "CIyixP2h5IQDEAE=",
-    "generation": "1709887141777676",
-    "id": "rally-tracks/apm/documents-1k.ndjson.bz2/1709887141777676",
-    "kind": "storage#object",
-    "md5Hash": "L1ESqWBTuflUGNe89oDGIQ==",
-    "mediaLink": "https://www.googleapis.com/download/storage/v1/b/rally-tracks/o/apm%2Fdocuments-1k.ndjson.bz2?generation=1709887141777676&alt=media",
-    "metageneration": "1",
-    "name": "apm/documents-1k.ndjson.bz2",
-    "selfLink": "https://www.googleapis.com/storage/v1/b/rally-tracks/o/apm%2Fdocuments-1k.ndjson.bz2",
-    "size": str(SOME_SIZE),
-    "storageClass": "STANDARD",
-    "timeCreated": "2024-03-08T08:39:01.854Z",
-    "timeFinalized": "2024-03-08T08:39:01.854Z",
-    "timeStorageClassUpdated": "2024-03-08T08:39:01.854Z",
-    "updated": "2024-03-08T08:39:01.854Z",
-}
+@pytest.fixture
+def dummy_blob() -> storage.Blob:
+    return DummyBlob()
+
+
+@pytest.fixture
+def adapter(dummy_blob: storage.Blob) -> gc.GSAdapter:
+    client = mock.create_autospec(storage.Client)
+    adapter = gc.GSAdapter(client=client)
+    return adapter
+
+
+class DummyBlob(storage.Blob):
+
+    def __init__(
+        self,
+        content: bytes = SOME_DATA * 10,
+        crc32s: str = SOME_CRC32C,
+        name: str = SOME_BLOB,
+        bucket_name: str = SOME_BUCKET,
+    ) -> None:
+        super().__init__(name=name, bucket=storage.Bucket(client=None, name=bucket_name))
+        self.content = content
+        self._set_properties({"crc32c": crc32s, "size": len(content)})
+
+    def open(
+        self,
+        mode="r",
+        chunk_size=None,
+        ignore_flush=None,
+        encoding=None,
+        errors=None,
+        newline=None,
+        **kwargs,
+    ) -> io.BytesIO:
+        assert mode == "rb"
+        return io.BytesIO(self.content)
 
 
 @dataclasses.dataclass
 class HeadCase:
-    response: dict[str, Any]
-    want: storage.Head
+    want_head: Head
     url: str = SOME_URL
+    blob: storage.Blob = dataclasses.field(default_factory=DummyBlob)
     want_bucket: str = SOME_BUCKET
     want_blob: str = SOME_BLOB
 
 
-def response(**kwargs) -> dict[str, Any]:
-    res = dict(DEFAULT_RESPONSE)
-    res.update(kwargs)
-    return res
-
-
-@pytest.fixture
-def client() -> gcs.Client:
-    return gcs.Client(project=SOME_PROJECT)
-
-
-@pytest.fixture(autouse=True)
-def default_credentials(monkeypatch: pytest.MonkeyPatch):
-    credentials = mock.create_autospec(google.auth.credentials.Credentials, instance=True, universe_domain="googleapis.com")
-    monkeypatch.setattr(google.auth, "default", mock.create_autospec(google.auth.default, return_value=[credentials, None]))
+# @pytest.fixture(autouse=True)
+# def default_credentials(monkeypatch: pytest.MonkeyPatch):
+#     credentials = mock.create_autospec(google.auth.credentials.Credentials, instance=True, universe_domain="googleapis.com")
+#     monkeypatch.setattr(google.auth, "default", mock.create_autospec(google.auth.default, return_value=[credentials, None]))
 
 
 @cases(
-    empty=HeadCase(response(), SOME_HEAD),
-    content_length=HeadCase(response(size=1243), storage.Head(url=SOME_URL, content_length=1243, accept_ranges=True, crc32c=SOME_CRC32C)),
+    default=HeadCase(want_head=SOME_HEAD),
+    content_length=HeadCase(
+        blob=DummyBlob(content=SOME_DATA[:5]), want_head=Head(url=SOME_URL, content_length=5, accept_ranges=True, crc32c=SOME_CRC32C)
+    ),
     crc32c=HeadCase(
-        response(crc32c="some-crc32c"), storage.Head(url=SOME_URL, crc32c="some-crc32c", content_length=SOME_SIZE, accept_ranges=True)
+        blob=DummyBlob(crc32s="some-crc32c"),
+        want_head=Head(url=SOME_URL, crc32c="some-crc32c", content_length=SOME_SIZE, accept_ranges=True),
     ),
 )
-def test_head(case: HeadCase, client: gcs.Client) -> None:
-    # pylint: disable=protected-access
-    client._connection.api_request = mock.create_autospec(client._connection.api_request, return_value=case.response)
-    adapter = gc.GSAdapter(client=client)
+def test_head(case: HeadCase, adapter: gc.GSAdapter) -> None:
+    adapter.blob = mock.create_autospec(adapter.blob, return_value=case.blob)
     head = adapter.head(case.url)
-    assert head == case.want
-    client._connection.api_request.assert_called_once()
-
-
-SOME_DATA = b"some-data,"
-SOME_HEADERS = {
-    "Content-Type": "application/octet-stream",
-    "X-Goog-Hash": "crc32c=83jA8A==,md5=L1ESqWBTuflUGNe89oDGIQ==",
-}
-
-
-class DummyResponse:
-    def __init__(self, body: bytes, ranges: storage.RangeSet = storage.NO_RANGE, headers: dict[str, Any] | None = None) -> None:
-        self.headers = dict(SOME_HEADERS)
-        if headers is not None:
-            self.headers.update(headers)
-        self.ranges = ranges
-        if ranges:
-            self.headers["Content-Range"] = str(ranges)
-            self.headers["Content-Length"] = ranges.size
-            self.status_code = 206
-            self.body = body[ranges.start : ranges.end]
-        else:
-            self.headers["Content-Length"] = len(body)
-            self.status_code = 200
-            self.body = body
-
-    @property
-    def raw(self) -> Self:
-        return self
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        pass
-
-    def iter_content(self, chunk_size: int, decode_unicode: bytes = False) -> Generator[bytes]:
-        while self.body:
-            yield self.body[:chunk_size]
-            self.body = self.body[chunk_size:]
+    assert head == case.want_head
 
 
 @dataclasses.dataclass
 class GetCase:
-    response: dict[str, Any]
-    data: bytes
-    want_head: storage.Head
-    content_length: int | None = None
+    want_head: Head
+    blob: DummyBlob = dataclasses.field(default_factory=DummyBlob)
+    content_length: int = len(SOME_DATA) * 10
     ranges: str = ""
     url: str = SOME_URL
     want_bucket: str = SOME_BUCKET
@@ -164,32 +124,18 @@ class GetCase:
 
 @cases(
     no_ranges=GetCase(
-        response(size=len(SOME_DATA) * 10),
-        data=SOME_DATA * 10,
-        want_head=storage.Head(SOME_URL, content_length=len(SOME_DATA) * 10, crc32c=SOME_CRC32C),
+        want_head=Head(SOME_URL, content_length=len(SOME_DATA) * 10, crc32c=SOME_CRC32C),
         want_data=[SOME_DATA * 10],
     ),
     ranges=GetCase(
-        response(size=len(SOME_DATA) * 10),
-        data=SOME_DATA * 10,
         ranges="10-20",
-        want_head=storage.Head(
-            SOME_URL, document_length=len(SOME_DATA) * 10, ranges=storage.rangeset("10-20"), content_length=11, crc32c=SOME_CRC32C
-        ),
+        content_length=11,
+        want_head=Head(SOME_URL, document_length=len(SOME_DATA) * 10, ranges=rangeset("10-20"), content_length=11, crc32c=SOME_CRC32C),
         want_data=[b"some-data,s"],
     ),
 )
-def test_get(case: GetCase, client: gcs.Client) -> None:
-    # pylint: disable=protected-access
-    client._connection.api_request = mock.create_autospec(client._connection.api_request, return_value=case.response)
-    client._http_internal = mock.create_autospec(requests.Session)
-    client._http_internal.request.return_value = DummyResponse(body=case.data, ranges=storage.rangeset(case.ranges))
-    adapter = gc.GSAdapter(client=client)
-    head, chunks = adapter.get(case.url, check_head=storage.Head(content_length=case.content_length, ranges=storage.rangeset(case.ranges)))
+def test_get(case: GetCase, adapter: gc.GSAdapter) -> None:
+    adapter.blob = mock.create_autospec(adapter.blob, return_value=case.blob)
+    head, chunks = adapter.get(case.url, check_head=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
     assert head == case.want_head
     assert case.want_data == list(chunks)
-
-    kwargs = {}
-    if case.want_range:
-        kwargs["Range"] = f"bytes={case.ranges}"
-    client._connection.api_request.assert_has_calls([])
