@@ -772,7 +772,7 @@ class TemplateSource:
 
     def read_glob_files(self, pattern):
         source = []
-        files = self.fileglobber(pattern)
+        files = sorted(self.fileglobber(pattern))
         for fname in files:
             with self.source(fname, mode="rt", encoding="utf-8") as fp:
                 source.append(fp.read())
