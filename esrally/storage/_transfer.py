@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import collections
+import copy
 import dataclasses
 import enum
 import json
@@ -170,6 +171,8 @@ class Transfer:
     servers.
     """
 
+    # pylint: disable=too-many-public-methods
+
     def __init__(
         self,
         client: Client,
@@ -244,6 +247,10 @@ class Transfer:
                 LOG.error("Failed to resume transfer: %s", ex)
             else:
                 LOG.debug("Transfer resumed from existing status:\n%s", self.info())
+
+    @property
+    def stats(self) -> dict[str, TransferStats]:
+        return copy.deepcopy(self._stats)
 
     @property
     def status_file_path(self) -> str:

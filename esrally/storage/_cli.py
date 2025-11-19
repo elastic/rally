@@ -160,7 +160,7 @@ def transfers_as_dictionaries(transfers: list[storage.Transfer]) -> list[dict[st
             "has_mirror_failures": bool(tr.mirror_failures),
             "todo": str(tr.todo),
             "finished": tr.finished,
-            "stats": {u: dataclasses.asdict(s) for u, s in tr._stats.items()},
+            "stats": {u: dataclasses.asdict(s) for u, s in tr.stats.items()},
         }
         for tr in transfers
     ]
