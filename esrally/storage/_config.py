@@ -81,7 +81,7 @@ class StorageConfig(config.Config):
     def connect_timeout(self, value: float) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.http.connect_timeout", value)
 
-    DEFAULT_GOOGLE_CLOUD_PROJECT: str | None = "elastic-performance-testing"
+    DEFAULT_GOOGLE_CLOUD_PROJECT: str | None = None
 
     @property
     def google_cloud_project(self) -> str | None:
