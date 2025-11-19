@@ -273,8 +273,8 @@ class Client:
                 try:
                     yield from chunks
                 finally:
-                    chunks.close()
                     wg.done()
+                    chunks.close()
 
             got.chunks = iter_chunks(wg, got.chunks)
             return got

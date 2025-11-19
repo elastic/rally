@@ -153,7 +153,6 @@ def transfers_as_dictionaries(transfers: list[storage.Transfer]) -> list[dict[st
         {
             "url": tr.url,
             "path": tr.path,
-            "status": str(tr.status),
             "progress": tr.progress,
             "errors": [str(e) for e in tr.errors],
             "document_length": tr.document_length,

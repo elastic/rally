@@ -19,7 +19,6 @@ from __future__ import annotations
 import collections
 import copy
 import dataclasses
-import enum
 import json
 import logging
 import os
@@ -45,18 +44,6 @@ from esrally.storage._range import (
 from esrally.utils import convert, pretty, threads
 
 LOG = logging.getLogger(__name__)
-
-
-class TransferStatus(enum.Enum):
-    INITIALIZED = 0
-    QUEUED = 1
-    DOING = 2
-    DONE = 3
-    CANCELLED = 4
-    FAILED = 5
-
-    def __str__(self):
-        return str(self.name)
 
 
 @dataclasses.dataclass
@@ -170,8 +157,6 @@ class Transfer:
     dynamic and allows the client to have more granularity for load balance transfers between multiple connections and
     servers.
     """
-
-    # pylint: disable=too-many-public-methods
 
     def __init__(
         self,
@@ -670,7 +655,6 @@ class Transfer:
             "progress": f"{self.progress:.0f}%",
             "done": pretty.size(self.done.size),
             "size": pretty.size(self.document_length),
-            "status": str(self.status),
             "workers": self._workers.count,
             "duration": self.duration and pretty.duration(self.duration),
             "throughput": self.average_speed and pretty.throughput(self.average_speed),
@@ -689,21 +673,6 @@ class Transfer:
         for ex in self._errors:
             raise ex
         return True
-
-    @property
-    def status(self) -> TransferStatus:
-        """It returns the status of the transfer."""
-        if self._finished:
-            if self._errors:
-                return TransferStatus.FAILED
-            if self._todo:
-                return TransferStatus.CANCELLED
-            return TransferStatus.DONE
-        if self._started:
-            return TransferStatus.DOING
-        if self._workers.count > 0:
-            return TransferStatus.QUEUED
-        return TransferStatus.INITIALIZED
 
     @property
     def errors(self) -> list[Exception]:

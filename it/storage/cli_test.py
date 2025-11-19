@@ -103,7 +103,6 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 1024)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
                 "done": "1.0KB",
                 "size": "62.0KB",
                 "progress": "2%",
@@ -118,7 +117,6 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 1024)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
                 "done": "1.0KB",
                 "size": "62.0KB",
                 "progress": "2%",
@@ -133,7 +131,6 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
                 "done": "64B",
                 "size": "62.0KB",
                 "progress": "0%",
@@ -148,7 +145,6 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
                 "done": "64B",
                 "size": "62.0KB",
                 "progress": "0%",
@@ -169,7 +165,6 @@ class LsCase:
         want_output={
             FIRST_URL: {
                 "finished": True,
-                "status": "DONE",
                 "done": "0-63",
                 "mirror_failures": {BAD_MIRROR_URL: f"FileNotFoundError:Can't get file head: {BAD_MIRROR_URL}"},
             }
@@ -180,7 +175,6 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
                 "done": "0-63",
                 "finished": True,
             }
@@ -223,7 +217,6 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
 
         assert got["path"] == cfg.transfer_file_path(want_url)
         assert got["done"] == want["done"]
-        assert got["status"] == want["status"]
         match case.want_format:
             case "pretty":
                 assert got["size"] == want["size"]
