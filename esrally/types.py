@@ -161,6 +161,8 @@ Key = Literal[
     "storage.base_url",
     "storage.cache_ttl",
     "storage.chunk_size",
+    "storage.gc.project",
+    "storage.gc.user_project",
     "storage.http.connect_timeout",
     "storage.http.max_retries",
     "storage.http.read_timeout",

@@ -78,7 +78,7 @@ dependencies = [
     # License: Apache 2.0
     # transitive dependencies:
     #   google-crc32c: Apache 2.0
-    "google-resumable-media[requests]==1.1.0",
+    "google-resumable-media[requests]==2.7.2",
     # License: Apache 2.0
     "google-auth==2.38.0",
     # License: BSD
@@ -95,6 +95,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# These packages are required to download files from a private AWS S3 bucket
 s3 = [
     # License: Apache 2.0
     # transitive dependencies:
@@ -103,10 +104,25 @@ s3 = [
     #   s3transfer: Apache 2.0
     "boto3==1.34.68",
 ]
+# These packages are required to download files from a private Google Cloud bucket
+gs = [
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   google-auth
+    #   google-api-core
+    #   google-cloud-core
+    #   google-resumable-media
+    #   requests
+    #   google-crc32c
+    "google-cloud-storage==3.5.0",
+]
+
 # These packages are only required when developing Rally
 develop = [
     # s3
     "boto3==1.34.68",
+    # Goolgle Clound Storage client
+    "google-cloud-storage==3.5.0",
     # tests
     "ujson",
     "pytest==8.4.2",

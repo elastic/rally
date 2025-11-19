@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from esrally.storage._adapter import Adapter, AdapterRegistry, Head
+from esrally.storage._adapter import Adapter, AdapterRegistry, GetResponse, Head
 from esrally.storage._client import Client
 from esrally.storage._config import StorageConfig
 from esrally.storage._manager import (

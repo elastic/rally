@@ -27,8 +27,7 @@ from botocore.response import StreamingBody
 from typing_extensions import Self
 
 from esrally import types
-from esrally.storage._adapter import Adapter, GetResponse, Head
-from esrally.storage._config import StorageConfig
+from esrally.storage import Adapter, GetResponse, Head, StorageConfig
 from esrally.storage.http import (
     head_to_headers,
     parse_accept_ranges,
@@ -73,27 +72,24 @@ class S3Adapter(Adapter):
         head_to_headers(check_head, headers)
 
         address = S3Address.from_url(url)
-        res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
-        body: StreamingBody | None = res.get("Body")
+        response = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
+        body: StreamingBody | None = response.get("Body")
         if body is None:
             raise RuntimeError("S3 client returned no body.")
 
         try:
-            head = head_from_response(url, res)
+            head = head_from_response(url, response)
             if check_head is not None:
                 check_head.check(head)
-
-            def iter_chunks():
-                try:
-                    yield from body.iter_chunks(self.chunk_size)
-                finally:
-                    body.close()
-
-            return GetResponse(head, iter_chunks())
-
         except Exception:
             body.close()
             raise
+
+        def iter_chunks():
+            with body:
+                yield from body.iter_chunks(self.chunk_size)
+
+        return GetResponse(head, iter_chunks())
 
     @property
     def _s3(self) -> S3Client:

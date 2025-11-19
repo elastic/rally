@@ -22,6 +22,7 @@ from unittest import mock
 
 import boto3
 import pytest
+from typing_extensions import Self
 
 from esrally.storage._adapter import Head
 from esrally.storage._config import StorageConfig
@@ -76,12 +77,19 @@ class DummyBody:
         self.body = body
         self.closed = False
 
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
     def iter_chunks(self, chunk_size: int) -> Iterable[bytes]:
         while self.body:
             yield self.body[:chunk_size]
             self.body = self.body[chunk_size:]
 
     def close(self) -> None:
+        assert not self.closed, "already closed"
         self.closed = True
 
 
