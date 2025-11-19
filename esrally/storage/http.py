@@ -87,7 +87,9 @@ class HTTPAdapter(Adapter):
     def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
         headers: MutableMapping[str, str] = CaseInsensitiveDict()
         head_to_headers(check_head, headers)
-        response = self.session.get(url, stream=True, allow_redirects=True, headers=headers)
+        response = self.session.get(
+            url, stream=True, allow_redirects=True, headers=headers, timeout=(self.connect_timeout, self.read_timeout)
+        )
         try:
             if response.status_code == 503:
                 raise ServiceUnavailableError()
@@ -102,11 +104,10 @@ class HTTPAdapter(Adapter):
 
         def iter_chunks():
             try:
-                yield from response.iter_content(chunk_size=self.chunk_size)
+                with response:
+                    yield from response.iter_content(chunk_size=self.chunk_size)
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as ex:
                 raise TimeoutError(f"Timed out reading content from URL={url}: {ex}") from ex
-            finally:
-                response.close()
 
         return GetResponse(head, iter_chunks())
 

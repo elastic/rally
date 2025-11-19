@@ -138,7 +138,11 @@ def test_get(case: GetCase, session: Session) -> None:
 
     with adapter.get(case.url, check_head=Head(ranges=rangeset(case.ranges))) as got:
         assert got.head == case.want_head
-        assert list(got.chunks) == case.want_data
+        if case.want_read_error is None:
+            assert list(got.chunks) == case.want_data
+        else:
+            with pytest.raises(case.want_read_error):
+                list(got.chunks)
 
     want_request_headers = {}
     if case.want_request_range:
