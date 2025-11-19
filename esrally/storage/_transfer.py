@@ -666,6 +666,7 @@ class Transfer:
     def pretty(self, *, stats: bool = False, mirror_failures: bool = False) -> dict[str, Any]:
         details: dict[str, Any] = {
             "url": self.url,
+            "path": self.path,
             "progress": f"{self.progress:.0f}%",
             "done": pretty.size(self.done.size),
             "size": pretty.size(self.document_length),

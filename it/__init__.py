@@ -26,7 +26,6 @@ import socket
 import subprocess
 import tempfile
 import time
-from collections.abc import Generator
 
 import pytest
 
@@ -257,14 +256,13 @@ def build_docker_image():
         raise AssertionError("It was not possible to build the docker image from Dockerfile-dev")
 
 
-def setup_module():
+@pytest.fixture(scope="session", autouse=True)
+def ensure_prerequisites():
     check_prerequisites()
     install_integration_test_config()
     ES_METRICS_STORE.start()
     build_docker_image()
-
-
-def teardown_module():
+    yield
     ES_METRICS_STORE.stop()
     remove_integration_test_config()
 
