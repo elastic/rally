@@ -406,7 +406,7 @@ class Transfer:
         """It updates the status file."""
         self._mirror_failures = {f.mirror_url: f.error for f in self.client.mirror_failures(self.url)}
         with self._lock:
-            stats = [dict(url=u, **dataclasses.asdict(s)) for u, s in self._stats.items()]
+            stats = [{"url": u, **dataclasses.asdict(s)} for u, s in self._stats.items()]
 
         document = {
             "url": self.url,
@@ -504,6 +504,9 @@ class Transfer:
             # In case of the count of concurrent tasks is greater than 1 then it forbids to reschedule it.
             cancelled = count > 1
             LOG.info("service unavailable: %s, workers=%d/%d: %s", self.url, count, max_count, ex)
+        except TimeoutError as ex:
+            # The client raised this error because it timed out waiting for answer from server.
+            LOG.info("transfer timed out (url=%s): %s", self.url, ex)
         except Exception as ex:
             # This error will brutally interrupt the transfer.
             LOG.exception("task failed: %s", self.url)
@@ -523,7 +526,7 @@ class Transfer:
             elif cancelled:
                 # It will submit any task for execution.
                 LOG.debug("task cancelled: %s", self.url)
-            elif not self.todo:
+            elif not self.todo and not self._workers.count:
                 # There is nothing more to do: the transfer has been completed with success.
                 if self._finished.set():
                     # Only the first task that enters here will write this message.
@@ -581,7 +584,7 @@ class Transfer:
                         # After receiving data _document_length could have been changed reducing the range to download.
                         todo &= Range(0, self._document_length or MAX_LENGTH)
                         # It updates the status of the works with the completed part.
-                        done, todo = todo.split(fd.position)
+                        done, todo = todo.split(fd.transferred)
                         self._todo |= todo
                         self._done |= done
         finally:

@@ -351,7 +351,7 @@ def test_put(case: PutCase, cfg: storage.StorageConfig, client: storage.Client, 
         cfg.mirror_files = case.mirror_files
 
     try:
-        subprocess.run(["which", "rclone"], check=True)
+        subprocess.run(["which", "rclone"], check=True, stdout=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
         LOG.critical("rclone is not installed")
         pytest.skip("rclone is not installed")

@@ -28,17 +28,7 @@ import tarfile
 import zipfile
 from collections.abc import Collection, Mapping, Sequence
 from types import TracebackType
-from typing import (
-    IO,
-    Any,
-    AnyStr,
-    Callable,
-    Generic,
-    Literal,
-    Optional,
-    Union,
-    overload,
-)
+from typing import IO, Any, AnyStr, Callable, Generic, Literal, Optional, overload
 
 import zstandard
 
@@ -345,7 +335,7 @@ def decompress(zip_name: str, target_directory: str) -> None:
     """
     _, extension = splitext(zip_name)
     if extension == ".zip":
-        _do_decompress(target_directory, zipfile.ZipFile(zip_name))
+        _do_zip_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
         decompressor_args = ["pbzip2", "-d", "-k", "-m10000", "-c"]
         decompressor_lib_bz2 = bz2.open
@@ -359,7 +349,7 @@ def decompress(zip_name: str, target_directory: str) -> None:
         decompressor_lib_gzip = gzip.open
         _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib_gzip)
     elif extension in [".tar", ".tar.gz", ".tgz", ".tar.bz2"]:
-        _do_decompress(target_directory, tarfile.open(zip_name))
+        _do_tar_decompress(target_directory, tarfile.open(zip_name))
     else:
         raise RuntimeError("Unsupported file extension [%s]. Cannot decompress [%s]" % (extension, zip_name))
 
@@ -405,16 +395,20 @@ def _do_decompress_manually_with_lib(target_directory: str, filename: str, compr
         compressed_file.close()
 
 
-def _do_decompress(target_directory: str, compressed_file: Union[zipfile.ZipFile, tarfile.TarFile]) -> None:
+def _do_tar_decompress(target_directory: str, compressed_file: tarfile.TarFile) -> None:
+    try:
+        compressed_file.extractall(path=target_directory, filter="tar")
+    except Exception:
+        raise RuntimeError(f"Could not decompress provided archive [{compressed_file.name!r}]. Please check if it is a valid tar file.")
+    finally:
+        compressed_file.close()
+
+
+def _do_zip_decompress(target_directory: str, compressed_file: zipfile.ZipFile) -> None:
     try:
         compressed_file.extractall(path=target_directory)
-    except BaseException:
-        if isinstance(compressed_file, zipfile.ZipFile):
-            raise RuntimeError(
-                f"Could not decompress provided archive [{compressed_file.filename}]. Please check if it is a valid zip file."
-            )
-        if isinstance(compressed_file, tarfile.TarFile):
-            raise RuntimeError(f"Could not decompress provided archive [{compressed_file.name!r}]. Please check if it is a valid tar file.")
+    except Exception:
+        raise RuntimeError(f"Could not decompress provided archive [{compressed_file.filename}]. Please check if it is a valid zip file.")
     finally:
         compressed_file.close()
 

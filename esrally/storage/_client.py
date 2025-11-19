@@ -251,9 +251,9 @@ class Client:
         # It iterates heads from all servers
         for head in self.resolve(url, check_head=resolve_head):
             # It checks connections counter for given URL.
-            connections = self._server_connections(head.url)
+            wg = self._server_connections(head.url)
             try:
-                connections.add(1)
+                wg.add(1)
             except WaitGroupLimitError:
                 LOG.warning("Connection limit exceeded for url '%s'", url)
                 continue
@@ -264,19 +264,19 @@ class Client:
                 LOG.warning("service unavailable error received: url='%s' %s", url, ex)
                 with self._lock:
                     # It corrects the maximum number of connections for this server.
-                    connections.max_count = max(1, connections.count)
-                connections.done()
+                    wg.max_count = max(1, wg.count)
+                wg.done()
                 continue
 
-            def iter_chunks(connections: WaitGroup, chunks: Generator[bytes]) -> Generator[bytes]:
+            def iter_chunks(wg: WaitGroup, chunks: Generator[bytes]) -> Generator[bytes]:
                 # It wraps chunks generator so it do release connections wait group once response has been processed.
                 try:
                     yield from chunks
                 finally:
                     chunks.close()
-                    connections.done()
+                    wg.done()
 
-            got.chunks = iter_chunks(connections, got.chunks)
+            got.chunks = iter_chunks(wg, got.chunks)
             return got
 
         raise ServiceUnavailableError(f"no connections available for getting URL '{url}'")

@@ -59,13 +59,23 @@ class HTTPAdapter(Adapter):
     @classmethod
     def from_config(cls, cfg: types.Config | None = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
-        return cls(session=Session.from_config(cfg), chunk_size=cfg.chunk_size)
+        return cls(
+            session=Session.from_config(cfg), chunk_size=cfg.chunk_size, connect_timeout=cfg.connect_timeout, read_timeout=cfg.read_timeout
+        )
 
-    def __init__(self, session: requests.Session | None = None, chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE):
+    def __init__(
+        self,
+        session: requests.Session | None = None,
+        chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE,
+        connect_timeout: float = StorageConfig.DEFAULT_CONNECT_TIMEOUT,
+        read_timeout: float = StorageConfig.DEFAULT_READ_TIMEOUT,
+    ):
         if session is None:
             session = requests.Session()
         self.session = session
         self.chunk_size = chunk_size
+        self.connect_timeout = connect_timeout
+        self.read_timeout = read_timeout
 
     def head(self, url: str) -> Head:
         with self.session.head(url, allow_redirects=True) as res:
@@ -86,17 +96,19 @@ class HTTPAdapter(Adapter):
             head = head_from_headers(url, response.headers)
             if check_head is not None:
                 check_head.check(head)
-
-            def iter_chunks():
-                try:
-                    yield from response.iter_content(chunk_size=self.chunk_size)
-                finally:
-                    response.close()
-
-            return GetResponse(head, iter_chunks())
         except Exception:
             response.close()
             raise
+
+        def iter_chunks():
+            try:
+                yield from response.iter_content(chunk_size=self.chunk_size)
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as ex:
+                raise TimeoutError(f"Timed out reading content from URL={url}: {ex}") from ex
+            finally:
+                response.close()
+
+        return GetResponse(head, iter_chunks())
 
 
 _ACCEPT_RANGES_HEADER = "Accept-Ranges"
