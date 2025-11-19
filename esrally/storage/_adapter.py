@@ -16,7 +16,6 @@
 # under the License.
 from __future__ import annotations
 
-import copy
 import dataclasses
 import datetime
 import importlib
@@ -174,41 +173,3 @@ class AdapterRegistry:
 
         self._adapters[cls] = adapter = cls.from_config(self._cfg)
         return adapter
-
-
-@dataclasses.dataclass
-class DummyAdapter(Adapter):
-    heads: dict[str, Head] = dataclasses.field(default_factory=dict)
-    data: dict[str, bytes] = dataclasses.field(default_factory=dict)
-
-    @classmethod
-    def match_url(cls, url: str) -> bool:
-        return True
-
-    @classmethod
-    def from_config(cls, cfg: types.Config | None = None) -> Self:
-        return cls()
-
-    def head(self, url: str) -> Head:
-        try:
-            return copy.copy(self.heads[url])
-        except KeyError:
-            raise FileNotFoundError from None
-
-    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
-        ranges: RangeSet = NO_RANGE
-        if check_head is not None:
-            ranges = check_head.ranges
-            if len(ranges) > 1:
-                raise NotImplementedError("len(head.ranges) > 1")
-
-        data = self.data[url]
-        if ranges:
-            data = data[ranges.start : ranges.end]
-
-        head = Head(url, content_length=ranges.size, ranges=ranges, document_length=len(data))
-
-        def iter_data() -> Generator[bytes]:
-            yield from (data,)
-
-        return GetResponse(head, iter_data())

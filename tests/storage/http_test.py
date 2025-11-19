@@ -26,9 +26,7 @@ import requests.exceptions
 from requests import Response, Session
 from requests.structures import CaseInsensitiveDict
 
-from esrally.storage._adapter import Head
-from esrally.storage._config import StorageConfig
-from esrally.storage._range import rangeset
+from esrally.storage import Head, StorageConfig, rangeset
 from esrally.storage.http import HTTPAdapter, head_from_headers, ranges_to_headers
 from esrally.utils.cases import cases
 

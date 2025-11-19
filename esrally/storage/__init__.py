@@ -17,6 +17,7 @@
 from esrally.storage._adapter import Adapter, AdapterRegistry, GetResponse, Head
 from esrally.storage._client import Client
 from esrally.storage._config import StorageConfig
+from esrally.storage._executor import Executor
 from esrally.storage._manager import (
     TransferManager,
     get_transfer_manager,

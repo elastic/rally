@@ -24,12 +24,16 @@ from urllib.parse import urlparse
 
 import pytest
 
-from esrally.storage._adapter import GetResponse, Head
-from esrally.storage._client import Client
-from esrally.storage._config import StorageConfig
-from esrally.storage._executor import DummyExecutor
-from esrally.storage._range import RangeSet, rangeset
-from esrally.storage._transfer import Transfer
+from esrally.storage import (
+    Client,
+    GetResponse,
+    Head,
+    RangeSet,
+    StorageConfig,
+    Transfer,
+    dummy,
+    rangeset,
+)
 from esrally.utils.cases import cases
 from tests.storage import local_dir  # pylint: disable=unused-import
 
@@ -58,8 +62,8 @@ class DummyClient(Client):
 
 
 @pytest.fixture
-def executor() -> Iterator[DummyExecutor]:
-    executor = DummyExecutor()
+def executor() -> Iterator[dummy.DummyExecutor]:
+    executor = dummy.DummyExecutor()
     try:
         yield executor
     finally:
@@ -134,7 +138,7 @@ class TransferCase:
         resume_status={"done": "128-255", "url": URL, "document_length": len(DATA), "crc32c": MISMATCH_CRC32C}, want_final_done="0-1023"
     ),
 )
-def test_transfer(case: TransferCase, executor: DummyExecutor, local_dir: str, tmpdir) -> None:
+def test_transfer(case: TransferCase, executor: dummy.DummyExecutor, local_dir: str, tmpdir) -> None:
     """It tests the execution of one single task (a single download step).
 
     :param case: the transfer case to be tested.

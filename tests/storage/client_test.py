@@ -28,10 +28,16 @@ from typing import Any
 import pytest
 
 from esrally.config import Config
-from esrally.storage._adapter import DummyAdapter, Head
-from esrally.storage._client import CachedHeadError, Client, MirrorFailure
-from esrally.storage._config import StorageConfig
-from esrally.storage._range import NO_RANGE, RangeSet, rangeset
+from esrally.storage import (
+    NO_RANGE,
+    Client,
+    Head,
+    RangeSet,
+    StorageConfig,
+    _client,
+    dummy,
+    rangeset,
+)
 from esrally.utils.cases import cases
 
 BASE_URL = "https://example.com"
@@ -87,7 +93,7 @@ def default_data() -> dict[str, bytes]:
 
 
 @dataclasses.dataclass
-class StorageAdapter(DummyAdapter):
+class StorageAdapter(dummy.DummyAdapter):
     heads: dict[str, Head] = dataclasses.field(default_factory=default_heads)
     data: dict[str, bytes] = dataclasses.field(default_factory=default_data)
 
@@ -177,7 +183,7 @@ def test_head(case: HeadCase, client: Client) -> None:
     if case.want_cached is not None:
         try:
             assert (got is client.head(url=case.url, cache_ttl=case.cache_ttl)) == case.want_cached
-        except CachedHeadError as ex:
+        except _client.CachedHeadError as ex:
             assert case.want_cached
             assert err is ex.__cause__
         except want_error:
@@ -199,26 +205,28 @@ class ResolveCase:
     mirrored=ResolveCase(
         url=MIRRORING_URL,
         want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD],
-        want_mirror_failures=[MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:")],
+        want_mirror_failures=[_client.MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:")],
     ),
     document_length=ResolveCase(
         url=MIRRORING_URL,
         content_length=len(SOME_BODY),
         want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD],
-        want_mirror_failures=[MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:")],
+        want_mirror_failures=[_client.MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:")],
     ),
     mismatching_document_length=ResolveCase(
         url=MIRRORING_URL,
         content_length=10,
         want=[],
         want_mirror_failures=[
-            MirrorFailure(
+            _client.MirrorFailure(
                 url=MIRRORING_URL,
                 mirror_url=MIRRORED_NO_RANGE_URL,
                 error="ValueError:unexpected 'content_length': got 30, want 10",
             ),
-            MirrorFailure(url=MIRRORING_URL, mirror_url=MIRRORED_URL, error="ValueError:unexpected 'content_length': got 30, want 10"),
-            MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:"),
+            _client.MirrorFailure(
+                url=MIRRORING_URL, mirror_url=MIRRORED_URL, error="ValueError:unexpected 'content_length': got 30, want 10"
+            ),
+            _client.MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:"),
         ],
     ),
     accept_ranges=ResolveCase(
@@ -226,12 +234,12 @@ class ResolveCase:
         accept_ranges=True,
         want=[MIRRORING_HEAD, MIRRORED_HEAD],
         want_mirror_failures=[
-            MirrorFailure(
+            _client.MirrorFailure(
                 url=MIRRORING_URL,
                 mirror_url=MIRRORED_NO_RANGE_URL,
                 error="ValueError:unexpected 'accept_ranges': got False, want True",
             ),
-            MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:"),
+            _client.MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:"),
         ],
     ),
     reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=[]),
