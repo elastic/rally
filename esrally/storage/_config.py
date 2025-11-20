@@ -28,6 +28,7 @@ LOG = logging.getLogger(__name__)
 class StorageConfig(config.Config):
 
     DEFAULT_ADAPTERS = (
+        "esrally.storage.gc:GSAdapter",
         "esrally.storage.aws:S3Adapter",
         "esrally.storage.http:HTTPAdapter",
     )
@@ -79,6 +80,16 @@ class StorageConfig(config.Config):
     @connect_timeout.setter
     def connect_timeout(self, value: float) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.http.connect_timeout", value)
+
+    DEFAULT_GOOGLE_AUTH_TOKEN: str | None = os.environ.get("GOOGLE_AUTH_TOKEN", "").strip() or None
+
+    @property
+    def google_auth_token(self) -> str | None:
+        return self.opts("storage", "storage.gc.auth_token", self.DEFAULT_GOOGLE_AUTH_TOKEN, False)
+
+    @google_auth_token.setter
+    def google_auth_token(self, value: str | None) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.gc.auth_token", value)
 
     DEFAULT_LOCAL_DIR = os.environ.get("RALLY_STORAGE_LOCAL_DIR", "~/.rally/storage")
 
