@@ -21,9 +21,10 @@ import urllib.parse
 from collections.abc import Iterator
 
 import google.auth
-import google.auth.transport.requests
 import google.oauth2.credentials
 import requests.adapters
+from google.auth.credentials import AnonymousCredentials, Credentials
+from google.auth.transport.requests import AuthorizedSession
 from typing_extensions import Self
 
 from esrally.storage import Head, StorageConfig, http
@@ -51,19 +52,38 @@ class GSAdapter(http.HTTPAdapter):
     @classmethod
     def session_from_config(cls, cfg: StorageConfig, session: requests.Session | None = None) -> requests.Session:
         if session is None:
-            session = google.auth.transport.requests.AuthorizedSession(cls.credentials_from_config(cfg))
+            try:
+                session = AuthorizedSession(cls.credentials_from_config(cfg))
+                LOG.debug("Using authorized session to Google APIs.")
+            except Exception as ex:
+                LOG.exception("Failed to create authorized session to Google APIs. Error: %s", {ex})
+                # HTTPAdapter will create an unauthorized session that should work for public blobs.
         return super().session_from_config(cfg, session)
 
     CREDENTIAL_SCOPES = ("https://www.googleapis.com/auth/devstorage.read_only",)
 
     @classmethod
-    def credentials_from_config(cls, cfg: StorageConfig) -> google.oauth2.credentials.Credentials:
+    def credentials_from_config(cls, cfg: StorageConfig) -> Credentials:
         token = (cfg.google_auth_token or "").strip()
         if token:
-            return google.oauth2.credentials.Credentials(token=token, scopes=cls.CREDENTIAL_SCOPES)
+            try:
+                credentials = google.oauth2.credentials.Credentials(token=token, scopes=cls.CREDENTIAL_SCOPES)
+            except Exception as ex:
+                LOG.exception("Failed to create Google Cloud credentials with token. Error: %s", ex)
+            else:
+                LOG.info("Using Google APIs credentials with auth token.")
+                return credentials
 
-        credentials, _ = google.auth.default(scopes=cls.CREDENTIAL_SCOPES)
-        return credentials
+        try:
+            credentials, _ = google.auth.default(scopes=cls.CREDENTIAL_SCOPES)
+        except Exception as ex:
+            LOG.exception("Failed to get default Google cloud credentials. Error: %s", ex)
+        else:
+            LOG.info("Using default Google APIs credentials.")
+            return credentials
+
+        LOG.warning("Using Google APYs anonymous credentials.")
+        return AnonymousCredentials()
 
     def head(self, url: str) -> Head:
         # It sends the request using the http media APIs URL.
