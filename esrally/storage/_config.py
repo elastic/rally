@@ -81,25 +81,15 @@ class StorageConfig(config.Config):
     def connect_timeout(self, value: float) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.http.connect_timeout", value)
 
-    DEFAULT_GOOGLE_CLOUD_PROJECT: str | None = None
+    DEFAULT_GOOGLE_AUTH_TOKEN: str | None = os.environ.get("GOOGLE_AUTH_TOKEN", "").strip() or None
 
     @property
-    def google_cloud_project(self) -> str | None:
-        return self.opts("storage", "storage.gc.project", self.DEFAULT_GOOGLE_CLOUD_PROJECT, False)
+    def google_auth_token(self) -> str | None:
+        return self.opts("storage", "storage.gc.auth_token", self.DEFAULT_GOOGLE_AUTH_TOKEN, False)
 
-    @google_cloud_project.setter
-    def google_cloud_project(self, value: str | None) -> None:
-        self.add(config.Scope.applicationOverride, "storage", "storage.gc.project", value)
-
-    DEFAULT_GOOGLE_CLOUD_USER_PROJECT: str | None = None
-
-    @property
-    def google_cloud_user_project(self) -> str | None:
-        return self.opts("storage", "storage.gc.project", self.DEFAULT_GOOGLE_CLOUD_USER_PROJECT, False)
-
-    @google_cloud_user_project.setter
-    def google_cloud_user_project(self, value: str | None) -> None:
-        self.add(config.Scope.applicationOverride, "storage", "storage.gc.user_project", value)
+    @google_auth_token.setter
+    def google_auth_token(self, value: str | None) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.gc.auth_token", value)
 
     DEFAULT_LOCAL_DIR = os.environ.get("RALLY_STORAGE_LOCAL_DIR", "~/.rally/storage")
 

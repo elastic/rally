@@ -34,21 +34,6 @@ from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 LOG = logging.getLogger(__name__)
 
 
-class Session(requests.Session):
-
-    @classmethod
-    def from_config(cls, cfg: types.Config | None = None) -> Self:
-        cfg = StorageConfig.from_config(cfg)
-        return cls(max_retries=parse_max_retries(cfg.max_retries))
-
-    def __init__(self, max_retries: urllib3.Retry | int | None = None) -> None:
-        super().__init__()
-        if max_retries:
-            adapter = requests.adapters.HTTPAdapter(max_retries=max_retries)
-            self.mount("http://", adapter)
-            self.mount("https://", adapter)
-
-
 class HTTPAdapter(Adapter):
     """It implements the `Adapter` interface for http(s) protocols using the requests library."""
 
@@ -57,10 +42,24 @@ class HTTPAdapter(Adapter):
         return url.startswith("http://") or url.startswith("https://")
 
     @classmethod
+    def session_from_config(cls, cfg: StorageConfig, session: requests.Session | None = None) -> requests.Session:
+        if session is None:
+            session = requests.Session()
+        max_retries = parse_max_retries(cfg.max_retries)
+        if max_retries:
+            adapter = requests.adapters.HTTPAdapter(max_retries=max_retries)
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
+        return session
+
+    @classmethod
     def from_config(cls, cfg: types.Config | None = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
         return cls(
-            session=Session.from_config(cfg), chunk_size=cfg.chunk_size, connect_timeout=cfg.connect_timeout, read_timeout=cfg.read_timeout
+            session=cls.session_from_config(cfg),
+            chunk_size=cfg.chunk_size,
+            connect_timeout=cfg.connect_timeout,
+            read_timeout=cfg.read_timeout,
         )
 
     def __init__(
