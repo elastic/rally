@@ -19,17 +19,21 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from urllib.parse import urlparse
 
 import pytest
 
-from esrally.storage._adapter import Head
-from esrally.storage._client import Client
-from esrally.storage._config import StorageConfig
-from esrally.storage._executor import DummyExecutor
-from esrally.storage._range import RangeSet, rangeset
-from esrally.storage._transfer import Transfer
+from esrally.storage import (
+    Client,
+    GetResponse,
+    Head,
+    RangeSet,
+    StorageConfig,
+    Transfer,
+    dummy,
+    rangeset,
+)
 from esrally.utils.cases import cases
 from tests.storage import local_dir  # pylint: disable=unused-import
 
@@ -45,17 +49,21 @@ class DummyClient(Client):
     def head(self, url: str, *, cache_ttl: float | None = None) -> Head:
         return Head(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
 
-    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
         data = DATA
         if check_head is not None and check_head.ranges:
             data = data[check_head.ranges.start : check_head.ranges.end]
         head = Head(url, ranges=check_head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
-        return head, iter((data,))
+
+        def iter_chunks() -> Generator[bytes]:
+            yield from (data,)
+
+        return GetResponse(head, iter_chunks())
 
 
 @pytest.fixture
-def executor() -> Iterator[DummyExecutor]:
-    executor = DummyExecutor()
+def executor() -> Iterator[dummy.DummyExecutor]:
+    executor = dummy.DummyExecutor()
     try:
         yield executor
     finally:
@@ -130,7 +138,7 @@ class TransferCase:
         resume_status={"done": "128-255", "url": URL, "document_length": len(DATA), "crc32c": MISMATCH_CRC32C}, want_final_done="0-1023"
     ),
 )
-def test_transfer(case: TransferCase, executor: DummyExecutor, local_dir: str, tmpdir) -> None:
+def test_transfer(case: TransferCase, executor: dummy.DummyExecutor, local_dir: str, tmpdir) -> None:
     """It tests the execution of one single task (a single download step).
 
     :param case: the transfer case to be tested.

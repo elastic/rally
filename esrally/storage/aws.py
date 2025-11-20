@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import urllib.parse
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 import boto3
@@ -27,8 +27,7 @@ from botocore.response import StreamingBody
 from typing_extensions import Self
 
 from esrally import types
-from esrally.storage._adapter import Adapter, Head
-from esrally.storage._config import StorageConfig
+from esrally.storage import Adapter, GetResponse, Head, StorageConfig
 from esrally.storage.http import (
     head_to_headers,
     parse_accept_ranges,
@@ -68,19 +67,29 @@ class S3Adapter(Adapter):
         res = self._s3.head_object(Bucket=address.bucket, Key=address.key)
         return head_from_response(url, res)
 
-    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
         headers: dict[str, Any] = {}
         head_to_headers(check_head, headers)
 
         address = S3Address.from_url(url)
-        res = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
-        head = head_from_response(url, res)
-        if check_head is not None:
-            check_head.check(head)
-        body: StreamingBody | None = res.get("Body")
+        response = self._s3.get_object(Bucket=address.bucket, Key=address.key, **headers)
+        body: StreamingBody | None = response.get("Body")
         if body is None:
             raise RuntimeError("S3 client returned no body.")
-        return head, body.iter_chunks(self.chunk_size)
+
+        try:
+            head = head_from_response(url, response)
+            if check_head is not None:
+                check_head.check(head)
+        except Exception:
+            body.close()
+            raise
+
+        def iter_chunks():
+            with body:
+                yield from body.iter_chunks(self.chunk_size)
+
+        return GetResponse(head, iter_chunks())
 
     @property
     def _s3(self) -> S3Client:
