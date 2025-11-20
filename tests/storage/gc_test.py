@@ -24,6 +24,7 @@ from unittest.mock import create_autospec
 
 import pytest
 import requests.exceptions
+from google.auth.transport.requests import AuthorizedSession
 from requests import Response, Session
 from requests.structures import CaseInsensitiveDict
 
@@ -165,6 +166,7 @@ class FromConfigCase:
     want_backoff_factor: int = 0
     want_connect_timeout: float = StorageConfig.DEFAULT_CONNECT_TIMEOUT
     want_read_timeout: float = StorageConfig.DEFAULT_READ_TIMEOUT
+    want_google_auth_token: str | None = StorageConfig.DEFAULT_GOOGLE_AUTH_TOKEN
 
 
 @cases(
@@ -176,6 +178,7 @@ class FromConfigCase:
     ),
     connect_timeout=FromConfigCase(storage_config(connect_timeout=5.0), want_connect_timeout=5.0),
     read_timeout=FromConfigCase(storage_config(read_timeout=7.0), want_read_timeout=7.0),
+    google_auth_token=FromConfigCase(storage_config(google_auth_token="S0m3~T0k3n"), want_google_auth_token="S0m3~T0k3n"),
 )
 def test_from_config(case: FromConfigCase) -> None:
     adapter = gc.GSAdapter.from_config(case.cfg)
@@ -186,3 +189,5 @@ def test_from_config(case: FromConfigCase) -> None:
     assert retry.backoff_factor == case.want_backoff_factor
     assert adapter.connect_timeout == case.want_connect_timeout
     assert adapter.read_timeout == case.want_read_timeout
+    assert isinstance(adapter.session, AuthorizedSession)
+    assert adapter.session.credentials.token == case.want_google_auth_token
