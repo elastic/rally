@@ -255,7 +255,7 @@ class Client:
             try:
                 wg.add(1)
             except WaitGroupLimitError:
-                LOG.warning("Connection limit exceeded for url '%s'", url)
+                LOG.debug("Connection limit exceeded for url '%s'", head.url)
                 continue
 
             try:

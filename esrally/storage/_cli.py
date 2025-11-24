@@ -55,7 +55,7 @@ def main():
         p.add_argument("-v", "--verbose", action="count", required=False, default=0, help="Increase verbosity level.")
         p.add_argument("-q", "--quiet", action="count", required=False, default=0, help="Decrease verbosity level.")
         p.add_argument("--local-dir", type=str, default=cfg.local_dir, help="destination directory for downloading files")
-        p.add_argument("--base-url", type=str, default=cfg.base_url, help="base URL for remote storage.")
+        p.add_argument("--base-url", type=str, default=None, help="base URL for remote storage.")
         p.add_argument("--mirror-failures", action="store_true", help="It upload only files that have recorded mirror failures.")
 
     # It defines ls sub-command output options.
@@ -193,7 +193,7 @@ def get(transfers: list[storage.Transfer], *, todo: storage.RangeSet = storage.N
                 LOG.info("Transfer finished: %s", url)
                 continue
         if transferring:
-            time.sleep(2.0)
+            time.sleep(4.0)
     if errors:
         LOG.critical("Files download failed. Errors:\n%s", json.dumps(errors, indent=2, sort_keys=True))
         sys.exit(1)

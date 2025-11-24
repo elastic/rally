@@ -24,23 +24,17 @@ import logging
 import os
 import threading
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
-from typing import Any, BinaryIO
+from typing import Any
 
 from esrally import types
 from esrally.storage._adapter import Head, ServiceUnavailableError
 from esrally.storage._client import Client
 from esrally.storage._config import StorageConfig
 from esrally.storage._executor import Executor
-from esrally.storage._range import (
-    MAX_LENGTH,
-    NO_RANGE,
-    Range,
-    RangeError,
-    RangeSet,
-    rangeset,
-)
+from esrally.storage._io import FileWriter, StreamClosedError
+from esrally.storage._range import MAX_LENGTH, NO_RANGE, Range, RangeSet, rangeset
 from esrally.utils import convert, pretty, threads
 
 LOG = logging.getLogger(__name__)
@@ -217,7 +211,7 @@ class Transfer:
         self._multipart_size = multipart_size
         self._todo = todo - done
         self._done = done
-        self._fds: list[FileDescriptor] = []
+        self._fds: list[FileWriter] = []
         self._executor = executor
         self._errors: list[Exception] = []
         self._lock = threading.Lock()
@@ -544,7 +538,7 @@ class Transfer:
                 LOG.error("error closing file descriptor %r: %s", fd.path, ex)
 
     @contextmanager
-    def _open(self) -> Iterator[FileDescriptor | None]:
+    def _open(self) -> Generator[FileWriter | None]:
         todo: RangeSet
         with self._lock:
             # It gets a part of the file to transfer from the remaining range.
@@ -554,36 +548,34 @@ class Transfer:
             yield None
             return
 
-        LOG.debug("transfer started: %s, %s", self.url, todo)
-        done: RangeSet = NO_RANGE
-        try:
+        # It opens a file descriptor bound to the part of the file assigned to this task.
+        with FileWriter.open(self.path, todo) as fd:
             with self._lock:
-                # It opens a file descriptor bound to the part of the file assigned to this task.
-                fd = FileWriter(self.path, todo)
                 # It registers the file descriptor so that it can be closed from another thread.
                 self._fds.append(fd)
-            with fd:
-                try:
-                    yield fd
-                finally:
-                    with self._lock:
-                        try:
-                            # It de-registers the file descriptor so that it can't be closed from another thread.
-                            fd.flush()
-                            self._fds.remove(fd)
-                        except ValueError:
-                            pass
-                        # After receiving data _document_length could have been changed reducing the range to download.
-                        todo &= Range(0, self._document_length or MAX_LENGTH)
-                        # It updates the status of the works with the completed part.
-                        done, todo = todo.split(fd.transferred)
-                        self._todo |= todo
-                        self._done |= done
-        finally:
-            if todo:
-                LOG.info("transfer interrupted: %s (done: %s, todo: %s).", self.url, done, todo)
-            else:
-                LOG.debug("transfer done: %s (done: %s).", self.url, done)
+            LOG.debug("transfer started: %s, %s", self.url, todo)
+            try:
+                yield fd
+            finally:
+                # It waits for data to be actually written before updating the status.
+                fd.flush()
+                # After receiving data _document_length could have been changed reducing the range to download.
+                todo &= Range(0, self._document_length or MAX_LENGTH)
+                done, todo = todo.split(fd.transferred)
+                if todo:
+                    LOG.info("transfer interrupted: %s (done: %s, todo: %s).", self.url, done, todo)
+                else:
+                    LOG.debug("transfer done: %s (done: %s).", self.url, done)
+
+                with self._lock:
+                    try:
+                        # It de-registers the file descriptor so that it can't be closed from another thread.
+                        self._fds.remove(fd)
+                    except ValueError:
+                        pass
+                    # It updates the status of the works with the completed parts.
+                    self._todo |= todo
+                    self._done |= done
 
     @property
     def done(self) -> RangeSet:
@@ -696,69 +688,3 @@ class Transfer:
             if self._crc32c is not None:
                 raise ValueError(f"mismatching crc32c checksum: got: {value!r}, want: {self._crc32c}")
             self._crc32c = value
-
-
-class StreamClosedError(Exception):
-    pass
-
-
-class FileDescriptor:
-
-    def __init__(self, path: str, fd: BinaryIO, ranges: RangeSet = NO_RANGE):
-        if len(ranges) > 1:
-            raise NotImplementedError(f"multiple ranges is not supported: {ranges}")
-        self.position = fd.tell()
-        self.ranges = ranges
-        self.path = path
-        self._lock = threading.Lock()
-        self._fd: BinaryIO | None = fd
-
-    @property
-    def transferred(self) -> int:
-        return self.position - self.ranges.start
-
-    def close(self):
-        with self._lock:
-            if self._fd is not None:
-                self._fd.close()
-            self._fd = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-
-class FileWriter(FileDescriptor):
-    """OutputStream provides an output stream wrapper able to prevent exceeding writing given range."""
-
-    def __init__(self, path: str, ranges: RangeSet = NO_RANGE):
-        if os.path.isfile(path):
-            fd = open(path, "r+b")
-        else:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            fd = open(path, "w+b")  # pylint: disable=consider-using-with
-        if ranges and ranges.start > 0:
-            fd.seek(ranges.start)
-        super().__init__(path, fd, ranges)
-
-    def write(self, data):
-        with self._lock:
-            if self._fd is None:
-                raise StreamClosedError("stream has been closed")
-            size = len(data)
-            if self.ranges:
-                # prevent exceeding file data range
-                size = min(size, self.ranges.end - self.position)
-            chunk = data[:size]
-            if chunk:
-                self._fd.write(data)
-                self.position += size
-            if len(data) > size:
-                raise RangeError(f"data size exceeds file range: {len(data)} > {size}", self.ranges)
-
-    def flush(self):
-        with self._lock:
-            if self._fd is not None:
-                self._fd.flush()

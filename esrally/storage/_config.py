@@ -102,6 +102,8 @@ class StorageConfig(config.Config):
         self.add(config.Scope.applicationOverride, "storage", "storage.local_dir", value)
 
     def transfer_file_path(self, url: str) -> str:
+        if "?" in url:
+            url, _ = url.split("?", maxsplit=1)
         path = os.path.join(self.local_dir, url)
         return os.path.normpath(os.path.expanduser(path))
 
