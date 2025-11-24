@@ -25,7 +25,7 @@ from typing import BinaryIO
 
 from typing_extensions import Self
 
-from esrally.storage._range import NO_RANGE, EmptyRange, Range, RangeError
+from esrally.storage._range import NO_RANGE, RangeError, RangeSet
 
 LOG = logging.getLogger(__name__)
 
@@ -38,27 +38,26 @@ class StreamClosedError(Exception):
 class FileDescriptor:
 
     path: str
-    ranges: Range | EmptyRange = NO_RANGE
+    ranges: RangeSet = NO_RANGE
     fd: BinaryIO | None = None
     lock: threading.Lock = dataclasses.field(default_factory=threading.Lock)
     position: int = 0
 
     @classmethod
-    def open(cls, path: str, ranges: Range | EmptyRange = NO_RANGE, fd: BinaryIO | None = None, lock: threading.Lock | None = None) -> Self:
+    def create(cls, fd: BinaryIO, path: str, ranges: RangeSet = NO_RANGE) -> Self:
         if fd is None:
             raise ValueError("fd can't be None.")
         if len(ranges) > 1:
             raise ValueError("ranges must be continuous.")
         if ranges and ranges.start > 0:
             fd.seek(ranges.start)
-        if lock is None:
-            lock = threading.Lock()
-        return cls(path=path, fd=fd, ranges=ranges, position=fd.tell(), lock=lock)
+        return cls(path=path, fd=fd, ranges=ranges, position=fd.tell())
 
     @property
     def transferred(self) -> int:
         with self.lock:
-            return self.position - self.ranges.start
+            start_position = self.ranges and self.ranges.start or 0
+            return self.position - start_position
 
     def close(self):
         with self.lock:
@@ -83,20 +82,18 @@ class FileWriter(FileDescriptor):
     """OutputStream provides an output stream wrapper able to prevent exceeding writing given range."""
 
     @classmethod
-    def open(cls, path: str, ranges: Range | EmptyRange = NO_RANGE, fd: BinaryIO | None = None, lock: threading.Lock | None = None) -> Self:
+    def open(cls, path: str, ranges: RangeSet = NO_RANGE) -> Self:
         """It opens a local binary file for writing yielding a file object eventually constrained by a continuous range set.
 
         Opened file object is thread-safe.
         """
-        if fd is None:
-            if os.path.isfile(path):
-                fd = open(path, "r+b")
-            else:
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                fd = open(path, "w+b")  # pylint: disable=consider-using-with
-        if not fd.writable():
-            raise ValueError("fd must be writable")
-        return super().open(path=path, ranges=ranges, lock=lock, fd=fd)
+        if os.path.isfile(path):
+            fd = open(path, "r+b")
+        else:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            fd = open(path, "w+b")  # pylint: disable=consider-using-with
+        assert fd.writable(), "fd must be writable"
+        return cls.create(path=path, ranges=ranges, fd=fd)
 
     def write(self, data: bytes) -> int:
         """It writes data bytes to target file.
