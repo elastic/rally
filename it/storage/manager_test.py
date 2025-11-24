@@ -76,8 +76,8 @@ def test_get(case: GetCase, base_url: str, transfer_manager: storage.TransferMan
     assert tr.done
     assert os.path.isfile(tr.path)
     assert os.path.getsize(tr.path) == case.want_size
-    if tr.crc32c is not None:
-        assert crc32c_from_file(tr.path) == crc32c_from_string(tr.crc32c)
+    assert tr.crc32c is not None
+    assert crc32c_from_file(tr.path) == crc32c_from_string(tr.crc32c)
 
 
 def crc32c_from_string(value: str) -> int:
