@@ -39,6 +39,9 @@ class Checksum(google_crc32c.Checksum):
         c._crc = int.from_bytes(base64.b64decode(value), "big")
         return c
 
+    def to_base64(self) -> str:
+        return base64.b64encode(self._crc.to_bytes(8, byteorder="big")).decode("ascii")
+
     @classmethod
     def from_filename(cls, filename: str, chunk_size: int = READ_CHUNK_SIZE) -> Self:
         c = cls()

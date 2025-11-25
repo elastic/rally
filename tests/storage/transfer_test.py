@@ -34,14 +34,14 @@ from esrally.storage import (
     dummy,
     rangeset,
 )
-from esrally.utils.cases import cases
+from esrally.utils import cases, crc32c
 from tests.storage import local_dir  # pylint: disable=unused-import
 
 URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
 MISMATCH_URL = "https://rally-tracks.elastic.co/apm/span.json.gz"
 DATA = b"\xff" * 1024
-CRC32C = "valid-crc32-checksum"
-MISMATCH_CRC32C = "invalid-crc32c-checksum"
+CRC32C = crc32c.Checksum(DATA).to_base64()
+MISMATCH_CRC32C = crc32c.Checksum(DATA[:-5]).to_base64()
 
 
 class DummyClient(Client):
@@ -92,7 +92,7 @@ class TransferCase:
     resume_status: dict[str, str] | None = None
 
 
-@cases(
+@cases.cases(
     # It tests default behavior for small transfers (content_length < multipart_size).
     default=TransferCase(want_final_done="0-1023", want_final_written="0-1023"),
     # It tests limiting transfers scope to some ranges.
