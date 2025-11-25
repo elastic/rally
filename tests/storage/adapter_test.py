@@ -64,6 +64,20 @@ class ExampleAdapterWithPath(MockAdapter, ABC):
         return url.startswith("https://example.com/some/path/")
 
 
+class GSAdapter(MockAdapter, ABC):
+
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("gs://")
+
+
+class S3Adapter(MockAdapter, ABC):
+
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("s3://")
+
+
 @pytest.fixture()
 def cfg() -> types.Config:
     cfg = StorageConfig()
@@ -72,6 +86,8 @@ def cfg() -> types.Config:
         f"{__name__}:ExampleAdapter",
         f"{__name__}:HTTPSAdapter",
         f"{__name__}:HTTPAdapter",
+        f"{__name__}:GSAdapter",
+        f"{__name__}:S3Adapter",
     )
     return cfg
 
@@ -95,6 +111,8 @@ class RegistryCase:
     https=RegistryCase("https://example.com", want_type=HTTPSAdapter),
     example=RegistryCase("https://example.com/", want_type=ExampleAdapter),
     example_with_path=RegistryCase("https://example.com/some/path/", ExampleAdapterWithPath),
+    gs=RegistryCase("gs://example.com/some/path/", want_type=GSAdapter),
+    s3=RegistryCase("s3://example.com/some/path/", want_type=S3Adapter),
 )
 def test_adapter_registry_get(case: RegistryCase, registry: AdapterRegistry) -> None:
     try:

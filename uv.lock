@@ -2,7 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.10, <3.14"
 resolution-markers = [
-    "python_full_version >= '3.12'",
+    "python_full_version >= '3.13'",
+    "python_full_version == '3.12.*'",
     "python_full_version == '3.11.*'",
     "python_full_version < '3.11'",
 ]
@@ -673,7 +674,7 @@ requires-dist = [
     { name = "github3-py", marker = "extra == 'develop'", specifier = "==3.2.0" },
     { name = "gitpython", marker = "extra == 'develop'", specifier = "==3.1.30" },
     { name = "google-auth", specifier = "==2.38.0" },
-    { name = "google-resumable-media", extras = ["requests"], specifier = "==1.1.0" },
+    { name = "google-resumable-media", extras = ["requests"], specifier = "==2.7.2" },
     { name = "hatch", specifier = "==1.3.1" },
     { name = "hatchling", specifier = "==1.6.0" },
     { name = "ijson", specifier = "==3.4.0" },
@@ -933,15 +934,14 @@ wheels = [
 
 [[package]]
 name = "google-resumable-media"
-version = "1.1.0"
+version = "2.7.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-crc32c" },
-    { name = "six" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ef/fa/a16a2e064ebec5e71ed1ee0d9b1547c1e675715082673034efb894a7dfc6/google-resumable-media-1.1.0.tar.gz", hash = "sha256:dcdab13e95bc534d268f87d5293e482cce5bc86dfce6ca0f2e2e89cbb73ef38c", size = 2149207, upload-time = "2020-10-05T18:13:26.474Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/58/5a/0efdc02665dca14e0837b62c8a1a93132c264bd02054a15abb2218afe0ae/google_resumable_media-2.7.2.tar.gz", hash = "sha256:5280aed4629f2b60b847b0d42f9857fd4935c11af266744df33d8074cae92fe0", size = 2163099, upload-time = "2024-08-07T22:20:38.555Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/52/4a/2dacac52a969aa4bdefeaedf555e972cc56f12fba4284dc41be7ffc42e69/google_resumable_media-1.1.0-py2.py3-none-any.whl", hash = "sha256:ecabcd90d74a6e00331af0c87f500f238c44870d9626e01b385dda3af7b99269", size = 75236, upload-time = "2020-10-05T18:13:24.55Z" },
+    { url = "https://files.pythonhosted.org/packages/82/35/b8d3baf8c46695858cb9d8835a53baa1eeb9906ddaf2f728a5f5b640fd1e/google_resumable_media-2.7.2-py2.py3-none-any.whl", hash = "sha256:3ce7551e9fe6d99e9a126101d2536612bb73486721951e9562fee0f90c6ababa", size = 81251, upload-time = "2024-08-07T22:20:36.409Z" },
 ]
 
 [package.optional-dependencies]

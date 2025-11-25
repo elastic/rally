@@ -78,7 +78,7 @@ dependencies = [
     # License: Apache 2.0
     # transitive dependencies:
     #   google-crc32c: Apache 2.0
-    "google-resumable-media[requests]==1.1.0",
+    "google-resumable-media[requests]==2.7.2",
     # License: Apache 2.0
     "google-auth==2.38.0",
     # License: BSD
@@ -95,6 +95,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# These packages are required to download files from a private AWS S3 bucket
 s3 = [
     # License: Apache 2.0
     # transitive dependencies:
@@ -103,6 +104,7 @@ s3 = [
     #   s3transfer: Apache 2.0
     "boto3==1.34.68",
 ]
+
 # These packages are only required when developing Rally
 develop = [
     # s3
