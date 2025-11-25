@@ -20,11 +20,10 @@ import dataclasses
 import os.path
 from collections.abc import Generator
 
-import google_crc32c
 import pytest
 
 from esrally import storage
-from esrally.utils import cases
+from esrally.utils import cases, crc32c
 
 BASE_URLS = {
     # "default": "https://rally-tracks.elastic.co",
@@ -85,8 +84,8 @@ def crc32c_from_string(value: str) -> int:
 
 
 def crc32c_from_file(path: str) -> int:
-    value = google_crc32c.Checksum()
+    checksum = crc32c.Checksum()
     with open(path, "rb") as fd:
         while chunk := fd.read(READ_CHUNK_SIZE):
-            value.update(chunk)
-    return int.from_bytes(value.digest(), "big")
+            checksum.update(chunk)
+    return checksum.value
