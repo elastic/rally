@@ -14,25 +14,50 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import anycrc
+import base64
+from typing import Any
+
 import google_crc32c
+from typing_extensions import Self
+
+READ_CHUNK_SIZE = 1024 * 1024
 
 
 class Checksum(google_crc32c.Checksum):
+
+    def __init__(self, initial_value: bytes | int = 0):
+        if isinstance(initial_value, bytes):
+            super().__init__(initial_value)
+            return
+        assert isinstance(initial_value, int)
+        super().__init__()
+        self._crc = initial_value
+
+    @classmethod
+    def from_base64(cls, value: str) -> Self:
+        c = cls()
+        c._crc = int.from_bytes(base64.b64decode(value), "big")
+        return c
+
+    @classmethod
+    def from_filename(cls, filename: str, chunk_size: int = READ_CHUNK_SIZE) -> Self:
+        c = cls()
+        with open(filename, "rb") as fd:
+            while chunk := fd.read(chunk_size):
+                c.update(chunk)
+        return c
 
     @property
     def value(self) -> int:
         return self._crc
 
-    def combine(self, value: google_crc32c.Checksum | int, length: int) -> None:
-        if isinstance(value, google_crc32c.Checksum):
-            value = value._crc
-        self._crc = _combine(self._crc, value, length)
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, google_crc32c.Checksum):
+            return NotImplemented
+        return self._crc == other._crc
 
+    def __hash__(self) -> int:
+        return self._crc
 
-# This model is used to combine two CRC32C values
-_CRC32C_MODEL = anycrc.Model("CRC32C")
-
-
-def _combine(checksum1: int, checksum2: int, length: int) -> int:
-    return _CRC32C_MODEL.combine(checksum1, checksum2, length)
+    def __repr__(self) -> str:
+        return f"Checksum({self._crc})"

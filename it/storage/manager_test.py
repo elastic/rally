@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import base64
 import dataclasses
 import os.path
 from collections.abc import Generator
@@ -25,10 +24,7 @@ import pytest
 from esrally import storage
 from esrally.utils import cases, crc32c
 
-BASE_URLS = {
-    # "default": "https://rally-tracks.elastic.co",
-    "gs": "gs://rally-tracks"
-}
+BASE_URLS = {"default": "https://rally-tracks.elastic.co", "gs": "gs://rally-tracks"}
 
 
 @pytest.fixture(params=BASE_URLS.keys())
@@ -76,16 +72,4 @@ def test_get(case: GetCase, base_url: str, transfer_manager: storage.TransferMan
     assert os.path.isfile(tr.path)
     assert os.path.getsize(tr.path) == case.want_size
     assert tr.crc32c is not None
-    assert crc32c_from_file(tr.path) == crc32c_from_string(tr.crc32c)
-
-
-def crc32c_from_string(value: str) -> int:
-    return int.from_bytes(base64.b64decode(value), "big")
-
-
-def crc32c_from_file(path: str) -> int:
-    checksum = crc32c.Checksum()
-    with open(path, "rb") as fd:
-        while chunk := fd.read(READ_CHUNK_SIZE):
-            checksum.update(chunk)
-    return checksum.value
+    assert crc32c.Checksum.from_filename(tr.path) == crc32c.Checksum.from_base64(tr.crc32c)

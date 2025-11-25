@@ -35,7 +35,9 @@ from esrally.storage._config import StorageConfig
 from esrally.storage._executor import Executor
 from esrally.storage._io import FileWriter, StreamClosedError
 from esrally.storage._range import MAX_LENGTH, NO_RANGE, Range, RangeSet, rangeset
-from esrally.utils import convert, pretty, threads
+from esrally.utils import convert
+from esrally.utils import crc32c as _crc32c
+from esrally.utils import pretty, threads
 
 LOG = logging.getLogger(__name__)
 
@@ -514,6 +516,13 @@ class Transfer:
                 LOG.debug("task cancelled: %s", self.url)
             elif not self.todo and not self._workers.count:
                 # There is nothing more to do: the transfer has been completed with success.
+                LOG.info("Checking transferred document: %s", self.url)
+                try:
+                    self._check_finished_document()
+                except Exception as ex:
+                    self._errors.append(ex)
+                    raise
+
                 if self._finished.set():
                     # Only the first task that enters here will write this message.
                     LOG.info("transfer completed: %s", self.url)
@@ -688,3 +697,25 @@ class Transfer:
             if self._crc32c is not None:
                 raise ValueError(f"mismatching crc32c checksum: got: {value!r}, want: {self._crc32c}")
             self._crc32c = value
+
+    def _check_finished_document(self) -> None:
+        with self._lock:
+            if self._todo:
+                raise ValueError("Transfer has not been finished.")
+            if self._fds:
+                raise ValueError("Some file writers is still there.")
+            if not os.path.isfile(self.path):
+                raise FileNotFoundError(self.path)
+            want_size = self._document_length
+            if want_size is not None:
+                size = os.path.getsize(self.path)
+                if size != want_size:
+                    raise ValueError(f"Unexpected file size: {size}, want {want_size}")
+                want_done = Range(0, want_size)
+                if self._done != want_done:
+                    raise ValueError(f"Unexpected done range: {self._done}, want {want_done}.")
+            want_checksum = _crc32c.Checksum.from_base64(self._crc32c) if self._crc32c else None
+            if want_checksum is not None:
+                checksum = _crc32c.Checksum.from_filename(self.path)
+                if checksum != want_checksum:
+                    raise ValueError(f"Unexpected checksum: {checksum}, want {want_checksum}")

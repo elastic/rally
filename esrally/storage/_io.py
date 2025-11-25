@@ -78,6 +78,7 @@ class FileDescriptor:
         self.close()
 
 
+@dataclasses.dataclass
 class FileWriter(FileDescriptor):
     """OutputStream provides an output stream wrapper able to prevent exceeding writing given range."""
 
@@ -104,20 +105,20 @@ class FileWriter(FileDescriptor):
         """
         written: int = 0
         chunk = data
-        try:
-            with self.lock:
-                if self.fd is None:
-                    raise StreamClosedError("Stream has been closed.")
-                if self.ranges:
-                    # It prevents exceeding file data range.
-                    chunk = chunk[: self.ranges.end - self.position]
-                if chunk:
-                    written = self.fd.write(chunk)
-                    if written is None:
-                        # Some implementations could return `None` instead of the count of written bytes.
-                        written = len(chunk)
-                    self.position += written
-        finally:
+        with self.lock:
+            if self.fd is None:
+                raise StreamClosedError("Stream has been closed.")
+            if self.ranges:
+                # It prevents exceeding file data range.
+                chunk = chunk[: self.ranges.end - self.position]
+            if chunk:
+                written = self.fd.write(chunk)
+                if written is None:
+                    # Some implementations could return `None` instead of the count of written bytes.
+                    written = len(chunk)
+                self.position += written
+                if len(chunk) != written:
+                    raise RuntimeError(f"Failed to write the whole chunk (written {written} of {len(chunk)} bytes).")
             if len(data) > len(chunk):
                 raise RangeError(
                     f"Error writing to file '{self.path}': data size exceeds file range {self.ranges} ({len(data)} > {len(chunk)})",

@@ -36,15 +36,3 @@ def test_update(case: ChecksumCase):
     for chunk in case.chunks:
         c.update(chunk)
     assert c.value == case.want
-
-
-@cases.cases(
-    no_cunks=ChecksumCase(chunks=[], want=0),
-    one_chunk=ChecksumCase(chunks=[b"Hello world!"], want=2073618257),
-    two_thunks=ChecksumCase(chunks=[b"Hello ", b"world!"], want=2073618257),
-)
-def test_combine(case: ChecksumCase):
-    c = crc32c.Checksum()
-    for chunk in case.chunks:
-        c.combine(crc32c.Checksum(chunk), len(chunk))
-    assert c.value == case.want
