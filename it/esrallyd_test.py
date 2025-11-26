@@ -17,9 +17,7 @@
 import pytest
 
 import it
-
-# pylint: disable=unused-import
-from it import fresh_log_file
+from it import ensure_prerequisites, fresh_log_file  # pylint: disable=unused-import
 
 
 @pytest.fixture(autouse=True)

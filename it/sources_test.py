@@ -18,6 +18,7 @@ import json
 
 import it
 from esrally.utils import process
+from it import fresh_log_file  # pylint: disable=unused-import
 
 
 @it.random_rally_config

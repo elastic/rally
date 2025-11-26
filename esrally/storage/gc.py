@@ -18,7 +18,6 @@ import dataclasses
 import logging
 import os
 import urllib.parse
-from collections.abc import Iterator
 
 import google.auth
 import google.oauth2.credentials
@@ -27,7 +26,7 @@ from google.auth.credentials import AnonymousCredentials, Credentials
 from google.auth.transport.requests import AuthorizedSession
 from typing_extensions import Self
 
-from esrally.storage import Head, StorageConfig, http
+from esrally.storage import GetResponse, Head, StorageConfig, http
 
 LOG = logging.getLogger(__name__)
 
@@ -91,11 +90,11 @@ class GSAdapter(http.HTTPAdapter):
         head.accept_ranges = True  # It is known it does accept ranges.
         return head
 
-    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
         # It sends the request using the http media APIs URL.
-        head, chunks = super().get(api_url(url), check_head=check_head)
-        head.accept_ranges = True  # It is known it does accept ranges.
-        return head, chunks
+        response = super().get(api_url(url), check_head=check_head)
+        response.head.accept_ranges = True  # It is known it does accept ranges.
+        return response
 
 
 @dataclasses.dataclass

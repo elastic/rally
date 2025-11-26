@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import os.path
@@ -25,7 +26,7 @@ import subprocess
 import sys
 import time
 import urllib
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from esrally import storage
@@ -33,7 +34,7 @@ from esrally import storage
 LOG = logging.getLogger(__name__)
 
 
-LsFormat = Literal["json", "filebeat"]
+LsFormat = Literal["json", "filebeat", "pretty"]
 
 
 def main():
@@ -44,24 +45,32 @@ def main():
         LOG.info("No configuration file found, using default configuration")
 
     parser = argparse.ArgumentParser(description="Interacts with ES Rally remote storage services.")
+
     subparsers = parser.add_subparsers(dest="command")
-    parser.add_argument("-v", "--verbose", action="count", required=False, default=0, help="Increase verbosity level.")
-    parser.add_argument("-q", "--quiet", action="count", required=False, default=0, help="Decrease verbosity level.")
-    parser.add_argument("--local-dir", type=str, default=cfg.local_dir, help="destination directory for downloading files")
-    parser.add_argument("--base-url", type=str, default=cfg.base_url, help="base URL for remote storage.")
-    parser.add_argument("--mirrors", type=str, default="", nargs="*", help="It will look for mirror services in given mirror file.")
-    parser.add_argument("--mirror-failures", action="store_true", help="It upload only files that have recorded mirror failures.")
-
     ls_parser = subparsers.add_parser("ls", help="List file(s) downloaded from ES Rally remote storage services.")
-    ls_parser.add_argument("urls", type=str, nargs="*")
-    ls_parser.add_argument("--filebeat", action="store_true", help="It prints a JSON entry for each file, each separated by a newline.")
-
-    get_parser = subparsers.add_parser("get", help="Download file(s) from ES Rally remote storage services.")
-    get_parser.add_argument("urls", type=str, nargs="*")
-    get_parser.add_argument("--range", type=str, default="", help="It will only download given range of each file.")
-
+    get_parser = subparsers.add_parser("get", help="Download file(s) from ES Rally rem1ote storage services.")
     put_parser = subparsers.add_parser("put", help="Upload file(s) to mirror server.")
-    put_parser.add_argument("urls", type=str, nargs="*")
+
+    for p in (parser, ls_parser, get_parser, put_parser):
+        p.add_argument("-v", "--verbose", action="count", required=False, default=0, help="Increase verbosity level.")
+        p.add_argument("-q", "--quiet", action="count", required=False, default=0, help="Decrease verbosity level.")
+        p.add_argument("--local-dir", type=str, default=cfg.local_dir, help="destination directory for downloading files")
+        p.add_argument("--base-url", type=str, default=None, help="base URL for remote storage.")
+        p.add_argument("--mirror-failures", action="store_true", help="It upload only files that have recorded mirror failures.")
+
+    # It defines ls sub-command output options.
+    for p in (parser, ls_parser):
+        p.add_argument("--filebeat", action="store_true", help="It prints a JSON entry for each file, each separated by a newline.")
+        p.add_argument("--json", action="store_true", help="It prints a pretty entry for each file.")
+        p.add_argument("--stats", action="store_true", help="It prints a pretty entry for each file.")
+
+    # It defines get sub-command options.
+    get_parser.add_argument("--range", type=str, default="", help="It will only download given range of each file.")
+    get_parser.add_argument("--mirrors", type=str, default="", nargs="*", help="It will look for mirror services in given mirror file.")
+
+    # It defines positional arguments.
+    for p in (ls_parser, get_parser, put_parser):
+        p.add_argument("urls", type=str, nargs="*")
     put_parser.add_argument("target_dir", type=str)
 
     args = parser.parse_args()
@@ -74,7 +83,7 @@ def main():
     if args.base_url:
         cfg.base_url = args.base_url
 
-    if args.mirrors:
+    if args.command == "get" and args.mirrors:
         cfg.mirror_files = args.mirrors
 
     manager = storage.init_transfer_manager(cfg=cfg)
@@ -109,13 +118,13 @@ def main():
             return
 
     match args.command:
-        case None:
-            ls(transfers)
-        case "ls" | None:
-            fmt: LsFormat = "json"
-            if args.filebeat:
+        case None | "ls":
+            fmt: LsFormat = "pretty"
+            if args.json:
+                fmt = "json"
+            elif args.filebeat:
                 fmt = "filebeat"
-            ls(transfers, fmt=fmt)
+            ls(transfers, fmt=fmt, stats=args.stats, mirror_failures=args.mirror_failures)
         case "get":
             get(transfers, todo=storage.rangeset(args.range))
         case "put":
@@ -125,14 +134,25 @@ def main():
             sys.exit(3)
 
 
-def ls(transfers: list[storage.Transfer], *, fmt: LsFormat = "json") -> None:
+def ls(transfers: list[storage.Transfer], *, fmt: LsFormat = "json", stats: bool = False, mirror_failures: bool = False) -> None:
     LOG.info("Found %d transfer(s).", len(transfers))
 
-    output = [
+    match fmt:
+        case "filebeat":
+            for o in transfers_as_dictionaries(transfers):
+                line = json.dumps({"rally": {"storage": o}})
+                sys.stdout.write(f"{line}\n")
+        case "json":
+            json.dump(transfers_as_dictionaries(transfers), sys.stdout, indent=2, sort_keys=True)
+        case "pretty":
+            json.dump([t.pretty(stats=stats, mirror_failures=mirror_failures) for t in transfers], sys.stdout, indent=2)
+
+
+def transfers_as_dictionaries(transfers: list[storage.Transfer]) -> list[dict[str, Any]]:
+    return [
         {
             "url": tr.url,
             "path": tr.path,
-            "status": str(tr.status),
             "progress": tr.progress,
             "errors": [str(e) for e in tr.errors],
             "document_length": tr.document_length,
@@ -142,17 +162,10 @@ def ls(transfers: list[storage.Transfer], *, fmt: LsFormat = "json") -> None:
             "has_mirror_failures": bool(tr.mirror_failures),
             "todo": str(tr.todo),
             "finished": tr.finished,
+            "stats": {u: dataclasses.asdict(s) for u, s in tr.stats.items()},
         }
         for tr in transfers
     ]
-
-    if fmt == "filebeat":
-        for o in output:
-            line = json.dumps({"rally": {"storage": o}})
-            sys.stdout.write(f"{line}\n")
-        return
-
-    json.dump(output, sys.stdout, indent=2, sort_keys=True)
 
 
 def get(transfers: list[storage.Transfer], *, todo: storage.RangeSet = storage.NO_RANGE) -> None:
@@ -180,7 +193,7 @@ def get(transfers: list[storage.Transfer], *, todo: storage.RangeSet = storage.N
                 LOG.info("Transfer finished: %s", url)
                 continue
         if transferring:
-            time.sleep(2.0)
+            time.sleep(4.0)
     if errors:
         LOG.critical("Files download failed. Errors:\n%s", json.dumps(errors, indent=2, sort_keys=True))
         sys.exit(1)

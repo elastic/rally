@@ -16,20 +16,25 @@
 # under the License.
 from __future__ import annotations
 
+import dataclasses
 import logging
 import threading
 import time
 import urllib.parse
 from collections import defaultdict, deque
-from collections.abc import Iterator
-from dataclasses import dataclass
+from collections.abc import Generator
 from random import Random
-from typing import NamedTuple
+from typing import Literal
 
 from typing_extensions import Self
 
 from esrally import types
-from esrally.storage._adapter import AdapterRegistry, Head, ServiceUnavailableError
+from esrally.storage._adapter import (
+    AdapterRegistry,
+    GetResponse,
+    Head,
+    ServiceUnavailableError,
+)
 from esrally.storage._config import StorageConfig
 from esrally.storage._mirror import MirrorList
 from esrally.utils import pretty
@@ -46,7 +51,7 @@ class CachedHeadError(Exception):
     """
 
 
-@dataclass
+@dataclasses.dataclass
 class CachedHead:
     timestamp: float
     head: Head | None = None
@@ -80,7 +85,7 @@ class CachedHead:
         return self.head
 
 
-@dataclass
+@dataclasses.dataclass
 class MirrorFailure:
     url: str
     mirror_url: str
@@ -116,7 +121,7 @@ class Client:
         self._lock = threading.Lock()
         self._mirrors: MirrorList = mirrors
         self._random: Random = random or Random(StorageConfig.DEFAULT_RANDOM_SEED)
-        self._stats: dict[str, deque[ServerStats]] = defaultdict(lambda: deque(maxlen=100))
+        self._request_stats: dict[str, deque[RequestStat]] = defaultdict(lambda: deque(maxlen=10000))
         self._cache_ttl: float = cache_ttl
         self._mirror_failures: dict[str, dict[str, MirrorFailure]] = defaultdict(dict)
 
@@ -129,37 +134,41 @@ class Client:
         if cache_ttl is None:
             cache_ttl = self._cache_ttl
         if cache_ttl > 0.0:
-            # when time-to-leave is given, it looks up for pre-cached head first
+            # When the time-to-live is given, it looks up for pre-cached head first.
             try:
                 return self._cached_heads[url].get(cache_ttl=cache_ttl)
             except (KeyError, TimeoutError):
-                # no cached head, or it has expired.
+                # Cached head is missing, or it has expired.
                 pass
 
-        start_time = time.monotonic()
         try:
-            adapter = self._adapters.get(url)
-            head = adapter.head(url)
-            error = None
+            # It sends HEAD request.
+            head = self._head(url)
         except Exception as ex:
-            head = None
-            error = ex
-        finally:
-            end_time = time.monotonic()
+            # It caches the error.
+            with self._lock:
+                # The cached value could be an exception. In this way it will not retry previously failed urls until
+                # the TTL expires.
+                self._cached_heads[url] = CachedHead(time.monotonic(), error=ex)
+            raise
 
-        with self._lock:
-            # It records per-server time statistics.
-            self._stats[_server_key(url)].append(ServerStats(url, start_time, end_time))
-            # The cached value could be an exception, or a head. In this way it will not retry previously failed
-            # urls until the TTL expires.
-            self._cached_heads[url] = CachedHead(start_time, head=head, error=error)
-
-        if error is not None:
-            raise error
-        assert head is not None
+        # It caches the response.
+        self._cached_heads[url] = CachedHead(time.monotonic(), head=head)
         return head
 
-    def resolve(self, url: str, *, check_head: Head | None = None, cache_ttl: float | None = None) -> Iterator[Head]:
+    def _head(self, url: str) -> Head:
+        """It sends HEAD request recording statistics for later use."""
+        adapter = self._adapters.get(url)
+        stat = RequestStat("HEAD", url)
+        try:
+            with stat:
+                return adapter.head(url)
+        finally:
+            with self._lock:
+                # It makes statistics available for load balancing following requests.
+                self._request_stats[_server_key(url)].append(stat)
+
+    def resolve(self, url: str, *, check_head: Head | None = None, cache_ttl: float | None = None) -> Generator[Head]:
         """It looks up mirror list for given URL and yield mirror heads.
         :param url: the remote file URL at its mirrored source location.
         :param check_head: extra parameters to mach remote heads.
@@ -220,7 +229,7 @@ class Client:
         """Returns failures that have been reported after fetching HEAD from mirror URLs."""
         return list(self._mirror_failures[url].values())
 
-    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
         """It downloads a remote bucket object to a local file path.
 
         :param url: the URL of the remote file.
@@ -237,21 +246,20 @@ class Client:
                 accept_ranges=True, content_length=check_head.document_length, date=check_head.date, crc32c=check_head.crc32c
             )
         else:
-            resolve_head = Head(content_length=check_head.content_length, date=check_head.date, crc32c=check_head.crc32c)
-        for got in self.resolve(url, check_head=resolve_head):
-            assert got.url is not None
-            adapter = self._adapters.get(got.url)
-            # wg keeps a counter of active connections to the same server. It is used to prevent allocating too many
-            # connections against the same mirror server.
-            wg = self._server_connections(got.url)
+            resolve_head = Head(url=url, content_length=check_head.content_length, date=check_head.date, crc32c=check_head.crc32c)
+
+        # It iterates heads from all servers
+        for head in self.resolve(url, check_head=resolve_head):
+            # It checks connections counter for given URL.
+            wg = self._server_connections(head.url)
             try:
                 wg.add(1)
             except WaitGroupLimitError:
-                LOG.debug("connection limit exceeded for url '%s'", url)
+                LOG.debug("Connection limit exceeded for url '%s'", head.url)
                 continue
 
             try:
-                head, chunks = adapter.get(got.url, check_head=check_head)
+                got = self._get(head.url, check_head=check_head)
             except ServiceUnavailableError as ex:
                 LOG.warning("service unavailable error received: url='%s' %s", url, ex)
                 with self._lock:
@@ -260,30 +268,60 @@ class Client:
                 wg.done()
                 continue
 
-            # wg.iter() will call wg.done() once chunks iteration is terminated.
-            return head, wg.iter(chunks)
+            def iter_chunks(wg: WaitGroup, chunks: Generator[bytes]) -> Generator[bytes]:
+                # It wraps chunks generator so it do release connections wait group once response has been processed.
+                try:
+                    yield from chunks
+                finally:
+                    wg.done()
+                    chunks.close()
+
+            got.chunks = iter_chunks(wg, got.chunks)
+            return got
 
         raise ServiceUnavailableError(f"no connections available for getting URL '{url}'")
+
+    def _get(self, url: str, check_head: Head | None = None) -> GetResponse:
+        """It sends GET request recording statistics for later use."""
+        # It gets client adapter for given URL.
+        adapter = self._adapters.get(url)
+        stat = RequestStat("GET", url)
+        try:
+            with stat:
+                # It will update statistics every time a chunk of data is read.
+                got: GetResponse = adapter.get(url, check_head=check_head)
+                got.chunks = stat.iterate_chunks(got.chunks)
+                return got
+        finally:
+            with self._lock:
+                # It makes statistics available for load balancing following requests.
+                self._request_stats[_server_key(url)].append(stat)
 
     def _server_connections(self, url: str) -> WaitGroup:
         with self._lock:
             return self._connections[_server_key(url)]
 
-    def _server_stats_from_url(self, url: str, ttl: float | None = None) -> deque[ServerStats]:
+    def _request_stats_from_url(self, url: str, *, ttl: float | None = None) -> deque[RequestStat]:
         with self._lock:
-            stats = self._stats[_server_key(url)]
+            stats = self._request_stats[_server_key(url)]
             if ttl is not None:
-                # it removes expired latencies
+                # It removes expired statistics
                 deadline = time.monotonic() - ttl
-                while stats and stats[0].end < deadline:
+                while stats and stats[0].start_time < deadline:
                     stats.popleft()
         return stats
 
-    def _average_latency(self, url: str, ttl: float | None = 60.0) -> float:
-        stats = self._server_stats_from_url(url, ttl)
+    def _average_latency(self, url: str, *, ttl: float | None = 60.0) -> float:
+        stats = self._request_stats_from_url(url, ttl=ttl)
         if not stats:
             return 0.0
         return sum(s.latency for s in stats) / len(stats)
+
+    def _average_throughput(self, url: str, *, ttl: float | None = 60.0) -> float:
+        stats = self._request_stats_from_url(url, ttl=ttl)
+        if not stats:
+            return 0.0
+        return sum(s.throughput for s in stats) / len(stats)
 
     def monitor(self):
         with self._lock:
@@ -291,19 +329,61 @@ class Client:
         infos = list[str]()
         for url, connection in sorted(connections.items()):
             latency = self._average_latency(url)
-            infos.append(f"- '{url}' count={connection.count} latency={pretty.duration(latency)}")
+            throughput = self._average_throughput(url)
+            infos.append(f"- '{url}' count={connection.count} latency={pretty.duration(latency)}, throughput={pretty.size(throughput)}/s")
         if len(infos) > 0:
             LOG.info("Active client connection(s):\n  %s", "\n  ".join(infos))
 
 
-class ServerStats(NamedTuple):
+RequestMethod = Literal["GET", "HEAD"]
+
+
+@dataclasses.dataclass
+class RequestStat:
+    """It recollects per request statistics."""
+
+    # The method of the request.
+    method: RequestMethod
+
+    # The URL of the request.
     url: str
-    start: float
-    end: float
+
+    # The moment the request started as returned from time.monotonic()
+    start_time: float = dataclasses.field(default_factory=time.monotonic)
+
+    # The time duration (in seconds) before receiving the head of the response.
+    latency: float = 0.0
+
+    # The time duration (in seconds) before receiving the last chunk of data.
+    duration: float = 0.0
+
+    # The number of bytes has been transferred processing the request.
+    transferred_bytes: int = 0
+
+    # Used to asynchronously update the statistics
+    _lock: threading.Lock = dataclasses.field(default_factory=threading.Lock)
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.latency = self.duration = time.monotonic() - self.start_time
 
     @property
-    def latency(self):
-        return self.end - self.start
+    def throughput(self) -> float:
+        with self._lock:
+            return self.transferred_bytes / self.duration
+
+    def iterate_chunks(self, chunks: Generator[bytes]) -> Generator[bytes]:
+        """It wraps data chunk iterator to update statistics."""
+        try:
+            for chunk in chunks:
+                with self._lock:
+                    self.transferred_bytes += len(chunk)
+                    self.duration = time.monotonic() - self.start_time
+                yield chunk
+        finally:
+            chunks.close()
 
 
 def _head_or_raise(value: Head | Exception) -> Head:
