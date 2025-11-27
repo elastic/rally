@@ -44,7 +44,7 @@ In order to tell Rally to install a plugin, use the ``--elasticsearch-plugins`` 
 
 Example::
 
-    esrally race --track=geonames --distribution-version=7.12.0 --elasticsearch-plugins="analysis-icu,analysis-phonetic"
+    esrally race --track=geonames --distribution-version=9.1.6 --elasticsearch-plugins="analysis-icu,analysis-phonetic"
 
 This will install the plugins ``analysis-icu`` and ``analysis-phonetic`` (in that order). In order to use the features that these plugins provide, you need to write a :doc:`custom track </adding_tracks>`.
 
@@ -216,7 +216,7 @@ As ``myplugin`` is not a core plugin, the Elasticsearch plugin manager does not 
     [distributions]
     plugin.myplugin.release.url=https://example.org/myplugin/releases/{{VERSION}}/myplugin-{{VERSION}}.zip
 
-Now you can run benchmarks with the custom Elasticsearch plugin, e.g. with ``esrally race --track=geonames --distribution-version=7.12.0 --elasticsearch-plugins="myplugin:simple"``.
+Now you can run benchmarks with the custom Elasticsearch plugin, e.g. with ``esrally race --track=geonames --distribution-version=9.6.1 --elasticsearch-plugins="myplugin:simple"``.
 
 For this to work you need ensure two things:
 
