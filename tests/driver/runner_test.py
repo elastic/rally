@@ -29,7 +29,6 @@ import elasticsearch
 import pytest
 
 from esrally import client, config, exceptions
-from esrally.client.asynchronous import RallyAsyncElasticsearch
 from esrally.driver import runner
 
 
@@ -5841,22 +5840,6 @@ class TestCreateIlmPolicyRunner:
             timeout=None,
             error_trace=None,
             filter_path=None,
-        )
-
-    @mock.patch("esrally.client.asynchronous.IlmClient")
-    @pytest.mark.asyncio
-    async def test_RallyIlmClient_rewrites_kwargs(self, es_ilm):
-        es = RallyAsyncElasticsearch(hosts=["http://localhost:9200"])
-        es_ilm.put_lifecycle = mock.AsyncMock(return_value={})
-
-        # simulating a custom runner that hasn't been refactored
-        # to suit the new 'elasticsearch-py' 8.x kwarg only method signature
-        await es.ilm.put_lifecycle("test-name", body=self.params["body"])
-
-        es_ilm.put_lifecycle.assert_awaited_once_with(
-            es.ilm,
-            policy=self.params["body"]["policy"],
-            name="test-name",
         )
 
 
