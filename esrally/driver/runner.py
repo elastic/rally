@@ -30,9 +30,10 @@ from functools import total_ordering
 from io import BytesIO
 from os.path import commonprefix
 from types import FunctionType
-from typing import Optional
+from typing import Any, Optional
 
 import ijson
+from elasticsearch import AsyncElasticsearch
 
 from esrally import exceptions, track, types
 from esrally.utils import convert
@@ -183,7 +184,7 @@ class Runner:
     async def __aenter__(self):
         return self
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         """
         Runs the actual method that should be benchmarked.
 
@@ -432,7 +433,7 @@ class AssertingRunner(Runner, Delegator):
         return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
 
 
-def mandatory(params, key, op):
+def mandatory(params: dict[str, Any], key, op) -> Any:
     try:
         return params[key]
     except KeyError:
@@ -2727,7 +2728,7 @@ class CreateIlmPolicy(Runner):
     <https://www.elastic.co/guide/en/elasticsearch/reference/current/ilm-put-lifecycle.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         policy_name = mandatory(params, "policy-name", self)
         body = mandatory(params, "body", self)
         policy = body.get("policy", {})

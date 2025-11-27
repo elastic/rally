@@ -26,7 +26,6 @@ from aiohttp.client_proto import ResponseHandler
 from aiohttp.helpers import BaseTimerContext
 from elastic_transport import AiohttpHttpNode, AsyncTransport
 from elasticsearch import AsyncElasticsearch
-from elasticsearch._async.client import IlmClient
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
@@ -262,31 +261,11 @@ class RallyAsyncTransport(AsyncTransport):
         super().__init__(*args, node_class=RallyAiohttpHttpNode, **kwargs)
 
 
-class RallyIlmClient(IlmClient):
-    async def put_lifecycle(self, *args, **kwargs):
-        """
-        The 'elasticsearch-py' 8.x method signature renames the 'policy' param to 'name', and the previously so-called
-        'body' param becomes 'policy'
-        """
-        if args:
-            kwargs["name"] = args[0]
-
-        if body := kwargs.pop("body", None):
-            kwargs["policy"] = body.get("policy", {})
-        # pylint: disable=missing-kwoa
-        return await IlmClient.put_lifecycle(self, **kwargs)
-
-
 class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
     def __init__(self, hosts: Any = None, *, distribution_version: str | None = None, distribution_flavor: str | None = None, **kwargs):
         super().__init__(hosts, **kwargs)
         self.distribution_version = distribution_version
         self.distribution_flavor = distribution_flavor
-
-        # some ILM method signatures changed in 'elasticsearch-py' 8.x,
-        # so we override method(s) here to provide BWC for any custom
-        # runners that aren't using the new kwargs
-        self.ilm = RallyIlmClient(self)
 
     @property
     def is_serverless(self):
