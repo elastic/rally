@@ -18,13 +18,14 @@
 import asyncio
 import json
 import logging
+from collections.abc import Mapping
 from typing import Any, Optional
 
 import aiohttp
 from aiohttp import BaseConnector, RequestInfo
 from aiohttp.client_proto import ResponseHandler
 from aiohttp.helpers import BaseTimerContext
-from elastic_transport import AiohttpHttpNode, AsyncTransport
+from elastic_transport import AiohttpHttpNode, ApiResponse, AsyncTransport
 from elasticsearch import AsyncElasticsearch
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
@@ -276,3 +277,23 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         new_self.distribution_version = self.distribution_version
         new_self.distribution_flavor = self.distribution_flavor
         return new_self
+
+    async def perform_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Optional[Mapping[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
+        body: Optional[Any] = None,
+        endpoint_id: Optional[str] = None,
+        path_parts: Optional[Mapping[str, Any]] = None,
+    ) -> ApiResponse[Any]:
+        # We need to ensure that we provide content-type and accept headers
+        if body is not None:
+            headers = headers or {}
+            headers.setdefault("Content-Type", "application/json")
+            headers.setdefault("Accept", "application/json")
+        return await super().perform_request(
+            method, path, params=params, headers=headers, body=body, endpoint_id=endpoint_id, path_parts=path_parts
+        )
