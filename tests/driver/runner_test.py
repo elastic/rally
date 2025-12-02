@@ -82,19 +82,19 @@ class TestRegisterRunner:
     @mock.patch("esrally.driver.runner._multi_cluster_runner")
     @pytest.mark.asyncio
     async def test_register_wrapped_runner_with_no_multi_cluster_attribute(self, multi_cluster_runner, single_cluster_runner):
-        class Wrapper(runner.Delegator):
+        class Wrapper(runner.DelegatorRunner):
             def __init__(self, delegate=None):
                 super().__init__(delegate=delegate)
 
-            async def __call__(self, *args):
-                return args
+            async def __call__(self, es, params):
+                return (es, params)
 
-        class BaseRunner:
+        class BaseRunner(runner.Runner):
             async def __call__(self, es, params):
                 pass
 
         base_runner = BaseRunner()
-        wrapped_runner = Wrapper(base_runner)
+        wrapped_runner = Wrapper(delegate=base_runner)
 
         es = None
         params = {}

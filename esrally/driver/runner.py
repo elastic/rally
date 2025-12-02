@@ -14,8 +14,9 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import abc
 import asyncio
+import contextlib
 import contextvars
 import json
 import logging
@@ -24,142 +25,132 @@ import re
 import sys
 import time
 from collections import Counter, OrderedDict
+from collections.abc import Callable, Iterable
 from copy import deepcopy
 from enum import Enum
 from functools import total_ordering
 from io import BytesIO
 from os.path import commonprefix
-from types import FunctionType
-from typing import Any, Optional
+from typing import Any
 
 import ijson
-from elasticsearch import AsyncElasticsearch
+from elasticsearch import AsyncElasticsearch, BadRequestError
+from typing_extensions import Self
 
 from esrally import exceptions, track, types
+from esrally.client.asynchronous import RallyAsyncElasticsearch
 from esrally.utils import convert
-from esrally.utils.versions import Version
+from esrally.utils.versions import Version, is_serverless
 
 # Mapping from operation type to specific runner
+__RUNNERS: dict[str, "Runner"] = {}
 
-__RUNNERS = {}
 
-
-def register_default_runners(config: Optional[types.Config] = None):
-    register_runner(track.OperationType.Bulk, BulkIndex(), async_runner=True)
-    register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
-    register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
-    register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
-    register_runner(track.OperationType.Search, Query(config=config), async_runner=True)
-    register_runner(track.OperationType.PaginatedSearch, Query(config=config), async_runner=True)
-    register_runner(track.OperationType.CompositeAgg, Query(config=config), async_runner=True)
-    register_runner(track.OperationType.ScrollSearch, Query(config=config), async_runner=True)
-    register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
-    register_runner(track.OperationType.Composite, Composite(), async_runner=True)
-    register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch(), async_runner=True)
-    register_runner(track.OperationType.GetAsyncSearch, Retry(GetAsyncSearch(), retry_until_success=True), async_runner=True)
-    register_runner(track.OperationType.DeleteAsyncSearch, DeleteAsyncSearch(), async_runner=True)
-    register_runner(track.OperationType.OpenPointInTime, OpenPointInTime(), async_runner=True)
-    register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
-    register_runner(track.OperationType.Sql, Sql(), async_runner=True)
-    register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
-    register_runner(track.OperationType.Esql, Esql(), async_runner=True)
+def register_default_runners(cfg: types.Config | None = None) -> None:
+    register_runner(track.OperationType.Bulk, BulkIndex())
+    register_runner(track.OperationType.ForceMerge, ForceMerge())
+    register_runner(track.OperationType.IndexStats, Retry(IndicesStats()))
+    register_runner(track.OperationType.NodeStats, NodeStats())
+    register_runner(track.OperationType.Search, Query(cfg=cfg))
+    register_runner(track.OperationType.PaginatedSearch, Query(cfg=cfg))
+    register_runner(track.OperationType.CompositeAgg, Query(cfg=cfg))
+    register_runner(track.OperationType.ScrollSearch, Query(cfg=cfg))
+    register_runner(track.OperationType.RawRequest, RawRequest())
+    register_runner(track.OperationType.Composite, Composite())
+    register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch())
+    register_runner(track.OperationType.GetAsyncSearch, Retry(GetAsyncSearch(), retry_until_success=True))
+    register_runner(track.OperationType.DeleteAsyncSearch, DeleteAsyncSearch())
+    register_runner(track.OperationType.OpenPointInTime, OpenPointInTime())
+    register_runner(track.OperationType.ClosePointInTime, ClosePointInTime())
+    register_runner(track.OperationType.Sql, Sql())
+    register_runner(track.OperationType.FieldCaps, FieldCaps())
+    register_runner(track.OperationType.Esql, Esql())
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
-    register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
+    register_runner(track.OperationType.Sleep, Sleep())
     # these requests should not be retried as they are not idempotent
-    register_runner(track.OperationType.CreateSnapshot, CreateSnapshot(), async_runner=True)
-    register_runner(track.OperationType.RestoreSnapshot, RestoreSnapshot(), async_runner=True)
-    register_runner(track.OperationType.Downsample, Downsample(), async_runner=True)
+    register_runner(track.OperationType.CreateSnapshot, CreateSnapshot())
+    register_runner(track.OperationType.RestoreSnapshot, RestoreSnapshot())
+    register_runner(track.OperationType.Downsample, Downsample())
     # We treat the following as administrative commands and thus already start to wrap them in a retry.
-    register_runner(track.OperationType.ClusterHealth, Retry(ClusterHealth()), async_runner=True)
-    register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()), async_runner=True)
-    register_runner(track.OperationType.Refresh, Retry(Refresh()), async_runner=True)
-    register_runner(track.OperationType.CreateIndex, Retry(CreateIndex()), async_runner=True)
-    register_runner(track.OperationType.DeleteIndex, Retry(DeleteIndex(config=config)), async_runner=True)
-    register_runner(track.OperationType.CreateComponentTemplate, Retry(CreateComponentTemplate()), async_runner=True)
-    register_runner(track.OperationType.DeleteComponentTemplate, Retry(DeleteComponentTemplate()), async_runner=True)
-    register_runner(track.OperationType.CreateComposableTemplate, Retry(CreateComposableTemplate()), async_runner=True)
-    register_runner(track.OperationType.DeleteComposableTemplate, Retry(DeleteComposableTemplate(config=config)), async_runner=True)
-    register_runner(track.OperationType.CreateDataStream, Retry(CreateDataStream()), async_runner=True)
-    register_runner(track.OperationType.DeleteDataStream, Retry(DeleteDataStream()), async_runner=True)
-    register_runner(track.OperationType.CreateIndexTemplate, Retry(CreateIndexTemplate()), async_runner=True)
-    register_runner(track.OperationType.DeleteIndexTemplate, Retry(DeleteIndexTemplate()), async_runner=True)
-    register_runner(track.OperationType.ShrinkIndex, Retry(ShrinkIndex()), async_runner=True)
-    register_runner(track.OperationType.CreateMlDatafeed, Retry(CreateMlDatafeed()), async_runner=True)
-    register_runner(track.OperationType.DeleteMlDatafeed, Retry(DeleteMlDatafeed()), async_runner=True)
-    register_runner(track.OperationType.StartMlDatafeed, Retry(StartMlDatafeed()), async_runner=True)
-    register_runner(track.OperationType.StopMlDatafeed, Retry(StopMlDatafeed()), async_runner=True)
-    register_runner(track.OperationType.CreateMlJob, Retry(CreateMlJob()), async_runner=True)
-    register_runner(track.OperationType.DeleteMlJob, Retry(DeleteMlJob()), async_runner=True)
-    register_runner(track.OperationType.OpenMlJob, Retry(OpenMlJob()), async_runner=True)
-    register_runner(track.OperationType.CloseMlJob, Retry(CloseMlJob()), async_runner=True)
-    register_runner(track.OperationType.DeleteSnapshotRepository, Retry(DeleteSnapshotRepository()), async_runner=True)
-    register_runner(track.OperationType.CreateSnapshotRepository, Retry(CreateSnapshotRepository()), async_runner=True)
-    register_runner(track.OperationType.WaitForSnapshotCreate, Retry(WaitForSnapshotCreate()), async_runner=True)
-    register_runner(track.OperationType.WaitForCurrentSnapshotsCreate, Retry(WaitForCurrentSnapshotsCreate()), async_runner=True)
-    register_runner(track.OperationType.WaitForRecovery, Retry(IndicesRecovery()), async_runner=True)
-    register_runner(track.OperationType.PutSettings, Retry(PutSettings()), async_runner=True)
-    register_runner(track.OperationType.CreateTransform, Retry(CreateTransform()), async_runner=True)
-    register_runner(track.OperationType.StartTransform, Retry(StartTransform()), async_runner=True)
-    register_runner(track.OperationType.WaitForTransform, Retry(WaitForTransform()), async_runner=True)
-    register_runner(track.OperationType.DeleteTransform, Retry(DeleteTransform()), async_runner=True)
-    register_runner(track.OperationType.TransformStats, Retry(TransformStats()), async_runner=True)
-    register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
-    register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
-    register_runner(track.OperationType.RunUntil, Retry(RunUntil()), async_runner=True)
+    register_runner(track.OperationType.ClusterHealth, Retry(ClusterHealth()))
+    register_runner(track.OperationType.PutPipeline, Retry(PutPipeline()))
+    register_runner(track.OperationType.Refresh, Retry(Refresh()))
+    register_runner(track.OperationType.CreateIndex, Retry(CreateIndex()))
+    register_runner(track.OperationType.DeleteIndex, Retry(DeleteIndex(cfg=cfg)))
+    register_runner(track.OperationType.CreateComponentTemplate, Retry(CreateComponentTemplate()))
+    register_runner(track.OperationType.DeleteComponentTemplate, Retry(DeleteComponentTemplate()))
+    register_runner(track.OperationType.CreateComposableTemplate, Retry(CreateComposableTemplate()))
+    register_runner(track.OperationType.DeleteComposableTemplate, Retry(DeleteComposableTemplate(cfg=cfg)))
+    register_runner(track.OperationType.CreateDataStream, Retry(CreateDataStream()))
+    register_runner(track.OperationType.DeleteDataStream, Retry(DeleteDataStream()))
+    register_runner(track.OperationType.CreateIndexTemplate, Retry(CreateIndexTemplate()))
+    register_runner(track.OperationType.DeleteIndexTemplate, Retry(DeleteIndexTemplate()))
+    register_runner(track.OperationType.ShrinkIndex, Retry(ShrinkIndex()))
+    register_runner(track.OperationType.CreateMlDatafeed, Retry(CreateMlDatafeed()))
+    register_runner(track.OperationType.DeleteMlDatafeed, Retry(DeleteMlDatafeed()))
+    register_runner(track.OperationType.StartMlDatafeed, Retry(StartMlDatafeed()))
+    register_runner(track.OperationType.StopMlDatafeed, Retry(StopMlDatafeed()))
+    register_runner(track.OperationType.CreateMlJob, Retry(CreateMlJob()))
+    register_runner(track.OperationType.DeleteMlJob, Retry(DeleteMlJob()))
+    register_runner(track.OperationType.OpenMlJob, Retry(OpenMlJob()))
+    register_runner(track.OperationType.CloseMlJob, Retry(CloseMlJob()))
+    register_runner(track.OperationType.DeleteSnapshotRepository, Retry(DeleteSnapshotRepository()))
+    register_runner(track.OperationType.CreateSnapshotRepository, Retry(CreateSnapshotRepository()))
+    register_runner(track.OperationType.WaitForSnapshotCreate, Retry(WaitForSnapshotCreate()))
+    register_runner(track.OperationType.WaitForCurrentSnapshotsCreate, Retry(WaitForCurrentSnapshotsCreate()))
+    register_runner(track.OperationType.WaitForRecovery, Retry(IndicesRecovery()))
+    register_runner(track.OperationType.PutSettings, Retry(PutSettings()))
+    register_runner(track.OperationType.CreateTransform, Retry(CreateTransform()))
+    register_runner(track.OperationType.StartTransform, Retry(StartTransform()))
+    register_runner(track.OperationType.WaitForTransform, Retry(WaitForTransform()))
+    register_runner(track.OperationType.DeleteTransform, Retry(DeleteTransform()))
+    register_runner(track.OperationType.TransformStats, Retry(TransformStats()))
+    register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()))
+    register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()))
+    register_runner(track.OperationType.RunUntil, Retry(RunUntil()))
 
 
-def runner_for(operation_type):
+def runner_for(operation_type: str) -> "Runner":
     try:
         return __RUNNERS[operation_type]
     except KeyError:
         raise exceptions.RallyError(f"No runner available for operation-type: [{operation_type}]")
 
 
-def enable_assertions(enabled):
+def enable_assertions(enabled: bool) -> None:
     """
     Changes whether assertions are enabled. The status changes for all tasks that are executed after this call.
 
     :param enabled: ``True`` to enable assertions, ``False`` to disable them.
     """
-    AssertingRunner.assertions_enabled = enabled
+    Runner.assertions_enabled = enabled
 
 
-def register_runner(operation_type, runner, **kwargs):
+RunnerType = Callable[[AsyncElasticsearch, dict[str, Any]], Any]
+
+
+def register_runner(operation_type: track.OperationType | str, runner: RunnerType, async_runner: bool | None = None) -> None:
     logger = logging.getLogger(__name__)
-    async_runner = kwargs.get("async_runner", False)
     if isinstance(operation_type, track.OperationType):
         operation_type = operation_type.to_hyphenated_string()
 
-    if not async_runner:
-        raise exceptions.RallyAssertionError(
-            f"Runner [{str(runner)}] must be implemented as async runner and registered with async_runner=True."
-        )
+    if not isinstance(runner, Runner):
+        raise TypeError("Runner must be a subclass of Runner")
 
-    if hasattr(unwrap(runner), "multi_cluster"):
-        if "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
-            cluster_aware_runner = _multi_cluster_runner(runner, str(runner), context_manager_enabled=True)
-        else:
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
-            cluster_aware_runner = _multi_cluster_runner(runner, str(runner))
-    # we'd rather use callable() but this will erroneously also classify a class as callable...
-    elif isinstance(runner, FunctionType):
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("Registering runner function [%s] for [%s].", str(runner), str(operation_type))
-        cluster_aware_runner = _single_cluster_runner(runner, runner.__name__)
-    elif "__aenter__" in dir(runner) and "__aexit__" in dir(runner):
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("Registering context-manager capable runner object [%s] for [%s].", str(runner), str(operation_type))
-        cluster_aware_runner = _single_cluster_runner(runner, str(runner), context_manager_enabled=True)
-    else:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("Registering runner object [%s] for [%s].", str(runner), str(operation_type))
-        cluster_aware_runner = _single_cluster_runner(runner, str(runner))
+    if async_runner is not None:
+        if not async_runner:
+            raise exceptions.RallyAssertionError(f"Runner [{runner}] must be implemented as async runner.")
+        logger.warning("async_runner flag is deprecated as rally now only supports async runners")
 
-    __RUNNERS[operation_type] = _with_completion(_with_assertions(cluster_aware_runner))
+    logger.debug("Registering runner [%s] for [%s].", str(runner), str(operation_type))
+    __RUNNERS[operation_type] = wrap(runner)
+
+
+def wrap(runner: RunnerType) -> "Runner":
+    if isinstance(runner, Runner):
+        return runner
+    return WrapperRunner(runner)
 
 
 # Only intended for unit-testing!
@@ -167,24 +158,42 @@ def remove_runner(operation_type):
     del __RUNNERS[operation_type]
 
 
-class Runner:
+class Runner(abc.ABC):
     """
     Base class for all operations against Elasticsearch.
     """
 
-    def __init__(self, *args, config=None, **kwargs):
-        super().__init__(*args, **kwargs)
+    assertions_enabled = False
+
+    def __init__(self, *, cfg: types.Config | None = None):
         self.logger = logging.getLogger(__name__)
         self.serverless_mode = False
         self.serverless_operator = False
-        if config:
-            self.serverless_mode = convert.to_bool(config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
-            self.serverless_operator = convert.to_bool(config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
+        if cfg:
+            self.serverless_mode = convert.to_bool(cfg.opts("driver", "serverless.mode", mandatory=False, default_value=False))
+            self.serverless_operator = convert.to_bool(cfg.opts("driver", "serverless.operator", mandatory=False, default_value=False))
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
+    def call(self, es: AsyncElasticsearch, params: dict[str, Any]) -> Any:
+        return_value = self(es, params)
+        if return_value is not None and not self.assertions_enabled:
+            return return_value
+
+        if not (assertions := params.pop("assertions", [])):
+            return return_value
+
+        name = params.get("name")
+        if not isinstance(return_value, dict):
+            raise exceptions.DataError(f"Cannot check assertion in [{name}] as [{self.delegate!r}] did not return a dict.")
+
+        for assertion in assertions:
+            check_assertion(name, assertion, return_value)
+        return return_value
+
+    @abc.abstractmethod
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> Any:
         """
         Runs the actual method that should be benchmarked.
 
@@ -196,7 +205,7 @@ class Runner:
         """
         raise NotImplementedError("abstract operation")
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
         return False
 
     def _default_kw_params(self, params):
@@ -209,9 +218,7 @@ class Runner:
             "params": "request-params",
             "request_timeout": "request-timeout",
         }
-        full_result = {k: params.get(v) for (k, v) in kw_dict.items()}
-        # filter Nones
-        return dict(filter(lambda kv: kv[1] is not None, full_result.items()))
+        return {k: params.get(v) for k, v in kw_dict.items() if v is not None}
 
     @staticmethod
     def _transport_request_params(params):
@@ -237,203 +244,107 @@ class Runner:
 
         return params, request_params, transport_params, headers
 
+    @property
+    def completed(self):
+        return None
 
-class Delegator:
-    """
-    Mixin to unify delegate handling
-    """
+    @property
+    def percent_completed(self):
+        return None
 
-    def __init__(self, delegate, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+
+def _greater_than(expected, actual) -> bool:
+    return actual > expected
+
+
+def _greater_than_or_equal(expected, actual):
+    return actual >= expected
+
+
+def _smaller_than(expected, actual):
+    return actual < expected
+
+
+def _smaller_than_or_equal(expected, actual):
+    return actual <= expected
+
+
+def _equal(expected, actual):
+    return actual == expected
+
+
+_PREDICATES = {
+    ">": _greater_than,
+    ">=": _greater_than_or_equal,
+    "<": _smaller_than,
+    "<=": _smaller_than_or_equal,
+    "==": _equal,
+}
+
+
+def check_assertion(op_name: str | None, assertion: dict[str, Any], properties: dict[str, Any]):
+    path = assertion["property"]
+    predicate_name = assertion["condition"]
+    expected_value = assertion["value"]
+    actual_value = properties
+    for k in path.split("."):
+        actual_value = actual_value[k]
+    predicate = _PREDICATES[predicate_name]
+    if predicate(expected_value, actual_value):
+        if op_name:
+            msg = f"Expected [{path}] in [{op_name}] to be {predicate_name} [{expected_value}] but was [{actual_value}]."
+        else:
+            msg = f"Expected [{path}] to be {predicate_name} [{expected_value}] but was [{actual_value}]."
+        raise exceptions.RallyTaskAssertionError(msg)
+
+
+class WrapperRunner(Runner):
+    """Runner which is wrapping another runner."""
+
+    def __init__(self, delegate: RunnerType, *, cfg: types.Config | None = None):
+        super().__init__(cfg=cfg)
         self.delegate = delegate
 
+    def __repr__(self):
+        return getattr(self.delegate, "__name__", None) or repr(self.delegate)
 
-def unwrap(runner):
+    async def __aenter__(self) -> Self:
+        func = getattr(self.delegate, "__aenter__", None)
+        if func is None:
+            return self
+        return await func()
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+        func = getattr(self.delegate, "__aexit__", None)
+        if func is None:
+            return False
+        return await func(exc_type, exc_val, exc_tb)
+
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> Any:
+        return await self.delegate(es, params)
+
+    @property
+    def completed(self):
+        return getattr(unwrap(self.delegate), "completed", None)
+
+    @property
+    def percent_completed(self):
+        return getattr(unwrap(self.delegate), "percent_completed", None)
+
+
+def unwrap(runner: RunnerType) -> RunnerType:
     """
     Unwraps all delegators until the actual runner.
 
     :param runner: An arbitrarily nested chain of delegators around a runner.
     :return: The innermost runner.
     """
-    delegate = getattr(runner, "delegate", None)
-    if delegate:
-        return unwrap(delegate)
-    else:
-        return runner
+    while delegate := getattr(runner, "delegate", None):
+        runner = delegate
+    return runner
 
 
-def _single_cluster_runner(runnable, name, context_manager_enabled=False):
-    # only pass the default ES client
-    return MultiClientRunner(runnable, name, lambda es: es["default"], context_manager_enabled)
-
-
-def _multi_cluster_runner(runnable, name, context_manager_enabled=False):
-    # pass all ES clients
-    return MultiClientRunner(runnable, name, lambda es: es, context_manager_enabled)
-
-
-def _with_assertions(delegate):
-    return AssertingRunner(delegate)
-
-
-def _with_completion(delegate):
-    unwrapped_runner = unwrap(delegate)
-    if hasattr(unwrapped_runner, "completed") and hasattr(unwrapped_runner, "percent_completed"):
-        return WithCompletion(delegate, unwrapped_runner)
-    else:
-        return NoCompletion(delegate)
-
-
-class NoCompletion(Runner, Delegator):
-    def __init__(self, delegate):
-        super().__init__(delegate=delegate)
-
-    @property
-    def completed(self):
-        return None
-
-    @property
-    def percent_completed(self):
-        return None
-
-    async def __call__(self, *args):
-        return await self.delegate(*args)
-
-    def __repr__(self, *args, **kwargs):
-        return repr(self.delegate)
-
-    async def __aenter__(self):
-        await self.delegate.__aenter__()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
-
-
-class WithCompletion(Runner, Delegator):
-    def __init__(self, delegate, progressable):
-        super().__init__(delegate=delegate)
-        self.progressable = progressable
-
-    @property
-    def completed(self):
-        return self.progressable.completed
-
-    @property
-    def percent_completed(self):
-        return self.progressable.percent_completed
-
-    async def __call__(self, *args):
-        return await self.delegate(*args)
-
-    def __repr__(self, *args, **kwargs):
-        return repr(self.delegate)
-
-    async def __aenter__(self):
-        await self.delegate.__aenter__()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
-
-
-class MultiClientRunner(Runner, Delegator):
-    def __init__(self, runnable, name, client_extractor, context_manager_enabled=False):
-        super().__init__(delegate=runnable)
-        self.name = name
-        self.client_extractor = client_extractor
-        self.context_manager_enabled = context_manager_enabled
-
-    async def __call__(self, *args):
-        return await self.delegate(self.client_extractor(args[0]), *args[1:])
-
-    def __repr__(self, *args, **kwargs):
-        if self.context_manager_enabled:
-            return "user-defined context-manager enabled runner for [%s]" % self.name
-        else:
-            return "user-defined runner for [%s]" % self.name
-
-    async def __aenter__(self):
-        if self.context_manager_enabled:
-            await self.delegate.__aenter__()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.context_manager_enabled:
-            return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
-        else:
-            return False
-
-
-class AssertingRunner(Runner, Delegator):
-    assertions_enabled = False
-
-    def __init__(self, delegate):
-        super().__init__(delegate=delegate)
-        self.predicates = {
-            ">": self.greater_than,
-            ">=": self.greater_than_or_equal,
-            "<": self.smaller_than,
-            "<=": self.smaller_than_or_equal,
-            "==": self.equal,
-        }
-
-    def greater_than(self, expected, actual):
-        return actual > expected
-
-    def greater_than_or_equal(self, expected, actual):
-        return actual >= expected
-
-    def smaller_than(self, expected, actual):
-        return actual < expected
-
-    def smaller_than_or_equal(self, expected, actual):
-        return actual <= expected
-
-    def equal(self, expected, actual):
-        return actual == expected
-
-    def check_assertion(self, op_name, assertion, properties):
-        path = assertion["property"]
-        predicate_name = assertion["condition"]
-        expected_value = assertion["value"]
-        actual_value = properties
-        for k in path.split("."):
-            actual_value = actual_value[k]
-        predicate = self.predicates[predicate_name]
-        success = predicate(expected_value, actual_value)
-        if not success:
-            if op_name:
-                msg = f"Expected [{path}] in [{op_name}] to be {predicate_name} [{expected_value}] but was [{actual_value}]."
-            else:
-                msg = f"Expected [{path}] to be {predicate_name} [{expected_value}] but was [{actual_value}]."
-
-            raise exceptions.RallyTaskAssertionError(msg)
-
-    async def __call__(self, *args):
-        params = args[1]
-        return_value = await self.delegate(*args)
-        if AssertingRunner.assertions_enabled and "assertions" in params:
-            op_name = params.get("name")
-            if isinstance(return_value, dict):
-                for assertion in params["assertions"]:
-                    self.check_assertion(op_name, assertion, return_value)
-            else:
-                raise exceptions.DataError(f"Cannot check assertion in [{op_name}] as [{repr(self.delegate)}] did not return a dict.")
-        return return_value
-
-    def __repr__(self, *args, **kwargs):
-        return repr(self.delegate)
-
-    async def __aenter__(self):
-        await self.delegate.__aenter__()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
-
-
-def mandatory(params: dict[str, Any], key, op) -> Any:
+def mandatory(params: dict[str, Any], key: str, op: Any) -> Any:
     try:
         return params[key]
     except KeyError:
@@ -443,19 +354,17 @@ def mandatory(params: dict[str, Any], key, op) -> Any:
         )
 
 
-def escape(v):
-    """
-    Escapes values so they can be used as query parameters
+def escape(v: Any) -> str | None:
+    """It escapes values so they can be used as query parameters
 
-    :param v: The raw value. May be None.
+    :param v: The raw value. It may be None.
     :return: The escaped value.
     """
     if v is None:
         return None
-    elif isinstance(v, bool):
+    if isinstance(v, bool):
         return str(v).lower()
-    else:
-        return str(v)
+    return str(v)
 
 
 class BulkIndex(Runner):
@@ -463,7 +372,7 @@ class BulkIndex(Runner):
     Bulk indexes the given documents.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         """
         Runs one bulk indexing operation.
 
@@ -518,7 +427,7 @@ class BulkIndex(Runner):
         unit = mandatory(params, "unit", self)
         # parse responses lazily in the standard case - responses might be large thus parsing skews results and if no
         # errors have occurred we only need a small amount of information from the potentially large response.
-        if not detailed_results:
+        if not detailed_results and isinstance(es, RallyAsyncElasticsearch):
             es.return_raw_response()
 
         if with_action_metadata:
@@ -691,7 +600,7 @@ class BulkIndex(Runner):
             description = description + " | TRUNCATED " + self._error_status_summary(error_details)
         return description
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "bulk-index"
 
 
@@ -700,7 +609,7 @@ class ForceMerge(Runner):
     Runs a force merge operation against Elasticsearch.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
@@ -717,7 +626,9 @@ class ForceMerge(Runner):
             except elasticsearch.ConnectionTimeout:
                 pass
             while not complete:
-                await asyncio.sleep(params.get("poll-period"))
+                poll_period = float(params.get("poll-period", -1))
+                if poll_period >= 0.0:
+                    await asyncio.sleep(poll_period)
                 tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
                 if len(tasks["nodes"]) == 0:
                     # empty nodes response indicates no tasks
@@ -725,7 +636,7 @@ class ForceMerge(Runner):
         else:
             await es.indices.forcemerge(**merge_params)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "force-merge"
 
 
@@ -745,7 +656,7 @@ class IndicesStats(Runner):
     def _safe_string(self, v):
         return str(v) if v is not None else None
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         api_kwargs = self._default_kw_params(params)
         index = api_kwargs.pop("index", "_all")
         condition = params.get("condition")
@@ -773,7 +684,7 @@ class IndicesStats(Runner):
                 "success": True,
             }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "indices-stats"
 
 
@@ -782,11 +693,11 @@ class NodeStats(Runner):
     Gather node stats for all nodes.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         request_timeout = params.get("request-timeout")
         await es.options(request_timeout=request_timeout).nodes.stats(metric="_all")
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "node-stats"
 
 
@@ -895,12 +806,12 @@ class Query(Runner):
     * ``pages``: Total number of pages that have been retrieved.
     """
 
-    def __init__(self, config=None):
-        super().__init__(config=config)
+    def __init__(self, *, cfg: types.Config | None = None):
+        super().__init__(cfg=cfg)
         self._search_after_extractor = SearchAfterExtractor()
         self._composite_agg_extractor = CompositeAggExtractor()
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         params, request_params, transport_params, headers = self._transport_request_params(params)
         # we don't set headers at the options level because the Query runner sets them via the client's '_perform_request' method
         es = es.options(**transport_params)
@@ -926,9 +837,10 @@ class Query(Runner):
             # counter-intuitive but preserves prior behavior
             headers = None
         # disable eager response parsing - responses might be huge thus skewing results
-        es.return_raw_response()
+        if isinstance(es, RallyAsyncElasticsearch):
+            es.return_raw_response()
 
-        async def _search_after_query(es, params):
+        async def _search_after_query(es: AsyncElasticsearch, params: dict[str, Any]):
             index = params.get("index", "_all")
             pit_op = params.get("with-point-in-time-from")
             results = {
@@ -950,11 +862,9 @@ class Query(Runner):
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
                 response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
-                parsed, last_sort = self._search_after_extractor(
-                    response,
-                    bool(pit_op),
-                    results.get("hits"),  # type: ignore[arg-type]  # TODO remove the below ignore when introducing type hints
-                )
+                hits = results.get("hits")
+                assert hits is None or isinstance(hits, int)
+                parsed, last_sort = self._search_after_extractor(response, bool(pit_op), hits)
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -978,7 +888,7 @@ class Query(Runner):
 
             return results
 
-        async def _composite_agg(es, params):
+        async def _composite_agg(es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
             index = params.get("index", "_all")
             pit_op = params.get("with-point-in-time-from")
             results = {
@@ -1011,12 +921,9 @@ class Query(Runner):
 
                 body_to_send = tree_copy_composite_agg(body, path_to_composite)
                 response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
-                parsed = self._composite_agg_extractor(
-                    response,
-                    bool(pit_op),
-                    path_to_composite,
-                    results.get("hits"),  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
-                )
+                hits = results.get("hits")
+                assert hits is None or isinstance(hits, int)
+                parsed = self._composite_agg_extractor(response, bool(pit_op), path_to_composite, hits)
                 results["pages"] = page
                 results["weight"] = page
                 if results.get("hits") is None:
@@ -1076,7 +983,7 @@ class Query(Runner):
                 aggs[key_path[0]] = tree_copy_composite_agg(aggs[key_path[0]], key_path[1:])
             return obj
 
-        async def _request_body_query(es, params):
+        async def _request_body_query(es: AsyncElasticsearch, params: dict[str, Any]):
             doc_type = params.get("type")
 
             r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
@@ -1128,7 +1035,7 @@ class Query(Runner):
                     "success": True,
                 }
 
-        async def _scroll_query(es, params):
+        async def _scroll_query(es: AsyncElasticsearch, params: dict[str, Any]):
             hits = 0
             hits_relation = None
             timed_out = False
@@ -1160,12 +1067,8 @@ class Query(Runner):
                         all_results_collected = (size is not None and hits < size) or hits == 0
                     else:
                         # /_search/scroll does not accept request_cache so not providing params
-                        r = await es.perform_request(
-                            method="GET",
-                            path="/_search/scroll",
-                            body={"scroll_id": scroll_id, "scroll": "10s"},
-                            params=None,
-                            headers=headers,
+                        r = await self.request(
+                            es, "GET", "/_search/scroll", body={"scroll_id": scroll_id, "scroll": "10s"}, headers=headers
                         )
                         props = parse(r, ["timed_out", "took"], ["hits.hits"])
                         timed_out = timed_out or props.get("timed_out", False)
@@ -1232,7 +1135,7 @@ class Query(Runner):
         else:
             return {"Accept-Encoding": "identity"}
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "query"
 
 
@@ -1241,7 +1144,7 @@ class SearchAfterExtractor:
         # extracts e.g. '[1609780186, "2"]' from '"sort": [1609780186, "2"]'
         self.sort_pattern = re.compile(r"sort\":([^\]]*])")
 
-    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: Optional[int]) -> (dict, list):
+    def __call__(self, response: BytesIO, get_point_in_time: bool, hits_total: int | None) -> (dict, list):
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
         if get_point_in_time:
@@ -1266,7 +1169,7 @@ class SearchAfterExtractor:
         """
         response_str = response.getvalue().decode("UTF-8")
         index_of_last_sort = response_str.rfind('"sort"')
-        last_sort_str = re.search(self.sort_pattern, response_str[index_of_last_sort::])
+        last_sort_str = re.search(self.sort_pattern, response_str[index_of_last_sort:])
         if last_sort_str is not None:
             return json.loads(last_sort_str.group(1))
         else:
@@ -1274,7 +1177,7 @@ class SearchAfterExtractor:
 
 
 class CompositeAggExtractor:
-    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: list, hits_total: Optional[int]) -> dict:
+    def __call__(self, response: BytesIO, get_point_in_time: bool, path_to_composite_agg: list, hits_total: int | None) -> dict:
         # not a class member as we would want to mutate over the course of execution for efficiency
         properties = ["timed_out", "took"]
         if get_point_in_time:
@@ -1303,7 +1206,7 @@ class ClusterHealth(Runner):
     Get cluster health
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         @total_ordering
         class ClusterHealthStatus(Enum):
             UNKNOWN = 0
@@ -1353,7 +1256,7 @@ class ClusterHealth(Runner):
         )
         return result
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "cluster-health"
 
 
@@ -1362,7 +1265,7 @@ class PutPipeline(Runner):
     Execute the `put pipeline API <https://www.elastic.co/guide/en/elasticsearch/reference/current/put-pipeline-api.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         await es.ingest.put_pipeline(
             id=mandatory(params, "id", self),
             body=mandatory(params, "body", self),
@@ -1370,7 +1273,7 @@ class PutPipeline(Runner):
             timeout=params.get("timeout"),
         )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "put-pipeline"
 
 
@@ -1379,11 +1282,11 @@ class Refresh(Runner):
     Execute the `refresh API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         api_kwargs = self._default_kw_params(params)
         await es.indices.refresh(**api_kwargs)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "refresh"
 
 
@@ -1392,10 +1295,10 @@ class CreateIndex(Runner):
     Execute the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         indices = mandatory(params, "indices", self)
         api_kwargs = self._default_kw_params(params)
-        ## ignore invalid entries rather than erroring
+        # It ignores invalid entries.
         for term in ["index", "body"]:
             api_kwargs.pop(term, None)
         for index, body in indices:
@@ -1406,7 +1309,7 @@ class CreateIndex(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "create-index"
 
 
@@ -1415,7 +1318,7 @@ class CreateDataStream(Runner):
     Execute the `create data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-data-stream.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         data_streams = mandatory(params, "data-streams", self)
         request_params = mandatory(params, "request-params", self)
         for data_stream in data_streams:
@@ -1426,11 +1329,11 @@ class CreateDataStream(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "create-data-stream"
 
 
-async def set_destructive_requires_name(es, value):
+async def set_destructive_requires_name(es: AsyncElasticsearch, value):
     """
     Sets `action.destructive_requires_name` to provided value
     :return: the prior setting, if any
@@ -1452,7 +1355,7 @@ class DeleteIndex(Runner):
     Execute the `delete index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         ops = 0
 
         indices = mandatory(params, "indices", self)
@@ -1482,7 +1385,7 @@ class DeleteIndex(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "delete-index"
 
 
@@ -1491,7 +1394,7 @@ class DeleteDataStream(Runner):
     Execute the `delete data stream API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-data-stream.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         ops = 0
 
         data_streams = mandatory(params, "data-streams", self)
@@ -1513,7 +1416,7 @@ class DeleteDataStream(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "delete-data-stream"
 
 
@@ -1523,7 +1426,7 @@ class CreateComponentTemplate(Runner):
     <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         templates = mandatory(params, "templates", self)
         request_params = mandatory(params, "request-params", self)
         for name, body in templates:
@@ -1534,7 +1437,7 @@ class CreateComponentTemplate(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "create-component-template"
 
 
@@ -1544,7 +1447,7 @@ class DeleteComponentTemplate(Runner):
     <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-component-template.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         template_names = mandatory(params, "templates", self)
         only_if_exists = mandatory(params, "only-if-exists", self)
         request_params = mandatory(params, "request-params", self)
@@ -1564,7 +1467,7 @@ class DeleteComponentTemplate(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "delete-component-template"
 
 
@@ -1573,7 +1476,7 @@ class CreateComposableTemplate(Runner):
     Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-put-template.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         templates = mandatory(params, "templates", self)
         request_params = mandatory(params, "request-params", self)
         for template, body in templates:
@@ -1585,7 +1488,7 @@ class CreateComposableTemplate(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "create-composable-template"
 
 
@@ -1594,7 +1497,7 @@ class DeleteComposableTemplate(Runner):
     Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-template.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         templates = mandatory(params, "templates", self)
         only_if_exists = mandatory(params, "only-if-exists", self)
         request_params = mandatory(params, "request-params", self)
@@ -1634,7 +1537,7 @@ class DeleteComposableTemplate(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "delete-composable-template"
 
 
@@ -1643,7 +1546,7 @@ class CreateIndexTemplate(Runner):
     Execute the `PUT index template API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         templates = mandatory(params, "templates", self)
         request_params = params.get("request-params", {})
         for template, body in templates:
@@ -1654,7 +1557,7 @@ class CreateIndexTemplate(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "create-index-template"
 
 
@@ -1664,7 +1567,7 @@ class DeleteIndexTemplate(Runner):
     <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-templates.html#delete>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         template_names = mandatory(params, "templates", self)
         only_if_exists = params.get("only-if-exists", False)
         request_params = params.get("request-params", {})
@@ -1703,7 +1606,7 @@ class DeleteIndexTemplate(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "delete-index-template"
 
 
@@ -1727,7 +1630,7 @@ class ShrinkIndex(Runner):
         if not result["success"]:
             raise exceptions.RallyAssertionError(f"Failed to wait for [{description}].")
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         source_index = mandatory(params, "source-index", self)
         source_indices_get = await es.indices.get(index=source_index)
         source_indices = list(source_indices_get.keys())
@@ -1785,7 +1688,7 @@ class ShrinkIndex(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "shrink-index"
 
 
@@ -1794,15 +1697,12 @@ class CreateMlDatafeed(Runner):
     Execute the `create datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-datafeed.html>`_.
     """
 
-    async def __call__(self, es, params):
-        # pylint: disable=import-outside-toplevel
-        import elasticsearch
-
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = mandatory(params, "body", self)
         try:
             await es.ml.put_datafeed(datafeed_id=datafeed_id, body=body)
-        except elasticsearch.BadRequestError:
+        except BadRequestError:
             # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="PUT",
@@ -1810,7 +1710,7 @@ class CreateMlDatafeed(Runner):
                 body=body,
             )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "create-ml-datafeed"
 
 
@@ -1819,16 +1719,13 @@ class DeleteMlDatafeed(Runner):
     Execute the `delete datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-datafeed.html>`_.
     """
 
-    async def __call__(self, es, params):
-        # pylint: disable=import-outside-toplevel
-        import elasticsearch
-
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         datafeed_id = mandatory(params, "datafeed-id", self)
         force = params.get("force", False)
         try:
             # we don't want to fail if a datafeed does not exist, thus we ignore 404s.
             await es.ml.delete_datafeed(datafeed_id=datafeed_id, force=force, ignore=[404])
-        except elasticsearch.BadRequestError:
+        except BadRequestError:
             # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="DELETE",
@@ -1836,7 +1733,7 @@ class DeleteMlDatafeed(Runner):
                 params={"force": escape(force), "ignore": 404},
             )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "delete-ml-datafeed"
 
 
@@ -1845,10 +1742,7 @@ class StartMlDatafeed(Runner):
     Execute the `start datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-start-datafeed.html>`_.
     """
 
-    async def __call__(self, es, params):
-        # pylint: disable=import-outside-toplevel
-        import elasticsearch
-
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         datafeed_id = mandatory(params, "datafeed-id", self)
         body = params.get("body")
         start = params.get("start")
@@ -1856,7 +1750,7 @@ class StartMlDatafeed(Runner):
         timeout = params.get("timeout")
         try:
             await es.ml.start_datafeed(datafeed_id=datafeed_id, body=body, start=start, end=end, timeout=timeout)
-        except elasticsearch.BadRequestError:
+        except BadRequestError:
             # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="POST",
@@ -1864,7 +1758,7 @@ class StartMlDatafeed(Runner):
                 body=body,
             )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "start-ml-datafeed"
 
 
@@ -1873,7 +1767,7 @@ class StopMlDatafeed(Runner):
     Execute the `stop datafeed API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-stop-datafeed.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
@@ -1895,7 +1789,7 @@ class StopMlDatafeed(Runner):
                 params=request_params,
             )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "stop-ml-datafeed"
 
 
@@ -1904,7 +1798,7 @@ class CreateMlJob(Runner):
     Execute the `create job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-put-job.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         # pylint: disable=import-outside-toplevel
         import elasticsearch
 
@@ -1920,7 +1814,7 @@ class CreateMlJob(Runner):
                 body=body,
             )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "create-ml-job"
 
 
@@ -1929,16 +1823,13 @@ class DeleteMlJob(Runner):
     Execute the `delete job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-delete-job.html>`_.
     """
 
-    async def __call__(self, es, params):
-        # pylint: disable=import-outside-toplevel
-        import elasticsearch
-
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
         # we don't want to fail if a job does not exist, thus we ignore 404s.
         try:
             await es.ml.delete_job(job_id=job_id, force=force, ignore=[404])
-        except elasticsearch.BadRequestError:
+        except BadRequestError:
             # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="DELETE",
@@ -1946,7 +1837,7 @@ class DeleteMlJob(Runner):
                 params={"force": escape(force), "ignore": 404},
             )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "delete-ml-job"
 
 
@@ -1955,21 +1846,18 @@ class OpenMlJob(Runner):
     Execute the `open job API <https://www.elastic.co/guide/en/elasticsearch/reference/current/ml-open-job.html>`_.
     """
 
-    async def __call__(self, es, params):
-        # pylint: disable=import-outside-toplevel
-        import elasticsearch
-
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         job_id = mandatory(params, "job-id", self)
         try:
             await es.ml.open_job(job_id=job_id)
-        except elasticsearch.BadRequestError:
+        except BadRequestError:
             # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             await es.perform_request(
                 method="POST",
                 path=f"/_xpack/ml/anomaly_detectors/{job_id}/_open",
             )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "open-ml-job"
 
 
@@ -1978,16 +1866,13 @@ class CloseMlJob(Runner):
     Execute the `close job API <http://www.elastic.co/guide/en/elasticsearch/reference/current/ml-close-job.html>`_.
     """
 
-    async def __call__(self, es, params):
-        # pylint: disable=import-outside-toplevel
-        import elasticsearch
-
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         job_id = mandatory(params, "job-id", self)
         force = params.get("force", False)
         timeout = params.get("timeout")
         try:
             await es.ml.close_job(job_id=job_id, force=force, timeout=timeout)
-        except elasticsearch.BadRequestError:
+        except BadRequestError:
             # TODO: remove the fallback to '_xpack' path when we drop support for Elasticsearch 6.8
             request_params = {
                 "force": escape(force),
@@ -2001,12 +1886,12 @@ class CloseMlJob(Runner):
                 params=request_params,
             )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "close-ml-job"
 
 
 class RawRequest(Runner):
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
 
@@ -2021,13 +1906,13 @@ class RawRequest(Runner):
             headers = None
 
         # disable eager response parsing - responses might be huge thus skewing results
-        es.return_raw_response()
-
+        if isinstance(es, RallyAsyncElasticsearch):
+            es.return_raw_response()
         await es.perform_request(
             method=params.get("method", "GET"), path=path, headers=headers, body=params.get("body"), params=request_params
         )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "raw-request"
 
 
@@ -2036,14 +1921,16 @@ class Sleep(Runner):
     Sleeps for the specified duration not issuing any request.
     """
 
-    async def __call__(self, es, params):
-        es.on_request_start()
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
+        if isinstance(es, RallyAsyncElasticsearch):
+            es.on_request_start()
         try:
             await asyncio.sleep(mandatory(params, "duration", "sleep"))
         finally:
-            es.on_request_end()
+            if isinstance(es, RallyAsyncElasticsearch):
+                es.on_request_end()
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "sleep"
 
 
@@ -2052,10 +1939,10 @@ class DeleteSnapshotRepository(Runner):
     Deletes a snapshot repository
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         await es.snapshot.delete_repository(repository=mandatory(params, "repository", repr(self)), ignore=[404])
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "delete-snapshot-repository"
 
 
@@ -2064,13 +1951,13 @@ class CreateSnapshotRepository(Runner):
     Creates a new snapshot repository
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         request_params = params.get("request-params", {})
         await es.snapshot.create_repository(
             name=mandatory(params, "repository", repr(self)), body=mandatory(params, "body", repr(self)), params=request_params
         )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "create-snapshot-repository"
 
 
@@ -2079,7 +1966,7 @@ class CreateSnapshot(Runner):
     Creates a new snapshot repository
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         wait_for_completion = params.get("wait-for-completion", False)
         repository = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
@@ -2088,7 +1975,7 @@ class CreateSnapshot(Runner):
         api_kwargs = self._default_kw_params(params)
         await es.snapshot.create(repository=repository, snapshot=snapshot, wait_for_completion=wait_for_completion, **api_kwargs)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "create-snapshot"
 
 
@@ -2097,7 +1984,7 @@ class WaitForSnapshotCreate(Runner):
     Waits until a currently running <snapshot> on a given repository has finished successfully and returns detailed metrics.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         repository = mandatory(params, "repository", repr(self))
         snapshot = mandatory(params, "snapshot", repr(self))
         wait_period = params.get("completion-recheck-wait-period", 1)
@@ -2143,7 +2030,7 @@ class WaitForSnapshotCreate(Runner):
             "file_count": file_count,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self):
         return "wait-for-snapshot-create"
 
 
@@ -2152,7 +2039,7 @@ class WaitForCurrentSnapshotsCreate(Runner):
     Waits until all currently running snapshots on a given repository have completed
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         repository = mandatory(params, "repository", repr(self))
         wait_period = params.get("completion-recheck-wait-period", 1)
         es_info = await es.info()
@@ -2162,7 +2049,10 @@ class WaitForCurrentSnapshotsCreate(Runner):
 
         # significantly reduce response size when lots of snapshots have been taken
         # only available since ES 8.3.0 (https://github.com/elastic/elasticsearch/pull/86269)
-        if (Version.from_string(es_version) >= Version.from_string("8.3.0")) or es.is_serverless:
+        serverless = False
+        if isinstance(es, RallyAsyncElasticsearch):
+            serverless = es.is_serverless
+        if (Version.from_string(es_version) >= Version.from_string("8.3.0")) or serverless:
             request_args["index_names"] = False
 
         while True:
@@ -2176,7 +2066,7 @@ class WaitForCurrentSnapshotsCreate(Runner):
         # getting detailed stats per snapshot using the snapshot status api can be very expensive.
         # return nothing and rely on Rally's own service_time measurement for the duration.
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "wait-for-current-snapshots-create"
 
 
@@ -2185,7 +2075,7 @@ class RestoreSnapshot(Runner):
     Restores a snapshot from an already registered repository
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
 
@@ -2205,12 +2095,12 @@ class RestoreSnapshot(Runner):
             params=request_params,
         )
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "restore-snapshot"
 
 
 class IndicesRecovery(Runner):
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         index = mandatory(params, "index", repr(self))
         wait_period = params.get("completion-recheck-wait-period", 1)
 
@@ -2258,7 +2148,7 @@ class IndicesRecovery(Runner):
             "stop_time_millis": total_end_millis,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "wait-for-recovery"
 
 
@@ -2268,10 +2158,10 @@ class PutSettings(Runner):
     `cluster settings API <http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-update-settings.html>_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         await es.cluster.put_settings(body=mandatory(params, "body", repr(self)))
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "put-settings"
 
 
@@ -2280,13 +2170,13 @@ class CreateTransform(Runner):
     Execute the `create transform API https://www.elastic.co/guide/en/elasticsearch/reference/current/put-transform.html`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         transform_id = mandatory(params, "transform-id", self)
         body = mandatory(params, "body", self)
         defer_validation = params.get("defer-validation", False)
         await es.transform.put_transform(transform_id=transform_id, body=body, defer_validation=defer_validation)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "create-transform"
 
 
@@ -2296,13 +2186,13 @@ class StartTransform(Runner):
     https://www.elastic.co/guide/en/elasticsearch/reference/current/start-transform.html`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         transform_id = mandatory(params, "transform-id", self)
         timeout = params.get("timeout")
 
         await es.transform.start_transform(transform_id=transform_id, timeout=timeout)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "start-transform"
 
 
@@ -2311,7 +2201,7 @@ class WaitForTransform(Runner):
     Wait for the transform until it reaches a certain checkpoint.
     """
 
-    def __init__(self):
+    def __init__(self, *, cfg=types.Config):
         super().__init__()
         self._completed = False
         self._percent_completed = 0.0
@@ -2327,7 +2217,7 @@ class WaitForTransform(Runner):
     def percent_completed(self):
         return self._percent_completed
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         """
         stop the transform and wait until transform has finished return stats
 
@@ -2425,7 +2315,7 @@ class WaitForTransform(Runner):
                 # sleep for a while, so stats is not called to often
                 await asyncio.sleep(poll_interval)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "wait-for-transform"
 
 
@@ -2435,13 +2325,13 @@ class DeleteTransform(Runner):
     https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-transform.html`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         transform_id = mandatory(params, "transform-id", self)
         force = params.get("force", False)
         # we don't want to fail if a job does not exist, thus we ignore 404s.
         await es.transform.delete_transform(transform_id=transform_id, force=force, ignore=[404])
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "delete-transform"
 
 
@@ -2461,7 +2351,7 @@ class TransformStats(Runner):
     def _safe_string(self, v):
         return str(v) if v is not None else None
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         api_kwargs = self._default_kw_params(params)
         transform_id = mandatory(params, "transform-id", self)
         condition = params.get("condition")
@@ -2491,12 +2381,12 @@ class TransformStats(Runner):
                 "success": True,
             }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "transform-stats"
 
 
 class SubmitAsyncSearch(Runner):
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         request_params = params.get("request-params", {})
 
         # defaults wait_for_completion_timeout = 0 to avoid sync fallback for fast searches
@@ -2509,7 +2399,7 @@ class SubmitAsyncSearch(Runner):
         search_id = response.get("id")
         CompositeContext.put(op_name, search_id)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "submit-async-search"
 
 
@@ -2522,7 +2412,7 @@ def async_search_ids(op_names):
 
 
 class GetAsyncSearch(Runner):
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         success = True
         searches = mandatory(params, "retrieve-results-for", self)
         request_params = params.get("request-params", {})
@@ -2549,23 +2439,23 @@ class GetAsyncSearch(Runner):
             "stats": stats,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "get-async-search"
 
 
 class DeleteAsyncSearch(Runner):
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> None:
         searches = mandatory(params, "delete-results-for", self)
         for search_id, search in async_search_ids(searches):
             await es.async_search.delete(id=search_id)
             CompositeContext.remove(search)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "delete-async-search"
 
 
 class OpenPointInTime(Runner):
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         op_name = mandatory(params, "name", self)
         index = mandatory(params, "index", self)
         keep_alive = params.get("keep-alive", "1m")
@@ -2573,12 +2463,12 @@ class OpenPointInTime(Runner):
         id = response.get("id")
         CompositeContext.put(op_name, id)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "open-point-in-time"
 
 
 class ClosePointInTime(Runner):
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         pit_op = mandatory(params, "with-point-in-time-from", self)
         pit_id = CompositeContext.get(pit_op)
         request_params = params.get("request-params", {})
@@ -2586,7 +2476,7 @@ class ClosePointInTime(Runner):
         await es.close_point_in_time(body=body, params=request_params, headers=None)
         CompositeContext.remove(pit_op)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "close-point-in-time"
 
 
@@ -2639,8 +2529,8 @@ class Composite(Runner):
     Executes a complex request structure which is measured by Rally as one composite operation.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *, cfg: types.Config | None = None):
+        super().__init__(cfg=cfg)
         # Since Composite is marked as serverless.Status.Public, only add public
         # operation types here.
         self.supported_op_types = [
@@ -2657,18 +2547,19 @@ class Composite(Runner):
             "field-caps",
         ]
 
-    async def run_stream(self, es, stream, connection_limit):
-        streams = []
+    async def run_stream(self, es: AsyncElasticsearch, stream: Iterable[dict[str, Any]], connection_limit):
+        streams: list[asyncio.Task] = []
         timings = []
         try:
             for item in stream:
                 if "stream" in item:
                     streams.append(asyncio.create_task(self.run_stream(es, item["stream"], connection_limit)))
-                elif "operation-type" in item:
+                    continue
+
+                if "operation-type" in item:
                     # consume all prior streams first
                     if streams:
-                        streams_timings = await asyncio.gather(*streams)
-                        for stream_timings in streams_timings:
+                        for stream_timings in await asyncio.gather(*streams):
                             timings += stream_timings
                         streams = []
                     op_type = item["operation-type"]
@@ -2679,7 +2570,7 @@ class Composite(Runner):
                     runner = RequestTiming(runner_for(op_type))
                     async with connection_limit:
                         async with runner:
-                            response = await runner({"default": es}, item)
+                            response: dict[str, Any] | None = await runner(es, item)
                             if response:
                                 # TODO: support calculating dependent's throughput
                                 # drop weight and unit metadata but keep the rest
@@ -2690,9 +2581,10 @@ class Composite(Runner):
                                     timings.append(response)
                             else:
                                 timings.append(None)
+                    continue
 
-                else:
-                    raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
+                raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
+
         except BaseException:
             # stop all already created tasks in case of exceptions
             for s in streams:
@@ -2702,12 +2594,11 @@ class Composite(Runner):
 
         # complete any outstanding streams
         if streams:
-            streams_timings = await asyncio.gather(*streams)
-            for stream_timings in streams_timings:
+            for stream_timings in await asyncio.gather(*streams):
                 timings += stream_timings
         return timings
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         requests = mandatory(params, "requests", self)
         max_connections = params.get("max-connections", sys.maxsize)
         async with CompositeContext():
@@ -2718,7 +2609,7 @@ class Composite(Runner):
             "dependent_timing": response,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "composite"
 
 
@@ -2762,7 +2653,7 @@ class CreateIlmPolicy(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "create-ilm-policy"
 
 
@@ -2772,7 +2663,7 @@ class DeleteIlmPolicy(Runner):
     <https://www.elastic.co/guide/en/elasticsearch/reference/current/ilm-delete-lifecycle.html>`_.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         policy_name = mandatory(params, "policy-name", self)
         request_params = params.get("request-params", {})
         error_trace = request_params.get("error_trace", None)
@@ -2789,7 +2680,7 @@ class DeleteIlmPolicy(Runner):
             "success": True,
         }
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "delete-ilm-policy"
 
 
@@ -2798,7 +2689,7 @@ class Sql(Runner):
     Executes an SQL query and optionally paginates through subsequent pages.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         body = mandatory(params, "body", self)
         if body.get("query") is None:
             raise exceptions.DataError(
@@ -2806,6 +2697,9 @@ class Sql(Runner):
                 "Add it to your parameter source and try again."
             )
         pages = params.get("pages", 1)
+
+        if not isinstance(es, RallyAsyncElasticsearch):
+            raise TypeError("Expected RallyAsyncElasticsearch, got %r" % type(es))
 
         es.return_raw_response()
 
@@ -2825,7 +2719,7 @@ class Sql(Runner):
 
         return {"weight": weight, "unit": "ops", "success": True}
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "sql"
 
 
@@ -2834,7 +2728,7 @@ class Downsample(Runner):
     Executes a downsampling operation creating the target index and aggregating data in the source index on the @timestamp field.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         params, request_params, transport_params, request_headers = self._transport_request_params(params)
         es = es.options(**transport_params)
 
@@ -2867,7 +2761,7 @@ class Downsample(Runner):
 
         return {"weight": 1, "unit": "ops", "success": True}
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "downsample"
 
 
@@ -2877,7 +2771,7 @@ class FieldCaps(Runner):
     <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-field-caps.html>` _.
     """
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         index = params.get("index", "_all")
         fields = params.get("fields", "*")
         body = params.get("body", {})
@@ -2889,12 +2783,12 @@ class FieldCaps(Runner):
 
         return {"weight": 1, "unit": "ops", "success": True}
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "field-caps"
 
 
 class Esql(Runner):
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
         query = mandatory(params, "query", self)
@@ -2907,25 +2801,23 @@ class Esql(Runner):
             # counter-intuitive, but preserves prior behavior
             headers = None
         # disable eager response parsing - responses might be huge thus skewing results
-        es.return_raw_response()
+        if isinstance(es, RallyAsyncElasticsearch):
+            es.return_raw_response()
         await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
         return {"success": True, "unit": "ops", "weight": 1}
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "esql"
 
 
-class RequestTiming(Runner, Delegator):
-    def __init__(self, delegate):
-        super().__init__(delegate=delegate)
+class RequestTiming(WrapperRunner):
 
-    async def __aenter__(self):
-        await self.delegate.__aenter__()
-        return self
-
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         absolute_time = time.time()
-        with es["default"].new_request_context() as request_context:
+        request_context = contextlib.nullcontext()
+        if isinstance(es, RallyAsyncElasticsearch):
+            request_context = es.new_request_context()
+        with request_context:
             return_value = await self.delegate(es, params)
             if isinstance(return_value, tuple) and len(return_value) == 2:
                 total_ops, total_ops_unit = return_value
@@ -2955,13 +2847,10 @@ class RequestTiming(Runner, Delegator):
             }
         return result
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
-
 
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
 # TODO: It would maybe be interesting to add meta-data on how many retries there were.
-class Retry(Runner, Delegator):
+class Retry(Runner, WrapperRunner):
     """
     This runner can be used as a wrapper around regular runners to retry operations.
 
@@ -2984,7 +2873,7 @@ class Retry(Runner, Delegator):
         await self.delegate.__aenter__()
         return self
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]):
         # pylint: disable=import-outside-toplevel
         import socket
 
@@ -3048,7 +2937,7 @@ class Retry(Runner, Delegator):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "retryable %s" % repr(self.delegate)
 
 
@@ -3068,10 +2957,11 @@ class RunUntil(Runner):
         }
         self.operators = {"exists": lambda v, _: v is not None, "not_exists": lambda v, _: v is None, **self.numerical_operators}
 
-    async def __call__(self, es, params):
+    async def __call__(self, es: AsyncElasticsearch, params: dict[str, Any]) -> dict[str, Any]:
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
-        es.return_raw_response()
+        if isinstance(es, RallyAsyncElasticsearch):
+            es.return_raw_response()
         path = mandatory(params, "path", self)
         method = params.get("method", "GET")
         body = params.get("body", None)
@@ -3117,5 +3007,5 @@ class RunUntil(Runner):
         target_value: int | float = criterion.get("value")
         return self.operators[operator](value, target_value)
 
-    def __repr__(self, *args, **kwargs):
+    def __repr__(self) -> str:
         return "run-until"
