@@ -16,7 +16,6 @@
 # under the License.
 
 import it
-from it import ensure_prerequisites  # pylint: disable=unused-import
 
 
 @it.all_rally_configs

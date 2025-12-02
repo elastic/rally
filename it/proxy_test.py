@@ -22,7 +22,9 @@ import pytest
 
 import it
 from esrally.utils import process
-from it import ensure_prerequisites, fresh_log_file  # pylint: disable=unused-import
+
+# pylint: disable=unused-import
+from it import fresh_log_file
 
 HttpProxy = collections.namedtuple("HttpProxy", ["authenticated_url", "anonymous_url"])
 

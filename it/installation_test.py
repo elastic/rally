@@ -23,7 +23,6 @@ import json
 import os
 
 import it
-from it import ensure_prerequisites  # pylint: disable=unused-import
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _CI_VARS = ".ci/variables.json"

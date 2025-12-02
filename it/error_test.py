@@ -16,7 +16,6 @@
 # under the License.
 import it
 from esrally.utils import process
-from it import ensure_prerequisites  # pylint: disable=unused-import
 
 
 @it.rally_in_mem

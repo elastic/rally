@@ -20,7 +20,6 @@ import uuid
 import pytest
 
 import it
-from it import ensure_prerequisites  # pylint: disable=unused-import
 
 
 @pytest.fixture(scope="module")

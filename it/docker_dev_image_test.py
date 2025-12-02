@@ -20,7 +20,6 @@ import os
 import it
 from esrally import version
 from esrally.utils import process
-from it import ensure_prerequisites  # pylint: disable=unused-import
 
 
 def test_docker_geonames():
