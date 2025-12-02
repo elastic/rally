@@ -2857,12 +2857,14 @@ class Downsample(Runner):
                 "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
                 "Add it to your parameter source and try again."
             )
+        sampling_method = params.get("sampling-method")
 
         path = f"/{source_index}/_downsample/{target_index}"
 
-        await es.perform_request(
-            method="POST", path=path, body={"fixed_interval": fixed_interval}, params=request_params, headers=request_headers
-        )
+        request_body = {"fixed_interval": fixed_interval}
+        if sampling_method:
+            request_body["sampling_method"] = sampling_method
+        await es.perform_request(method="POST", path=path, body=request_body, params=request_params, headers=request_headers)
 
         return {"weight": 1, "unit": "ops", "success": True}
 
