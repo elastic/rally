@@ -18,9 +18,6 @@ import pytest
 
 import it
 
-# pylint: disable=unused-import
-from it import fresh_log_file
-
 
 @pytest.fixture(autouse=True)
 def setup_esrallyd():

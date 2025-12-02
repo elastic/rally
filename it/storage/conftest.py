@@ -14,3 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shared_setup():
+    pass
