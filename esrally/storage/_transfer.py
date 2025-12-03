@@ -412,17 +412,18 @@ class Transfer:
         with open(status_filename, "w") as fd:
             json.dump(document, fd)
 
-    def _run(self):
+    def _run(self) -> None:
         """It downloads part of the file."""
+        # pylint: disable=too-many-return-statements
+
         if self._finished:
             # Anything else to do.
             return
 
-        cancelled = False  # It indicates the task has been interrupted.
+        if self._started.set():
+            # The first executed task will enter here.
+            LOG.info("transfer started: %s", self.url)
         try:
-            if self._started.set():
-                # The first executed task will enter here.
-                LOG.info("transfer started: %s", self.url)
             # It opens a portion of the file to write to.
             with self._open() as fd:
                 if fd is None:
@@ -480,8 +481,9 @@ class Transfer:
                             )
 
         except StreamClosedError as ex:
-            LOG.info("transfer cancelled: %s: %s", self.url, ex)
-            cancelled = True
+            if self._finished.set():
+                LOG.info("transfer closed: %s: %s", self.url, ex)
+                return
         except ServiceUnavailableError as ex:
             # The client raised this error because the maximum number of client connections for each remote server
             # has been already established.
@@ -489,46 +491,46 @@ class Transfer:
                 count = self._workers.count
                 max_count = max(1, count - 1)
                 self._workers.max_count = max_count
-            # In case of the count of concurrent tasks is greater than 1 then it forbids to reschedule it.
-            cancelled = count > 1
             LOG.info("service unavailable: %s, workers=%d/%d: %s", self.url, count, max_count, ex)
+            if count > 1:
+                return
         except TimeoutError as ex:
             # The client raised this error because it timed out waiting for answer from server.
             LOG.info("transfer timed out (url=%s): %s", self.url, ex)
         except Exception as ex:
             # This error will brutally interrupt the transfer.
-            LOG.exception("task failed: %s", self.url)
-            with self._lock:
-                self._errors.append(ex)
+            LOG.exception("transfer failed: %s", self.url)
+            self._errors.append(ex)
             # It will interrupt all other tasks execution by closing the streams causing an error in the fd.write()
             # method.
             self.close()
+            return
         finally:
             # It decreases the number of scheduled tasks, allowing a new tasks to be submit.
             self._workers.done()
             self.save_status()
-            if self._errors:
-                if self._finished.set():
-                    # The first task entered here will write the error(s) to the log fine.
-                    LOG.error("transfer failed: %s:\n - %s", self.url, "\n - ".join(str(e) for e in self._errors))
-            elif cancelled:
-                # It will submit any task for execution.
-                LOG.debug("task cancelled: %s", self.url)
-            elif not self.todo and not self._workers.count:
-                # There is nothing more to do: the transfer has been completed with success.
-                LOG.info("Checking transferred document: %s", self.url)
-                try:
-                    self._check_finished_document()
-                except Exception as ex:
-                    self._errors.append(ex)
-                    raise
 
-                if self._finished.set():
-                    # Only the first task that enters here will write this message.
-                    LOG.info("transfer completed: %s", self.url)
-            else:
-                # It eventually re-schedule another task for execution.
-                self.start()
+        if self.todo:
+            # It eventually re-spawn a new task unless the work is complete.
+            self.start()
+            return
+
+        with self._lock:
+            # Only the last worker will continue further this point to finalize the transfer.
+            if self._workers.count:
+                return
+
+        # The transfer has been completed and this is the last worker.
+        # It checks the download file before firing the finished event.
+        try:
+            self._check_finished_document()
+            LOG.info("transfer completed: %s", self.url)
+        except Exception as ex:
+            self._errors.append(ex)
+            LOG.error("file verification failed: %s", self.url)
+            raise
+        finally:
+            self._finished.set()
 
     def close(self):
         """It cancels all transfer tasks and closes all open streams."""
@@ -704,18 +706,21 @@ class Transfer:
                 raise ValueError("Transfer has not been finished.")
             if self._fds:
                 raise ValueError("Some file writers is still there.")
+            if self._workers.count:
+                raise ValueError("Workers count is > 0.")
             if not os.path.isfile(self.path):
                 raise FileNotFoundError(self.path)
-            want_size = self._document_length
-            if want_size is not None:
-                size = os.path.getsize(self.path)
-                if size != want_size:
-                    raise ValueError(f"Unexpected file size: {size}, want {want_size}")
-                want_done = Range(0, want_size)
-                if self._done != want_done:
-                    raise ValueError(f"Unexpected done range: {self._done}, want {want_done}.")
-            want_checksum = _crc32c.Checksum.from_base64(self._crc32c) if self._crc32c else None
-            if want_checksum is not None:
+
+            if not self._document_length or not self._done:
+                # I can't make any further verification if I don't know the file size.
+                return
+
+            size = os.path.getsize(self.path)
+            if size < self._done.size:
+                raise ValueError(f"Transferred file has been truncated: size={size}, want={self._done.size}.")
+
+            if self._done == Range(0, self._document_length) and self._crc32c:
+                want_checksum = _crc32c.Checksum.from_base64(self._crc32c)
                 checksum = _crc32c.Checksum.from_filename(self.path)
                 if checksum != want_checksum:
                     raise ValueError(f"Unexpected checksum: {checksum}, want {want_checksum}")

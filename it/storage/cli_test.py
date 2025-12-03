@@ -248,6 +248,11 @@ class GetCase:
         want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
         want_status={FIRST_URL: {"done": "0-63457"}},
     ),
+    range=GetCase(
+        ["get", "--range=1024-2043", FIRST_URL],
+        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
+        want_status={FIRST_URL: {"done": "1024-2043"}},
+    ),
     two_urls=GetCase(
         ["get", "--range=0-1023", FIRST_URL, SECOND_PATH],
         want_stderr_lines=[
@@ -255,11 +260,6 @@ class GetCase:
             f"INFO {LOGGER_NAME} Transfer finished: {SECOND_URL}",
         ],
         want_status={FIRST_URL: {"done": "0-1023"}, SECOND_URL: {"done": "0-1023"}},
-    ),
-    range=GetCase(
-        ["get", "--range=1024-2043", FIRST_URL],
-        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
-        want_status={FIRST_URL: {"done": "1024-2043"}},
     ),
     resume_after_get=GetCase(
         ["get", "--range=-1024"],
