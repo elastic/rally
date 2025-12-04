@@ -732,6 +732,8 @@ class Transfer:
         self.close()
         errors: list[Exception] = []
         for p in [self.path, self.status_file_path]:
+            if not os.path.isfile(p):
+                continue
             try:
                 LOG.debug("Delete file: %s", p)
                 os.remove(p)
