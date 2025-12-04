@@ -6038,22 +6038,23 @@ class TestDownsampleRunner:
         es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Downsample()
-        params = {
-            "operation-type": "downsample",
-            "fixed-interval": "1d",
-            "source-index": "source-index",
-            "target-index": "target-index",
-        }
+        params = {"operation-type": "downsample", "fixed-interval": "1d", "source-index": "source-index", "target-index": "target-index"}
+        sampling_method = random.choice(["aggregate", "last_value", None])
+        if sampling_method:
+            params["sampling-method"] = sampling_method
 
         async with sql_runner:
             result = await sql_runner(es, params)
 
         assert result == {"success": True, "weight": 1, "unit": "ops"}
 
+        expected_request_body = {"fixed_interval": params.get("fixed-interval")}
+        if sampling_method:
+            expected_request_body["sampling_method"] = sampling_method
         es.perform_request.assert_awaited_once_with(
             method="POST",
             path="/source-index/_downsample/target-index",
-            body={"fixed_interval": params.get("fixed-interval")},
+            body=expected_request_body,
             params={},
             headers={},
         )

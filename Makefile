@@ -204,7 +204,7 @@ it: venv
 
 # It runs serverless integration tests.
 it_serverless: install_pytest_rally_plugin
-	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_serverless it/track_repo_compatibility $(ARGS)
+	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_tracks_serverless it/track_repo_compatibility $(ARGS)
 
 # It runs rally_tracks_compat integration tests.
 it_tracks_compat: install_pytest_rally_plugin
