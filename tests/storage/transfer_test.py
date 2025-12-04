@@ -196,6 +196,8 @@ def test_transfer(case: TransferCase, executor: dummy.DummyExecutor, local_dir: 
     try:
         # This is only needed to eventually extract the first transfer failure (if any).
         transfer.wait(timeout=0.0)
+    except TimeoutError:
+        assert case.want_final_error is None
     except Exception as exc:
         assert case.want_final_error is not None
         assert isinstance(exc, case.want_final_error)

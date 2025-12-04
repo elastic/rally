@@ -167,8 +167,6 @@ class TransferManager:
             with self._lock:
                 self._transfers[tr.url] = tr
             tr.start(todo=todo)
-            self._update_transfers()
-
         return tr
 
     def list(

@@ -506,17 +506,21 @@ class Transfer:
             self.close()
             return
         finally:
-            # It decreases the number of scheduled tasks, allowing a new tasks to be submit.
-            self._workers.done()
-            self.save_status()
+            self._finish_task()
+
+    def _finish_task(self) -> None:
+        # It decreases the number of scheduled tasks, allowing another task to be submitted.
+        self._workers.done()
+        # It updates the status file.
+        self.save_status()
 
         if self.todo:
-            # It eventually re-spawn a new task unless the work is complete.
+            # It eventually starts a new task unless the work is complete.
             self.start()
             return
 
+        # Only the last worker will continue further this point to finalize the transfer.
         with self._lock:
-            # Only the last worker will continue further this point to finalize the transfer.
             if self._workers.count:
                 return
 
@@ -669,13 +673,12 @@ class Transfer:
     def info(self, *, stats: bool = False, mirror_failures: bool = False) -> str:
         return json.dumps(self.pretty(stats=stats, mirror_failures=mirror_failures), indent=2)
 
-    def wait(self, timeout: float | None = None) -> bool:
+    def wait(self, timeout: float | None = None) -> None:
         """It waits for transfer termination."""
         if not self._finished.wait(timeout):
-            return False
+            raise TimeoutError(f"Transfer not finished: {self.url}")
         for ex in self._errors:
             raise ex
-        return True
 
     @property
     def errors(self) -> list[Exception]:

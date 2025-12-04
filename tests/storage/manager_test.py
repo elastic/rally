@@ -105,15 +105,16 @@ def test_get(case: GetCase, manager: TransferManager, dummy_executor: dummy.Dumm
 
     assert not case.want_error
 
-    got = tr.wait(timeout=0.0)
-    assert not got
+    with pytest.raises(TimeoutError):
+        tr.wait(timeout=0.0)
+    assert not tr.finished
 
     if case.path is not None:
         assert os.path.join(tmpdir, case.path) == tr.path
 
     dummy_executor.execute_tasks()
-    got = tr.wait(timeout=0.0)
-    assert got
+    tr.wait(timeout=0.0)
+    assert tr.finished
 
     if case.want_data is not None:
         assert os.path.exists(tr.path)
@@ -136,7 +137,8 @@ def test_transfer_manager(tmpdir: os.PathLike, cfg: StorageConfig) -> None:
     assert isinstance(manager, TransferManager)
 
     tr = manager.get(url=SIMPLE_URL, document_length=len(SIMPLE_DATA))
-    assert tr.wait(timeout=10.0)
+    tr.wait(timeout=10.0)
+    assert tr.finished
     assert os.path.exists(tr.path)
     assert os.path.getsize(tr.path) == len(SIMPLE_DATA)
 
