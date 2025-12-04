@@ -187,7 +187,7 @@ class TransferManager:
                 stderr = find_result.stderr.strip().decode("utf-8")
                 if stderr:
                     message += f"\nSTDERR:\n{stderr}"
-                LOG.info(message)
+                LOG.debug(message)
                 raise FileNotFoundError(message)
 
             urls = [

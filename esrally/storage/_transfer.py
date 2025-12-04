@@ -154,6 +154,8 @@ class Transfer:
     servers.
     """
 
+    # pylint: disable=too-many-public-methods
+
     def __init__(
         self,
         client: Client,
@@ -414,8 +416,6 @@ class Transfer:
 
     def _run(self) -> None:
         """It downloads part of the file."""
-        # pylint: disable=too-many-return-statements
-
         if self._finished:
             # Anything else to do.
             return
@@ -727,3 +727,15 @@ class Transfer:
                 checksum = _crc32c.Checksum.from_filename(self.path)
                 if checksum != want_checksum:
                     raise ValueError(f"Unexpected checksum: {checksum}, want {want_checksum}")
+
+    def prune(self):
+        self.close()
+        errors: list[Exception] = []
+        for p in [self.path, self.status_file_path]:
+            try:
+                LOG.debug("Delete file: %s", p)
+                os.remove(p)
+            except Exception as ex:
+                errors.append(ex)
+        if errors:
+            raise errors[0]
