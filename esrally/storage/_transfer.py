@@ -16,44 +16,123 @@
 # under the License.
 from __future__ import annotations
 
-import enum
+import collections
+import copy
+import dataclasses
 import json
 import logging
 import os
 import threading
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
-from typing import BinaryIO
+from typing import Any
 
 from esrally import types
 from esrally.storage._adapter import Head, ServiceUnavailableError
 from esrally.storage._client import Client
 from esrally.storage._config import StorageConfig
 from esrally.storage._executor import Executor
-from esrally.storage._range import (
-    MAX_LENGTH,
-    NO_RANGE,
-    Range,
-    RangeError,
-    RangeSet,
-    rangeset,
-)
-from esrally.utils import convert, pretty, threads
+from esrally.storage._io import FileWriter, StreamClosedError
+from esrally.storage._range import MAX_LENGTH, NO_RANGE, Range, RangeSet, rangeset
+from esrally.utils import convert
+from esrally.utils import crc32c as _crc32c
+from esrally.utils import pretty, threads
 
 LOG = logging.getLogger(__name__)
 
 
-class TransferStatus(enum.Enum):
-    INITIALIZED = 0
-    QUEUED = 1
-    DOING = 2
-    DONE = 3
-    CANCELLED = 4
-    FAILED = 5
+@dataclasses.dataclass
+class TransferStats:
+    # The number of requests.
+    request_count: int = 0
 
-    def __str__(self):
-        return str(self.name)
+    # The amount of bytes transferred.
+    transferred_bytes: int = 0
+
+    # The amount of time spent waiting for a response.
+    response_time: float = 0.0
+
+    # The amount of time spent receiving data.
+    read_time: float = 0.0
+
+    # The amount of time spent writing data.
+    write_time: float = 0.0
+
+    @property
+    def total_time(self) -> float:
+        """total_time represents the total mount of time spend performing this transfer."""
+        return self.response_time + self.read_time + self.write_time
+
+    @property
+    def average_latency(self) -> float:
+        """average_latency is computed as the average response time of each GET request."""
+        if self.request_count == 0:
+            return 0.0
+        return self.response_time / self.request_count
+
+    @property
+    def requests_per_second(self) -> float:
+        """requests_per_second is computed as the average number of GET requests per second."""
+        duration = self.total_time
+        if not duration:
+            return 0.0
+        return self.request_count / duration
+
+    @property
+    def throughput(self) -> float:
+        """throughput is computed as the average throughput of each GET request."""
+        if not self.total_time:
+            return 0.0
+        return self.transferred_bytes / self.total_time
+
+    @property
+    def read_throughput(self) -> float:
+        """throughput is computed as the average throughput of reading data of each GET request."""
+        if not self.read_time:
+            return 0.0
+        return self.transferred_bytes / self.read_time
+
+    @property
+    def write_throughput(self) -> float:
+        """throughput is computed as the average throughput of writing data of each GET request."""
+        if not self.write_time:
+            return 0.0
+        return self.transferred_bytes / self.write_time
+
+    def add(
+        self,
+        *,
+        request_count: int = 0,
+        transferred_bytes: int = 0,
+        response_time: float = 0.0,
+        read_time: float = 0.0,
+        write_time: float = 0.0,
+    ) -> None:
+        self.request_count += request_count
+        self.transferred_bytes += transferred_bytes
+        self.response_time += response_time
+        self.read_time += read_time
+        self.write_time += write_time
+
+    def pretty(self) -> dict[str, Any]:
+        details: dict[str, Any] = {
+            "bytes": pretty.size(self.transferred_bytes),
+            "requests": self.request_count,
+            "latency": pretty.duration(self.average_latency),
+            "duration": {
+                "total": pretty.duration(self.total_time),
+                "response": pretty.duration(self.response_time),
+                "read": pretty.duration(self.read_time),
+                "write": pretty.duration(self.write_time),
+            },
+            "throughput": {
+                "total": pretty.throughput(self.throughput),
+                "read": pretty.throughput(self.read_throughput),
+                "write": pretty.throughput(self.write_throughput),
+            },
+        }
+        return {k: v for k, v in details.items() if v}
 
 
 class Transfer:
@@ -134,20 +213,25 @@ class Transfer:
         self._multipart_size = multipart_size
         self._todo = todo - done
         self._done = done
-        self._fds: list[FileDescriptor] = []
+        self._fds: list[FileWriter] = []
         self._executor = executor
         self._errors: list[Exception] = []
         self._lock = threading.Lock()
         self._resumed_size = 0
         self._crc32c = crc32c
         self._mirror_failures: dict[str, str] = {}
+        self._stats: dict[str, TransferStats] = collections.defaultdict(TransferStats)
         if resume and self.status_file_path and os.path.isfile(self.status_file_path):
             try:
                 self._resume_status()
             except Exception as ex:
                 LOG.error("Failed to resume transfer: %s", ex)
             else:
-                LOG.info("resumed from existing status: %s", self.info())
+                LOG.debug("Transfer resumed from existing status:\n%s", self.info())
+
+    @property
+    def stats(self) -> dict[str, TransferStats]:
+        return copy.deepcopy(self._stats)
 
     @property
     def status_file_path(self) -> str:
@@ -287,16 +371,31 @@ class Transfer:
 
             self._done = self.done | done
             self._todo = self._todo - done
-        # Update the resumed size so that it will compute download speed only on the new parts.
+
+        # It updates the resumed size so that it will compute download speed only on the new parts.
         self._resumed_size = done.size
         if not self._todo:
             # There is nothing more to do.
             self._finished.set()
+
+        # It restores mirror failures.
         self._mirror_failures = document.get("mirror_failures", {})
+
+        # It restores transfer statistics.
+        for stats in document.get("stats", []):
+            if not isinstance(stats, dict):
+                raise ValueError(f"mismatching stats file format: got {type(stats)}, expected dict")
+            url = stats.pop("url", None)
+            if url is None:
+                raise ValueError(f"url field not found in stats '{stats}' in status file: '{status_filename}'")
+            self._stats[url].add(**stats)
 
     def save_status(self):
         """It updates the status file."""
         self._mirror_failures = {f.mirror_url: f.error for f in self.client.mirror_failures(self.url)}
+        with self._lock:
+            stats = [{"url": u, **dataclasses.asdict(s)} for u, s in self._stats.items()]
+
         document = {
             "url": self.url,
             "path": self.path,
@@ -306,23 +405,25 @@ class Transfer:
             # Mirror failures is intended to be consumed by a tool in charge to upload downloaded files that was missing
             # in any mirror server to keep it in sync with source file repository.
             "mirror_failures": self._mirror_failures,
+            "stats": stats,
         }
         status_filename = self.status_file_path
         os.makedirs(os.path.dirname(status_filename), exist_ok=True)
         with open(status_filename, "w") as fd:
             json.dump(document, fd)
 
-    def _run(self):
+    def _run(self) -> None:
         """It downloads part of the file."""
+        # pylint: disable=too-many-return-statements
+
         if self._finished:
             # Anything else to do.
             return
 
-        cancelled = False  # It indicates the task has been interrupted.
+        if self._started.set():
+            # The first executed task will enter here.
+            LOG.info("transfer started: %s", self.url)
         try:
-            if self._started.set():
-                # The first executed task will enter here.
-                LOG.info("transfer started: %s", self.url)
             # It opens a portion of the file to write to.
             with self._open() as fd:
                 if fd is None:
@@ -340,22 +441,49 @@ class Transfer:
                     )
                 else:
                     check_head = Head(content_length=self._document_length, crc32c=self._crc32c)
-                head, content = self.client.get(self.url, check_head=check_head)
-                # When ranges are not given, then content_length replaces document_length.
-                document_length = head.document_length or head.content_length
-                if document_length:
-                    # It checks the size of the file it downloaded the data from.
-                    self.document_length = document_length
-                if head.crc32c is not None:
-                    # It checks the crc32c check sum of the file it downloaded the data from.
-                    self.crc32c = head.crc32c
-                LOG.debug("Downloading file fragment from '%s' to '%s' (range=%s)...", head.url, self.path, head.ranges)
-                for chunk in content:
-                    if chunk:
-                        fd.write(chunk)
+
+                start_time = time.monotonic()
+                with self.client.get(self.url, check_head=check_head) as got:
+                    with self._lock:
+                        # Response time includes only:
+                        # - resolving the mirrored file URL(s);
+                        # - receiving the file headers.
+                        self._stats[got.head.url].add(request_count=1, response_time=time.monotonic() - start_time)
+
+                    # When ranges are not given, then content_length replaces document_length.
+                    document_length = got.head.document_length or got.head.content_length
+                    if document_length:
+                        # It checks the size of the file it downloaded the data from.
+                        self.document_length = document_length
+                    if got.head.crc32c is not None:
+                        # It checks the crc32c check sum of the file it downloaded the data from.
+                        self.crc32c = got.head.crc32c
+
+                    LOG.debug("Downloading file chunks from '%s' to '%s' (range=%s)...", got.head.url, self.path, got.head.ranges)
+                    while True:
+                        start_time = time.monotonic()
+                        try:
+                            chunk = next(got.chunks)
+                        except StopIteration:
+                            LOG.debug(
+                                "Stopped downloading file chunks from '%s' to '%s' (range=%s)", got.head.url, self.path, got.head.ranges
+                            )
+                            break
+                        read_time = time.monotonic()
+                        if chunk:
+                            fd.write(chunk)
+                        write_time = time.monotonic()
+                        with self._lock:
+                            # Read time includes the time spent receiving all chunks of data.
+                            # Write time includes the time spent writing all chunks of data.
+                            self._stats[got.head.url].add(
+                                transferred_bytes=len(chunk), read_time=read_time - start_time, write_time=write_time - read_time
+                            )
+
         except StreamClosedError as ex:
-            LOG.info("transfer cancelled: %s: %s", self.url, ex)
-            cancelled = True
+            if self._finished.set():
+                LOG.info("transfer closed: %s: %s", self.url, ex)
+                return
         except ServiceUnavailableError as ex:
             # The client raised this error because the maximum number of client connections for each remote server
             # has been already established.
@@ -363,39 +491,50 @@ class Transfer:
                 count = self._workers.count
                 max_count = max(1, count - 1)
                 self._workers.max_count = max_count
-            # In case of the count of concurrent tasks is greater than 1 then it forbids to reschedule it.
-            cancelled = count > 1
             LOG.info("service unavailable: %s, workers=%d/%d: %s", self.url, count, max_count, ex)
+            if count > 1:
+                return
         except TimeoutError as ex:
             # The client raised this error because it timed out waiting for answer from server.
             LOG.info("transfer timed out (url=%s): %s", self.url, ex)
         except Exception as ex:
             # This error will brutally interrupt the transfer.
-            LOG.exception("task failed: %s", self.url)
-            with self._lock:
-                self._errors.append(ex)
+            LOG.exception("transfer failed: %s", self.url)
+            self._errors.append(ex)
             # It will interrupt all other tasks execution by closing the streams causing an error in the fd.write()
             # method.
             self.close()
+            return
         finally:
-            # It decreases the number of scheduled tasks, allowing a new tasks to be submit.
-            self._workers.done()
-            self.save_status()
-            if self._errors:
-                if self._finished.set():
-                    # The first task entered here will write the error(s) to the log fine.
-                    LOG.error("transfer failed: %s:\n - %s", self.url, "\n - ".join(str(e) for e in self._errors))
-            elif cancelled:
-                # It will submit any task for execution.
-                LOG.debug("task cancelled: %s", self.url)
-            elif not self.todo and not self._workers.count:
-                # There is nothing more to do: the transfer has been completed with success.
-                if self._finished.set():
-                    # Only the first task that enters here will write this message.
-                    LOG.info("transfer completed: %s", self.url)
-            else:
-                # It eventually re-schedule another task for execution.
-                self.start()
+            self._finish_task()
+
+    def _finish_task(self) -> None:
+        # It decreases the number of scheduled tasks, allowing another task to be submitted.
+        self._workers.done()
+        # It updates the status file.
+        self.save_status()
+
+        if self.todo:
+            # It eventually starts a new task unless the work is complete.
+            self.start()
+            return
+
+        # Only the last worker will continue further this point to finalize the transfer.
+        with self._lock:
+            if self._workers.count:
+                return
+
+        # The transfer has been completed and this is the last worker.
+        # It checks the download file before firing the finished event.
+        try:
+            self._check_finished_document()
+            LOG.info("transfer completed: %s", self.url)
+        except Exception as ex:
+            self._errors.append(ex)
+            LOG.error("file verification failed: %s", self.url)
+            raise
+        finally:
+            self._finished.set()
 
     def close(self):
         """It cancels all transfer tasks and closes all open streams."""
@@ -414,7 +553,7 @@ class Transfer:
                 LOG.error("error closing file descriptor %r: %s", fd.path, ex)
 
     @contextmanager
-    def _open(self) -> Iterator[FileDescriptor | None]:
+    def _open(self) -> Generator[FileWriter | None]:
         todo: RangeSet
         with self._lock:
             # It gets a part of the file to transfer from the remaining range.
@@ -424,36 +563,34 @@ class Transfer:
             yield None
             return
 
-        LOG.debug("transfer started: %s, %s", self.url, todo)
-        done: RangeSet = NO_RANGE
-        try:
+        # It opens a file descriptor bound to the part of the file assigned to this task.
+        with FileWriter.open(self.path, todo) as fd:
             with self._lock:
-                # It opens a file descriptor bound to the part of the file assigned to this task.
-                fd = FileWriter(self.path, todo)
                 # It registers the file descriptor so that it can be closed from another thread.
                 self._fds.append(fd)
-            with fd:
-                try:
-                    yield fd
-                finally:
-                    with self._lock:
-                        try:
-                            # It de-registers the file descriptor so that it can't be closed from another thread.
-                            fd.flush()
-                            self._fds.remove(fd)
-                        except ValueError:
-                            pass
-                        # After receiving data _document_length could have been changed reducing the range to download.
-                        todo &= Range(0, self._document_length or MAX_LENGTH)
-                        # It updates the status of the works with the completed part.
-                        done, todo = todo.split(fd.transferred)
-                        self._todo |= todo
-                        self._done |= done
-        finally:
-            if todo:
-                LOG.info("transfer interrupted: %s (done: %s, todo: %s).", self.url, done, todo)
-            else:
-                LOG.debug("transfer done: %s (done: %s).", self.url, done)
+            LOG.debug("transfer started: %s, %s", self.url, todo)
+            try:
+                yield fd
+            finally:
+                # It waits for data to be actually written before updating the status.
+                fd.flush()
+                # After receiving data _document_length could have been changed reducing the range to download.
+                todo &= Range(0, self._document_length or MAX_LENGTH)
+                done, todo = todo.split(fd.transferred)
+                if todo:
+                    LOG.info("transfer interrupted: %s (done: %s, todo: %s).", self.url, done, todo)
+                else:
+                    LOG.debug("transfer done: %s (done: %s).", self.url, done)
+
+                with self._lock:
+                    try:
+                        # It de-registers the file descriptor so that it can't be closed from another thread.
+                        self._fds.remove(fd)
+                    except ValueError:
+                        pass
+                    # It updates the status of the works with the completed parts.
+                    self._todo |= todo
+                    self._done |= done
 
     @property
     def done(self) -> RangeSet:
@@ -518,35 +655,30 @@ class Transfer:
             return 0.0
         return (done.size - self._resumed_size) / self.duration.s()
 
-    def info(self) -> str:
-        return (
-            f"- {self.url} {self.progress:.0f}% "
-            f"({pretty.size(self.done.size)} of {pretty.size(self.document_length)}) {self.duration} "
-            f"{pretty.size(self.average_speed)}/s {self.status.name} {self._workers.count} workers"
-        )
+    def pretty(self, *, stats: bool = False, mirror_failures: bool = False) -> dict[str, Any]:
+        details: dict[str, Any] = {
+            "url": self.url,
+            "path": self.path,
+            "progress": f"{self.progress:.0f}%",
+            "done": pretty.size(self.done.size),
+            "size": pretty.size(self.document_length),
+            "workers": self._workers.count,
+            "duration": self.duration and pretty.duration(self.duration),
+            "throughput": self.average_speed and pretty.throughput(self.average_speed),
+            "stats": stats and {u: s.pretty() for u, s in self._stats.items()},
+            "mirror_failures": mirror_failures and self._mirror_failures,
+        }
+        return {k: v for k, v in details.items() if v}
 
-    def wait(self, timeout: float | None = None) -> bool:
+    def info(self, *, stats: bool = False, mirror_failures: bool = False) -> str:
+        return json.dumps(self.pretty(stats=stats, mirror_failures=mirror_failures), indent=2)
+
+    def wait(self, timeout: float | None = None) -> None:
         """It waits for transfer termination."""
         if not self._finished.wait(timeout):
-            return False
+            raise TimeoutError(f"Transfer not finished: {self.url}")
         for ex in self._errors:
             raise ex
-        return True
-
-    @property
-    def status(self) -> TransferStatus:
-        """It returns the status of the transfer."""
-        if self._finished:
-            if self._errors:
-                return TransferStatus.FAILED
-            if self._todo:
-                return TransferStatus.CANCELLED
-            return TransferStatus.DONE
-        if self._started:
-            return TransferStatus.DOING
-        if self._workers.count > 0:
-            return TransferStatus.QUEUED
-        return TransferStatus.INITIALIZED
 
     @property
     def errors(self) -> list[Exception]:
@@ -571,68 +703,27 @@ class Transfer:
                 raise ValueError(f"mismatching crc32c checksum: got: {value!r}, want: {self._crc32c}")
             self._crc32c = value
 
-
-class StreamClosedError(Exception):
-    pass
-
-
-class FileDescriptor:
-
-    def __init__(self, path: str, fd: BinaryIO, ranges: RangeSet = NO_RANGE):
-        if len(ranges) > 1:
-            raise NotImplementedError(f"multiple ranges is not supported: {ranges}")
-        self.position = fd.tell()
-        self.ranges = ranges
-        self.path = path
-        self._lock = threading.Lock()
-        self._fd: BinaryIO | None = fd
-
-    @property
-    def transferred(self) -> int:
-        return self.position - self.ranges.start
-
-    def close(self):
+    def _check_finished_document(self) -> None:
         with self._lock:
-            if self._fd is not None:
-                self._fd.close()
-            self._fd = None
+            if self._todo:
+                raise ValueError("Transfer has not been finished.")
+            if self._fds:
+                raise ValueError("Some file writers is still there.")
+            if self._workers.count:
+                raise ValueError("Workers count is > 0.")
+            if not os.path.isfile(self.path):
+                raise FileNotFoundError(self.path)
 
-    def __enter__(self):
-        return self
+            if not self._document_length or not self._done:
+                # I can't make any further verification if I don't know the file size.
+                return
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+            size = os.path.getsize(self.path)
+            if size < self._done.size:
+                raise ValueError(f"Transferred file has been truncated: size={size}, want={self._done.size}.")
 
-
-class FileWriter(FileDescriptor):
-    """OutputStream provides an output stream wrapper able to prevent exceeding writing given range."""
-
-    def __init__(self, path: str, ranges: RangeSet = NO_RANGE):
-        if os.path.isfile(path):
-            fd = open(path, "r+b")
-        else:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            fd = open(path, "w+b")  # pylint: disable=consider-using-with
-        if ranges and ranges.start > 0:
-            fd.seek(ranges.start)
-        super().__init__(path, fd, ranges)
-
-    def write(self, data):
-        with self._lock:
-            if self._fd is None:
-                raise StreamClosedError("stream has been closed")
-            size = len(data)
-            if self.ranges:
-                # prevent exceeding file data range
-                size = min(size, self.ranges.end - self.position)
-            chunk = data[:size]
-            if chunk:
-                self._fd.write(data)
-                self.position += size
-            if len(data) > size:
-                raise RangeError(f"data size exceeds file range: {len(data)} > {size}", self.ranges)
-
-    def flush(self):
-        with self._lock:
-            if self._fd is not None:
-                self._fd.flush()
+            if self._done == Range(0, self._document_length) and self._crc32c:
+                want_checksum = _crc32c.Checksum.from_base64(self._crc32c)
+                checksum = _crc32c.Checksum.from_filename(self.path)
+                if checksum != want_checksum:
+                    raise ValueError(f"Unexpected checksum: {checksum}, want {want_checksum}")

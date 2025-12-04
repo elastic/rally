@@ -26,9 +26,7 @@ import requests.exceptions
 from requests import Response, Session
 from requests.structures import CaseInsensitiveDict
 
-from esrally.storage._adapter import Head
-from esrally.storage._config import StorageConfig
-from esrally.storage._range import rangeset
+from esrally.storage import Head, StorageConfig, rangeset
 from esrally.storage.http import HTTPAdapter, head_from_headers, ranges_to_headers
 from esrally.utils.cases import cases
 
@@ -135,13 +133,15 @@ def test_get(case: GetCase, session: Session) -> None:
         session=session, chunk_size=case.cfg.chunk_size, connect_timeout=case.cfg.connect_timeout, read_timeout=case.cfg.read_timeout
     )
     session.get.return_value = case.response
-    head, data = adapter.get(case.url, check_head=Head(ranges=rangeset(case.ranges)))
-    assert head == case.want_head
-    if case.want_read_error is None:
-        assert list(data) == case.want_data
-    else:
-        with pytest.raises(case.want_read_error):
-            list(data)
+
+    with adapter.get(case.url, check_head=Head(ranges=rangeset(case.ranges))) as got:
+        assert got.head == case.want_head
+        if case.want_read_error is None:
+            assert list(got.chunks) == case.want_data
+        else:
+            with pytest.raises(case.want_read_error):
+                list(got.chunks)
+
     want_request_headers = {}
     if case.want_request_range:
         want_request_headers["range"] = case.want_request_range

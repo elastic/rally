@@ -79,7 +79,7 @@ class LsCase:
     args: list[str]
     mirror_files: list[str] | None = None
     after_get_params: dict[str, Any] | None = None
-    want_format: Literal["json", "filebeat"] = "json"
+    want_format: Literal["pretty", "json", "filebeat"] = "pretty"
     want_return_code: int = 0
     want_output: dict[str, dict[str, Any]] | None = None
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
@@ -103,9 +103,9 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 1024)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
-                "done": "0-1023",
-                "finished": True,
+                "done": "1.0KB",
+                "size": "62.0KB",
+                "progress": "2%",
             }
         },
         want_stderr_lines=[
@@ -117,9 +117,9 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 1024)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
-                "done": "0-1023",
-                "finished": True,
+                "done": "1.0KB",
+                "size": "62.0KB",
+                "progress": "2%",
             }
         },
         want_stderr_lines=[
@@ -131,9 +131,9 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
-                "done": "0-63",
-                "finished": True,
+                "done": "64B",
+                "size": "62.0KB",
+                "progress": "0%",
             }
         },
         want_stderr_lines=[
@@ -145,26 +145,26 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
-                "done": "0-63",
-                "finished": True,
+                "done": "64B",
+                "size": "62.0KB",
+                "progress": "0%",
             }
         },
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
     ),
-    after_mirror_failures=LsCase(
-        ["ls", FIRST_URL],
+    json_after_mirror_failures=LsCase(
+        ["ls", "--json", FIRST_URL],
         mirror_files=[BAD_MIRROR_FILES],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
+        want_format="json",
         want_output={
             FIRST_URL: {
                 "finished": True,
-                "status": "DONE",
                 "done": "0-63",
                 "mirror_failures": {BAD_MIRROR_URL: f"FileNotFoundError:Can't get file head: {BAD_MIRROR_URL}"},
             }
@@ -175,7 +175,6 @@ class LsCase:
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_output={
             FIRST_URL: {
-                "status": "DONE",
                 "done": "0-63",
                 "finished": True,
             }
@@ -202,7 +201,7 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
 
     got_output: dict[str, dict] = {}
     match case.want_format:
-        case "json":
+        case "json" | "pretty":
             got_output.update((got["url"], got) for got in json.loads(result.stdout))
         case "filebeat":
             for line in result.stdout.splitlines():
@@ -217,10 +216,14 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
         got = got_output[want_url]
 
         assert got["path"] == cfg.transfer_file_path(want_url)
-        assert got["mirror_failures"] == want.get("mirror_failures", {})
         assert got["done"] == want["done"]
-        assert got["status"] == want["status"]
-        assert got["finished"] == want["finished"]
+        match case.want_format:
+            case "pretty":
+                assert got["size"] == want["size"]
+                assert got["progress"] == want["progress"]
+            case _:
+                assert got["mirror_failures"] == want.get("mirror_failures", {})
+                assert got["finished"] == want["finished"]
 
 
 @dataclasses.dataclass
@@ -245,6 +248,11 @@ class GetCase:
         want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
         want_status={FIRST_URL: {"done": "0-63457"}},
     ),
+    range=GetCase(
+        ["get", "--range=1024-2043", FIRST_URL],
+        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
+        want_status={FIRST_URL: {"done": "1024-2043"}},
+    ),
     two_urls=GetCase(
         ["get", "--range=0-1023", FIRST_URL, SECOND_PATH],
         want_stderr_lines=[
@@ -253,11 +261,6 @@ class GetCase:
         ],
         want_status={FIRST_URL: {"done": "0-1023"}, SECOND_URL: {"done": "0-1023"}},
     ),
-    range=GetCase(
-        ["get", "--range=1024-2043", FIRST_URL],
-        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
-        want_status={FIRST_URL: {"done": "1024-2043"}},
-    ),
     resume_after_get=GetCase(
         ["get", "--range=-1024"],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(1024, 2048)},
@@ -265,15 +268,15 @@ class GetCase:
         want_status={FIRST_URL: {"done": "0-2047"}},
     ),
     good_mirrors=GetCase(
-        ["-v", f"--mirrors={GOOD_MIRROR_FILES}", "get", "--range=0-63,128-255", FIRST_URL],
+        ["get", "-v", f"--mirrors={GOOD_MIRROR_FILES}", "--range=0-63,128-255", FIRST_URL],
         want_stderr_lines=[
-            f"DEBUG esrally.storage._transfer Downloading file fragment from '{GOOD_MIRROR_URL}'",
+            f"DEBUG esrally.storage._transfer Downloading file chunks from '{GOOD_MIRROR_URL}'",
             f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}",
         ],
         want_status={FIRST_URL: {"done": "0-63,128-255"}},
     ),
     bad_mirrors=GetCase(
-        [f"--mirrors={BAD_MIRROR_FILES}", "get", "--range=0-63", FIRST_URL],
+        ["get", f"--mirrors={BAD_MIRROR_FILES}", "--range=0-63", FIRST_URL],
         want_stderr_lines=[
             f"WARNING esrally.storage._client Failed to get head from mirror URL: '{BAD_MIRROR_URL}'",
             f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}",
@@ -333,14 +336,14 @@ class PutCase:
         want_files=[f"./target/{FIRST_PATH}"],
     ),
     mirror_failures=PutCase(
-        ["--mirror-failures", "put", "target"],
+        ["put", "--mirror-failures", "target"],
         mirror_files=[BAD_MIRROR_FILES],
         after_get_params={"url": FIRST_URL},
         want_return_code=0,
         want_files=[f"./target/{FIRST_PATH}"],
     ),
     no_mirror_failures=PutCase(
-        ["--mirror-failures", "put", "target"],
+        ["put", "--mirror-failures", "target"],
         mirror_files=[GOOD_MIRROR_FILES],
         after_get_params={"url": FIRST_URL},
         want_return_code=0,
