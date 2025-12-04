@@ -225,5 +225,4 @@ def latest_bounded_minor(alternatives, target_version):
         return None
 
     eligible_minors.sort()
-    result = min(eligible_minors, key=lambda x: abs(x - target_version.minor))
-    return result
+    return min(eligible_minors, key=lambda x: abs(x - target_version.minor))
