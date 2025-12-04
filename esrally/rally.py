@@ -1085,7 +1085,27 @@ def configure_track_params(arg_parser, args, cfg: types.Config, command_requires
             cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
 
     if command_requires_track:
-        cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
+        track_params = opts.to_dict(args.track_params)
+        if "start_date" in track_params and "end_date" in track_params:
+
+            def _parse_date(v):
+                # try parsing with common formats
+                for fmt in ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"]:
+                    try:
+                        return datetime.datetime.strptime(str(v), fmt)
+                    except ValueError:
+                        pass
+                return None
+
+            start = _parse_date(track_params["start_date"])
+            end = _parse_date(track_params["end_date"])
+
+            if start and end and start >= end:
+                raise exceptions.SystemSetupError(
+                    f"track-param 'start_date' ({track_params['start_date']}) must be earlier than 'end_date' ({track_params['end_date']})."
+                )
+
+        cfg.add(config.Scope.applicationOverride, "track", "params", track_params)
         cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
         cfg.add(config.Scope.applicationOverride, "track", "include.tasks", opts.csv_to_list(args.include_tasks))
         cfg.add(config.Scope.applicationOverride, "track", "exclude.tasks", opts.csv_to_list(args.exclude_tasks))
