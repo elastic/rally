@@ -177,9 +177,9 @@ def best_match(available_alternatives, distribution_version):
             if version in available_alternatives:
                 return version
             # match nearest prior minor
-            if version_type == "with_minor" and (latest_minor := latest_bounded_minor(available_alternatives, versions)):
-                if latest_minor:
-                    return f"{versions.major}.{latest_minor}"
+            latest_minor = latest_bounded_minor(available_alternatives, versions)
+            if version_type == "with_minor" and latest_minor is not None:
+                return f"{versions.major}.{latest_minor}"
         # not found in the available alternatives, it could still be a master version
         major, _, _, _ = components(distribution_version)
         if major > _latest_major(available_alternatives):
@@ -217,7 +217,7 @@ def latest_bounded_minor(alternatives, target_version):
             if patch is not None or suffix is not None:
                 # branches containing patch or patch-suffix aren't supported
                 continue
-            if major == target_version.major and minor and minor <= target_version.minor:
+            if major == target_version.major and minor is not None and minor <= target_version.minor:
                 eligible_minors.append(minor)
 
     # no matching minor version
@@ -225,5 +225,5 @@ def latest_bounded_minor(alternatives, target_version):
         return None
 
     eligible_minors.sort()
-
-    return min(eligible_minors, key=lambda x: abs(x - target_version.minor))
+    result = min(eligible_minors, key=lambda x: abs(x - target_version.minor))
+    return result
