@@ -34,7 +34,7 @@ from esrally import storage
 LOG = logging.getLogger(__name__)
 
 
-LsFormat = Literal["json", "filebeat", "pretty"]
+LsFormat = Literal["json", "filebeat", "pretty", "filenames"]
 
 
 def main():
@@ -50,7 +50,7 @@ def main():
     ls_parser = subparsers.add_parser("ls", help="It lists file(s) downloaded from ES Rally remote storage services.")
     get_parser = subparsers.add_parser("get", help="It downloads file(s) from ES Rally rem1ote storage services.")
     put_parser = subparsers.add_parser("put", help="It uploads file(s) to mirror server.")
-    prune_parser = subparsers.add_parser("prune", help="It delete transfer files from local directories.")
+    prune_parser = subparsers.add_parser("prune", help="It deletes transfer files from local directories.")
 
     for p in (parser, ls_parser, get_parser, put_parser, prune_parser):
         p.add_argument("-v", "--verbose", action="count", required=False, default=0, help="It increases the verbosity level.")
@@ -66,6 +66,8 @@ def main():
         p.add_argument("--filebeat", action="store_true", help="It prints a JSON entry for each file, each separated by a newline.")
         p.add_argument("--json", action="store_true", help="It prints a pretty entry for each file.")
         p.add_argument("--stats", action="store_true", help="It adds connectivity statistics to produced output.")
+        p.add_argument("--filenames", action="store_true", help="It shows downloaded file names.")
+        p.add_argument("--status-filenames", action="store_true", help="It shows status file names.")
 
     # It defines get sub-command options.
     get_parser.add_argument("--range", type=str, default="", help="It will only download given range of each file.")
@@ -76,6 +78,10 @@ def main():
         default=cfg.monitor_interval,
         help="It specify the period of time (in seconds) for monitoring ongoing transfers.",
     )
+
+    # It defines prune sub-command options.
+    prune_parser.add_argument("--status-filenames", action="store_true", help="It deletes only status files.")
+    prune_parser.add_argument("--filenames", action="store_true", help="It deletes downloaded files.")
 
     # It defines positional arguments.
     for p in (ls_parser, get_parser, put_parser, prune_parser):
@@ -131,29 +137,50 @@ def main():
             LOG.info("No transfers with mirror failures.")
             return
 
+    file_types: set[storage.TransferFileType] | None = None
+    if args.status_filenames or args.filenames:
+        file_types = set[storage.TransferFileType]()
+        if args.filenames:
+            file_types.add("data")
+        if args.status_filenames:
+            file_types.add("status")
+
     match args.command:
         case None | "ls":
             fmt: LsFormat = "pretty"
-            if args.json:
+            if file_types:
+                fmt = "filenames"
+            elif args.json:
                 fmt = "json"
             elif args.filebeat:
                 fmt = "filebeat"
-            ls(transfers, fmt=fmt, stats=args.stats, mirror_failures=args.mirror_failures)
+            ls(transfers, fmt=fmt, stats=args.stats, mirror_failures=args.mirror_failures, file_types=file_types)
         case "get":
             get(transfers, todo=storage.rangeset(args.range), monitor_interval=cfg.monitor_interval)
         case "put":
             put(transfers, args.target_dir, base_url=cfg.base_url)
         case "prune":
-            prune(transfers)
+            prune(transfers, file_types=file_types)
         case _:
             LOG.critical("Invalid command: %r", args.command)
             sys.exit(3)
 
 
-def ls(transfers: list[storage.Transfer], *, fmt: LsFormat = "json", stats: bool = False, mirror_failures: bool = False) -> None:
+def ls(
+    transfers: list[storage.Transfer],
+    *,
+    fmt: LsFormat = "json",
+    stats: bool = False,
+    mirror_failures: bool = False,
+    file_types: set[storage.TransferFileType] | None = None,
+) -> None:
     LOG.info("Found %d transfer(s).", len(transfers))
-
     match fmt:
+        case "filenames":
+            filenames: set[str] = set()
+            for tr in transfers:
+                filenames.update(tr.ls_files(file_types=file_types))
+            sys.stdout.write("\n".join(sorted(filenames)) + "\n")
         case "filebeat":
             for o in transfers_as_dictionaries(transfers):
                 line = json.dumps({"rally": {"storage": o}})
@@ -255,11 +282,11 @@ def put(transfers: list[storage.Transfer], target_dir: str, *, base_url: str | N
     LOG.info("All transfers finished.")
 
 
-def prune(transfers: list[storage.Transfer]) -> None:
+def prune(transfers: list[storage.Transfer], *, file_types: set[storage.TransferFileType] | None = None) -> None:
     errors: dict[str, str] = {}
     for tr in transfers:
         try:
-            tr.prune()
+            tr.prune(file_types=file_types)
         except Exception as ex:
             errors[tr.url] = str(ex)
 

@@ -25,4 +25,4 @@ from esrally.storage._manager import (
     shutdown_transfer_manager,
 )
 from esrally.storage._range import NO_RANGE, Range, RangeError, RangeSet, rangeset
-from esrally.storage._transfer import Transfer
+from esrally.storage._transfer import Transfer, TransferFileType

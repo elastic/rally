@@ -26,7 +26,7 @@ import threading
 import time
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, Literal
 
 from esrally import types
 from esrally.storage._adapter import Head, ServiceUnavailableError
@@ -135,6 +135,9 @@ class TransferStats:
         return {k: v for k, v in details.items() if v}
 
 
+TransferFileType = Literal["data", "status"]
+
+
 class Transfer:
     """Transfers class implements multipart file transfers by submitting tasks to an Executor.
 
@@ -227,7 +230,7 @@ class Transfer:
             try:
                 self._resume_status()
             except Exception as ex:
-                LOG.error("Failed to resume transfer: %s", ex)
+                LOG.warning("Failed to resume transfer: %s", ex)
             else:
                 LOG.debug("Transfer resumed from existing status:\n%s", self.info())
 
@@ -728,12 +731,18 @@ class Transfer:
                 if checksum != want_checksum:
                     raise ValueError(f"Unexpected checksum: {checksum}, want {want_checksum}")
 
-    def prune(self):
+    def ls_files(self, *, file_types: set[TransferFileType] | None = None) -> list[str]:
+        filenames = []
+        if file_types is None or file_types & {"data"}:
+            filenames.append(self.path)
+        if file_types is None or file_types & {"status"}:
+            filenames.append(self.status_file_path)
+        return [f for f in filenames if os.path.isfile(f)]
+
+    def prune(self, *, file_types: set[TransferFileType] | None = None) -> None:
         self.close()
         errors: list[Exception] = []
-        for p in [self.path, self.status_file_path]:
-            if not os.path.isfile(p):
-                continue
+        for p in self.ls_files(file_types=file_types):
             try:
                 LOG.debug("Delete file: %s", p)
                 os.remove(p)
