@@ -79,9 +79,9 @@ class LsCase:
     args: list[str]
     mirror_files: list[str] | None = None
     after_get_params: dict[str, Any] | None = None
-    want_format: Literal["pretty", "json", "filebeat"] = "pretty"
+    want_format: Literal["pretty", "json", "filebeat", "filenames"] = "pretty"
     want_return_code: int = 0
-    want_output: dict[str, dict[str, Any]] | None = None
+    want_output: dict[str, dict[str, Any]] | list[str] | None = None
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
 
 
@@ -184,6 +184,28 @@ class LsCase:
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
     ),
+    filenames_after_get_files=LsCase(
+        ["ls", "--filenames", FIRST_URL],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output=[
+            "https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        ],
+        want_format="filenames",
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
+    status_filenames_after_get_files=LsCase(
+        ["ls", "--status-filenames", FIRST_URL],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output=[
+            "https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+        ],
+        want_format="filenames",
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
 )
 def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
     if case.mirror_files:
@@ -199,8 +221,10 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
         assert b"" == result.stdout
         return
 
-    got_output: dict[str, dict] = {}
+    got_output: dict[str, dict] | list[str] = {}
     match case.want_format:
+        case "filenames":
+            got_output = [os.path.relpath(p, cfg.local_dir) for p in result.stdout.decode().splitlines()]
         case "json" | "pretty":
             got_output.update((got["url"], got) for got in json.loads(result.stdout))
         case "filebeat":
@@ -210,20 +234,23 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
         case _:
             pytest.fail(f"Unexpected output format: {case.want_format}")
 
-    assert set(got_output) == set(case.want_output)
-    for want_url, want in case.want_output.items():
-        assert want_url in got_output
-        got = got_output[want_url]
+    if isinstance(case.want_output, dict):
+        assert set(got_output) == set(case.want_output)
+        for want_url, want in case.want_output.items():
+            assert want_url in got_output
+            got = got_output[want_url]
 
-        assert got["path"] == cfg.transfer_file_path(want_url)
-        assert got["done"] == want["done"]
-        match case.want_format:
-            case "pretty":
-                assert got["size"] == want["size"]
-                assert got["progress"] == want["progress"]
-            case _:
-                assert got["mirror_failures"] == want.get("mirror_failures", {})
-                assert got["finished"] == want["finished"]
+            assert got["path"] == cfg.transfer_file_path(want_url)
+            assert got["done"] == want["done"]
+            match case.want_format:
+                case "pretty":
+                    assert got["size"] == want["size"]
+                    assert got["progress"] == want["progress"]
+                case _:
+                    assert got["mirror_failures"] == want.get("mirror_failures", {})
+                    assert got["finished"] == want["finished"]
+    else:
+        assert got_output == case.want_output
 
 
 @dataclasses.dataclass
@@ -349,7 +376,7 @@ class PutCase:
         want_return_code=0,
     ),
 )
-def test_put(case: PutCase, cfg: storage.StorageConfig, client: storage.Client, tmpdir):
+def test_put(case: PutCase, cfg: storage.StorageConfig, tmpdir):
     if case.mirror_files:
         cfg.mirror_files = case.mirror_files
 
@@ -364,14 +391,91 @@ def test_put(case: PutCase, cfg: storage.StorageConfig, client: storage.Client, 
             manager.get(**case.after_get_params).wait(timeout=15)
 
     cwd = str(tmpdir.mkdir("cwd"))
-    result = run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
-
-    assert result.returncode == case.want_return_code
-    assert result.stdout == case.want_stdout
-    assert_lines_in_stderr(case.want_stderr_lines, result.stderr)
+    run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
 
     try:
         find_result = subprocess.run(["find", ".", "-type", "f"], cwd=cwd, capture_output=True, check=not case.want_files)
+    except subprocess.CalledProcessError as ex:
+        LOG.critical("Command '%s' returned non-zero exit status %d", COMMAND, ex.returncode)
+        LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
+        raise
+
+    assert find_result.stdout.decode("utf-8").splitlines() == case.want_files
+
+
+@dataclasses.dataclass
+class PruneCase:
+    args: list[str]
+    mirror_files: list[str] | None = None
+    after_get_params: dict[str, Any] | None = None
+    want_return_code: int = 0
+    want_stdout: bytes = b""
+    want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
+    want_files: list[str] = dataclasses.field(default_factory=list)
+
+
+@cases.cases(
+    clean=PruneCase(
+        ["prune"],
+    ),
+    after_get=PruneCase(
+        ["prune"],
+        after_get_params={"url": FIRST_URL},
+    ),
+    with_url=PruneCase(
+        ["prune", FIRST_URL],
+        after_get_params={"url": FIRST_URL},
+    ),
+    with_other_url=PruneCase(
+        ["prune", SECOND_URL],
+        after_get_params={"url": FIRST_URL},
+        want_files=[
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        ],
+    ),
+    mirror_failures=PruneCase(
+        ["prune", "--mirror-failures"],
+        mirror_files=[BAD_MIRROR_FILES],
+        after_get_params={"url": FIRST_URL},
+    ),
+    no_mirror_failures=PruneCase(
+        ["prune", "--mirror-failures"],
+        mirror_files=[GOOD_MIRROR_FILES],
+        after_get_params={"url": FIRST_URL},
+        want_files=[
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        ],
+    ),
+    filenams=PruneCase(
+        ["prune", "--filenames"],
+        after_get_params={"url": FIRST_URL},
+        want_files=[
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+        ],
+    ),
+    status_filenams=PruneCase(
+        ["prune", "--status-filenames"],
+        after_get_params={"url": FIRST_URL},
+        want_files=[
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        ],
+    ),
+)
+def test_prune(case: PruneCase, cfg: storage.StorageConfig, tmpdir):
+    if case.mirror_files:
+        cfg.mirror_files = case.mirror_files
+
+    if case.after_get_params is not None:
+        with storage.TransferManager.from_config(cfg) as manager:
+            manager.get(**case.after_get_params).wait(timeout=15)
+
+    cwd = str(tmpdir.mkdir("cwd"))
+    run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
+
+    try:
+        find_result = subprocess.run(["find", ".", "-type", "f"], cwd=cfg.local_dir, capture_output=True, check=not case.want_files)
     except subprocess.CalledProcessError as ex:
         LOG.critical("Command '%s' returned non-zero exit status %d", COMMAND, ex.returncode)
         LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
