@@ -29,7 +29,7 @@ class ChecksumCase:
 @cases.cases(
     no_cunks=ChecksumCase(chunks=[], want=0),
     one_chunk=ChecksumCase(chunks=[b"Hello world!"], want=2073618257),
-    two_thunks=ChecksumCase(chunks=[b"Hello ", b"world!"], want=2073618257),
+    two_chunks=ChecksumCase(chunks=[b"Hello ", b"world!"], want=2073618257),
 )
 def test_update(case: ChecksumCase):
     c = crc32c.Checksum()

@@ -269,7 +269,7 @@ class Client:
                 continue
 
             def iter_chunks(wg: WaitGroup, chunks: Generator[bytes]) -> Generator[bytes]:
-                # It wraps chunks generator so it do release connections wait group once response has been processed.
+                # It wraps chunks generator so that it releases connections wait group once response has been processed.
                 try:
                     yield from chunks
                 finally:

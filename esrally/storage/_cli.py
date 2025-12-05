@@ -65,11 +65,17 @@ def main():
     for p in (parser, ls_parser):
         p.add_argument("--filebeat", action="store_true", help="It prints a JSON entry for each file, each separated by a newline.")
         p.add_argument("--json", action="store_true", help="It prints a pretty entry for each file.")
-        p.add_argument("--stats", action="store_true", help="It prints a pretty entry for each file.")
+        p.add_argument("--stats", action="store_true", help="It adds connectivity statistics to produced output.")
 
     # It defines get sub-command options.
     get_parser.add_argument("--range", type=str, default="", help="It will only download given range of each file.")
     get_parser.add_argument("--mirrors", type=str, default="", nargs="*", help="It will look for mirror services in given mirror file.")
+    get_parser.add_argument(
+        "--monitor-interval",
+        type=float,
+        default=cfg.monitor_interval,
+        help="It specify the period of time (in seconds) for monitoring ongoing transfers.",
+    )
 
     # It defines positional arguments.
     for p in (ls_parser, get_parser, put_parser, prune_parser):
@@ -88,8 +94,11 @@ def main():
     if args.base_url:
         cfg.base_url = args.base_url
 
-    if args.command == "get" and args.mirrors:
-        cfg.mirror_files = args.mirrors
+    if args.command == "get":
+        if args.mirrors:
+            cfg.mirror_files = args.mirrors
+        if args.monitor_interval:
+            cfg.monitor_interval = args.monitor_interval
 
     manager = storage.init_transfer_manager(cfg=cfg)
     urls: list[str] = []
@@ -131,7 +140,7 @@ def main():
                 fmt = "filebeat"
             ls(transfers, fmt=fmt, stats=args.stats, mirror_failures=args.mirror_failures)
         case "get":
-            get(transfers, todo=storage.rangeset(args.range))
+            get(transfers, todo=storage.rangeset(args.range), monitor_interval=cfg.monitor_interval)
         case "put":
             put(transfers, args.target_dir, base_url=cfg.base_url)
         case "prune":
@@ -175,7 +184,12 @@ def transfers_as_dictionaries(transfers: list[storage.Transfer]) -> list[dict[st
     ]
 
 
-def get(transfers: list[storage.Transfer], *, todo: storage.RangeSet = storage.NO_RANGE) -> None:
+def get(
+    transfers: list[storage.Transfer],
+    *,
+    todo: storage.RangeSet = storage.NO_RANGE,
+    monitor_interval: float = storage.StorageConfig.DEFAULT_MONITOR_INTERVAL,
+) -> None:
     errors: dict[str, list[str]] = {}
 
     transferring: dict[str, storage.Transfer] = {}
@@ -200,7 +214,7 @@ def get(transfers: list[storage.Transfer], *, todo: storage.RangeSet = storage.N
                 LOG.info("Transfer finished: %s", url)
                 continue
         if transferring:
-            time.sleep(4.0)
+            time.sleep(monitor_interval)
     if errors:
         LOG.critical("Files download failed. Errors:\n%s", json.dumps(errors, indent=2, sort_keys=True))
         sys.exit(1)
