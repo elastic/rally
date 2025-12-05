@@ -177,8 +177,7 @@ def best_match(available_alternatives, distribution_version):
             if version in available_alternatives:
                 return version
             # match nearest prior minor
-            latest_minor = latest_bounded_minor(available_alternatives, versions)
-            if version_type == "with_minor" and latest_minor is not None:
+            if version_type == "with_minor" and (latest_minor := latest_bounded_minor(available_alternatives, versions)) is not None:
                 return f"{versions.major}.{latest_minor}"
         # not found in the available alternatives, it could still be a master version
         major, _, _, _ = components(distribution_version)
