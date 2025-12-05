@@ -79,9 +79,9 @@ class LsCase:
     args: list[str]
     mirror_files: list[str] | None = None
     after_get_params: dict[str, Any] | None = None
-    want_format: Literal["pretty", "json", "filebeat"] = "pretty"
+    want_format: Literal["pretty", "json", "filebeat", "filenames"] = "pretty"
     want_return_code: int = 0
-    want_output: dict[str, dict[str, Any]] | None = None
+    want_output: dict[str, dict[str, Any]] | list[str] | None = None
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
 
 
@@ -184,6 +184,28 @@ class LsCase:
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
     ),
+    filenames_after_get_files=LsCase(
+        ["ls", "--filenames", FIRST_URL],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output=[
+            "https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        ],
+        want_format="filenames",
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
+    status_filenames_after_get_files=LsCase(
+        ["ls", "--status-filenames", FIRST_URL],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output=[
+            "https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+        ],
+        want_format="filenames",
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
 )
 def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
     if case.mirror_files:
@@ -199,8 +221,10 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
         assert b"" == result.stdout
         return
 
-    got_output: dict[str, dict] = {}
+    got_output: dict[str, dict] | list[str] = {}
     match case.want_format:
+        case "filenames":
+            got_output = [os.path.relpath(p, cfg.local_dir) for p in result.stdout.decode().splitlines()]
         case "json" | "pretty":
             got_output.update((got["url"], got) for got in json.loads(result.stdout))
         case "filebeat":
@@ -210,20 +234,23 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
         case _:
             pytest.fail(f"Unexpected output format: {case.want_format}")
 
-    assert set(got_output) == set(case.want_output)
-    for want_url, want in case.want_output.items():
-        assert want_url in got_output
-        got = got_output[want_url]
+    if isinstance(case.want_output, dict):
+        assert set(got_output) == set(case.want_output)
+        for want_url, want in case.want_output.items():
+            assert want_url in got_output
+            got = got_output[want_url]
 
-        assert got["path"] == cfg.transfer_file_path(want_url)
-        assert got["done"] == want["done"]
-        match case.want_format:
-            case "pretty":
-                assert got["size"] == want["size"]
-                assert got["progress"] == want["progress"]
-            case _:
-                assert got["mirror_failures"] == want.get("mirror_failures", {})
-                assert got["finished"] == want["finished"]
+            assert got["path"] == cfg.transfer_file_path(want_url)
+            assert got["done"] == want["done"]
+            match case.want_format:
+                case "pretty":
+                    assert got["size"] == want["size"]
+                    assert got["progress"] == want["progress"]
+                case _:
+                    assert got["mirror_failures"] == want.get("mirror_failures", {})
+                    assert got["finished"] == want["finished"]
+    else:
+        assert got_output == case.want_output
 
 
 @dataclasses.dataclass
@@ -418,6 +445,20 @@ class PruneCase:
         after_get_params={"url": FIRST_URL},
         want_files=[
             "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        ],
+    ),
+    filenams=PruneCase(
+        ["prune", "--filenames"],
+        after_get_params={"url": FIRST_URL},
+        want_files=[
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+        ],
+    ),
+    status_filenams=PruneCase(
+        ["prune", "--status-filenames"],
+        after_get_params={"url": FIRST_URL},
+        want_files=[
             "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
         ],
     ),
