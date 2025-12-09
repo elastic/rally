@@ -348,7 +348,7 @@ class PutCase:
     want_return_code: int = 0
     want_stdout: bytes = b""
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
-    want_files: list[str] = dataclasses.field(default_factory=list)
+    want_files: set[str] = dataclasses.field(default_factory=set)
 
 
 @cases.cases(
@@ -360,14 +360,14 @@ class PutCase:
         ["put", "target"],
         after_get_params={"url": FIRST_URL},
         want_return_code=0,
-        want_files=[f"./target/{FIRST_PATH}"],
+        want_files={f"./target/{FIRST_PATH}"},
     ),
     mirror_failures=PutCase(
         ["put", "--mirror-failures", "target"],
         mirror_files=[BAD_MIRROR_FILES],
         after_get_params={"url": FIRST_URL},
         want_return_code=0,
-        want_files=[f"./target/{FIRST_PATH}"],
+        want_files={f"./target/{FIRST_PATH}"},
     ),
     no_mirror_failures=PutCase(
         ["put", "--mirror-failures", "target"],
@@ -400,7 +400,7 @@ def test_put(case: PutCase, cfg: storage.StorageConfig, tmpdir):
         LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
         raise
 
-    assert find_result.stdout.decode("utf-8").splitlines() == case.want_files
+    assert set(find_result.stdout.decode("utf-8").splitlines()) == case.want_files
 
 
 @dataclasses.dataclass
@@ -411,7 +411,7 @@ class PruneCase:
     want_return_code: int = 0
     want_stdout: bytes = b""
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
-    want_files: list[str] = dataclasses.field(default_factory=list)
+    want_files: set[str] = dataclasses.field(default_factory=set)
 
 
 @cases.cases(
@@ -429,10 +429,10 @@ class PruneCase:
     with_other_url=PruneCase(
         ["prune", SECOND_URL],
         after_get_params={"url": FIRST_URL},
-        want_files=[
+        want_files={
             "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
             "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
-        ],
+        },
     ),
     mirror_failures=PruneCase(
         ["prune", "--mirror-failures"],
@@ -443,24 +443,24 @@ class PruneCase:
         ["prune", "--mirror-failures"],
         mirror_files=[GOOD_MIRROR_FILES],
         after_get_params={"url": FIRST_URL},
-        want_files=[
+        want_files={
             "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
             "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
-        ],
+        },
     ),
     filenams=PruneCase(
         ["prune", "--filenames"],
         after_get_params={"url": FIRST_URL},
-        want_files=[
+        want_files={
             "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
-        ],
+        },
     ),
     status_filenams=PruneCase(
         ["prune", "--status-filenames"],
         after_get_params={"url": FIRST_URL},
-        want_files=[
+        want_files={
             "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
-        ],
+        },
     ),
 )
 def test_prune(case: PruneCase, cfg: storage.StorageConfig, tmpdir):
@@ -481,7 +481,7 @@ def test_prune(case: PruneCase, cfg: storage.StorageConfig, tmpdir):
         LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
         raise
 
-    assert find_result.stdout.decode("utf-8").splitlines() == case.want_files
+    assert set(find_result.stdout.decode("utf-8").splitlines()) == case.want_files
 
 
 def run_command(
