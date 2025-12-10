@@ -16,6 +16,7 @@
 # under the License.
 import atexit
 import contextvars
+import json
 import logging
 import os
 import subprocess
@@ -183,23 +184,33 @@ class TransferManager:
             find_result = subprocess.run(find_status_files_command, cwd=local_dir, capture_output=True, shell=False, check=False)
             found_status_files_output = find_result.stdout.decode("utf-8").strip()
             if find_result.returncode != 0 or not found_status_files_output:
-                message = f"'.status' file not found in  '{local_dir}'"
+                message = f"'.status' file not found in '{local_dir}'"
                 stderr = find_result.stderr.strip().decode("utf-8")
                 if stderr:
                     message += f"\nSTDERR:\n{stderr}"
                 LOG.debug(message)
                 raise FileNotFoundError(message)
 
-            urls = [
-                url[len("./") :][: -len(".status")].replace(":/", "://")
-                for f in found_status_files_output.splitlines()
-                if (url := f.strip()).endswith(".status")
-            ]
+            urls = []
+            for line in found_status_files_output.splitlines():
+                filename = line.rstrip("\n")
+                if not filename or not filename.endswith(".status"):
+                    LOG.error("Filename doesn't look like a status file: '%s'", filename)
+                    continue
+                try:
+                    with open(os.path.join(local_dir, filename)) as f:
+                        status = json.loads(f.read())
+                    urls.append(status["url"])
+                except Exception:
+                    LOG.exception("Error reading status file: '%s'", filename)
+
             if not urls:
                 raise FileNotFoundError(
-                    f"Unable to find any valid URL from status files: {found_status_files_output}.",
+                    f"Unable to find any valid status files: {found_status_files_output}.",
                 )
-        return [self.get(url, start=start, local_dir=local_dir, todo=todo) for url in urls]
+        transfers = [self.get(url, local_dir=local_dir, todo=todo, start=start) for url in urls]
+        transfers.sort(key=lambda tr: tr.url)
+        return transfers
 
     def monitor(self):
         self._update_transfers()
