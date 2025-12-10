@@ -87,7 +87,7 @@ class TransferCase:
     want_final_todo: str = ""
     want_final_written: str = ""
     want_final_document_length: int = len(DATA)
-    want_mirror_failures: dict[str, str] = dataclasses.field(default_factory=dict)
+    want_mirror_failures: list[dict[str, str]] = dataclasses.field(default_factory=list)
     resume: bool = True
     resume_status: dict[str, str] | None = None
 

@@ -16,8 +16,6 @@
 # under the License.
 from __future__ import annotations
 
-import collections
-import copy
 import dataclasses
 import json
 import logging
@@ -44,6 +42,9 @@ LOG = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class TransferStats:
+    # The URL of the remote file on the mirror server.
+    url: str = ""
+
     # The number of requests.
     request_count: int = 0
 
@@ -117,6 +118,7 @@ class TransferStats:
 
     def pretty(self) -> dict[str, Any]:
         details: dict[str, Any] = {
+            "url": self.url,
             "bytes": pretty.size(self.transferred_bytes),
             "requests": self.request_count,
             "latency": pretty.duration(self.average_latency),
@@ -136,6 +138,12 @@ class TransferStats:
 
 
 TransferFileType = Literal["data", "status"]
+
+
+@dataclasses.dataclass
+class TransferMirrorFailure:
+    url: str
+    error: str
 
 
 class Transfer:
@@ -224,8 +232,8 @@ class Transfer:
         self._lock = threading.Lock()
         self._resumed_size = 0
         self._crc32c = crc32c
-        self._mirror_failures: dict[str, str] = {}
-        self._stats: dict[str, TransferStats] = collections.defaultdict(TransferStats)
+        self._mirror_failures: dict[str, TransferMirrorFailure] = {}
+        self._stats: dict[str, TransferStats] = {}
         if resume and self.status_file_path and os.path.isfile(self.status_file_path):
             try:
                 self._resume_status()
@@ -235,8 +243,14 @@ class Transfer:
                 LOG.debug("Transfer resumed from existing status:\n%s", self.info())
 
     @property
-    def stats(self) -> dict[str, TransferStats]:
-        return copy.deepcopy(self._stats)
+    def mirror_failures(self) -> list[TransferMirrorFailure]:
+        with self._lock:
+            return list(self._mirror_failures.values())
+
+    @property
+    def stats(self) -> list[TransferStats]:
+        with self._lock:
+            return list(self._stats.values())
 
     @property
     def status_file_path(self) -> str:
@@ -322,10 +336,6 @@ class Transfer:
             self._executor.submit(self._run)
             return True
 
-    @property
-    def mirror_failures(self) -> dict[str, str]:
-        return dict(self._mirror_failures)
-
     def _resume_status(self):
         status_filename = self.status_file_path
         if not os.path.isfile(status_filename):
@@ -383,24 +393,52 @@ class Transfer:
             # There is nothing more to do.
             self._finished.set()
 
-        # It restores mirror failures.
-        self._mirror_failures = document.get("mirror_failures", {})
+        for mirror_failure in document.get("mirror_failures", []):
+            if not isinstance(mirror_failure, dict):
+                raise ValueError(
+                    f"invalid 'mirror_failures' value in status file: '{status_filename}': got {type(mirror_failure)}, want dict"
+                )
+            self._add_mirror_failure(**mirror_failure)
 
         # It restores transfer statistics.
         for stats in document.get("stats", []):
             if not isinstance(stats, dict):
-                raise ValueError(f"mismatching stats file format: got {type(stats)}, expected dict")
-            url = stats.pop("url", None)
-            if url is None:
-                raise ValueError(f"url field not found in stats '{stats}' in status file: '{status_filename}'")
-            self._stats[url].add(**stats)
+                raise ValueError(f"invalid 'stats' value in status file '{status_filename}': got {type(stats)}, want dict")
+            self._add_stats(**stats)
+
+    def _add_stats(
+        self,
+        *,
+        url: str,
+        request_count: int = 0,
+        transferred_bytes: int = 0,
+        response_time: float = 0.0,
+        read_time: float = 0.0,
+        write_time: float = 0.0,
+    ) -> None:
+        if not url:
+            raise ValueError(f"Invalid mirror url: '{url}'")
+        s = self._stats.get(url)
+        if s is None:
+            self._stats[url] = s = TransferStats(url=url)
+        s.add(
+            request_count=request_count,
+            transferred_bytes=transferred_bytes,
+            response_time=response_time,
+            read_time=read_time,
+            write_time=write_time,
+        )
+
+    def _add_mirror_failure(self, *, url: str, error: str) -> None:
+        self._mirror_failures[url] = TransferMirrorFailure(url=url, error=error)
 
     def save_status(self):
         """It updates the status file."""
-        self._mirror_failures = {f.mirror_url: f.error for f in self.client.mirror_failures(self.url)}
+        # It synchronizes mirror failures with the client.
+        mirror_failures = self.client.mirror_failures(self.url)
         with self._lock:
-            stats = [{"url": u, **dataclasses.asdict(s)} for u, s in self._stats.items()]
-
+            for f in mirror_failures:
+                self._add_mirror_failure(url=f.mirror_url, error=f.error)
         document = {
             "url": self.url,
             "path": self.path,
@@ -409,8 +447,8 @@ class Transfer:
             "crc32c": self.crc32c,
             # Mirror failures is intended to be consumed by a tool in charge to upload downloaded files that was missing
             # in any mirror server to keep it in sync with source file repository.
-            "mirror_failures": self._mirror_failures,
-            "stats": stats,
+            "mirror_failures": [dataclasses.asdict(f) for f in self.mirror_failures],
+            "stats": [dataclasses.asdict(s) for s in self.stats],
         }
         status_filename = self.status_file_path
         os.makedirs(os.path.dirname(status_filename), exist_ok=True)
@@ -451,7 +489,7 @@ class Transfer:
                         # Response time includes only:
                         # - resolving the mirrored file URL(s);
                         # - receiving the file headers.
-                        self._stats[got.head.url].add(request_count=1, response_time=time.monotonic() - start_time)
+                        self._add_stats(url=got.head.url, request_count=1, response_time=time.monotonic() - start_time)
 
                     # When ranges are not given, then content_length replaces document_length.
                     document_length = got.head.document_length or got.head.content_length
@@ -479,9 +517,14 @@ class Transfer:
                         with self._lock:
                             # Read time includes the time spent receiving all chunks of data.
                             # Write time includes the time spent writing all chunks of data.
-                            self._stats[got.head.url].add(
-                                transferred_bytes=len(chunk), read_time=read_time - start_time, write_time=write_time - read_time
+                            self._add_stats(
+                                url=got.head.url,
+                                transferred_bytes=len(chunk),
+                                read_time=read_time - start_time,
+                                write_time=write_time - read_time,
                             )
+                            # It eventually removes old mirror failure.
+                            self._mirror_failures.pop(got.head.url, None)
 
         except StreamClosedError as ex:
             if self._finished.set():
@@ -668,9 +711,11 @@ class Transfer:
             "workers": self._workers.count,
             "duration": self.duration and pretty.duration(self.duration),
             "throughput": self.average_speed and pretty.throughput(self.average_speed),
-            "stats": stats and {u: s.pretty() for u, s in self._stats.items()},
-            "mirror_failures": mirror_failures and self._mirror_failures,
         }
+        if mirror_failures:
+            details["mirror_failures"] = [dataclasses.asdict(f) for f in self.mirror_failures]
+        if stats:
+            details["stats"] = [s.pretty() for s in self.stats]
         return {k: v for k, v in details.items() if v}
 
     def info(self, *, stats: bool = False, mirror_failures: bool = False) -> str:
