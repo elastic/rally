@@ -44,6 +44,8 @@ class TestsVersions:
         assert versions.is_version_identifier("5", strict=False)
         assert versions.is_version_identifier("23", strict=False)
         assert versions.is_version_identifier("20.3.7-SNAPSHOT", strict=False)
+        assert versions.is_version_identifier("9.2-test", strict=False) is False
+        assert versions.is_version_identifier("9-test", strict=False) is False
 
     def test_is_serverless(self):
         assert versions.is_serverless("serverless")
