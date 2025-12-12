@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import json
 import logging
 import os.path
@@ -26,8 +25,11 @@ import subprocess
 import sys
 import time
 import urllib
-from typing import Any, Literal
+from collections.abc import Generator
+from typing import Literal, TypedDict
 from urllib.parse import urlparse
+
+from typing_extensions import NotRequired
 
 from esrally import storage
 
@@ -181,34 +183,110 @@ def ls(
             for tr in transfers:
                 filenames.update(tr.ls_files(file_types=file_types))
             sys.stdout.write("\n".join(sorted(filenames)) + "\n")
-        case "filebeat":
-            for o in transfers_as_dictionaries(transfers):
-                line = json.dumps({"rally": {"storage": o}})
-                sys.stdout.write(f"{line}\n")
         case "json":
-            json.dump(transfers_as_dictionaries(transfers), sys.stdout, indent=2, sort_keys=True)
+            json.dump(
+                [transfer_to_dict(tr, stats=stats, mirror_failures=mirror_failures) for tr in transfers],
+                sys.stdout,
+                indent=2,
+                sort_keys=True,
+            )
+        case "filebeat":
+            for tr in transfers:
+                # Filebeat format is made of the root object (without stats), plus a separate object for each transfer stat.
+                for d in transfer_to_filebeat(tr, stats=stats, mirror_failures=mirror_failures):
+                    line = json.dumps({"rally": {"storage": d}})
+                    sys.stdout.write(f"{line}\n")
         case "pretty":
             json.dump([t.pretty(stats=stats, mirror_failures=mirror_failures) for t in transfers], sys.stdout, indent=2)
 
 
-def transfers_as_dictionaries(transfers: list[storage.Transfer]) -> list[dict[str, Any]]:
-    return [
-        {
-            "url": tr.url,
-            "path": tr.path,
-            "progress": tr.progress,
-            "errors": [str(e) for e in tr.errors],
-            "document_length": tr.document_length,
-            "crc32": tr.crc32c,
-            "done": str(tr.done),
-            "mirror_failures": tr.mirror_failures,
-            "has_mirror_failures": bool(tr.mirror_failures),
-            "todo": str(tr.todo),
-            "finished": tr.finished,
-            "stats": {u: dataclasses.asdict(s) for u, s in tr.stats.items()},
-        }
-        for tr in transfers
-    ]
+class BaseTransferDict(TypedDict):
+    url: str
+    path: str
+
+
+class TransferDict(BaseTransferDict):
+    progress: float
+    errors: list[str]
+    document_length: int | None
+    crc32c: str | None
+    done: str
+    todo: str
+    finished: bool
+    mirror_failures: NotRequired[list[MirrorFailureDict]]
+    stats: NotRequired[list[StatsDict]]
+
+
+class FilebeatStatsDict(BaseTransferDict):
+    stats: StatsDict
+
+
+class FilebeatMirrorFailureDict(BaseTransferDict):
+    mirror_failures: MirrorFailureDict
+
+
+class MirrorFailureDict(TypedDict):
+    url: str
+    error: str
+
+
+class StatsDict(TypedDict):
+    url: str
+    request_count: int
+    transferred_bytes: int
+    response_time: float
+    read_time: float
+    write_time: float
+
+
+def transfer_to_dict(tr: storage.Transfer, *, stats: bool = False, mirror_failures: bool = False) -> TransferDict:
+    """It obtains dictionaries from transfer status in the format to be serialized as JSON."""
+    d = TransferDict(
+        url=tr.url,
+        path=tr.path,
+        progress=tr.progress,
+        errors=[str(e) for e in tr.errors],
+        document_length=tr.document_length,
+        crc32c=tr.crc32c,
+        done=str(tr.done),
+        todo=str(tr.todo),
+        finished=tr.finished,
+    )
+    if mirror_failures:
+        d["mirror_failures"] = [MirrorFailureDict(url=f.url, error=f.error) for f in tr.mirror_failures]
+    if stats:
+        d["stats"] = [
+            StatsDict(
+                url=s.url,
+                request_count=s.request_count,
+                transferred_bytes=s.transferred_bytes,
+                response_time=s.response_time,
+                read_time=s.read_time,
+                write_time=s.write_time,
+            )
+            for s in tr.stats
+        ]
+    return d
+
+
+def transfer_to_filebeat(
+    tr: storage.Transfer, stats: bool = False, mirror_failures: bool = False
+) -> Generator[TransferDict | FilebeatStatsDict | FilebeatMirrorFailureDict]:
+    """It obtains dictionaries from transfer in the format to be ingested to filebeat.
+
+    After getting a TransferDict as transfer_to_dict it yields:
+      - the TransferDict without 'mirror_failures' and 'stats' items;
+      - a FilebeatMirrorFailureDict for every MirrorFailureDict in 'mirror_failures' list.
+      - a FilebeatStatsDict for every TransferStatsDict in 'stats' list.
+    """
+    root: TransferDict = transfer_to_dict(tr, stats=stats, mirror_failures=mirror_failures)
+    _mirror_failures: list[MirrorFailureDict] = root.pop("mirror_failures", [])
+    _stats: list[StatsDict] = root.pop("stats", [])
+    yield root
+    for f in _mirror_failures:
+        yield FilebeatMirrorFailureDict(url=tr.url, path=tr.path, mirror_failures=f)
+    for s in _stats:
+        yield FilebeatStatsDict(url=tr.url, path=tr.path, stats=s)
 
 
 def get(
