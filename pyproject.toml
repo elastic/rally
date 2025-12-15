@@ -76,8 +76,8 @@ dependencies = [
     # License: BSD
     "ijson==3.4.0",
     # License: Apache 2.0
-    # transitive dependencies:
-    #   google-crc32c: Apache 2.0
+    "google-crc32c==1.7.1",
+    # License: Apache 2.0
     "google-resumable-media[requests]==2.7.2",
     # License: Apache 2.0
     "google-auth==2.38.0",
