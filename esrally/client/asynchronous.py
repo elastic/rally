@@ -293,14 +293,8 @@ class RallyIlmClient(IlmClient):
 
 
 class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
-    def __init__(self, *args, **kwargs):
-        distribution_version = kwargs.pop("distribution_version", None)
-        distribution_flavor = kwargs.pop("distribution_flavor", None)
-        super().__init__(*args, **kwargs)
-        # skip verification at this point; we've already verified this earlier with the synchronous client.
-        # The async client is used in the hot code path and we use customized overrides (such as that we don't
-        # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
-        self._verified_elasticsearch = True
+    def __init__(self, hosts: Any = None, *, distribution_version: str | None = None, distribution_flavor: str | None = None, **kwargs):
+        super().__init__(hosts, **kwargs)
         self.distribution_version = distribution_version
         self.distribution_flavor = distribution_flavor
 
@@ -327,7 +321,12 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         params: Optional[Mapping[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
         body: Optional[Any] = None,
+        endpoint_id: Optional[str] = None,
+        path_parts: Optional[Mapping[str, Any]] = None,
     ) -> ApiResponse[Any]:
+        if endpoint_id is not None or path_parts is not None:
+            raise NotImplementedError("Parameters endpoint_id and path_parts are not supported.")
+
         # We need to ensure that we provide content-type and accept headers
         if body is not None:
             if headers is None:
