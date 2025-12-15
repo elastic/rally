@@ -709,9 +709,10 @@ class ForceMerge(Runner):
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         if mode == "polling":
+            complete = False
             es_info = await es.info()
             es_version = Version.from_string(es_info["version"]["number"])
-            if es_version < Version(8, 1, 0):
+            if es_version < Version(8, 1, 0):  # before 8.1.0 wait_for_completion is not supported
                 try:
                     await es.indices.forcemerge(**merge_params)
                     complete = True
