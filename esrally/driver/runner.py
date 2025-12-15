@@ -700,15 +700,27 @@ class ForceMerge(Runner):
     """
 
     async def __call__(self, es, params):
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
         max_num_segments = params.get("max-num-segments")
         mode = params.get("mode")
         merge_params = self._default_kw_params(params)
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         if mode == "polling":
-            complete = False
-            merge_params["wait_for_completion"] = False
-            await es.indices.forcemerge(**merge_params)
+            es_info = await es.info()
+            es_version = Version.from_string(es_info["version"]["number"])
+            if es_version < Version(8, 1, 0):
+                try:
+                    await es.indices.forcemerge(**merge_params)
+                    complete = True
+                except elasticsearch.ConnectionTimeout:
+                    pass
+            else:
+                complete = False
+                merge_params["wait_for_completion"] = False
+                await es.indices.forcemerge(**merge_params)
             while not complete:
                 await asyncio.sleep(params.get("poll-period"))
                 tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
