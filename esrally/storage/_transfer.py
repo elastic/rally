@@ -701,7 +701,7 @@ class Transfer:
             return 0.0
         return (done.size - self._resumed_size) / self.duration.s()
 
-    def pretty(self, *, stats: bool = False, mirror_failures: bool = False) -> dict[str, Any]:
+    def pretty(self, *, stats: bool = False) -> dict[str, Any]:
         details: dict[str, Any] = {
             "url": self.url,
             "path": self.path,
@@ -712,14 +712,14 @@ class Transfer:
             "duration": self.duration and pretty.duration(self.duration),
             "throughput": self.average_speed and pretty.throughput(self.average_speed),
         }
-        if mirror_failures:
+        if self.mirror_failures:
             details["mirror_failures"] = [dataclasses.asdict(f) for f in self.mirror_failures]
         if stats:
             details["stats"] = [s.pretty() for s in self.stats]
         return {k: v for k, v in details.items() if v}
 
-    def info(self, *, stats: bool = False, mirror_failures: bool = False) -> str:
-        return json.dumps(self.pretty(stats=stats, mirror_failures=mirror_failures), indent=2)
+    def info(self, *, stats: bool = False) -> str:
+        return json.dumps(self.pretty(stats=stats), indent=2)
 
     def wait(self, timeout: float | None = None) -> None:
         """It waits for transfer termination."""
