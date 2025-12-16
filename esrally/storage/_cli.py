@@ -61,13 +61,13 @@ def main():
             "--local-dir", type=str, default=cfg.local_dir, help="It specifies local destination directory for downloading files."
         )
         p.add_argument("--base-url", type=str, default=None, help="It specifies the base URL for remote storage.")
-        p.add_argument("--mirror-failures", action="store_true", help="It considers only those files which have recorded mirror failures.")
 
     # It defines ls sub-command output options.
     for p in (parser, ls_parser):
         p.add_argument("--filebeat", action="store_true", help="It prints a JSON entry for each file, each separated by a newline.")
         p.add_argument("--json", action="store_true", help="It prints a pretty entry for each file.")
-        p.add_argument("--stats", action="store_true", help="It adds connectivity statistics to produced output.")
+        p.add_argument("--stats", action="store_true", help="It shows connectivity statistics in produced output.")
+        p.add_argument("--mirror-failures", action="store_true", help="It shows mirror failures in produced output.")
         p.add_argument("--filenames", action="store_true", help="It shows downloaded file names.")
         p.add_argument("--status-filenames", action="store_true", help="It shows status file names.")
 
@@ -131,12 +131,6 @@ def main():
         transfers = [tr for tr in transfers if tr.url.startswith(args.base_url.rstrip("/"))]
         if not transfers:
             LOG.info("No transfers with base URL: %s.", args.base_url)
-            return
-
-    if args.mirror_failures:
-        transfers = [tr for tr in transfers if tr.mirror_failures]
-        if not transfers:
-            LOG.info("No transfers with mirror failures.")
             return
 
     file_types: set[storage.TransferFileType] | None = None
