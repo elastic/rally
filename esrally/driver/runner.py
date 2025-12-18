@@ -709,6 +709,7 @@ class ForceMerge(Runner):
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         if mode == "polling":
+            task_id = None
             complete = False
             es_info = await es.info()
             es_version = Version.from_string(es_info["version"]["number"])
@@ -721,13 +722,18 @@ class ForceMerge(Runner):
             else:
                 complete = False
                 merge_params["wait_for_completion"] = False
-                await es.indices.forcemerge(**merge_params)
+                response = await es.indices.forcemerge(**merge_params)
+                task_id = response.get("task")
             while not complete:
                 await asyncio.sleep(params.get("poll-period"))
-                tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
-                if len(tasks["nodes"]) == 0:
-                    # empty nodes response indicates no tasks
-                    complete = True
+                if task_id:
+                    tasks = await es.tasks.get(task_id=task_id)
+                    complete = tasks.get("completed", False)
+                else:
+                    tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
+                    if len(tasks["nodes"]) == 0:
+                        # empty nodes response indicates no tasks
+                        complete = True
         else:
             await es.indices.forcemerge(**merge_params)
 
