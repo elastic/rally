@@ -709,18 +709,31 @@ class ForceMerge(Runner):
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         if mode == "polling":
+            task_id = None
             complete = False
-            try:
-                await es.indices.forcemerge(**merge_params)
-                complete = True
-            except elasticsearch.ConnectionTimeout:
-                pass
+            es_info = await es.info()
+            es_version = Version.from_string(es_info["version"]["number"])
+            if es_version < Version(8, 1, 0):  # before 8.1.0 wait_for_completion is not supported
+                try:
+                    await es.indices.forcemerge(**merge_params)
+                    complete = True
+                except elasticsearch.ConnectionTimeout:
+                    pass
+            else:
+                complete = False
+                merge_params["wait_for_completion"] = False
+                response = await es.indices.forcemerge(**merge_params)
+                task_id = response.get("task")
             while not complete:
                 await asyncio.sleep(params.get("poll-period"))
-                tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
-                if len(tasks["nodes"]) == 0:
-                    # empty nodes response indicates no tasks
-                    complete = True
+                if task_id:
+                    tasks = await es.tasks.get(task_id=task_id)
+                    complete = tasks.get("completed", False)
+                else:
+                    tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
+                    if len(tasks["nodes"]) == 0:
+                        # empty nodes response indicates no tasks
+                        complete = True
         else:
             await es.indices.forcemerge(**merge_params)
 
