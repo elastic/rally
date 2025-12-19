@@ -866,9 +866,12 @@ class DownsampleParamSource(ParamSource):
         params["index"] = params.get("source-index")
         self._source_index = get_target(track, params)
         self._target_index = params.get("target-index", f"{self._source_index}-{self._fixed_interval}")
+        self._sampling_method = params.get("sampling-method", None)
 
     def params(self):
         parsed_params = {"fixed-interval": self._fixed_interval, "source-index": self._source_index, "target-index": self._target_index}
+        if self._sampling_method:
+            parsed_params["sampling-method"] = self._sampling_method
         parsed_params.update(self._client_params())
         return parsed_params
 
