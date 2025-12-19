@@ -140,8 +140,8 @@ Define a secure connection to an Elastic Cloud Serverless project::
 storage
 ~~~~~~~
 
-This section defines how client is configured to transfer corpus files. The main
-advantages of this downloader implementation are:
+This section defines how client is configured to transfer corpus files. The main advantages of this downloader
+implementation are:
 
 * It supports configuring multiple mirror URLs. The client will load balance between these URLs giving priority to
   those with the lower latency. In case of failures the client will download files from the original URL.
@@ -166,11 +166,17 @@ Configuration options are:
   Here is an example of valid value for http(s) adapter::
 
     [storage]
-    storage.adapters = esrally.storage._http:HTTPAdapter
+    storage.adapters = esrally.storage.http:HTTPAdapter,esrally.storage.aws:S3Adapter
 
+  At this point in time ``esrally.storage.http:HTTPAdapter`` and ``esrally.storage.aws:S3Adapter`` are the only
+  known ``Adapter`` implementations intended for public use and they are both enabled by default. So it is required
+  to edit this option for special customizations (like for example remove one of them or adding a new
+  custom implementation for accessing a special infrastructure server).
 
-  At this point in time `esrally.storage._http:HTTPAdapter` is the only existing `Adapter` implementations intended
-  for public use and that is already the default one. So it is required to edit this option for special customizations.
+* ``storage.cache_ttl`` indicates the default time to live in seconds replies from head requests has to be considered
+  valid. In case this value is zero, the caching mechanism is disabled.
+
+* ``storage.chunk_size`` is used to specify the default size (in bytes) of data chunks to be downloaded using adapters.
 
 * ``storage.local_dir`` indicates the default directory where to store local files when no path has been specified.
 
@@ -208,17 +214,17 @@ Configuration options are:
   The mirroring of the files on mirrors servers has to be provided by the infrastructure. The esrally client will look
   for the files on the destination mirror endpoints URLs or use the original source endpoint URL in case the files
   are not mirrored or they have a different size from the source one. The client will prefer endpoints with the lower
-  latency fetching the head of the file.
+  latency measured by fetching the headers of the file.
 
-* ``storage.monitor_interval`` represents the time interval (in seconds) `TransferManager` should wait for consecutive
+* ``storage.monitor_interval`` represents the time interval (in seconds) ``TransferManager`` should wait for consecutive
   monitor operations (log transfer and connections statistics, adjust the maximum number of connections, etc.).
 
 * ``storage.multipart_size`` When the file size measured in bytes is greater than this value the file is split in chunk
-  of this size plus the last one ()that could be smaller). Each part will be downloaded separately and in parallel using
-  a dedicated connection by a worker thread and eventually from a different mirror server to load balance the network
-  traffic between multiple servers. If the resulting number of parts is greater than ``storage.max_workers`` and
-  ``storage.max_connections`` options, then the transfer of those parts exceeding these limits will be performed as
-  soon as a worker thread gets available or a HTTP connection get released by another thread.
+  of this size plus the last one. Each part will be downloaded separately and in parallel using a dedicated connection
+  by a worker thread and eventually from a different mirror server to load balance the network traffic between multiple
+  servers. If the resulting number of parts is greater than ``storage.max_workers`` and ``storage.max_connections``
+  options, then the transfer of those parts exceeding these limits will be performed as soon as a worker thread gets
+  available or a HTTP connection get released by another thread.
 
 * ``storage.random_seed`` a string used to initialize the client random number generator. This could be used to make
   problems easier to reproduce in continuous integration. In most of the cases it should be left empty.
@@ -229,10 +235,16 @@ HTTP Adapter
 
 This adapter can be used only to download files from public HTTP or HTTPS servers.
 
-* ``storage.http.chunk_size`` is used to specify the size of the buffer is being used for transferring chunk of files.
+It must be listed in the ``storage.adapters`` option::
+
+    [storage]
+    storage.adapters = esrally.storage.http:HTTPAdapter
+
+* ``storage.http.connect_timeout`` is used to specify the maximum number of seconds an HTTP connect operation could take
+  before giving up.
 
 * ``storage.http.max_retries`` is used to configure the maximum number of retries for making HTTP adapter requests.
-  it accept a numeric value to simply specify total number of retries. Examples::
+  It accepts a numeric value to simply specify total number of retries. Examples::
 
     [storage]
     storage.http.max_retries = 3
@@ -245,6 +257,9 @@ This adapter can be used only to download files from public HTTP or HTTPS server
 
   .. _urllib3.Retry: https://urllib3.readthedocs.io/en/stable/reference/urllib3.util.html
 
+* ``storage.http.read_timeout`` is used to specify the maximum number of seconds an HTTP read operation could take before
+  giving up.
+
 
 S3 Adapter
 **********
@@ -255,6 +270,11 @@ S3 buckets as mirror for track file downloads.
 It requires `Boto3 Client`_ to be installed and it accepts only URLs with the following format::
 
   s3://<bucket-name>/[<object-key-prefix>]
+
+It must be listed in the ``storage.adapters`` option::
+
+    [storage]
+    storage.adapters = esrally.storage.aws:S3Adapter
 
 In the case the boto3 client is not installed, and S3 buckets are publicly readable without authentication, you can use
 the HTTP adapter instead, for example by using the following URL format::
@@ -293,6 +313,20 @@ Configuration options:
   .. _S3 Cloud Storage Service: https://aws.amazon.com/es/s3/
   .. _Boto3 Client: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
   .. _S3 Service Documentation: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistS3AndCustomOrigins.html#concept_S3Origin
+
+
+track
+~~~~~
+
+This section specifies how tracks corpora files has to be fetched. Available options are:
+
+* ``track.downloader.multipart_enabled`` if ``true``, it will enable the use the new multipart ``esrally.storage`` package for
+  downloading corpora files. For more configuration options please have a look to the `storage`_ configuration section.
+
+.. warning::
+
+    Transfers manager implementation is experimental and under active development. Enable it only if you actually need it.
+
 
 tracks
 ~~~~~~

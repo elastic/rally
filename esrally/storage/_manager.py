@@ -15,149 +15,202 @@
 # specific language governing permissions and limitations
 # under the License.
 import atexit
+import contextvars
+import json
 import logging
 import os
+import subprocess
 import threading
+from collections.abc import Iterable
 
+import urllib3.exceptions
 from typing_extensions import Self
 
 from esrally import types
-from esrally.storage._client import MAX_CONNECTIONS, Client
-from esrally.storage._executor import MAX_WORKERS, Executor, ThreadPoolExecutor
-from esrally.storage._transfer import MULTIPART_SIZE, Transfer
+from esrally.storage._client import Client
+from esrally.storage._config import StorageConfig
+from esrally.storage._executor import Executor, executor_from_config
+from esrally.storage._range import NO_RANGE, RangeSet
+from esrally.storage._transfer import Transfer
 from esrally.utils.threads import ContinuousTimer
 
 LOG = logging.getLogger(__name__)
-
-LOCAL_DIR = "~/.rally/storage"
-MONITOR_INTERVAL = 2.0  # Seconds
-THREAD_NAME_PREFIX = "esrally.storage.transfer-worker"
 
 
 class TransferManager:
     """It creates and perform file transfer operations in background."""
 
     @classmethod
-    def from_config(cls, cfg: types.Config, client: Client | None = None, executor: Executor | None = None) -> Self:
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
         """It creates a TransferManager with initialization values taken from given configuration."""
-        local_dir = cfg.opts(section="storage", key="storage.local_dir", default_value=LOCAL_DIR, mandatory=False)
-        monitor_interval = cfg.opts(section="storage", key="storage.monitor_interval", default_value=MONITOR_INTERVAL, mandatory=False)
-        max_connections = cfg.opts(section="storage", key="storage.max_connections", default_value=MAX_CONNECTIONS, mandatory=False)
-        max_workers = cfg.opts(section="storage", key="storage.max_workers", default_value=MAX_WORKERS, mandatory=False)
-        multipart_size = cfg.opts(section="storage", key="storage.multipart_size", default_value=MULTIPART_SIZE, mandatory=False)
-        if client is None:
-            client = Client.from_config(cfg)
-        if executor is None:
-            executor = ThreadPoolExecutor.from_config(cfg)
+        cfg = StorageConfig.from_config(cfg)
         return cls(
-            client=client,
-            executor=executor,
-            local_dir=local_dir,
-            monitor_interval=float(monitor_interval),
-            multipart_size=multipart_size,
-            max_connections=int(max_connections),
-            max_workers=int(max_workers),
+            cfg=cfg,
+            client=Client.from_config(cfg),
+            executor=executor_from_config(cfg),
         )
 
     def __init__(
         self,
+        cfg: StorageConfig,
         client: Client,
         executor: Executor,
-        local_dir: str = LOCAL_DIR,
-        monitor_interval: float = MONITOR_INTERVAL,
-        max_connections: int = MAX_CONNECTIONS,
-        max_workers: int = MAX_WORKERS,
-        multipart_size: int = MULTIPART_SIZE,
     ):
         """It manages files transfers.
 
         It executes file transfers in background. It periodically logs the status of transfers that are in progress.
-
-        :param local_dir: default directory used to download files to, or upload files from.
-        :param monitor_interval: time interval (in seconds) separating background calls to the _monitor method.
+        :param cfg: Configuration object.
         :param client: _client.Client instance used to allocate/reuse storage adapters.
-        :param multipart_size: length of every part when working with multipart.
-        :param max_workers: max number of connections per remote server when working with multipart.
+        :param executor: Executor instance used to execute transfer operations.
         """
+        self.cfg = cfg
         self._client = client
         self._executor = executor
         self._lock = threading.Lock()
+        self._transfers: dict[str, Transfer] = {}
 
-        local_dir = os.path.expanduser(local_dir)
-        if not os.path.isdir(local_dir):
-            os.makedirs(local_dir)
+        if cfg.max_workers < 1:
+            raise ValueError(f"invalid max_workers: {cfg.max_workers} < 1")
 
-        self._local_dir = local_dir
-        if monitor_interval <= 0:
-            raise ValueError(f"invalid monitor interval: {monitor_interval} <= 0")
+        if cfg.max_connections < 1:
+            raise ValueError(f"invalid max_connections: {cfg.max_connections} < 1")
 
-        self._transfers: list[Transfer] = []
+        if cfg.multipart_size < 1024 * 1024:
+            raise ValueError(f"invalid multipart_size: {cfg.multipart_size} < {1024 * 1024}")
 
-        if max_workers < 1:
-            raise ValueError(f"invalid max_workers: {max_workers} < 1")
-        self._max_workers = max_workers
-
-        if max_connections < 1:
-            raise ValueError(f"invalid max_connections: {max_connections} < 1")
-        self._max_connections = max_connections
-
-        if multipart_size < 1024 * 1024:
-            raise ValueError(f"invalid multipart_size: {multipart_size} < {1024 * 1024}")
-        self._multipart_size = multipart_size
-
-        self._monitor_timer = ContinuousTimer(interval=monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
+        if cfg.monitor_interval <= 0:
+            raise ValueError(f"invalid monitor interval: {cfg.monitor_interval} <= 0")
+        self._monitor_timer = ContinuousTimer(interval=cfg.monitor_interval, function=self.monitor, name="esrally.storage.transfer-monitor")
         self._monitor_timer.start()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.shutdown()
+        return False
 
     def shutdown(self):
         with self._lock:
             transfers = self._transfers
-            self._transfers = []
-        for tr in transfers:
-            tr.close()
+            self._transfers = {}
+        LOG.debug("Shutting down transfer manager...")
+        for tr in transfers.values():
+            try:
+                if tr.finished:
+                    continue
+                LOG.warning("Cancelling transfer: %s...", tr)
+                tr.close()
+            except Exception as ex:
+                LOG.error("error closing transfer: %s, %s", tr.url, ex)
         self._monitor_timer.cancel()
+        LOG.debug("Transfer manager shut down.")
 
-    def get(self, url: str, path: os.PathLike | str | None = None, document_length: int | None = None) -> Transfer:
-        """It starts a new transfer of a file from local path to a remote url.
+    def get(
+        self,
+        url: str,
+        *,
+        path: str | None = None,
+        document_length: int | None = None,
+        crc32c: str | None = None,
+        start: bool = True,
+        local_dir: str | None = None,
+        todo: RangeSet | None = None,
+    ) -> Transfer:
+        """It starts a new transfer of a file from a remote url to a local path.
 
         :param url: remote file address.
         :param path: local file address.
         :param document_length: the expected file size in bytes.
         :return: started transfer object.
         """
-        return self._transfer(url=url, path=path, document_length=document_length)
+        tr = self._transfers.get(url)
+        if tr is not None:
+            if start:
+                tr.start(todo=todo)
+            return tr
 
-    def _transfer(
-        self,
-        url: str,
-        path: os.PathLike | str | None = None,
-        document_length: int | None = None,
-    ) -> Transfer:
-        if path is None:
-            path = os.path.join(self._local_dir, url)
-        # This also ensures the path is a string
-        path = os.path.normpath(os.path.expanduser(path))
+        try:
+            head = self._client.head(url)
+        except urllib3.exceptions.NewConnectionError as ex:
+            LOG.error("Failed to get head: %s", ex)
+        else:
+            if document_length is None:
+                document_length = head.content_length
+            elif head.content_length != document_length:
+                raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
+            if crc32c is None:
+                crc32c = head.crc32c
+            elif head.crc32c != crc32c:
+                raise ValueError(f"mismatching crc32c: got {head.crc32c} bytes, wanted {crc32c} bytes")
 
-        head = self._client.head(url)
-        if document_length is not None and head.content_length != document_length:
-            raise ValueError(f"mismatching document_length: got {head.content_length} bytes, wanted {document_length} bytes")
+        cfg = self.cfg
+        if local_dir is not None:
+            cfg = StorageConfig.from_config(cfg)
+            cfg.local_dir = local_dir
+
         tr = Transfer(
             client=self._client,
             url=url,
             path=path,
-            document_length=head.content_length,
+            document_length=document_length,
+            todo=todo,
             executor=self._executor,
-            multipart_size=self._multipart_size,
-            crc32c=head.crc32c,
+            multipart_size=self.cfg.multipart_size,
+            crc32c=crc32c,
+            cfg=cfg,
         )
 
-        # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
-        # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
-        # the allowed per-transfer connections.
-        with self._lock:
-            self._transfers.append(tr)
-        self._update_transfers()
-        tr.start()
+        if start:
+            # It sets the actual value for `max_connections` after updating the number of unfinished transfers and before
+            # requesting for the first worker threads. In this way it will avoid requesting more worker threads than
+            # the allowed per-transfer connections.
+            with self._lock:
+                self._transfers[tr.url] = tr
+            tr.start(todo=todo)
         return tr
+
+    def list(
+        self, *, urls: Iterable[str] | None = None, start: bool = False, local_dir: str | None = None, todo: RangeSet = NO_RANGE
+    ) -> list[Transfer]:
+        if not urls:
+            if local_dir is None:
+                local_dir = self.cfg.local_dir
+            local_dir = os.path.normpath(os.path.expanduser(local_dir))
+            if not os.path.isdir(local_dir):
+                raise FileNotFoundError(f"local dir '{local_dir}' is not a directory")
+
+            find_status_files_command = ["find", ".", "-type", "f", "-name", "*.status"]
+            find_result = subprocess.run(find_status_files_command, cwd=local_dir, capture_output=True, shell=False, check=False)
+            found_status_files_output = find_result.stdout.decode("utf-8").strip()
+            if find_result.returncode != 0 or not found_status_files_output:
+                message = f"'.status' file not found in '{local_dir}'"
+                stderr = find_result.stderr.strip().decode("utf-8")
+                if stderr:
+                    message += f"\nSTDERR:\n{stderr}"
+                LOG.debug(message)
+                raise FileNotFoundError(message)
+
+            urls = []
+            for line in found_status_files_output.splitlines():
+                filename = line.rstrip("\n")
+                if not filename or not filename.endswith(".status"):
+                    LOG.error("Filename doesn't look like a status file: '%s'", filename)
+                    continue
+                try:
+                    with open(os.path.join(local_dir, filename)) as f:
+                        status = json.loads(f.read())
+                    urls.append(status["url"])
+                except Exception:
+                    LOG.exception("Error reading status file: '%s'", filename)
+
+            if not urls:
+                raise FileNotFoundError(
+                    f"Unable to find any valid status files: {found_status_files_output}.",
+                )
+        transfers = [self.get(url, local_dir=local_dir, todo=todo, start=start) for url in urls]
+        transfers.sort(key=lambda tr: tr.url)
+        return transfers
 
     def monitor(self):
         self._update_transfers()
@@ -166,23 +219,23 @@ class TransferManager:
     @property
     def max_connections(self) -> int:
         with self._lock:
-            max_connections = self._max_connections
+            max_connections = self.cfg.max_connections
             number_of_transfers = len(self._transfers)
             if number_of_transfers > 0:
-                max_connections = min(max_connections, (self._max_workers // number_of_transfers) + 1)
+                max_connections = min(max_connections, (self.cfg.max_workers // number_of_transfers) + 1)
         return max_connections
 
     def _update_transfers(self) -> None:
         """It executes periodic update operations on every unfinished transfer."""
         with self._lock:
             # It first removes finished transfers.
-            self._transfers = transfers = [tr for tr in self._transfers if not tr.finished]
+            self._transfers = transfers = {tr.url: tr for tr in self._transfers.values() if not tr.finished}
             if not transfers:
                 return
 
         # It updates max_connections value for each transfer
         max_connections = self.max_connections
-        for tr in transfers:
+        for tr in transfers.values():
             # It updates the limit of the number of connections for every transfer because it varies in function of
             # the number of transfers in progress.
             tr.max_connections = max_connections
@@ -194,36 +247,37 @@ class TransferManager:
             tr.start()
 
         # It logs updated statistics for every transfer.
-        LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers))
+        LOG.info("Transfers in progress:\n  %s", "\n  ".join(tr.info() for tr in transfers.values()))
 
 
-_LOCK = threading.Lock()
-_MANAGER: TransferManager | None = None
+_MANAGER = contextvars.ContextVar[TransferManager | None](f"{__name__}.transfer_manager", default=None)
 
 
-def init_transfer_manager(cfg: types.Config, client: Client | None = None, executor: Executor | None = None) -> bool:
-    global _MANAGER
-    with _LOCK:
-        if _MANAGER is not None:
-            LOG.debug("Transfer manager already initialized")
-            return False
-        _MANAGER = TransferManager.from_config(cfg, client=client, executor=executor)
-        atexit.register(_MANAGER.shutdown)
-        return True
+def init_transfer_manager(*, cfg: types.Config | None = None, shutdown_at_exit: bool = True) -> TransferManager:
+    manager = _MANAGER.get()
+    if manager is not None:
+        return manager
+
+    # Initialize transfer manager.
+    cfg = StorageConfig.from_config(cfg)
+    manager = TransferManager.from_config(cfg)
+    _MANAGER.set(manager)
+
+    if shutdown_at_exit:
+        atexit.register(manager.shutdown)
+    return manager
 
 
-def quit_transfer_manager() -> bool:
-    global _MANAGER
-    with _LOCK:
-        if _MANAGER is None:
-            LOG.debug("Transfer manager not initialized.")
-            return False
-        _MANAGER.shutdown()
-        _MANAGER = None
-        return True
-
-
-def transfer_manager() -> TransferManager:
-    if _MANAGER is None:
+def get_transfer_manager() -> TransferManager:
+    manager = _MANAGER.get()
+    if manager is None:
         raise RuntimeError("Transfer manager not initialized.")
-    return _MANAGER
+    return manager
+
+
+def shutdown_transfer_manager() -> None:
+    manager = _MANAGER.get()
+    if manager is None:
+        return
+    _MANAGER.set(None)
+    return manager.shutdown()

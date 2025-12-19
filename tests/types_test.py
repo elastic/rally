@@ -32,6 +32,8 @@ def glob_modules(path: Path, pattern, *args, **kwargs):
         if not file.match("*.py"):
             continue
         pyfile = file.relative_to(path)
+        if pyfile.name == "__main__.py":
+            continue
         modpath = pyfile.parent if pyfile.name == "__init__.py" else pyfile.with_suffix("")
         yield import_module(str(modpath).replace(sep, "."))
 
@@ -122,5 +124,5 @@ def assert_annotations(obj, ident, *expects):
 class TestConfigTypeHint:
     def test_esrally_module_annotations(self):
         for module in glob_modules(project_root, "esrally/**/*.py"):
-            assert_annotations(module, "cfg", types.Config, "types.Config", "types.Config | None")
+            assert_annotations(module, "cfg", types.Config, "types.Config", "types.Config | None", types.Config | None)
             assert_annotations(module, "config", types.Config, Optional[types.Config], ConfigParser)

@@ -17,8 +17,8 @@
 import sys
 import threading
 import time
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Generator, Iterable
+from typing import Any, TypeVar
 
 
 class ContinuousTimer(threading.Thread):
@@ -37,7 +37,7 @@ class ContinuousTimer(threading.Thread):
         super().__init__(name=name, daemon=daemon)
         if interval <= 0:
             raise ValueError("interval must be strictly positive")
-        self._interval = interval
+        self.interval = interval
         self._function = function
         self._finished = threading.Event()
 
@@ -47,10 +47,10 @@ class ContinuousTimer(threading.Thread):
 
     def run(self):
         """It executes the function every interval seconds until the timer is cancelled."""
-        self._finished.wait(self._interval)
+        self._finished.wait(self.interval)
         while not self._finished.is_set():
             self._function()
-            self._finished.wait(self._interval)
+            self._finished.wait(self.interval)
 
     def wait(self, timeout: float | None) -> bool:
         return self._finished.wait(timeout=timeout)
@@ -141,6 +141,9 @@ class WaitGroupLimitError(Exception):
         self.max_count = max_count
 
 
+T = TypeVar("T")
+
+
 class WaitGroup(TimedEvent):
     """It implements a go-lang style wait group on top of a timed event.
 
@@ -205,3 +208,10 @@ class WaitGroup(TimedEvent):
     def done(self) -> bool:
         """It subtracts 1 from `count`."""
         return self.add(-1)
+
+    def iter(self, iterable: Iterable[T]) -> Generator[T]:
+        """It iterates over `iterable` and sets to Done when done."""
+        try:
+            yield from iterable
+        finally:
+            self.done()

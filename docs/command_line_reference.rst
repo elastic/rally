@@ -667,6 +667,17 @@ You can use this distribution repository with the name "in_house_snapshot" as fo
 
 This will benchmark the latest 7.0.0 snapshot build of Elasticsearch.
 
+``source-build-method``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Method with which to build Elasticsearch and plugins from sources. Supported values are: ``default`` and ``docker``.
+
+``source-build-release``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Determines whether to build a release version of Elasticsearch. By default, Rally builds a snapshot version. Default: ``false``.
+Provide the ``--source-build-release`` flag to build a release version.
+
 ``report-format``
 ~~~~~~~~~~~~~~~~~
 
@@ -842,14 +853,17 @@ Save the above responses as ``responses.json`` and execute a benchmark as follow
 ``on-error``
 ~~~~~~~~~~~~
 
+
 This option controls how Rally behaves when a response error occurs. The following values are possible:
 
 * ``continue``: (default) only records that an error has happened and will continue with the benchmark unless there is a fatal error. At the end of a race, errors show up in the "error rate" metric.
 * ``abort``: aborts the benchmark on the first request error with a detailed error message. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`.
+* ``continue-on-network``: As with ``continue``, but also continues on network errors (such as connection refused).
 
 .. attention::
 
-    The only error that is considered fatal is "Connection Refused" (`ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_).
+  With ``continue-on-network``, Rally continues on network errors (e.g., "Connection Refused"/`ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_). For other errors, behavior is the same as ``continue``. 
+  Use this option if you want Rally to be resilient to temporary network issues during a benchmark. Note that this will impact rally aborting in the case of a target Elasticsearch cluster being down.
 
 ``load-driver-hosts``
 ~~~~~~~~~~~~~~~~~~~~~

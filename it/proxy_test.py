@@ -23,9 +23,6 @@ import pytest
 import it
 from esrally.utils import process
 
-# pylint: disable=unused-import
-from it import fresh_log_file
-
 HttpProxy = collections.namedtuple("HttpProxy", ["authenticated_url", "anonymous_url"])
 
 
@@ -48,7 +45,7 @@ def http_proxy():
 @it.rally_in_mem
 def test_run_with_direct_internet_connection(cfg, http_proxy, fresh_log_file):
     assert it.esrally(cfg, "list tracks") == 0
-    assert it.check_log_line_present(fresh_log_file, "Connecting directly to the Internet")
+    assert it.find_log_line(fresh_log_file, "Connecting directly to the Internet")
 
 
 @it.rally_in_mem

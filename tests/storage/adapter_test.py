@@ -18,22 +18,21 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Any
 from unittest import mock
 
 import pytest
 from typing_extensions import Self
 
-import esrally.config
+from esrally import types
+from esrally.storage import StorageConfig
 from esrally.storage._adapter import Adapter, AdapterRegistry
-from esrally.types import Config
 from esrally.utils.cases import cases
 
 
 class MockAdapter(Adapter, ABC):
 
     @classmethod
-    def from_config(cls, cfg: Config, **kwargs: Any) -> Self:
+    def from_config(cls, cfg: types.Config) -> Self:
         return mock.create_autospec(cls, spec_set=True, instance=True)
 
 
@@ -65,21 +64,37 @@ class ExampleAdapterWithPath(MockAdapter, ABC):
         return url.startswith("https://example.com/some/path/")
 
 
+class GSAdapter(MockAdapter, ABC):
+
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("gs://")
+
+
+class S3Adapter(MockAdapter, ABC):
+
+    @classmethod
+    def match_url(cls, url: str) -> bool:
+        return url.startswith("s3://")
+
+
 @pytest.fixture()
-def cfg() -> Config:
-    cfg = esrally.config.Config()
-    cfg.add(
-        esrally.config.Scope.application,
-        "storage",
-        "storage.adapters",
-        f"{__name__}:ExampleAdapterWithPath,{__name__}:ExampleAdapter,{__name__}:HTTPSAdapter,{__name__}:HTTPAdapter",
+def cfg() -> types.Config:
+    cfg = StorageConfig()
+    cfg.adapters = (
+        f"{__name__}:ExampleAdapterWithPath",
+        f"{__name__}:ExampleAdapter",
+        f"{__name__}:HTTPSAdapter",
+        f"{__name__}:HTTPAdapter",
+        f"{__name__}:GSAdapter",
+        f"{__name__}:S3Adapter",
     )
     return cfg
 
 
 # Initialize default registry
 @pytest.fixture()
-def registry(cfg: Config) -> AdapterRegistry:
+def registry(cfg: types.Config) -> AdapterRegistry:
     return AdapterRegistry.from_config(cfg)
 
 
@@ -96,6 +111,8 @@ class RegistryCase:
     https=RegistryCase("https://example.com", want_type=HTTPSAdapter),
     example=RegistryCase("https://example.com/", want_type=ExampleAdapter),
     example_with_path=RegistryCase("https://example.com/some/path/", ExampleAdapterWithPath),
+    gs=RegistryCase("gs://example.com/some/path/", want_type=GSAdapter),
+    s3=RegistryCase("s3://example.com/some/path/", want_type=S3Adapter),
 )
 def test_adapter_registry_get(case: RegistryCase, registry: AdapterRegistry) -> None:
     try:

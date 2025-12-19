@@ -105,6 +105,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.TransformStats, Retry(TransformStats()), async_runner=True)
     register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
+    register_runner(track.OperationType.RunUntil, Retry(RunUntil()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -708,18 +709,31 @@ class ForceMerge(Runner):
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         if mode == "polling":
+            task_id = None
             complete = False
-            try:
-                await es.indices.forcemerge(**merge_params)
-                complete = True
-            except elasticsearch.ConnectionTimeout:
-                pass
+            es_info = await es.info()
+            es_version = Version.from_string(es_info["version"]["number"])
+            if es_version < Version(8, 1, 0):  # before 8.1.0 wait_for_completion is not supported
+                try:
+                    await es.indices.forcemerge(**merge_params)
+                    complete = True
+                except elasticsearch.ConnectionTimeout:
+                    pass
+            else:
+                complete = False
+                merge_params["wait_for_completion"] = False
+                response = await es.indices.forcemerge(**merge_params)
+                task_id = response.get("task")
             while not complete:
                 await asyncio.sleep(params.get("poll-period"))
-                tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
-                if len(tasks["nodes"]) == 0:
-                    # empty nodes response indicates no tasks
-                    complete = True
+                if task_id:
+                    tasks = await es.tasks.get(task_id=task_id)
+                    complete = tasks.get("completed", False)
+                else:
+                    tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
+                    if len(tasks["nodes"]) == 0:
+                        # empty nodes response indicates no tasks
+                        complete = True
         else:
             await es.indices.forcemerge(**merge_params)
 
@@ -2856,12 +2870,14 @@ class Downsample(Runner):
                 "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
                 "Add it to your parameter source and try again."
             )
+        sampling_method = params.get("sampling-method")
 
         path = f"/{source_index}/_downsample/{target_index}"
 
-        await es.perform_request(
-            method="POST", path=path, body={"fixed_interval": fixed_interval}, params=request_params, headers=request_headers
-        )
+        request_body = {"fixed_interval": fixed_interval}
+        if sampling_method:
+            request_body["sampling_method"] = sampling_method
+        await es.perform_request(method="POST", path=path, body=request_body, params=request_params, headers=request_headers)
 
         return {"weight": 1, "unit": "ops", "success": True}
 
@@ -3048,3 +3064,72 @@ class Retry(Runner, Delegator):
 
     def __repr__(self, *args, **kwargs):
         return "retryable %s" % repr(self.delegate)
+
+
+class RunUntil(Runner):
+    """
+    Performs an API call until a target value is seen.
+    """
+
+    def __init__(self, *args, config=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.numerical_operators = {
+            "gte": lambda v, t: int(v) >= int(t),
+            "lte": lambda v, t: int(v) <= int(t),
+            "eq": lambda v, t: int(v) == int(t),
+            "neq": lambda v, t: int(v) != int(t),
+        }
+        self.operators = {"exists": lambda v, _: v is not None, "not_exists": lambda v, _: v is None, **self.numerical_operators}
+
+    async def __call__(self, es, params):
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
+        es.return_raw_response()
+        path = mandatory(params, "path", self)
+        method = params.get("method", "GET")
+        body = params.get("body", None)
+        json_path = mandatory(params, "json-path", self)
+        criterion = mandatory(params, "criterion", self)
+        retry_wait_interval = params.get("retry-wait-interval", 60)
+        if criterion.get("operator") not in self.operators:
+            raise ValueError(f"Unsupported operator: {criterion.get('operator')}")
+        if criterion.get("operator") in self.numerical_operators and "value" not in criterion:
+            raise ValueError(f"Criterion operator {criterion.get('operator')} requires a 'value' field.")
+
+        complete = False
+        while not complete:
+            response = await es.perform_request(
+                method=method,
+                path=path,
+                headers=headers,
+                body=body,
+                params=request_params,
+            )
+            value = parse(response, [json_path])
+            raw_value: str | int | float = value.get(json_path)
+            if not raw_value:
+                continue
+            complete = self.compare_value(criterion, raw_value)
+            if not complete:
+                self.logger.debug("Criterion not met, retrying...")
+                await asyncio.sleep(retry_wait_interval)  # wait before retrying
+
+    def compare_value(self, criterion: dict, value: str | int | float) -> bool:
+        """
+        Compare a value against a criterion using the specified operator.
+
+        Args:
+            criterion (dict): Dictionary containing 'operator' and optionally 'value' keys.
+                Supported operators: 'exists', 'not_exists', 'gte', 'lte', 'eq', 'neq'.
+            value: The actual value to compare against the criterion.
+
+        Returns:
+            bool: True if the criterion is met, False otherwise.
+        """
+        operator = criterion.get("operator")
+        target_value: int | float = criterion.get("value")
+        return self.operators[operator](value, target_value)
+
+    def __repr__(self, *args, **kwargs):
+        return "run-until"

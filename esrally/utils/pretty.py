@@ -117,6 +117,12 @@ def size(x: int | float | None, unit: convert.Size.Unit = convert.Size.Unit.B) -
     return str(convert.size(x, unit))
 
 
+def throughput(x: int | float | None, unit: convert.Size.Unit = convert.Size.Unit.B) -> str:
+    if x is None:
+        return "N/A"
+    return f"{convert.size(x, unit)}/s"
+
+
 def duration(x: int | float | None, unit: convert.Duration.Unit = convert.Duration.Unit.S) -> str:
     if x is None:
         return "N/A"

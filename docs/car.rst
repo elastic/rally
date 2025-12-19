@@ -71,9 +71,12 @@ The top-level directory "v1" denotes the configuration format in version 1. Belo
 This defines the variable ``clean_command`` for all cars that reference this configuration. Rally will treat the following variable names specially:
 
 * `clean_command`: The command to clean the Elasticsearch project directory.
-* `build_command`: The command to build an Elasticsearch source distribution.
-* `artifact_path_pattern`: A glob pattern to find a previously built source distribution within the project directory.
-* `release_url`: A download URL for Elasticsearch distributions. The placeholder ``{{VERSION}}`` is replaced by Rally with the actual Elasticsearch version.
+* `system.build_command`: The command to build an Elasticsearch x86_64 source distribution.
+* `system.build_command.no-snapshot`: The command to build an Elasticsearch x86_64 source distribution creating a release-like build.
+* `system.build_command.arch`: The command to build an Elasticsearch a source distribution based on the target.arch architecture.
+* `system.build_command.arch.no-snapshot`: The command to build an Elasticsearch source distribution creating a release-like build based on the target.arch architecture.
+* `system.artifact_path_pattern`: A glob pattern to find a previously built source distribution within the project directory.
+* `jdk.bundled.release_url`: A download URL for Elasticsearch distributions. The placeholder ``{{VERSION}}`` is replaced by Rally with the actual Elasticsearch version.
 
 Let's have a look at the ``1gheap`` car by inspecting ``1gheap.ini``::
 

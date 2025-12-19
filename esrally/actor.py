@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import logging
+import os
 import socket
 import traceback
 import typing
@@ -104,14 +105,16 @@ def no_retry(f, actor_name):
 
 
 class RallyActor(thespian.actors.ActorTypeDispatcher):
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
+
+    def __init__(self):
+        super().__init__()
         self.children: list[thespian.actors.ActorAddress] = []
         self.received_responses = []
         self.status = None
         log.post_configure_actor_logging()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(type(self).__module__)
         console.set_assume_tty(assume_tty=False)
+        LOG.info("Actor initialized: %s (pid=%s)", type(self).__name__, os.getpid())
 
     # The method name is required by the actor framework
     # noinspection PyPep8Naming

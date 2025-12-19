@@ -14,30 +14,30 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from __future__ import annotations
+
 import copy
-from collections.abc import Iterable
+import dataclasses
+from collections.abc import Generator
 
-from esrally.storage._adapter import Adapter, Head, Writable
-from esrally.storage._executor import Executor
-from esrally.storage._range import NO_RANGE, RangeSet
+from typing_extensions import Self
+
+from esrally import types
+from esrally.storage import NO_RANGE, Adapter, Executor, GetResponse, Head, RangeSet
 
 
+@dataclasses.dataclass
 class DummyAdapter(Adapter):
-
-    HEADS: Iterable[Head] = tuple()
-    DATA: dict[str, bytes] = {}
+    heads: dict[str, Head] = dataclasses.field(default_factory=dict)
+    data: dict[str, bytes] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def match_url(cls, url: str) -> bool:
         return True
 
-    def __init__(self, heads: Iterable[Head] | None = None, data: dict[str, bytes] | None = None) -> None:
-        if heads is None:
-            heads = self.HEADS
-        if data is None:
-            data = self.DATA
-        self.heads: dict[str, Head] = {h.url: h for h in heads if h.url is not None}
-        self.data: dict[str, bytes] = copy.deepcopy(data)
+    @classmethod
+    def from_config(cls, cfg: types.Config | None = None) -> Self:
+        return cls()
 
     def head(self, url: str) -> Head:
         try:
@@ -45,19 +45,23 @@ class DummyAdapter(Adapter):
         except KeyError:
             raise FileNotFoundError from None
 
-    def get(self, url: str, stream: Writable, head: Head | None = None) -> Head:
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
         ranges: RangeSet = NO_RANGE
-        if head is not None:
-            ranges = head.ranges
+        if check_head is not None:
+            ranges = check_head.ranges
             if len(ranges) > 1:
                 raise NotImplementedError("len(head.ranges) > 1")
+
         data = self.data[url]
         if ranges:
-            stream.write(data[ranges.start : ranges.end])
-            return Head(url, content_length=ranges.size, ranges=ranges, document_length=len(data))
+            data = data[ranges.start : ranges.end]
 
-        stream.write(data)
-        return Head(url, content_length=len(data))
+        head = Head(url, content_length=ranges.size, ranges=ranges, document_length=len(data))
+
+        def iter_chunks() -> Generator[bytes]:
+            yield from (data,)
+
+        return GetResponse(head, iter_chunks())
 
 
 class DummyExecutor(Executor):

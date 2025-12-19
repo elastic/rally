@@ -42,11 +42,11 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
         os:
-          - macos-13
+          - macos-latest
           - ubuntu-latest
 
     runs-on: ${{ matrix.os }}
-    name: unit ${{ fromJson('{"macos-13":"macOS","ubuntu-latest":"Ubuntu"}')[matrix.os] }} ${{ matrix.python-version }}
+    name: unit ${{ fromJson('{"macos-latest":"macOS","ubuntu-latest":"Ubuntu"}')[matrix.os] }} ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -69,6 +69,9 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      - name: Check public IP address
+        run: curl -4s ifconfig.me
+        continue-on-error: true
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
@@ -83,13 +86,28 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.8.22"
+      - name: Free Disk Space
+        continue-on-error: true
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+          tool-cache: false
+      - name: Check disk space before
+        run: df -h
       - name: Run tests
         run: make it_tracks_compat
-        timeout-minutes: 120
+        timeout-minutes: 160
         env:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid
           # being rate limited
           ASSETS_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check disk space after
+        run: df -h
       - uses: elastic/es-perf-github-status@v2
         if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
         with:

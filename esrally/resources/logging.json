@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "disable_existing_loggers": false,
   "formatters": {
     "normal": {
       "format": "%(asctime)s,%(msecs)d %(actorAddress)s/PID:%(process)d %(name)s %(levelname)s %(message)s",
@@ -64,12 +65,7 @@
   },
   "loggers": {
     "elasticsearch": {
-      "handlers": [
-        "rally_log_handler",
-        "rally_json_handler"
-      ],
-      "level": "WARNING",
-      "propagate": false
+      "level": "WARNING"
     },
     "rally.profile": {
       "handlers": [
@@ -79,12 +75,7 @@
       "propagate": false
     },
     "elastic_transport": {
-      "handlers": [
-        "rally_log_handler",
-        "rally_json_handler"
-      ],
-      "level": "WARNING",
-      "propagate": false
+      "level": "WARNING"
     }
   }
 }

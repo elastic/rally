@@ -1519,6 +1519,79 @@ class TestBulkIndexRunner:
 
 
 class TestForceMergeRunner:
+
+    def _eight_cluster_info_output(self):
+        return {
+            "name": "es01",
+            "cluster_name": "docker-cluster",
+            "cluster_uuid": "7KTGbgcOTgSC0_X8B57-Gg",
+            "version": {
+                "number": "8.1.0",
+                "build_flavor": "default",
+                "build_type": "docker",
+                "build_hash": "3700f7679f7d95e36da0b43762189bab189bc53a",
+                "build_date": "2022-03-03T14:20:00.690422633Z",
+                "build_snapshot": False,
+                "lucene_version": "9.0.0",
+                "minimum_wire_compatibility_version": "7.17.0",
+                "minimum_index_compatibility_version": "7.0.0",
+            },
+            "tagline": "You Know, for Search",
+        }
+
+    def _seven_cluster_info_output(self):
+        return {
+            "name": "es01",
+            "cluster_name": "escluster",
+            "cluster_uuid": "4BgOtWNiQ6-zap9zDW2Q1A",
+            "version": {
+                "number": "7.17.3",
+                "build_flavor": "default",
+                "build_type": "tar",
+                "build_hash": "5ad023604c8d7416c9eb6c0eadb62b14e766caff",
+                "build_date": "2022-04-19T08:11:19.070913226Z",
+                "build_snapshot": False,
+                "lucene_version": "8.11.1",
+                "minimum_wire_compatibility_version": "6.8.0",
+                "minimum_index_compatibility_version": "6.0.0-beta1",
+            },
+            "tagline": "You Know, for Search",
+        }
+
+    def _task_list_output(self):
+        return {
+            "nodes": {
+                "Ap3OfntPT7qL4CBeKvamxg": {
+                    "name": "instance-0000000001",
+                    "transport_address": "10.46.79.231:19693",
+                    "host": "10.46.79.231",
+                    "ip": "10.46.79.231:19693",
+                    "roles": ["data", "ingest", "master", "remote_cluster_client", "transform"],
+                    "attributes": {
+                        "logical_availability_zone": "zone-1",
+                        "server_name": "instance-0000000001.64cb4c66f4f24d85b41f120ef2df5526",
+                        "availability_zone": "us-east4-a",
+                        "xpack.installed": "true",
+                        "instance_configuration": "gcp.data.highio.1",
+                        "transform.node": "true",
+                        "region": "unknown-region",
+                    },
+                    "tasks": {
+                        "Ap3OfntPT7qL4CBeKvamxg:417009036": {
+                            "node": "Ap3OfntPT7qL4CBeKvamxg",
+                            "id": 417009036,
+                            "type": "transport",
+                            "action": "indices:admin/forcemerge",
+                            "start_time_in_millis": 1598018980850,
+                            "running_time_in_nanos": 3659821411,
+                            "cancellable": False,
+                            "headers": {},
+                        }
+                    },
+                }
+            }
+        }
+
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_force_merge_with_defaults(self, es):
@@ -1562,7 +1635,115 @@ class TestForceMergeRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_force_merge_with_polling_no_timeout(self, es):
+        es.indices.forcemerge = mock.AsyncMock(return_value={"task": "Ap3OfntPT7qL4CBeKvamxg"})
+        es.info = mock.AsyncMock(
+            return_value=self._eight_cluster_info_output(),
+        )
+        es.tasks.get = mock.AsyncMock(return_value={"completed": True})
+        es.tasks.list = mock.AsyncMock(
+            side_effect=[
+                self._task_list_output(),
+                {
+                    "nodes": {},
+                },
+            ]
+        )
+
+        force_merge = runner.ForceMerge()
+        await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
+        es.indices.forcemerge.assert_awaited_once_with(index="_all", wait_for_completion=False)
+        es.tasks.get.assert_awaited_once_with(task_id="Ap3OfntPT7qL4CBeKvamxg")
+        es.tasks.list.assert_not_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling(self, es):
+        es.indices.forcemerge = mock.AsyncMock(return_value={"task": "Ap3OfntPT7qL4CBeKvamxg"})
+        es.info = mock.AsyncMock(
+            return_value=self._eight_cluster_info_output(),
+        )
+        es.tasks.get = mock.AsyncMock(return_value={"completed": True})
+        es.tasks.list = mock.AsyncMock(
+            side_effect=[
+                self._task_list_output,
+                {
+                    "nodes": {},
+                },
+            ]
+        )
+        force_merge = runner.ForceMerge()
+        await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
+        es.indices.forcemerge.assert_awaited_once_with(index="_all", wait_for_completion=False)
+        es.tasks.get.assert_awaited_once_with(task_id="Ap3OfntPT7qL4CBeKvamxg")
+        es.tasks.list.assert_not_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling_and_params(self, es):
+        es.indices.forcemerge = mock.AsyncMock(return_value={"task": "Ap3OfntPT7qL4CBeKvamxg"})
+        es.info = mock.AsyncMock(return_value=self._eight_cluster_info_output())
+        es.tasks.get = mock.AsyncMock(return_value={"completed": True})
+        es.tasks.list = mock.AsyncMock(
+            side_effect=[
+                self._task_list_output(),
+                {
+                    "nodes": {},
+                },
+            ]
+        )
+        force_merge = runner.ForceMerge()
+        # request-timeout should be ignored as mode:polling
+        await force_merge(
+            es,
+            params={
+                "index": "_all",
+                "mode": "polling",
+                "max-num-segments": 1,
+                "request-timeout": 50000,
+                "poll-period": 0,
+            },
+        )
+        es.indices.forcemerge.assert_awaited_once_with(index="_all", max_num_segments=1, request_timeout=50000, wait_for_completion=False)
+        es.tasks.get.assert_awaited_once_with(task_id="Ap3OfntPT7qL4CBeKvamxg")
+        es.tasks.list.assert_not_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling_and_params_missing_task_id(self, es):
+        es.indices.forcemerge = mock.AsyncMock(return_value={})
+        es.info = mock.AsyncMock(return_value=self._eight_cluster_info_output())
+        es.tasks.get = mock.AsyncMock(return_value={"completed": True})
+        es.tasks.list = mock.AsyncMock(
+            side_effect=[
+                self._task_list_output(),
+                {
+                    "nodes": {},
+                },
+            ]
+        )
+        force_merge = runner.ForceMerge()
+        # request-timeout should be ignored as mode:polling
+        await force_merge(
+            es,
+            params={
+                "index": "_all",
+                "mode": "polling",
+                "max-num-segments": 1,
+                "request-timeout": 50000,
+                "poll-period": 0,
+            },
+        )
+        es.indices.forcemerge.assert_awaited_once_with(index="_all", max_num_segments=1, request_timeout=50000, wait_for_completion=False)
+        es.tasks.get.assert_not_awaited()
+        es.tasks.list.assert_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling_no_timeout_pre_8_1(self, es):
         es.indices.forcemerge = mock.AsyncMock()
+        es.info = mock.AsyncMock(
+            return_value=self._seven_cluster_info_output(),
+        )
 
         force_merge = runner.ForceMerge()
         await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
@@ -1570,42 +1751,12 @@ class TestForceMergeRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_force_merge_with_polling(self, es):
+    async def test_force_merge_with_polling_pre_8_1(self, es):
         es.indices.forcemerge = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="connection timeout"))
+        es.info = mock.AsyncMock(return_value=self._seven_cluster_info_output())
         es.tasks.list = mock.AsyncMock(
             side_effect=[
-                {
-                    "nodes": {
-                        "Ap3OfntPT7qL4CBeKvamxg": {
-                            "name": "instance-0000000001",
-                            "transport_address": "10.46.79.231:19693",
-                            "host": "10.46.79.231",
-                            "ip": "10.46.79.231:19693",
-                            "roles": ["data", "ingest", "master", "remote_cluster_client", "transform"],
-                            "attributes": {
-                                "logical_availability_zone": "zone-1",
-                                "server_name": "instance-0000000001.64cb4c66f4f24d85b41f120ef2df5526",
-                                "availability_zone": "us-east4-a",
-                                "xpack.installed": "true",
-                                "instance_configuration": "gcp.data.highio.1",
-                                "transform.node": "true",
-                                "region": "unknown-region",
-                            },
-                            "tasks": {
-                                "Ap3OfntPT7qL4CBeKvamxg:417009036": {
-                                    "node": "Ap3OfntPT7qL4CBeKvamxg",
-                                    "id": 417009036,
-                                    "type": "transport",
-                                    "action": "indices:admin/forcemerge",
-                                    "start_time_in_millis": 1598018980850,
-                                    "running_time_in_nanos": 3659821411,
-                                    "cancellable": False,
-                                    "headers": {},
-                                }
-                            },
-                        }
-                    }
-                },
+                self._task_list_output(),
                 {
                     "nodes": {},
                 },
@@ -1617,42 +1768,14 @@ class TestForceMergeRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_force_merge_with_polling_and_params(self, es):
+    async def test_force_merge_with_polling_and_params_pre_8_1(self, es):
         es.indices.forcemerge = mock.AsyncMock(return_value=elasticsearch.ConnectionTimeout("connection timeout"))
+        es.info = mock.AsyncMock(
+            return_value=self._seven_cluster_info_output(),
+        )
         es.tasks.list = mock.AsyncMock(
             side_effect=[
-                {
-                    "nodes": {
-                        "Ap3OfntPT7qL4CBeKvamxg": {
-                            "name": "instance-0000000001",
-                            "transport_address": "10.46.79.231:19693",
-                            "host": "10.46.79.231",
-                            "ip": "10.46.79.231:19693",
-                            "roles": ["data", "ingest", "master", "remote_cluster_client", "transform"],
-                            "attributes": {
-                                "logical_availability_zone": "zone-1",
-                                "server_name": "instance-0000000001.64cb4c66f4f24d85b41f120ef2df5526",
-                                "availability_zone": "us-east4-a",
-                                "xpack.installed": "true",
-                                "instance_configuration": "gcp.data.highio.1",
-                                "transform.node": "true",
-                                "region": "unknown-region",
-                            },
-                            "tasks": {
-                                "Ap3OfntPT7qL4CBeKvamxg:417009036": {
-                                    "node": "Ap3OfntPT7qL4CBeKvamxg",
-                                    "id": 417009036,
-                                    "type": "transport",
-                                    "action": "indices:admin/forcemerge",
-                                    "start_time_in_millis": 1598018980850,
-                                    "running_time_in_nanos": 3659821411,
-                                    "cancellable": False,
-                                    "headers": {},
-                                }
-                            },
-                        }
-                    }
-                },
+                self._task_list_output(),
                 {
                     "nodes": {},
                 },
@@ -6038,22 +6161,23 @@ class TestDownsampleRunner:
         es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Downsample()
-        params = {
-            "operation-type": "downsample",
-            "fixed-interval": "1d",
-            "source-index": "source-index",
-            "target-index": "target-index",
-        }
+        params = {"operation-type": "downsample", "fixed-interval": "1d", "source-index": "source-index", "target-index": "target-index"}
+        sampling_method = random.choice(["aggregate", "last_value", None])
+        if sampling_method:
+            params["sampling-method"] = sampling_method
 
         async with sql_runner:
             result = await sql_runner(es, params)
 
         assert result == {"success": True, "weight": 1, "unit": "ops"}
 
+        expected_request_body = {"fixed_interval": params.get("fixed-interval")}
+        if sampling_method:
+            expected_request_body["sampling_method"] = sampling_method
         es.perform_request.assert_awaited_once_with(
             method="POST",
             path="/source-index/_downsample/target-index",
-            body={"fixed_interval": params.get("fixed-interval")},
+            body=expected_request_body,
             params={},
             headers={},
         )
