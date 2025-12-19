@@ -545,7 +545,7 @@ If we do not want to reuse these operations, we can also define them inline. Not
       ]
     }
 
-Contrary to the ``query``, the ``force-merge`` operation does not take any parameters, so Rally allows us to just specify the ``operation-type`` for this operation. Its name will be the same as the operation's type::
+Contrary to the ``query``, the ``force-merge`` operation does not require any parameters (though there are some optional parameters), so Rally allows us to just specify the ``operation-type`` for this operation. Its name will be the same as the operation's type::
 
     {
       "schedule": [
