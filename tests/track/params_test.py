@@ -2958,6 +2958,7 @@ class TestDownsampleParamSource:
                 "source-index": "test-source-index",
                 "target-index": "test-target-index",
                 "fixed-interval": "1m",
+                "sampling-method": "last_value"
             },
         )
 
@@ -3010,3 +3011,4 @@ class TestDownsampleParamSource:
         p = source.params()
         assert p["fixed-interval"] == "1h"
         assert p["target-index"] == f"{p['source-index']}-{p['fixed-interval']}"
+        assert p.get("sampling-method") is None
