@@ -2958,7 +2958,7 @@ class TestDownsampleParamSource:
                 "source-index": "test-source-index",
                 "target-index": "test-target-index",
                 "fixed-interval": "1m",
-                "sampling-method": "last_value"
+                "sampling-method": "last_value",
             },
         )
 
