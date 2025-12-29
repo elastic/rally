@@ -2966,6 +2966,7 @@ class TestDownsampleParamSource:
         assert p["fixed-interval"] == "1m"
         assert p["source-index"] == "test-source-index"
         assert p["target-index"] == "test-target-index"
+        assert p["sampling-method"] == "last_value"
 
     def test_downsample_default_index_param(self):
         source = params.DownsampleParamSource(
@@ -2983,6 +2984,7 @@ class TestDownsampleParamSource:
         assert p["fixed-interval"] == "1m"
         assert p["source-index"] == "test-source-index"
         assert p["target-index"] == "test-target-index"
+        assert p.get("sampling-method") is None
 
     def test_downsample_source_index_override_default_index_param(self):
         source = params.DownsampleParamSource(
@@ -3001,6 +3003,7 @@ class TestDownsampleParamSource:
         assert p["fixed-interval"] == "1m"
         assert p["source-index"] == "another-index"
         assert p["target-index"] == "test-target-index"
+        assert p.get("sampling-method") is None
 
     def test_downsample_empty_params(self):
         source = params.DownsampleParamSource(
