@@ -2668,6 +2668,7 @@ class Composite(Runner):
             "delete-async-search",
             "field-caps",
         ]
+        self.operations_without_request_timing = ["composite"]
 
     async def run_stream(self, es, stream, connection_limit):
         streams = []
@@ -2688,7 +2689,10 @@ class Composite(Runner):
                         raise exceptions.RallyAssertionError(
                             f"Unsupported operation-type [{op_type}]. Use one of [{', '.join(self.supported_op_types)}]."
                         )
-                    runner = RequestTiming(runner_for(op_type))
+                    if op_type not in self.operations_without_request_timing:
+                        runner = RequestTiming(runner_for(op_type))
+                    else:
+                        runner = runner_for(op_type)
                     async with connection_limit:
                         async with runner:
                             response = await runner({"default": es}, item)
