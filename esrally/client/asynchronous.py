@@ -50,14 +50,16 @@ from esrally.utils import io, versions
 
 
 class StaticTransport:
-    def __init__(self):
+    def __init__(self, protocol: asyncio.Protocol):
         self.closed = False
+        self.protocol = protocol
 
     def is_closing(self):
-        return False
+        return self.closed
 
     def close(self):
         self.closed = True
+        self.protocol.connection_lost(None)
 
     def abort(self):
         self.close()
@@ -66,8 +68,7 @@ class StaticTransport:
 class StaticConnector(BaseConnector):
     async def _create_connection(self, req: "ClientRequest", traces: list["Trace"], timeout: "ClientTimeout") -> ResponseHandler:
         handler = ResponseHandler(self._loop)
-        handler.transport = StaticTransport()
-        handler.protocol = ""
+        handler.transport = StaticTransport(handler)
         return handler
 
 
