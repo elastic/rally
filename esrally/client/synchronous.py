@@ -148,6 +148,8 @@ class RallySyncElasticsearch(Elasticsearch):
         params: Optional[Mapping[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
         body: Optional[Any] = None,
+        endpoint_id: Optional[str] = None,
+        path_parts: Optional[Mapping[str, Any]] = None,
     ) -> ApiResponse[Any]:
         # We need to ensure that we provide content-type and accept headers
         if body is not None:

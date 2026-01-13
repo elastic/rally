@@ -42,10 +42,10 @@ classifiers = [
 ################################################################################################
 dependencies = [
     # License: Apache 2.0
-    "elasticsearch[async]==8.6.1",
-    "elastic-transport==8.4.1",
+    "elasticsearch[async]==9.2.1",
+    "elastic-transport==9.2.1",
     # License: MIT
-    "urllib3==1.26.19",
+    "urllib3==2.6.3",
     # License: Apache 2.0
     "aiohttp==3.13.3",
     "aiosignal==1.4.0",
