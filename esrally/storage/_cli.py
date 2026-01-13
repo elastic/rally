@@ -326,18 +326,19 @@ def get(
 
 
 def put(transfers: list[storage.Transfer], target_dir: str, *, base_url: str | None = None) -> None:
-    target_dir = os.path.normpath(os.path.expanduser(target_dir))
+    if ":" not in target_dir:
+        target_dir = os.path.normpath(os.path.expanduser(target_dir))
     commands: dict[str, list[str]] = {}
     for tr in transfers:
-        dest_dir = target_dir
         if base_url and tr.url.startswith(base_url):
             subdir = os.path.dirname(tr.url[len(base_url) :]).strip("/")
         else:
             subdir = os.path.dirname(urlparse(tr.url).path).strip("/")
         if subdir:
-            dest_dir += f"/{subdir}"
-
-        commands[tr.url] = ["rclone", "copy", tr.path, dest_dir]
+            target_path = f"{target_dir}/{subdir}"
+        else:
+            target_path = target_dir
+        commands[tr.url] = ["rclone", "copy", tr.path, target_path]
     if not commands:
         LOG.info("No files to transfer.")
         return

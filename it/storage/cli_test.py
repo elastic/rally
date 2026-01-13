@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import configparser
 import dataclasses
 import json
 import logging
@@ -493,6 +494,7 @@ class PutCase:
     args: list[str]
     mirror_files: list[str] | None = None
     after_get_params: list[dict[str, Any]] | None = None
+    config_file: dict[str, dict[str, str]] | None = None
     want_return_code: int = 0
     want_stdout: bytes = b""
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
@@ -529,10 +531,33 @@ class PutCase:
         after_get_params=[{"url": FIRST_URL}],
         want_return_code=0,
     ),
+    with_remote=PutCase(
+        ["put", "some-remote:some-path"],
+        after_get_params=[{"url": FIRST_URL}],
+        config_file={
+            "some-remote": {
+                "type": "alias",
+                "remote": "./some-folder",
+            }
+        },
+        want_return_code=0,
+        want_files={f"./some-folder/some-path/{FIRST_PATH}"},
+    ),
 )
-def test_put(case: PutCase, cfg: storage.StorageConfig, tmpdir):
+def test_put(case: PutCase, cfg: storage.StorageConfig, tmpdir, monkeypatch):
     if case.mirror_files:
         cfg.mirror_files = case.mirror_files
+
+    config_filename = os.path.normpath(tmpdir.join("rclone.conf"))
+    monkeypatch.setenv("RCLONE_CONFIG", str(config_filename))
+    if case.config_file:
+        config = configparser.ConfigParser(allow_no_value=True)
+        for section, options in case.config_file.items():
+            config.add_section(section)
+            for option, value in options.items():
+                config.set(section, option, value)
+        with open(config_filename, "w") as fd:
+            config.write(fd)
 
     try:
         subprocess.run(["which", "rclone"], check=True, stdout=subprocess.DEVNULL)
