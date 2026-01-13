@@ -492,7 +492,7 @@ def test_get(case: GetCase, tmpdir, local_dir: str, cfg: storage.StorageConfig, 
 class PutCase:
     args: list[str]
     mirror_files: list[str] | None = None
-    after_get_params: dict[str, Any] | None = None
+    after_get_params: list[dict[str, Any]] | None = None
     want_return_code: int = 0
     want_stdout: bytes = b""
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
@@ -506,21 +506,27 @@ class PutCase:
     ),
     after_get=PutCase(
         ["put", "target"],
-        after_get_params={"url": FIRST_URL},
+        after_get_params=[{"url": FIRST_URL}],
         want_return_code=0,
         want_files={f"./target/{FIRST_PATH}"},
+    ),
+    after_get_two=PutCase(
+        ["put", "target"],
+        after_get_params=[{"url": FIRST_URL}, {"url": SECOND_URL}],
+        want_return_code=0,
+        want_files={f"./target/{FIRST_PATH}", f"./target/{SECOND_PATH}"},
     ),
     mirror_failures=PutCase(
         ["put", "--mirror-failures", "target"],
         mirror_files=[BAD_MIRROR_FILES],
-        after_get_params={"url": FIRST_URL},
+        after_get_params=[{"url": FIRST_URL}, {"url": SECOND_URL}],
         want_return_code=0,
-        want_files={f"./target/{FIRST_PATH}"},
+        want_files={f"./target/{FIRST_PATH}", f"./target/{SECOND_PATH}"},
     ),
     no_mirror_failures=PutCase(
         ["put", "--mirror-failures", "target"],
         mirror_files=[GOOD_MIRROR_FILES],
-        after_get_params={"url": FIRST_URL},
+        after_get_params=[{"url": FIRST_URL}],
         want_return_code=0,
     ),
 )
@@ -536,7 +542,8 @@ def test_put(case: PutCase, cfg: storage.StorageConfig, tmpdir):
 
     if case.after_get_params is not None:
         with storage.TransferManager.from_config(cfg) as manager:
-            manager.get(**case.after_get_params).wait(timeout=15)
+            for params in case.after_get_params:
+                manager.get(**params).wait(timeout=15)
 
     cwd = str(tmpdir.mkdir("cwd"))
     run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
