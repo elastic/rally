@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import configparser
 import dataclasses
 import json
 import logging
@@ -492,7 +493,8 @@ def test_get(case: GetCase, tmpdir, local_dir: str, cfg: storage.StorageConfig, 
 class PutCase:
     args: list[str]
     mirror_files: list[str] | None = None
-    after_get_params: dict[str, Any] | None = None
+    after_get_params: list[dict[str, Any]] | None = None
+    config_file: dict[str, dict[str, str]] | None = None
     want_return_code: int = 0
     want_stdout: bytes = b""
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
@@ -506,27 +508,56 @@ class PutCase:
     ),
     after_get=PutCase(
         ["put", "target"],
-        after_get_params={"url": FIRST_URL},
+        after_get_params=[{"url": FIRST_URL}],
         want_return_code=0,
         want_files={f"./target/{FIRST_PATH}"},
+    ),
+    after_get_two=PutCase(
+        ["put", "target"],
+        after_get_params=[{"url": FIRST_URL}, {"url": SECOND_URL}],
+        want_return_code=0,
+        want_files={f"./target/{FIRST_PATH}", f"./target/{SECOND_PATH}"},
     ),
     mirror_failures=PutCase(
         ["put", "--mirror-failures", "target"],
         mirror_files=[BAD_MIRROR_FILES],
-        after_get_params={"url": FIRST_URL},
+        after_get_params=[{"url": FIRST_URL}, {"url": SECOND_URL}],
         want_return_code=0,
-        want_files={f"./target/{FIRST_PATH}"},
+        want_files={f"./target/{FIRST_PATH}", f"./target/{SECOND_PATH}"},
     ),
     no_mirror_failures=PutCase(
         ["put", "--mirror-failures", "target"],
         mirror_files=[GOOD_MIRROR_FILES],
-        after_get_params={"url": FIRST_URL},
+        after_get_params=[{"url": FIRST_URL}],
         want_return_code=0,
     ),
+    with_remote=PutCase(
+        ["put", "some-remote:some-path"],
+        after_get_params=[{"url": FIRST_URL}],
+        config_file={
+            "some-remote": {
+                "type": "alias",
+                "remote": "./some-folder",
+            }
+        },
+        want_return_code=0,
+        want_files={f"./some-folder/some-path/{FIRST_PATH}"},
+    ),
 )
-def test_put(case: PutCase, cfg: storage.StorageConfig, tmpdir):
+def test_put(case: PutCase, cfg: storage.StorageConfig, tmpdir, monkeypatch):
     if case.mirror_files:
         cfg.mirror_files = case.mirror_files
+
+    config_filename = os.path.normpath(tmpdir.join("rclone.conf"))
+    monkeypatch.setenv("RCLONE_CONFIG", str(config_filename))
+    if case.config_file:
+        config = configparser.ConfigParser(allow_no_value=True)
+        for section, options in case.config_file.items():
+            config.add_section(section)
+            for option, value in options.items():
+                config.set(section, option, value)
+        with open(config_filename, "w") as fd:
+            config.write(fd)
 
     try:
         subprocess.run(["which", "rclone"], check=True, stdout=subprocess.DEVNULL)
@@ -536,7 +567,8 @@ def test_put(case: PutCase, cfg: storage.StorageConfig, tmpdir):
 
     if case.after_get_params is not None:
         with storage.TransferManager.from_config(cfg) as manager:
-            manager.get(**case.after_get_params).wait(timeout=15)
+            for params in case.after_get_params:
+                manager.get(**params).wait(timeout=15)
 
     cwd = str(tmpdir.mkdir("cwd"))
     run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
