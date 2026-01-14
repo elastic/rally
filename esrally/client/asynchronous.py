@@ -18,6 +18,7 @@
 import asyncio
 import json
 import logging
+import os
 import warnings
 from collections.abc import Iterable, Mapping
 from typing import Any, Optional
@@ -47,6 +48,11 @@ from yarl import URL
 from esrally.client.common import _WARNING_RE, _mimetype_header_to_compat, _quote_query
 from esrally.client.context import RequestContextHolder
 from esrally.utils import io, versions
+
+# It ensures that API versioning is enabled
+# See: https://www.elastic.co/docs/reference/elasticsearch/rest-apis/compatibility
+os.environ["ELASTIC_CLIENT_APIVERSIONING"] = "true"
+os.environ["ES_COMPATIBILITY_MODE"] = "8"
 
 
 class StaticTransport(asyncio.Transport):
