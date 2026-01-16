@@ -19,25 +19,29 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from urllib.parse import urlparse
 
 import pytest
 
-from esrally.storage._adapter import Head
-from esrally.storage._client import Client
-from esrally.storage._config import StorageConfig
-from esrally.storage._executor import DummyExecutor
-from esrally.storage._range import RangeSet, rangeset
-from esrally.storage._transfer import Transfer
-from esrally.utils.cases import cases
+from esrally.storage import (
+    Client,
+    GetResponse,
+    Head,
+    RangeSet,
+    StorageConfig,
+    Transfer,
+    dummy,
+    rangeset,
+)
+from esrally.utils import cases, crc32c
 from tests.storage import local_dir  # pylint: disable=unused-import
 
 URL = "https://rally-tracks.elastic.co/apm/span.json.bz2"
 MISMATCH_URL = "https://rally-tracks.elastic.co/apm/span.json.gz"
 DATA = b"\xff" * 1024
-CRC32C = "valid-crc32-checksum"
-MISMATCH_CRC32C = "invalid-crc32c-checksum"
+CRC32C = crc32c.Checksum(DATA).to_base64()
+MISMATCH_CRC32C = crc32c.Checksum(DATA[:-5]).to_base64()
 
 
 class DummyClient(Client):
@@ -45,17 +49,21 @@ class DummyClient(Client):
     def head(self, url: str, *, cache_ttl: float | None = None) -> Head:
         return Head(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
 
-    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
         data = DATA
         if check_head is not None and check_head.ranges:
             data = data[check_head.ranges.start : check_head.ranges.end]
         head = Head(url, ranges=check_head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
-        return head, iter((data,))
+
+        def iter_chunks() -> Generator[bytes]:
+            yield from (data,)
+
+        return GetResponse(head, iter_chunks())
 
 
 @pytest.fixture
-def executor() -> Iterator[DummyExecutor]:
-    executor = DummyExecutor()
+def executor() -> Iterator[dummy.DummyExecutor]:
+    executor = dummy.DummyExecutor()
     try:
         yield executor
     finally:
@@ -79,12 +87,12 @@ class TransferCase:
     want_final_todo: str = ""
     want_final_written: str = ""
     want_final_document_length: int = len(DATA)
-    want_mirror_failures: dict[str, str] = dataclasses.field(default_factory=dict)
+    want_mirror_failures: list[dict[str, str]] = dataclasses.field(default_factory=list)
     resume: bool = True
     resume_status: dict[str, str] | None = None
 
 
-@cases(
+@cases.cases(
     # It tests default behavior for small transfers (content_length < multipart_size).
     default=TransferCase(want_final_done="0-1023", want_final_written="0-1023"),
     # It tests limiting transfers scope to some ranges.
@@ -130,7 +138,7 @@ class TransferCase:
         resume_status={"done": "128-255", "url": URL, "document_length": len(DATA), "crc32c": MISMATCH_CRC32C}, want_final_done="0-1023"
     ),
 )
-def test_transfer(case: TransferCase, executor: DummyExecutor, local_dir: str, tmpdir) -> None:
+def test_transfer(case: TransferCase, executor: dummy.DummyExecutor, local_dir: str, tmpdir) -> None:
     """It tests the execution of one single task (a single download step).
 
     :param case: the transfer case to be tested.
@@ -188,6 +196,8 @@ def test_transfer(case: TransferCase, executor: DummyExecutor, local_dir: str, t
     try:
         # This is only needed to eventually extract the first transfer failure (if any).
         transfer.wait(timeout=0.0)
+    except TimeoutError:
+        assert case.want_final_error is None
     except Exception as exc:
         assert case.want_final_error is not None
         assert isinstance(exc, case.want_final_error)

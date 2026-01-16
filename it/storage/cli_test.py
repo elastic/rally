@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import configparser
 import dataclasses
 import json
 import logging
@@ -79,9 +80,9 @@ class LsCase:
     args: list[str]
     mirror_files: list[str] | None = None
     after_get_params: dict[str, Any] | None = None
-    want_format: Literal["json", "filebeat"] = "json"
+    want_format: Literal["pretty", "json", "filebeat", "filenames"] = "pretty"
     want_return_code: int = 0
-    want_output: dict[str, dict[str, Any]] | None = None
+    want_output: list[dict[str, Any] | str] | None = None
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
 
 
@@ -101,13 +102,14 @@ class LsCase:
     no_args_after_get=LsCase(
         [],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 1024)},
-        want_output={
-            FIRST_URL: {
-                "status": "DONE",
-                "done": "0-1023",
-                "finished": True,
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "done": "1.0KB",
+                "size": "62.0KB",
+                "progress": "2%",
             }
-        },
+        ],
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
@@ -115,13 +117,14 @@ class LsCase:
     no_urls_after_get=LsCase(
         ["ls"],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 1024)},
-        want_output={
-            FIRST_URL: {
-                "status": "DONE",
-                "done": "0-1023",
-                "finished": True,
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "done": "1.0KB",
+                "size": "62.0KB",
+                "progress": "2%",
             }
-        },
+        ],
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
@@ -129,13 +132,14 @@ class LsCase:
     path_after_get=LsCase(
         ["ls", FIRST_PATH],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
-        want_output={
-            FIRST_URL: {
-                "status": "DONE",
-                "done": "0-63",
-                "finished": True,
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "done": "64B",
+                "size": "62.0KB",
+                "progress": "0%",
             }
-        },
+        ],
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
@@ -143,44 +147,198 @@ class LsCase:
     url_after_get=LsCase(
         ["ls", FIRST_URL],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
-        want_output={
-            FIRST_URL: {
-                "status": "DONE",
-                "done": "0-63",
-                "finished": True,
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "done": "64B",
+                "size": "62.0KB",
+                "progress": "0%",
             }
-        },
+        ],
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
     ),
-    after_mirror_failures=LsCase(
-        ["ls", FIRST_URL],
+    stats_after_get=LsCase(
+        ["--stats"],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "done": "64B",
+                "size": "62.0KB",
+                "progress": "0%",
+                "stats": [
+                    {
+                        "bytes": "64B",
+                        "requests": 1,
+                        "url": FIRST_URL,
+                    }
+                ],
+            }
+        ],
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
+    mirror_failures_after_get=LsCase(
+        ["--mirror-failures"],
         mirror_files=[BAD_MIRROR_FILES],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
-        want_output={
-            FIRST_URL: {
-                "finished": True,
-                "status": "DONE",
-                "done": "0-63",
-                "mirror_failures": {BAD_MIRROR_URL: f"FileNotFoundError:Can't get file head: {BAD_MIRROR_URL}"},
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "done": "64B",
+                "progress": "0%",
+                "size": "62.0KB",
+                "mirror_failures": [{"url": BAD_MIRROR_URL, "error": f"FileNotFoundError:Can't get file head: {BAD_MIRROR_URL}"}],
             }
-        },
+        ],
+    ),
+    json_and_stats=LsCase(
+        ["--json", "--stats"],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+        want_format="json",
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "finished": True,
+                "done": "0-63",
+                "crc32c": "83jA8A==",
+                "document_length": 63458,
+                "errors": [],
+                "progress": 0.10085410822906489,
+                "todo": "",
+                "stats": [
+                    {
+                        "url": "https://rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+                        "request_count": 1,
+                        "transferred_bytes": 64,
+                    }
+                ],
+            }
+        ],
+    ),
+    json_after_mirror_failures=LsCase(
+        ["--json", "--mirror-failures"],
+        mirror_files=[BAD_MIRROR_FILES],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+        want_format="json",
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "finished": True,
+                "done": "0-63",
+                "crc32c": "83jA8A==",
+                "document_length": 63458,
+                "errors": [],
+                "progress": 0.10085410822906489,
+                "todo": "",
+                "mirror_failures": [{"url": BAD_MIRROR_URL, "error": f"FileNotFoundError:Can't get file head: {BAD_MIRROR_URL}"}],
+            }
+        ],
     ),
     filebeat_after_get_files=LsCase(
         ["ls", "--filebeat", FIRST_URL],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
-        want_output={
-            FIRST_URL: {
-                "status": "DONE",
-                "done": "0-63",
+        want_output=[
+            {
+                "url": FIRST_URL,
                 "finished": True,
-            }
-        },
+                "done": "0-63",
+                "crc32c": "83jA8A==",
+                "document_length": 63458,
+                "errors": [],
+                "progress": 0.10085410822906489,
+                "todo": "",
+            },
+        ],
         want_format="filebeat",
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
+    filebeat_with_stats=LsCase(
+        ["--filebeat", "--stats"],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_format="filebeat",
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "finished": True,
+                "done": "0-63",
+                "crc32c": "83jA8A==",
+                "document_length": 63458,
+                "errors": [],
+                "progress": 0.10085410822906489,
+                "todo": "",
+            },
+            {
+                "stats": {
+                    "request_count": 1,
+                    "transferred_bytes": 64,
+                    "url": "https://rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+                },
+                "url": "https://rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+            },
+        ],
+    ),
+    filebeat_after_mirror_failures=LsCase(
+        ["ls", "--filebeat", "--mirror-failures", FIRST_URL],
+        mirror_files=[BAD_MIRROR_FILES],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output=[
+            {
+                "url": FIRST_URL,
+                "finished": True,
+                "done": "0-63",
+                "crc32c": "83jA8A==",
+                "document_length": 63458,
+                "errors": [],
+                "progress": 0.10085410822906489,
+                "todo": "",
+            },
+            {
+                "mirror_failures": {
+                    "error": "FileNotFoundError:Can't get file head: "
+                    "https://storage.googleapis.com/invalid-rally-tracks/apm/documents-1k.ndjson.bz2",
+                    "url": "https://storage.googleapis.com/invalid-rally-tracks/apm/documents-1k.ndjson.bz2",
+                },
+                "url": "https://rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+            },
+        ],
+        want_format="filebeat",
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
+    filenames_after_get_files=LsCase(
+        ["ls", "--filenames", FIRST_URL],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output=[
+            "https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        ],
+        want_format="filenames",
+        want_stderr_lines=[
+            f"INFO {LOGGER_NAME} Found 1 transfer(s).",
+        ],
+    ),
+    status_filenames_after_get_files=LsCase(
+        ["ls", "--status-filenames", FIRST_URL],
+        after_get_params={"url": FIRST_URL, "todo": storage.Range(0, 64)},
+        want_output=[
+            "https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+        ],
+        want_format="filenames",
         want_stderr_lines=[
             f"INFO {LOGGER_NAME} Found 1 transfer(s).",
         ],
@@ -200,27 +358,31 @@ def test_ls(case: LsCase, tmpdir, cfg: storage.StorageConfig):
         assert b"" == result.stdout
         return
 
-    got_output: dict[str, dict] = {}
+    got_output: dict[str, dict] | list[str] = {}
     match case.want_format:
-        case "json":
-            got_output.update((got["url"], got) for got in json.loads(result.stdout))
+        case "filenames":
+            got_output = [os.path.relpath(p, cfg.local_dir) for p in result.stdout.decode().splitlines()]
+        case "json" | "pretty":
+            got_output = json.loads(result.stdout)
         case "filebeat":
-            for line in result.stdout.splitlines():
-                got = json.loads(line)["rally"]["storage"]
-                got_output[got["url"]] = got
+            got_output = [json.loads(line)["rally"]["storage"] for line in result.stdout.decode().splitlines()]
         case _:
             pytest.fail(f"Unexpected output format: {case.want_format}")
 
-    assert set(got_output) == set(case.want_output)
-    for want_url, want in case.want_output.items():
-        assert want_url in got_output
-        got = got_output[want_url]
+    for o in got_output:
+        if not isinstance(o, dict):
+            continue
+        o.pop("path", None)
+        stats = o.get("stats")
+        if stats:
+            if isinstance(stats, dict):
+                stats = [stats]
+            for s in stats:
+                for k in set(s):
+                    if k.endswith("_time") or k in ("duration", "throughput", "latency"):
+                        del s[k]
 
-        assert got["path"] == cfg.transfer_file_path(want_url)
-        assert got["mirror_failures"] == want.get("mirror_failures", {})
-        assert got["done"] == want["done"]
-        assert got["status"] == want["status"]
-        assert got["finished"] == want["finished"]
+    assert got_output == case.want_output
 
 
 @dataclasses.dataclass
@@ -238,12 +400,17 @@ class GetCase:
     one_path=GetCase(
         ["get", FIRST_PATH],
         want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
-        want_status={FIRST_URL: {"done": "0-63457"}},
+        want_status={FIRST_URL: {"done": "0-63457", "stats": [{"request_count": 1, "transferred_bytes": 63458, "url": FIRST_URL}]}},
     ),
     one_url=GetCase(
         ["get", FIRST_URL],
         want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
-        want_status={FIRST_URL: {"done": "0-63457"}},
+        want_status={FIRST_URL: {"done": "0-63457", "stats": [{"request_count": 1, "transferred_bytes": 63458, "url": FIRST_URL}]}},
+    ),
+    range=GetCase(
+        ["get", "--range=1024-2043", FIRST_URL],
+        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
+        want_status={FIRST_URL: {"done": "1024-2043", "stats": [{"request_count": 1, "transferred_bytes": 1020, "url": FIRST_URL}]}},
     ),
     two_urls=GetCase(
         ["get", "--range=0-1023", FIRST_URL, SECOND_PATH],
@@ -251,35 +418,45 @@ class GetCase:
             f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}",
             f"INFO {LOGGER_NAME} Transfer finished: {SECOND_URL}",
         ],
-        want_status={FIRST_URL: {"done": "0-1023"}, SECOND_URL: {"done": "0-1023"}},
-    ),
-    range=GetCase(
-        ["get", "--range=1024-2043", FIRST_URL],
-        want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
-        want_status={FIRST_URL: {"done": "1024-2043"}},
+        want_status={
+            FIRST_URL: {"done": "0-1023", "stats": [{"request_count": 1, "transferred_bytes": 1024, "url": FIRST_URL}]},
+            SECOND_URL: {"done": "0-1023", "stats": [{"request_count": 1, "transferred_bytes": 1024, "url": SECOND_URL}]},
+        },
     ),
     resume_after_get=GetCase(
         ["get", "--range=-1024"],
         after_get_params={"url": FIRST_URL, "todo": storage.Range(1024, 2048)},
         want_stderr_lines=[f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}"],
-        want_status={FIRST_URL: {"done": "0-2047"}},
+        want_status={FIRST_URL: {"done": "0-2047", "stats": [{"request_count": 2, "transferred_bytes": 2048, "url": FIRST_URL}]}},
     ),
     good_mirrors=GetCase(
-        ["-v", f"--mirrors={GOOD_MIRROR_FILES}", "get", "--range=0-63,128-255", FIRST_URL],
+        ["get", "-v", f"--mirrors={GOOD_MIRROR_FILES}", "--range=0-63,128-255", FIRST_URL],
         want_stderr_lines=[
-            f"DEBUG esrally.storage._transfer Downloading file fragment from '{GOOD_MIRROR_URL}'",
+            f"DEBUG esrally.storage._transfer Downloading file chunks from '{GOOD_MIRROR_URL}'",
             f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}",
         ],
-        want_status={FIRST_URL: {"done": "0-63,128-255"}},
+        want_status={
+            FIRST_URL: {"done": "0-63,128-255", "stats": [{"request_count": 2, "transferred_bytes": 192, "url": GOOD_MIRROR_URL}]}
+        },
     ),
     bad_mirrors=GetCase(
-        [f"--mirrors={BAD_MIRROR_FILES}", "get", "--range=0-63", FIRST_URL],
+        ["get", f"--mirrors={BAD_MIRROR_FILES}", "--range=0-63", FIRST_URL],
         want_stderr_lines=[
             f"WARNING esrally.storage._client Failed to get head from mirror URL: '{BAD_MIRROR_URL}'",
             f"INFO {LOGGER_NAME} Transfer finished: {FIRST_URL}",
         ],
         want_status={
-            FIRST_URL: {"done": "0-63", "mirror_failures": {BAD_MIRROR_URL: f"FileNotFoundError:Can't get file head: {BAD_MIRROR_URL}"}}
+            FIRST_URL: {
+                "done": "0-63",
+                "mirror_failures": [{"url": BAD_MIRROR_URL, "error": f"FileNotFoundError:Can't get file head: {BAD_MIRROR_URL}"}],
+                "stats": [
+                    {
+                        "request_count": 1,
+                        "transferred_bytes": 64,
+                        "url": FIRST_URL,
+                    }
+                ],
+            },
         },
     ),
 )
@@ -307,18 +484,21 @@ def test_get(case: GetCase, tmpdir, local_dir: str, cfg: storage.StorageConfig, 
         assert got["path"] == want_path
         assert got["document_length"] == head.content_length
         assert got["done"] == want["done"]
-        assert got["mirror_failures"] == want.get("mirror_failures", {})
+        assert got["mirror_failures"] == want.get("mirror_failures", [])
+        got_stats = [{k: v for k, v in s.items() if not k.endswith("_time")} for s in got["stats"]]
+        assert got_stats == want.get("stats", [])
 
 
 @dataclasses.dataclass
 class PutCase:
     args: list[str]
     mirror_files: list[str] | None = None
-    after_get_params: dict[str, Any] | None = None
+    after_get_params: list[dict[str, Any]] | None = None
+    config_file: dict[str, dict[str, str]] | None = None
     want_return_code: int = 0
     want_stdout: bytes = b""
     want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
-    want_files: list[str] = dataclasses.field(default_factory=list)
+    want_files: set[str] = dataclasses.field(default_factory=set)
 
 
 @cases.cases(
@@ -328,27 +508,56 @@ class PutCase:
     ),
     after_get=PutCase(
         ["put", "target"],
-        after_get_params={"url": FIRST_URL},
+        after_get_params=[{"url": FIRST_URL}],
         want_return_code=0,
-        want_files=[f"./target/{FIRST_PATH}"],
+        want_files={f"./target/{FIRST_PATH}"},
+    ),
+    after_get_two=PutCase(
+        ["put", "target"],
+        after_get_params=[{"url": FIRST_URL}, {"url": SECOND_URL}],
+        want_return_code=0,
+        want_files={f"./target/{FIRST_PATH}", f"./target/{SECOND_PATH}"},
     ),
     mirror_failures=PutCase(
-        ["--mirror-failures", "put", "target"],
+        ["put", "--mirror-failures", "target"],
         mirror_files=[BAD_MIRROR_FILES],
-        after_get_params={"url": FIRST_URL},
+        after_get_params=[{"url": FIRST_URL}, {"url": SECOND_URL}],
         want_return_code=0,
-        want_files=[f"./target/{FIRST_PATH}"],
+        want_files={f"./target/{FIRST_PATH}", f"./target/{SECOND_PATH}"},
     ),
     no_mirror_failures=PutCase(
-        ["--mirror-failures", "put", "target"],
+        ["put", "--mirror-failures", "target"],
         mirror_files=[GOOD_MIRROR_FILES],
-        after_get_params={"url": FIRST_URL},
+        after_get_params=[{"url": FIRST_URL}],
         want_return_code=0,
     ),
+    with_remote=PutCase(
+        ["put", "some-remote:some-path"],
+        after_get_params=[{"url": FIRST_URL}],
+        config_file={
+            "some-remote": {
+                "type": "alias",
+                "remote": "./some-folder",
+            }
+        },
+        want_return_code=0,
+        want_files={f"./some-folder/some-path/{FIRST_PATH}"},
+    ),
 )
-def test_put(case: PutCase, cfg: storage.StorageConfig, client: storage.Client, tmpdir):
+def test_put(case: PutCase, cfg: storage.StorageConfig, tmpdir, monkeypatch):
     if case.mirror_files:
         cfg.mirror_files = case.mirror_files
+
+    config_filename = os.path.normpath(tmpdir.join("rclone.conf"))
+    monkeypatch.setenv("RCLONE_CONFIG", str(config_filename))
+    if case.config_file:
+        config = configparser.ConfigParser(allow_no_value=True)
+        for section, options in case.config_file.items():
+            config.add_section(section)
+            for option, value in options.items():
+                config.set(section, option, value)
+        with open(config_filename, "w") as fd:
+            config.write(fd)
 
     try:
         subprocess.run(["which", "rclone"], check=True, stdout=subprocess.DEVNULL)
@@ -358,14 +567,11 @@ def test_put(case: PutCase, cfg: storage.StorageConfig, client: storage.Client, 
 
     if case.after_get_params is not None:
         with storage.TransferManager.from_config(cfg) as manager:
-            manager.get(**case.after_get_params).wait(timeout=15)
+            for params in case.after_get_params:
+                manager.get(**params).wait(timeout=15)
 
     cwd = str(tmpdir.mkdir("cwd"))
-    result = run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
-
-    assert result.returncode == case.want_return_code
-    assert result.stdout == case.want_stdout
-    assert_lines_in_stderr(case.want_stderr_lines, result.stderr)
+    run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
 
     try:
         find_result = subprocess.run(["find", ".", "-type", "f"], cwd=cwd, capture_output=True, check=not case.want_files)
@@ -374,7 +580,88 @@ def test_put(case: PutCase, cfg: storage.StorageConfig, client: storage.Client, 
         LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
         raise
 
-    assert find_result.stdout.decode("utf-8").splitlines() == case.want_files
+    assert set(find_result.stdout.decode("utf-8").splitlines()) == case.want_files
+
+
+@dataclasses.dataclass
+class PruneCase:
+    args: list[str]
+    mirror_files: list[str] | None = None
+    after_get_params: dict[str, Any] | None = None
+    want_return_code: int = 0
+    want_stdout: bytes = b""
+    want_stderr_lines: list[str] = dataclasses.field(default_factory=list)
+    want_files: set[str] = dataclasses.field(default_factory=set)
+
+
+@cases.cases(
+    clean=PruneCase(
+        ["prune"],
+    ),
+    after_get=PruneCase(
+        ["prune"],
+        after_get_params={"url": FIRST_URL},
+    ),
+    with_url=PruneCase(
+        ["prune", FIRST_URL],
+        after_get_params={"url": FIRST_URL},
+    ),
+    with_other_url=PruneCase(
+        ["prune", SECOND_URL],
+        after_get_params={"url": FIRST_URL},
+        want_files={
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        },
+    ),
+    mirror_failures=PruneCase(
+        ["prune", "--mirror-failures"],
+        mirror_files=[BAD_MIRROR_FILES],
+        after_get_params={"url": FIRST_URL},
+    ),
+    no_mirror_failures=PruneCase(
+        ["prune", "--mirror-failures"],
+        mirror_files=[GOOD_MIRROR_FILES],
+        after_get_params={"url": FIRST_URL},
+        want_files={
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        },
+    ),
+    filenams=PruneCase(
+        ["prune", "--filenames"],
+        after_get_params={"url": FIRST_URL},
+        want_files={
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2.status",
+        },
+    ),
+    status_filenams=PruneCase(
+        ["prune", "--status-filenames"],
+        after_get_params={"url": FIRST_URL},
+        want_files={
+            "./https:/rally-tracks.elastic.co/apm/documents-1k.ndjson.bz2",
+        },
+    ),
+)
+def test_prune(case: PruneCase, cfg: storage.StorageConfig, tmpdir):
+    if case.mirror_files:
+        cfg.mirror_files = case.mirror_files
+
+    if case.after_get_params is not None:
+        with storage.TransferManager.from_config(cfg) as manager:
+            manager.get(**case.after_get_params).wait(timeout=15)
+
+    cwd = str(tmpdir.mkdir("cwd"))
+    run_command(case.args, cwd=cwd, want_return_cone=case.want_return_code, want_stderr_lines=case.want_stderr_lines)
+
+    try:
+        find_result = subprocess.run(["find", ".", "-type", "f"], cwd=cfg.local_dir, capture_output=True, check=not case.want_files)
+    except subprocess.CalledProcessError as ex:
+        LOG.critical("Command '%s' returned non-zero exit status %d", COMMAND, ex.returncode)
+        LOG.critical("STDERR:\n%s", ex.stderr.decode("utf-8"))
+        raise
+
+    assert set(find_result.stdout.decode("utf-8").splitlines()) == case.want_files
 
 
 def run_command(

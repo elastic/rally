@@ -24,12 +24,12 @@ from typing import Any
 import pytest
 
 from esrally import types
-from esrally.storage import _manager
-from esrally.storage._adapter import DummyAdapter, Head
-from esrally.storage._config import StorageConfig
-from esrally.storage._executor import DummyExecutor
-from esrally.storage._manager import (
+from esrally.storage import (
+    Head,
+    StorageConfig,
     TransferManager,
+    _manager,
+    dummy,
     get_transfer_manager,
     init_transfer_manager,
     shutdown_transfer_manager,
@@ -46,8 +46,8 @@ def cfg(request, tmpdir: os.PathLike) -> types.Config:
 
 
 @pytest.fixture(scope="function")
-def dummy_executor(monkeypatch: pytest.MonkeyPatch) -> Generator[DummyExecutor]:
-    executor = DummyExecutor()
+def dummy_executor(monkeypatch: pytest.MonkeyPatch) -> Generator[dummy.DummyExecutor]:
+    executor = dummy.DummyExecutor()
     monkeypatch.setattr(_manager, "executor_from_config", lambda cfg: executor)
     try:
         yield executor
@@ -56,7 +56,7 @@ def dummy_executor(monkeypatch: pytest.MonkeyPatch) -> Generator[DummyExecutor]:
 
 
 @pytest.fixture
-def manager(cfg: types.Config, dummy_executor: DummyExecutor) -> Generator[TransferManager]:
+def manager(cfg: types.Config, dummy_executor: dummy.DummyExecutor) -> Generator[TransferManager]:
     manager = init_transfer_manager(cfg=cfg)
     try:
         yield manager
@@ -70,7 +70,7 @@ SIMPLE_HEAD = Head(url=SIMPLE_URL, content_length=len(SIMPLE_DATA))
 
 
 @dataclasses.dataclass
-class StorageAdapter(DummyAdapter):
+class StorageAdapter(dummy.DummyAdapter):
 
     heads: dict[str, Head] = dataclasses.field(default_factory=lambda: {SIMPLE_URL: SIMPLE_HEAD})
     data: dict[str, bytes] = dataclasses.field(default_factory=lambda: {SIMPLE_URL: SIMPLE_DATA})
@@ -91,7 +91,7 @@ class GetCase:
     document_length=GetCase(url=SIMPLE_URL, want_data=SIMPLE_DATA, document_length=len(SIMPLE_DATA)),
     mismach_document_length=GetCase(url=SIMPLE_URL, want_error=(ValueError,), document_length=len(SIMPLE_DATA) - 1),
 )
-def test_get(case: GetCase, manager: TransferManager, dummy_executor: DummyExecutor, tmpdir: os.PathLike) -> None:
+def test_get(case: GetCase, manager: TransferManager, dummy_executor: dummy.DummyExecutor, tmpdir: os.PathLike) -> None:
     kwargs: dict[str, Any] = {}
     if case.path is not None:
         kwargs["path"] = os.path.join(tmpdir, case.path)
@@ -105,15 +105,16 @@ def test_get(case: GetCase, manager: TransferManager, dummy_executor: DummyExecu
 
     assert not case.want_error
 
-    got = tr.wait(timeout=0.0)
-    assert not got
+    with pytest.raises(TimeoutError):
+        tr.wait(timeout=0.0)
+    assert not tr.finished
 
     if case.path is not None:
         assert os.path.join(tmpdir, case.path) == tr.path
 
     dummy_executor.execute_tasks()
-    got = tr.wait(timeout=0.0)
-    assert got
+    tr.wait(timeout=0.0)
+    assert tr.finished
 
     if case.want_data is not None:
         assert os.path.exists(tr.path)
@@ -136,7 +137,8 @@ def test_transfer_manager(tmpdir: os.PathLike, cfg: StorageConfig) -> None:
     assert isinstance(manager, TransferManager)
 
     tr = manager.get(url=SIMPLE_URL, document_length=len(SIMPLE_DATA))
-    assert tr.wait(timeout=10.0)
+    tr.wait(timeout=10.0)
+    assert tr.finished
     assert os.path.exists(tr.path)
     assert os.path.getsize(tr.path) == len(SIMPLE_DATA)
 

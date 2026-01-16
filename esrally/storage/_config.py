@@ -28,6 +28,7 @@ LOG = logging.getLogger(__name__)
 class StorageConfig(config.Config):
 
     DEFAULT_ADAPTERS = (
+        "esrally.storage.gc:GSAdapter",
         "esrally.storage.aws:S3Adapter",
         "esrally.storage.http:HTTPAdapter",
     )
@@ -80,6 +81,16 @@ class StorageConfig(config.Config):
     def connect_timeout(self, value: float) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.http.connect_timeout", value)
 
+    DEFAULT_GOOGLE_AUTH_TOKEN: str | None = os.environ.get("GOOGLE_AUTH_TOKEN", "").strip() or None
+
+    @property
+    def google_auth_token(self) -> str | None:
+        return self.opts("storage", "storage.gc.auth_token", self.DEFAULT_GOOGLE_AUTH_TOKEN, False)
+
+    @google_auth_token.setter
+    def google_auth_token(self, value: str | None) -> None:
+        self.add(config.Scope.applicationOverride, "storage", "storage.gc.auth_token", value)
+
     DEFAULT_LOCAL_DIR = os.environ.get("RALLY_STORAGE_LOCAL_DIR", "~/.rally/storage")
 
     @property
@@ -91,6 +102,8 @@ class StorageConfig(config.Config):
         self.add(config.Scope.applicationOverride, "storage", "storage.local_dir", value)
 
     def transfer_file_path(self, url: str) -> str:
+        if "?" in url:
+            url, _ = url.split("?", maxsplit=1)
         path = os.path.join(self.local_dir, url)
         return os.path.normpath(os.path.expanduser(path))
 
@@ -147,7 +160,7 @@ class StorageConfig(config.Config):
     def monitor_interval(self, value: float) -> None:
         self.add(config.Scope.applicationOverride, "storage", "storage.monitor_interval", value)
 
-    DEFAULT_MULTIPART_SIZE = 128 * 1024 * 1024
+    DEFAULT_MULTIPART_SIZE = 64 * 1024 * 1024
 
     @property
     def multipart_size(self) -> int:

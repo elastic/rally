@@ -14,15 +14,25 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from esrally.storage._adapter import Adapter, AdapterRegistry, GetResponse, Head
-from esrally.storage._client import Client
-from esrally.storage._config import StorageConfig
-from esrally.storage._executor import Executor
-from esrally.storage._manager import (
-    TransferManager,
-    get_transfer_manager,
-    init_transfer_manager,
-    shutdown_transfer_manager,
+
+from dataclasses import dataclass
+
+from esrally.utils import cases, crc32c
+
+
+@dataclass
+class ChecksumCase:
+    chunks: list[bytes]
+    want: int
+
+
+@cases.cases(
+    no_cunks=ChecksumCase(chunks=[], want=0),
+    one_chunk=ChecksumCase(chunks=[b"Hello world!"], want=2073618257),
+    two_chunks=ChecksumCase(chunks=[b"Hello ", b"world!"], want=2073618257),
 )
-from esrally.storage._range import NO_RANGE, Range, RangeError, RangeSet, rangeset
-from esrally.storage._transfer import Transfer, TransferFileType, TransferMirrorFailure
+def test_update(case: ChecksumCase):
+    c = crc32c.Checksum()
+    for chunk in case.chunks:
+        c.update(chunk)
+    assert c.value == case.want

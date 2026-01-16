@@ -21,16 +21,13 @@ import json
 import os
 import platform
 import random
-import shutil
 import socket
 import subprocess
-import tempfile
 import time
-from collections.abc import Generator
 
 import pytest
 
-from esrally import client, config, version
+from esrally import client
 from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
@@ -137,25 +134,6 @@ def wait_until_port_is_free(port_number=39200, timeout=120):
     raise TimeoutError(f"Port [{port_number}] is occupied after [{timeout}] seconds")
 
 
-def check_prerequisites():
-    if process.run_subprocess_with_logging("docker ps") != 0:
-        raise AssertionError("Docker must be installed and the daemon must be up and running to run integration tests.")
-    if process.run_subprocess_with_logging("docker-compose --help") != 0:
-        raise AssertionError("Docker Compose is required to run integration tests.")
-
-
-class ConfigFile:
-    def __init__(self, config_name):
-        self.user_home = os.getenv("RALLY_HOME", os.path.expanduser("~"))
-        self.rally_home = os.path.join(self.user_home, ".rally")
-        if config_name is not None:
-            self.config_file_name = f"rally-{config_name}.ini"
-        else:
-            self.config_file_name = "rally.ini"
-        self.source_path = os.path.join(os.path.dirname(__file__), "resources", self.config_file_name)
-        self.target_path = os.path.join(self.rally_home, self.config_file_name)
-
-
 class TestCluster:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -197,95 +175,6 @@ class TestCluster:
 
     def __str__(self):
         return f"TestCluster[installation-id={self.installation_id}]"
-
-
-class EsMetricsStore:
-    VERSION = "8.5.1"
-
-    def __init__(self):
-        self.cluster = TestCluster("in-memory-it")
-
-    def start(self):
-        self.cluster.install(
-            distribution_version=EsMetricsStore.VERSION,
-            node_name="metrics-store",
-            car="defaults,basic-license",
-            http_port=10200,
-        )
-        self.cluster.start(race_id="metrics-store")
-
-    def stop(self):
-        self.cluster.stop()
-
-
-def install_integration_test_config():
-    def copy_config(name):
-        source_path = os.path.join(os.path.dirname(__file__), "resources", f"rally-{name}.ini")
-        f = config.ConfigFile(name)
-        f.store_default_config(template_path=source_path)
-
-    for n in CONFIG_NAMES:
-        copy_config(n)
-
-
-def remove_integration_test_config():
-    for config_name in CONFIG_NAMES:
-        os.remove(config.ConfigFile(config_name).location)
-
-
-ES_METRICS_STORE = EsMetricsStore()
-
-
-def get_license():
-    with open(os.path.join(ROOT_DIR, "LICENSE")) as license_file:
-        return license_file.readlines()[1].strip()
-
-
-def build_docker_image():
-    rally_version = version.__version__
-
-    env_variables = os.environ.copy()
-    env_variables["RALLY_VERSION"] = rally_version
-    env_variables["RALLY_LICENSE"] = get_license()
-
-    command = (
-        f"docker build -t elastic/rally:{rally_version} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE "
-        f"-f {ROOT_DIR}/docker/Dockerfiles/dev/Dockerfile {ROOT_DIR}"
-    )
-
-    if process.run_subprocess_with_logging(command, env=env_variables) != 0:
-        raise AssertionError("It was not possible to build the docker image from Dockerfile-dev")
-
-
-def setup_module():
-    check_prerequisites()
-    install_integration_test_config()
-    ES_METRICS_STORE.start()
-    build_docker_image()
-
-
-def teardown_module():
-    ES_METRICS_STORE.stop()
-    remove_integration_test_config()
-
-
-# ensures that a fresh log file is available
-@pytest.fixture(scope="function")
-def fresh_log_file():
-    cfg = ConfigFile(config_name=None)
-    log_file = os.path.join(cfg.rally_home, "logs", "rally.log")
-
-    if os.path.exists(log_file):
-        bak = os.path.join(tempfile.mkdtemp(), "rally.log")
-        shutil.move(log_file, bak)
-        yield log_file
-        # append log lines to the original file and move it back to its original
-        with open(log_file) as src:
-            with open(bak, "a") as dst:
-                dst.write(src.read())
-        shutil.move(bak, log_file)
-    else:
-        yield log_file
 
 
 def find_log_line(log_file, text) -> str | None:

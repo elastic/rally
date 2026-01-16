@@ -16,14 +16,13 @@
 # under the License.
 from __future__ import annotations
 
-import copy
 import dataclasses
 import datetime
 import importlib
 import logging
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Container, Iterator
+from collections.abc import Container, Generator
 from typing import Any
 
 from typing_extensions import Self
@@ -44,7 +43,7 @@ _HEAD_CHECK_IGNORE = frozenset(["url"])
 
 @dataclasses.dataclass
 class Head:
-    url: str | None = None
+    url: str = ""
     content_length: int | None = None
     accept_ranges: bool | None = None
     ranges: RangeSet = NO_RANGE
@@ -96,7 +95,7 @@ class Adapter(ABC):
         """
 
     @abstractmethod
-    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
         """It downloads a remote bucket object to a local file path.
 
         :param url: it represents the URL of the remote file object.
@@ -108,6 +107,21 @@ class Adapter(ABC):
         :raises ServiceUnavailableError: in case on temporary service failure.
         :returns: a tuple containing the Head of the remote file, and the iterator of bytes received from the service.
         """
+
+
+@dataclasses.dataclass
+class GetResponse:
+    head: Head
+    chunks: Generator[bytes]
+
+    def __enter__(self) -> GetResponse:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self) -> None:
+        self.chunks.close()
 
 
 class AdapterRegistry:
@@ -159,37 +173,3 @@ class AdapterRegistry:
 
         self._adapters[cls] = adapter = cls.from_config(self._cfg)
         return adapter
-
-
-@dataclasses.dataclass
-class DummyAdapter(Adapter):
-    heads: dict[str, Head] = dataclasses.field(default_factory=dict)
-    data: dict[str, bytes] = dataclasses.field(default_factory=dict)
-
-    @classmethod
-    def match_url(cls, url: str) -> bool:
-        return True
-
-    @classmethod
-    def from_config(cls, cfg: types.Config | None = None) -> Self:
-        return cls()
-
-    def head(self, url: str) -> Head:
-        try:
-            return copy.copy(self.heads[url])
-        except KeyError:
-            raise FileNotFoundError from None
-
-    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
-        ranges: RangeSet = NO_RANGE
-        if check_head is not None:
-            ranges = check_head.ranges
-            if len(ranges) > 1:
-                raise NotImplementedError("len(head.ranges) > 1")
-
-        data = self.data[url]
-        if ranges:
-            data = data[ranges.start : ranges.end]
-
-        head = Head(url, content_length=ranges.size, ranges=ranges, document_length=len(data))
-        return head, iter((data,))

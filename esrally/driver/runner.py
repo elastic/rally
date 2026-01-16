@@ -772,18 +772,31 @@ class ForceMerge(Runner):
         if max_num_segments:
             merge_params["max_num_segments"] = max_num_segments
         if mode == "polling":
+            task_id = None
             complete = False
-            try:
-                await es.indices.forcemerge(**merge_params)
-                complete = True
-            except elasticsearch.ConnectionTimeout:
-                pass
+            es_info = await es.info()
+            es_version = Version.from_string(es_info["version"]["number"])
+            if es_version < Version(8, 1, 0):  # before 8.1.0 wait_for_completion is not supported
+                try:
+                    await es.indices.forcemerge(**merge_params)
+                    complete = True
+                except elasticsearch.ConnectionTimeout:
+                    pass
+            else:
+                complete = False
+                merge_params["wait_for_completion"] = False
+                response = await es.indices.forcemerge(**merge_params)
+                task_id = response.get("task")
             while not complete:
                 await asyncio.sleep(params.get("poll-period"))
-                tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
-                if len(tasks["nodes"]) == 0:
-                    # empty nodes response indicates no tasks
-                    complete = True
+                if task_id:
+                    tasks = await es.tasks.get(task_id=task_id)
+                    complete = tasks.get("completed", False)
+                else:
+                    tasks = await es.tasks.list(params={"actions": "indices:admin/forcemerge"})
+                    if len(tasks["nodes"]) == 0:
+                        # empty nodes response indicates no tasks
+                        complete = True
         else:
             await es.indices.forcemerge(**merge_params)
 
@@ -2920,12 +2933,14 @@ class Downsample(Runner):
                 "Parameter source for operation 'downsample' did not provide the mandatory parameter 'target-index'. "
                 "Add it to your parameter source and try again."
             )
+        sampling_method = params.get("sampling-method")
 
         path = f"/{source_index}/_downsample/{target_index}"
 
-        await es.perform_request(
-            method="POST", path=path, body={"fixed_interval": fixed_interval}, params=request_params, headers=request_headers
-        )
+        request_body = {"fixed_interval": fixed_interval}
+        if sampling_method:
+            request_body["sampling_method"] = sampling_method
+        await es.perform_request(method="POST", path=path, body=request_body, params=request_params, headers=request_headers)
 
         return {"weight": 1, "unit": "ops", "success": True}
 

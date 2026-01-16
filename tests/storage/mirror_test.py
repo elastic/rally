@@ -19,8 +19,7 @@ import os.path
 
 import pytest
 
-from esrally.storage._config import StorageConfig
-from esrally.storage._mirror import MirrorList
+from esrally.storage import StorageConfig, _mirror
 from esrally.utils import cases
 
 BASE_URL = "https://rally-tracks.elastic.co"
@@ -63,7 +62,7 @@ def patch_default_config(monkeypatch: pytest.MonkeyPatch) -> None:
 )
 def test_from_config(case: FromConfigCase, monkeypatch):
     try:
-        got_mirrors = MirrorList.from_config(case.cfg)
+        got_mirrors = _mirror.MirrorList.from_config(case.cfg)
         got_error = None
     except Exception as ex:
         got_mirrors = None
@@ -90,7 +89,7 @@ class ResolveCase:
     normalized=ResolveCase("https://rally-tracks.elastic.co/", want=[f"{MIRROR1_URL}/", f"{MIRROR2_URL}/"]),
 )
 def test_resolve(case: ResolveCase):
-    mirrors = MirrorList(urls=MIRRORS)
+    mirrors = _mirror.MirrorList(urls=MIRRORS)
     try:
         got = sorted(mirrors.resolve(case.url))
         got_error = None

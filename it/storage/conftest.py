@@ -14,15 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from esrally.storage._adapter import Adapter, AdapterRegistry, GetResponse, Head
-from esrally.storage._client import Client
-from esrally.storage._config import StorageConfig
-from esrally.storage._executor import Executor
-from esrally.storage._manager import (
-    TransferManager,
-    get_transfer_manager,
-    init_transfer_manager,
-    shutdown_transfer_manager,
-)
-from esrally.storage._range import NO_RANGE, Range, RangeError, RangeSet, rangeset
-from esrally.storage._transfer import Transfer, TransferFileType, TransferMirrorFailure
+
+import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shared_setup():
+    pass

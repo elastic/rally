@@ -16,7 +16,7 @@
 # under the License.
 import json
 import logging
-from collections.abc import Iterator, Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping
 from datetime import datetime
 from typing import Any
 
@@ -27,26 +27,11 @@ from requests.structures import CaseInsensitiveDict
 from typing_extensions import Self
 
 from esrally import types
-from esrally.storage._adapter import Adapter, Head, ServiceUnavailableError
+from esrally.storage._adapter import Adapter, GetResponse, Head, ServiceUnavailableError
 from esrally.storage._config import StorageConfig
 from esrally.storage._range import NO_RANGE, RangeSet, rangeset
 
 LOG = logging.getLogger(__name__)
-
-
-class Session(requests.Session):
-
-    @classmethod
-    def from_config(cls, cfg: types.Config | None = None) -> Self:
-        cfg = StorageConfig.from_config(cfg)
-        return cls(max_retries=parse_max_retries(cfg.max_retries))
-
-    def __init__(self, max_retries: urllib3.Retry | int | None = None) -> None:
-        super().__init__()
-        if max_retries:
-            adapter = requests.adapters.HTTPAdapter(max_retries=max_retries)
-            self.mount("http://", adapter)
-            self.mount("https://", adapter)
 
 
 class HTTPAdapter(Adapter):
@@ -57,10 +42,24 @@ class HTTPAdapter(Adapter):
         return url.startswith("http://") or url.startswith("https://")
 
     @classmethod
+    def session_from_config(cls, cfg: StorageConfig, session: requests.Session | None = None) -> requests.Session:
+        if session is None:
+            session = requests.Session()
+        max_retries = parse_max_retries(cfg.max_retries)
+        if max_retries:
+            adapter = requests.adapters.HTTPAdapter(max_retries=max_retries)
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
+        return session
+
+    @classmethod
     def from_config(cls, cfg: types.Config | None = None) -> Self:
         cfg = StorageConfig.from_config(cfg)
         return cls(
-            session=Session.from_config(cfg), chunk_size=cfg.chunk_size, connect_timeout=cfg.connect_timeout, read_timeout=cfg.read_timeout
+            session=cls.session_from_config(cfg),
+            chunk_size=cfg.chunk_size,
+            connect_timeout=cfg.connect_timeout,
+            read_timeout=cfg.read_timeout,
         )
 
     def __init__(
@@ -84,26 +83,32 @@ class HTTPAdapter(Adapter):
             res.raise_for_status()
         return head_from_headers(url, res.headers)
 
-    def get(self, url: str, *, check_head: Head | None = None) -> tuple[Head, Iterator[bytes]]:
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
         headers: MutableMapping[str, str] = CaseInsensitiveDict()
         head_to_headers(check_head, headers)
-        res = self.session.get(url, stream=True, allow_redirects=True, headers=headers, timeout=(self.connect_timeout, self.read_timeout))
-        if res.status_code == 503:
-            raise ServiceUnavailableError()
-        res.raise_for_status()
+        response = self.session.get(
+            url, stream=True, allow_redirects=True, headers=headers, timeout=(self.connect_timeout, self.read_timeout)
+        )
+        try:
+            if response.status_code == 503:
+                raise ServiceUnavailableError()
+            response.raise_for_status()
 
-        head = head_from_headers(url, res.headers)
-        if check_head is not None:
-            check_head.check(head)
+            head = head_from_headers(url, response.headers)
+            if check_head is not None:
+                check_head.check(head)
+        except Exception:
+            response.close()
+            raise
 
-        def iter_content() -> Iterator[bytes]:
+        def iter_chunks():
             try:
-                with res:
-                    yield from res.iter_content(chunk_size=self.chunk_size)
+                with response:
+                    yield from response.iter_content(chunk_size=self.chunk_size)
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as ex:
                 raise TimeoutError(f"Timed out reading content from URL={url}: {ex}") from ex
 
-        return head, iter_content()
+        return GetResponse(head, iter_chunks())
 
 
 _ACCEPT_RANGES_HEADER = "Accept-Ranges"
