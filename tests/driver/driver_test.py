@@ -1465,8 +1465,12 @@ class TestAsyncExecutor:
     async def test_execute_schedule_in_throughput_mode(self, es):
         task_start = time.perf_counter()
         es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
+        _headers = elastic_transport.HttpHeaders()
+        _headers["content-type"] = "application/json"
+        _node = elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200)
+        _meta = elastic_transport.ApiResponseMeta(status=200, http_version="1.1", headers=_headers, duration=0.05, node=_node)
 
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(b'{"errors": false, "took": 8}'))
+        es.bulk = mock.AsyncMock(return_value=elastic_transport.ApiResponse(body=io.BytesIO(b'{"errors": false, "took": 8}'), meta=_meta))
 
         params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
