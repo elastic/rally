@@ -251,7 +251,7 @@ def _remove_deprecated_dependency(dependencies: Iterable[str]) -> tuple[list[str
 
 
 def _install_dependencies(dependencies: Iterable[str]):
-    dependencies, deprecated = _remove_deprecated_dependency(dependencies)
+    dependencies, deprecated = _remove_deprecated_dependency(set(dependencies))
     if deprecated:
         message = (
             f"Track dependencies are deprecated: {', '.join(deprecated)}. "
@@ -260,6 +260,10 @@ def _install_dependencies(dependencies: Iterable[str]):
         )
         LOG.warning(message)
         console.warn(message)
+
+    if not dependencies:
+        LOG.debug("No track dependency to be installed.")
+        return
 
     log_path = os.path.join(paths.logs(), "dependency.log")
     console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
