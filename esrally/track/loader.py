@@ -24,7 +24,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Iterable
 
 import jinja2
 import jinja2.exceptions
@@ -231,19 +231,47 @@ def load_track(cfg: types.Config, install_dependencies=False):
     return _load_single_track(cfg, repo, repo.track_name, install_dependencies)
 
 
-def _install_dependencies(dependencies):
-    if dependencies:
-        log_path = os.path.join(paths.logs(), "dependency.log")
-        console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
-        try:
-            with open(log_path, "ab") as install_log:
-                subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
-                    stdout=install_log,
-                    stderr=install_log,
-                )
-        except subprocess.CalledProcessError:
-            raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
+DEPRECATED_DEPENDENCIES = [
+    "elasticsearch",
+    "elastic-transport",
+]
+
+
+def _remove_deprecated_dependency(dependencies: Iterable[str]) -> tuple[list[str], list[str]]:
+    invalid: list[str] = []
+    valid: list[str] = []
+    for dependency in dependencies:
+        for deprecated in DEPRECATED_DEPENDENCIES:
+            if dependency.startswith(deprecated) and dependency[len(deprecated) : len(deprecated) + 1] in "<=>!~":
+                invalid.append(deprecated)
+                break
+        else:
+            valid.append(dependency)
+    return valid, invalid
+
+
+def _install_dependencies(dependencies: Iterable[str]):
+    dependencies, deprecated = _remove_deprecated_dependency(dependencies)
+    if deprecated:
+        message = (
+            f"Track dependencies are deprecated: {', '.join(deprecated)}. "
+            f"Please update the track to rely on the 'elasticsearch' library version required by rally. "
+            f"Rally no longer supports installing deprecated Elasticsearch client libraries."
+        )
+        LOG.warning(message)
+        console.warn(message)
+
+    log_path = os.path.join(paths.logs(), "dependency.log")
+    console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
+    try:
+        with open(log_path, "ab") as install_log:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
+                stdout=install_log,
+                stderr=install_log,
+            )
+    except subprocess.CalledProcessError:
+        raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
 
 
 def _load_single_track(cfg: types.Config, track_repository, track_name, install_dependencies=False):
