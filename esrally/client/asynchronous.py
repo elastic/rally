@@ -44,7 +44,12 @@ from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWar
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
-from esrally.client.common import _WARNING_RE, _quote_query, mimetype_headers_to_compat
+from esrally.client.common import (
+    _WARNING_RE,
+    _quote_query,
+    combine_headers,
+    mimetype_headers_to_compat,
+)
 from esrally.client.context import RequestContextHolder
 from esrally.utils import io, versions
 
@@ -365,27 +370,22 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         endpoint_id: Optional[str] = None,
         path_parts: Optional[Mapping[str, Any]] = None,
     ) -> ApiResponse[Any]:
-        # We need to ensure that we provide content-type and accept headers
-        headers = headers or {}
+        headers = combine_headers(self._headers, headers)
+        assert isinstance(headers, dict)
         if body is not None:
+            # It ensures content-type and accept headers are set.
             mimetype = "application/json"
             if path.endswith("/_bulk"):
                 mimetype = "application/x-ndjson"
             for header in ("content-type", "accept"):
                 headers.setdefault(header, mimetype)
 
-        if headers:
-            request_headers = self._headers.copy()
-            request_headers.update(headers)
-        else:
-            request_headers = self._headers
-
         # Converts all parts of a Accept/Content-Type headers
         # from application/X -> application/vnd.elasticsearch+X
         # see https://github.com/elastic/elasticsearch/issues/51816
         # Not applicable to serverless
         if not self.is_serverless:
-            mimetype_headers_to_compat(request_headers, self.distribution_version)
+            mimetype_headers_to_compat(headers, self.distribution_version)
 
         if params:
             target = f"{path}?{_quote_query(params)}"
@@ -395,7 +395,7 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         meta, resp_body = await self.transport.perform_request(
             method,
             target,
-            headers=request_headers,
+            headers=headers,
             body=body,
             request_timeout=self._request_timeout,
             max_retries=self._max_retries,

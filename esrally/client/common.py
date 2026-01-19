@@ -13,6 +13,14 @@ _WARNING_RE = re.compile(r"\"([^\"]*)\"")
 _COMPAT_MIMETYPE_RE = re.compile(r"application/(json|x-ndjson|vnd\.mapbox-vector-tile)")
 
 
+def combine_headers(*args: Mapping[str, str] | None) -> dict[str, str]:
+    combined_headers: dict[str, str] = {}
+    for header_mapping in args:
+        if header_mapping:
+            combined_headers.update(header_mapping)
+    return combined_headers
+
+
 def mimetype_headers_to_compat(headers: MutableMapping[str, str], distribution_version: str | None) -> None:
     if not headers:
         return

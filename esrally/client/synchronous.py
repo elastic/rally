@@ -37,7 +37,12 @@ from elasticsearch.exceptions import (
     UnsupportedProductError,
 )
 
-from esrally.client.common import _WARNING_RE, _quote_query, mimetype_headers_to_compat
+from esrally.client.common import (
+    _WARNING_RE,
+    _quote_query,
+    combine_headers,
+    mimetype_headers_to_compat,
+)
 from esrally.utils import versions
 
 
@@ -151,24 +156,11 @@ class RallySyncElasticsearch(Elasticsearch):
         endpoint_id: Optional[str] = None,
         path_parts: Optional[Mapping[str, Any]] = None,
     ) -> ApiResponse[Any]:
-        # We need to ensure that we provide content-type and accept headers
-        if body is not None:
-            if headers is None:
-                headers = {"content-type": "application/json", "accept": "application/json"}
-            else:
-                if headers.get("content-type") is None:
-                    headers["content-type"] = "application/json"
-                if headers.get("accept") is None:
-                    headers["accept"] = "application/json"
-
-        if headers:
-            request_headers = self._headers.copy()
-            request_headers.update(headers)
-        else:
-            request_headers = self._headers
+        headers = combine_headers(self._headers, headers)
+        assert isinstance(headers, dict)
 
         if self._verified_elasticsearch is None:
-            info = self.transport.perform_request(method="GET", target="/", headers=request_headers)
+            info = self.transport.perform_request(method="GET", target="/", headers=headers)
             info_meta = info.meta
             info_body = info.body
 
@@ -180,11 +172,19 @@ class RallySyncElasticsearch(Elasticsearch):
             if self._verified_elasticsearch is not True:
                 _ProductChecker.raise_error(self._verified_elasticsearch, info_meta, info_body)
 
+        if body is not None:
+            # It ensures content-type and accept headers are set.
+            mimetype = "application/json"
+            if path.endswith("/_bulk"):
+                mimetype = "application/x-ndjson"
+            for header in ("content-type", "accept"):
+                headers.setdefault(header, mimetype)
+
         # Converts all parts of a Accept/Content-Type headers
         # from application/X -> application/vnd.elasticsearch+X
         # see https://github.com/elastic/elasticsearch/issues/51816
         if not self.is_serverless:
-            mimetype_headers_to_compat(request_headers, self.distribution_version)
+            mimetype_headers_to_compat(headers, self.distribution_version)
 
         if params:
             target = f"{path}?{_quote_query(params)}"
@@ -194,7 +194,7 @@ class RallySyncElasticsearch(Elasticsearch):
         meta, resp_body = self.transport.perform_request(
             method,
             target,
-            headers=request_headers,
+            headers=headers,
             body=body,
             request_timeout=self._request_timeout,
             max_retries=self._max_retries,
