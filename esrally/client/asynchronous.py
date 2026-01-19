@@ -368,8 +368,11 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         # We need to ensure that we provide content-type and accept headers
         headers = headers or {}
         if body is not None:
-            headers.setdefault("Content-Type", "application/json")
-            headers.setdefault("Accept", "application/json")
+            mimetype = "application/json"
+            if path.endswith("/_bulk"):
+                mimetype = "application/x-ndjson"
+            for header in ("content-type", "accept"):
+                headers.setdefault(header, mimetype)
 
         if headers:
             request_headers = self._headers.copy()
