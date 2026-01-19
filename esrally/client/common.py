@@ -1,28 +1,34 @@
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from datetime import date, datetime
 from typing import Any
 
 from elastic_transport.client_utils import percent_encode
-from elasticsearch import VERSION
+from elasticsearch import VERSION as ES_VERSION
 
+from esrally.utils import versions
 
-def _client_major_version_to_str(version: tuple) -> str:
-    return str(version[0])
-
-
+_MAJOR_SERVER_VERSION = str(ES_VERSION[0])
 _WARNING_RE = re.compile(r"\"([^\"]*)\"")
-_COMPAT_MIMETYPE_TEMPLATE = "application/vnd.elasticsearch+%s; compatible-with=" + _client_major_version_to_str(VERSION)
 _COMPAT_MIMETYPE_RE = re.compile(r"application/(json|x-ndjson|vnd\.mapbox-vector-tile)")
-_COMPAT_MIMETYPE_SUB = _COMPAT_MIMETYPE_TEMPLATE % (r"\g<1>",)
 
 
-def _mimetype_header_to_compat(header, request_headers):
-    # Converts all parts of a Accept/Content-Type headers
-    # from application/X -> application/vnd.elasticsearch+X
-    mimetype = request_headers.get(header, None) if request_headers else None
-    if mimetype:
-        request_headers[header] = _COMPAT_MIMETYPE_RE.sub(_COMPAT_MIMETYPE_SUB, mimetype)
+def mimetype_headers_to_compat(headers: MutableMapping[str, str], distribution_version: str | None) -> None:
+    if not headers:
+        return
+    if not versions.is_version_identifier(distribution_version):
+        return
+    major_version = versions.Version.from_string(distribution_version).major
+    if major_version < 8:
+        return
+
+    for header in ("accept", "content-type"):
+        mimetype = headers.get(header)
+        if not mimetype:
+            continue
+        headers[header] = _COMPAT_MIMETYPE_RE.sub(
+            "application/vnd.elasticsearch+%s; compatible-with=%s" % (r"\g<1>", major_version), mimetype
+        )
 
 
 def _escape(value: Any) -> str:

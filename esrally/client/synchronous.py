@@ -37,7 +37,7 @@ from elasticsearch.exceptions import (
     UnsupportedProductError,
 )
 
-from esrally.client.common import _WARNING_RE, _mimetype_header_to_compat, _quote_query
+from esrally.client.common import _WARNING_RE, _quote_query, mimetype_headers_to_compat
 from esrally.utils import versions
 
 
@@ -184,11 +184,7 @@ class RallySyncElasticsearch(Elasticsearch):
         # from application/X -> application/vnd.elasticsearch+X
         # see https://github.com/elastic/elasticsearch/issues/51816
         if not self.is_serverless:
-            if versions.is_version_identifier(self.distribution_version) and (
-                versions.Version.from_string(self.distribution_version) >= versions.Version.from_string("8.0.0")
-            ):
-                _mimetype_header_to_compat("Accept", headers)
-                _mimetype_header_to_compat("Content-Type", headers)
+            mimetype_headers_to_compat(request_headers, self.distribution_version)
 
         if params:
             target = f"{path}?{_quote_query(params)}"

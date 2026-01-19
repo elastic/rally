@@ -45,7 +45,7 @@ from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWar
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
-from esrally.client.common import _WARNING_RE, _mimetype_header_to_compat, _quote_query
+from esrally.client.common import _WARNING_RE, _quote_query, mimetype_headers_to_compat
 from esrally.client.context import RequestContextHolder
 from esrally.utils import io, versions
 
@@ -372,14 +372,10 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         path_parts: Optional[Mapping[str, Any]] = None,
     ) -> ApiResponse[Any]:
         # We need to ensure that we provide content-type and accept headers
+        headers = headers or {}
         if body is not None:
-            if headers is None:
-                headers = {"content-type": "application/json", "accept": "application/json"}
-            else:
-                if headers.get("content-type") is None:
-                    headers["content-type"] = "application/json"
-                if headers.get("accept") is None:
-                    headers["accept"] = "application/json"
+            headers.setdefault("Content-Type", "application/json")
+            headers.setdefault("Accept", "application/json")
 
         if headers:
             request_headers = self._headers.copy()
@@ -392,11 +388,7 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         # see https://github.com/elastic/elasticsearch/issues/51816
         # Not applicable to serverless
         if not self.is_serverless:
-            if versions.is_version_identifier(self.distribution_version) and (
-                versions.Version.from_string(self.distribution_version) >= versions.Version.from_string("8.0.0")
-            ):
-                _mimetype_header_to_compat("Accept", request_headers)
-                _mimetype_header_to_compat("Content-Type", request_headers)
+            mimetype_headers_to_compat(request_headers, self.distribution_version)
 
         if params:
             target = f"{path}?{_quote_query(params)}"
