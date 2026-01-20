@@ -242,7 +242,7 @@ def _remove_deprecated_dependency(dependencies: Iterable[str]) -> tuple[list[str
     valid: list[str] = []
     for dependency in dependencies:
         for deprecated in DEPRECATED_DEPENDENCIES:
-            if dependency.startswith(deprecated) and dependency[len(deprecated) : len(deprecated) + 1] in "<=>!~":
+            if dependency.startswith(deprecated) and len(dependency) > len(deprecated) and dependency[len(deprecated)] in "<=>!~":
                 invalid.append(deprecated)
                 break
         else:
