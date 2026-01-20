@@ -22,6 +22,7 @@ import os
 import random
 import re
 import subprocess
+import sys
 import textwrap
 import urllib.error
 from unittest import mock
@@ -4386,7 +4387,7 @@ def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest
     if case.want_installed:
         subprocess.check_call.assert_called_once()
         assert subprocess.check_call.call_args[0][0] == [
-            "/Users/fressi/src/rally/.venv/bin/python3",
+            sys.executable,
             "-m",
             "pip",
             "install",
