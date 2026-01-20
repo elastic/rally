@@ -255,7 +255,7 @@ def _install_dependencies(dependencies: Iterable[str]):
     if deprecated:
         message = (
             f"Track dependencies are deprecated: {', '.join(deprecated)}. "
-            f"Please update the track to rely on the 'elasticsearch' library version required by rally. "
+            f"Please update the track to rely on the 'elasticsearch' library version required by Rally. "
             f"Rally no longer supports installing deprecated Elasticsearch client libraries."
         )
         LOG.warning(message)
