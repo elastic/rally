@@ -16,18 +16,22 @@
 # under the License.
 
 import copy
+import dataclasses
+import logging
 import os
 import random
 import re
+import subprocess
 import textwrap
 import urllib.error
 from unittest import mock
 
 import pytest
 
-from esrally import config, exceptions
+from esrally import config, exceptions, paths
 from esrally.track import loader, track
-from esrally.utils import io
+from esrally.utils import console, io
+from esrally.utils.cases import cases
 
 
 def strip_ws(s):
@@ -4323,3 +4327,75 @@ class TestTrackProcessorRegistry:
         ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         assert len(expected_processors) == len(actual_processors)
+
+
+@dataclasses.dataclass
+class InstallDependenciesCase:
+    requirements: list[str]
+    want_installed: list[str] = dataclasses.field(default_factory=list)
+    want_skipped: list[str] = dataclasses.field(default_factory=list)
+
+
+install_dependencies_cases = cases(
+    empty=InstallDependenciesCase(requirements=[]),
+    simple=InstallDependenciesCase(requirements=["pyyaml"], want_installed=["pyyaml"]),
+    deprecated=InstallDependenciesCase(requirements=list(loader.DEPRECATED_PACKAGES), want_skipped=list(loader.DEPRECATED_PACKAGES)),
+    mixed=InstallDependenciesCase(
+        requirements=[
+            "requests>=2.0.0",
+            " # some comment",
+            "numpy<1.25.0",
+            "pandas[test]==1.5.3",
+            "elasticsearch==8.4.0",
+            "elastic-transport>=8.2.0",
+        ],
+        want_installed=["requests>=2.0.0", "numpy<1.25.0", "pandas[test]==1.5.3"],
+        want_skipped=["elasticsearch", "elastic-transport"],
+    ),
+)
+
+
+@install_dependencies_cases
+def test_filter_requirements(case: InstallDependenciesCase) -> None:
+    # pylint: disable=protected-access
+    filtered, deprecated = loader._filter_requirements(case.requirements)
+    assert filtered == case.want_installed
+    assert deprecated == case.want_skipped
+
+
+@install_dependencies_cases
+def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest.MonkeyPatch, tmpdir) -> None:
+    # pylint: disable=protected-access
+    monkeypatch.chdir(str(tmpdir))
+    monkeypatch.setattr(paths, "logs", lambda: "./logs")
+    monkeypatch.setattr(paths, "libs", lambda: "./libs")
+    monkeypatch.setattr(loader, "LOG", mock.create_autospec(logging.Logger))
+    monkeypatch.setattr(console, "warn", mock.create_autospec(console.warn))
+    monkeypatch.setattr(console, "info", mock.create_autospec(console.info))
+    monkeypatch.setattr(subprocess, "check_call", mock.create_autospec(subprocess.check_call))
+    loader._install_dependencies(case.requirements)
+
+    if case.want_skipped:
+        want_message = loader.DEPRECATED_MESSAGE.format(deprecated=", ".join(case.want_skipped))
+        loader.LOG.warning.assert_called_once_with(want_message)
+        console.warn.assert_called_once_with(want_message)
+    else:
+        loader.LOG.warning.assert_not_called()
+        console.warn.assert_not_called()
+
+    if case.want_installed:
+        subprocess.check_call.assert_called_once()
+        assert subprocess.check_call.call_args[0][0] == [
+            "/Users/fressi/src/rally/.venv/bin/python3",
+            "-m",
+            "pip",
+            "install",
+            *case.want_installed,
+            "--upgrade",
+            "--target",
+            "./libs",
+        ]
+        assert os.path.isfile("./logs/dependency.log")
+    else:
+        subprocess.check_call.assert_not_called()
+        assert not os.path.isdir("./logs")

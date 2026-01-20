@@ -221,7 +221,6 @@ def track_info(cfg: types.Config):
 
 def load_track(cfg: types.Config, install_dependencies=False):
     """
-
     Loads a track
 
     :param cfg: The config object. It contains the name of the track to load.
@@ -231,51 +230,90 @@ def load_track(cfg: types.Config, install_dependencies=False):
     return _load_single_track(cfg, repo, repo.track_name, install_dependencies)
 
 
-DEPRECATED_DEPENDENCIES = [
+DEPRECATED_PACKAGES = (
     "elasticsearch",
     "elastic-transport",
-]
+)
+
+DEPRECATED_MESSAGE = (
+    "Track dependencies are deprecated: {deprecated}. "
+    "Please update the track to rely on the 'elasticsearch' libraries versions as required by Rally. "
+    "Rally no longer supports installing per-track Elasticsearch client libraries."
+)
 
 
-def _remove_deprecated_dependency(dependencies: Iterable[str]) -> tuple[list[str], list[str]]:
-    invalid: list[str] = []
-    valid: list[str] = []
-    for dependency in dependencies:
-        for deprecated in DEPRECATED_DEPENDENCIES:
-            if dependency.startswith(deprecated) and len(dependency) > len(deprecated) and dependency[len(deprecated)] in "<=>!~":
-                invalid.append(deprecated)
-                break
-        else:
-            valid.append(dependency)
-    return valid, invalid
-
-
-def _install_dependencies(dependencies: Iterable[str]):
-    dependencies, deprecated = _remove_deprecated_dependency(set(dependencies))
+def _install_dependencies(requirements: Iterable[str]) -> None:
+    requirements, deprecated = _filter_requirements(requirements)
     if deprecated:
-        message = (
-            f"Track dependencies are deprecated: {', '.join(deprecated)}. "
-            f"Please update the track to rely on the 'elasticsearch' library version required by Rally. "
-            f"Rally no longer supports installing deprecated Elasticsearch client libraries."
-        )
+        message = DEPRECATED_MESSAGE.format(deprecated=", ".join(deprecated))
         LOG.warning(message)
         console.warn(message)
 
-    if not dependencies:
-        LOG.debug("No track dependency to be installed.")
+    if not requirements:
+        LOG.debug("No track requirements to be installed.")
         return
 
     log_path = os.path.join(paths.logs(), "dependency.log")
-    console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
+    console.info(f"Installing track dependencies: {requirements}.")
+    os.makedirs(paths.logs(), exist_ok=True)
     try:
         with open(log_path, "ab") as install_log:
             subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
+                [sys.executable, "-m", "pip", "install", *requirements, "--upgrade", "--target", paths.libs()],
                 stdout=install_log,
                 stderr=install_log,
             )
     except subprocess.CalledProcessError:
-        raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
+        raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See '{log_path}' for more information.")
+
+
+def _filter_requirements(
+    requirements: Iterable[str], deprecated_packages: Iterable[str] = DEPRECATED_PACKAGES
+) -> tuple[list[str], list[str]]:
+    """
+    It removes deprecated packages from a list of pip requirement strings.
+
+    :param requirements: List of strings (e.g., ['flask==2.0', 'requests>=2.0'])
+    :param deprecated_packages: List of strings (e.g., ['old-pkg', 'deprecated_lib'])
+    :return: List of strings with deprecated dependencies removed.
+    """
+
+    # It normalizes the deprecated list for efficient lookup.
+    normalized_deprecated = {_normalize_package_name(pkg) for pkg in deprecated_packages}
+
+    # It defines a pattern to extract the package name before any operators (==, >=, <, [, etc.)
+    # This regex looks for the start of the string until it hits a non-alphanumeric
+    # character that isn't a hyphen or underscore.
+    name_extractor = re.compile(r"^([a-zA-Z0-9\-_.]+)")
+
+    filtered_list = []
+    deprecated_list = []
+
+    for line in requirements:
+        if not (line := line.strip()) or line.startswith("#"):
+            # It skips comments and empty lines
+            continue
+
+        if match := name_extractor.match(line):
+            pkg = _normalize_package_name(match.group(1))
+            if pkg in normalized_deprecated:
+                deprecated_list.append(pkg)
+                continue
+
+        # If a name doesn't match any deprecated or if it can't parse a name, then it keep it.
+        filtered_list.append(line)
+
+    return filtered_list, deprecated_list
+
+
+def _normalize_package_name(name: str) -> str:
+    """
+    It normalizes a package name according to PEP 503.
+
+    :param name: The package name to normalize.
+    :return: The normalized package name.
+    """
+    return re.sub(r"[-_.]+", "-", name).lower().strip()
 
 
 def _load_single_track(cfg: types.Config, track_repository, track_name, install_dependencies=False):
