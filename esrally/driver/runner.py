@@ -516,8 +516,6 @@ class BulkIndex(Runner):
         bulk_size = mandatory(params, "bulk-size", self)
         unit = mandatory(params, "unit", self)
         retries_on_429 = params.get("retries_on_429", 0)
-        if retries_on_429 > 0:
-            self.logger.info("Will retry up to %d times on document-level 429s.", retries_on_429)
         # parse responses lazily in the standard case - responses might be large thus parsing skews results and if no
         # errors have occurred we only need a small amount of information from the potentially large response.
         if not detailed_results:
