@@ -347,7 +347,7 @@ class TestDockerLauncher:
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     def test_starts_container_successfully(self, run_subprocess_with_output, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
-        # Docker container id (from docker-compose ps), Docker container id (from docker ps --filter ...)
+        # Docker container id (from docker compose ps), Docker container id (from docker ps --filter ...)
         run_subprocess_with_output.side_effect = [["de604d0d"], ["de604d0d"]]
         cfg = config.Config()
         docker = launcher.DockerLauncher(cfg)
@@ -386,7 +386,7 @@ class TestDockerLauncher:
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     def test_container_not_started(self, run_subprocess_with_output, run_subprocess_with_logging, sleep):
         run_subprocess_with_logging.return_value = 0
-        # Docker container id (from docker-compose ps), but NO Docker container id (from docker ps --filter...) twice
+        # Docker container id (from docker compose ps), but NO Docker container id (from docker ps --filter...) twice
         run_subprocess_with_output.side_effect = [["de604d0d"], [], []]
         cfg = config.Config()
         # ensure we only check the status two times

@@ -32,7 +32,7 @@ function check_prerequisites {
         exit 1
     fi
 
-    if ! type docker-compose > /dev/null; then
+    if ! type docker compose > /dev/null; then
         echo "docker compose is necessary to run the integration tests"
         exit 1
     fi
