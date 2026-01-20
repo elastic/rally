@@ -50,7 +50,7 @@ def test_docker_override_cmd():
 def run_docker_compose_test(test_command):
     try:
         if run_docker_compose_up(test_command) != 0:
-            raise AssertionError(f"The docker-compose test failed with test command: {test_command}")
+            raise AssertionError(f"The docker compose test failed with test command: {test_command}")
     finally:
         # Always ensure proper cleanup regardless of results
         run_docker_compose_down()
@@ -64,11 +64,11 @@ def run_docker_compose_up(test_command):
     env_variables["RALLY_VERSION_TAG"] = version.__version__
 
     return process.run_subprocess_with_logging(
-        f"docker-compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml up --abort-on-container-exit",
+        f"docker compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml up --abort-on-container-exit",
         env=env_variables,
     )
 
 
 def run_docker_compose_down():
-    if process.run_subprocess_with_logging(f"docker-compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml down -v") != 0:
+    if process.run_subprocess_with_logging(f"docker compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml down -v") != 0:
         raise AssertionError("Failed to stop running containers from docker-compose-tests.yml")
