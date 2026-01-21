@@ -523,7 +523,6 @@ class BulkIndex(Runner):
 
         if with_action_metadata:
             api_kwargs.pop("index", None)
-            # only half of the lines are documents
             response = await es.bulk(params=bulk_params, **api_kwargs)
         else:
             response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
