@@ -559,8 +559,8 @@ class BulkIndex(Runner):
                 total_success += stats["success-count"]
                 total_error += stats["error-count"]
                 total_time += stats["took"]
-                sum_bulk_request_size_bytes += stats["bulk-request-size-bytes"]
-                sum_total_document_size_bytes += stats["total-document-size-bytes"]
+                sum_bulk_request_size_bytes += stats.get("bulk-request-size-bytes", 0)
+                sum_total_document_size_bytes += stats.get("total-document-size-bytes", 0)
             retry_count = len(retry_stats)
             if detailed_results:
                 stats = {
