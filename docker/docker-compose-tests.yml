@@ -12,10 +12,17 @@ services:
       es01:
         condition: service_healthy
   es01:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.4
     container_name: es01
     environment:
+      - node.name=es01
+      - cluster.name=docker-cluster
       - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      # It disable security for tests
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.http.ssl.enabled=false
       - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
     volumes:
       - esdata1:/usr/share/elasticsearch/data
@@ -24,10 +31,11 @@ services:
     networks:
       - esnet
     healthcheck:
-          test: curl -f http://localhost:9200
-          interval: 5s
-          timeout: 2s
-          retries: 10
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
 networks:
   esnet:
     name: rally-tests
