@@ -1,8 +1,9 @@
 import re
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Any
 
+import elastic_transport
 from elastic_transport.client_utils import percent_encode
 from elasticsearch import VERSION as ES_VERSION
 
@@ -13,15 +14,10 @@ _WARNING_RE = re.compile(r"\"([^\"]*)\"")
 _COMPAT_MIMETYPE_RE = re.compile(r"application/(json|x-ndjson|vnd\.mapbox-vector-tile)")
 
 
-def combine_headers(*args: Mapping[str, str] | None) -> dict[str, str]:
-    combined_headers: dict[str, str] = {}
-    for header_mapping in args:
-        if header_mapping:
-            combined_headers.update(header_mapping)
-    return combined_headers
-
-
-def mimetype_headers_to_compat(headers: MutableMapping[str, str], distribution_version: str | None) -> None:
+def mimetype_headers_to_compat(
+    headers: elastic_transport.HttpHeaders,
+    distribution_version: str | None = None,
+) -> None:
     if not headers:
         return
     if not versions.is_version_identifier(distribution_version):
@@ -29,7 +25,6 @@ def mimetype_headers_to_compat(headers: MutableMapping[str, str], distribution_v
     major_version = versions.Version.from_string(distribution_version).major
     if major_version < 8:
         return
-
     for header in ("accept", "content-type"):
         mimetype = headers.get(header)
         if not mimetype:

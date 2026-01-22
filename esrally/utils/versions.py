@@ -33,7 +33,7 @@ def is_version_identifier(text: str | None, strict: bool = True) -> bool:
     return text is not None and _versions_pattern(strict).match(text) is not None
 
 
-def is_serverless(text):
+def is_serverless(text) -> bool:
     return text == "serverless"
 
 

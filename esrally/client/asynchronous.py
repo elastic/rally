@@ -34,22 +34,23 @@ from elastic_transport import (
     HeadApiResponse,
     ListApiResponse,
     ObjectApiResponse,
+    OpenTelemetrySpan,
     TextApiResponse,
 )
 from elastic_transport.client_utils import DEFAULT
 from elasticsearch import AsyncElasticsearch
 from elasticsearch._async.client import IlmClient
 from elasticsearch.compat import warn_stacklevel
-from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWarning
+from elasticsearch.exceptions import (
+    HTTP_EXCEPTIONS,
+    ApiError,
+    ElasticsearchWarning,
+    UnsupportedProductError,
+)
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
-from esrally.client.common import (
-    _WARNING_RE,
-    _quote_query,
-    combine_headers,
-    mimetype_headers_to_compat,
-)
+from esrally.client.common import _WARNING_RE, _quote_query, mimetype_headers_to_compat
 from esrally.client.context import RequestContextHolder
 from esrally.utils import io, versions
 
@@ -359,7 +360,7 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         new_self.distribution_flavor = self.distribution_flavor
         return new_self
 
-    async def perform_request(
+    async def _perform_request(
         self,
         method: str,
         path: str,
@@ -367,25 +368,27 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         params: Optional[Mapping[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
         body: Optional[Any] = None,
-        endpoint_id: Optional[str] = None,
-        path_parts: Optional[Mapping[str, Any]] = None,
+        otel_span: OpenTelemetrySpan,
     ) -> ApiResponse[Any]:
-        headers = combine_headers(self._headers, headers)
-        assert isinstance(headers, dict)
+        if headers:
+            request_headers = self._headers.copy()
+            request_headers.update(headers)
+        else:
+            request_headers = self._headers
+
         if body is not None:
             # It ensures content-type and accept headers are set.
             mimetype = "application/json"
             if path.endswith("/_bulk"):
                 mimetype = "application/x-ndjson"
             for header in ("content-type", "accept"):
-                headers.setdefault(header, mimetype)
+                request_headers.setdefault(header, mimetype)
 
-        # Converts all parts of a Accept/Content-Type headers
-        # from application/X -> application/vnd.elasticsearch+X
-        # see https://github.com/elastic/elasticsearch/issues/51816
-        # Not applicable to serverless
         if not self.is_serverless:
-            mimetype_headers_to_compat(headers, self.distribution_version)
+            # Converts all parts of a Accept/Content-Type headers
+            # from application/X -> application/vnd.elasticsearch+X
+            # see https://github.com/elastic/elasticsearch/issues/51816
+            mimetype_headers_to_compat(request_headers, self.distribution_version)
 
         if params:
             target = f"{path}?{_quote_query(params)}"
@@ -395,13 +398,14 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         meta, resp_body = await self.transport.perform_request(
             method,
             target,
-            headers=headers,
+            headers=request_headers,
             body=body,
             request_timeout=self._request_timeout,
             max_retries=self._max_retries,
             retry_on_status=self._retry_on_status,
             retry_on_timeout=self._retry_on_timeout,
             client_meta=self._client_meta,
+            otel_span=otel_span,
         )
 
         # HEAD with a 404 is returned as a normal response
@@ -424,6 +428,19 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
                     pass
 
             raise HTTP_EXCEPTIONS.get(meta.status, ApiError)(message=message, meta=meta, body=resp_body)
+
+        # 'X-Elastic-Product: Elasticsearch' should be on every 2XX response.
+        if not self._verified_elasticsearch:
+            # If the header is set we mark the server as verified.
+            if meta.headers.get("x-elastic-product", "") == "Elasticsearch":
+                self._verified_elasticsearch = True
+            # Otherwise we only raise an error on 2XX responses.
+            elif meta.status >= 200 and meta.status < 300:
+                raise UnsupportedProductError(
+                    message="The client noticed that the server is not Elasticsearch " "and we do not support this unknown product",
+                    meta=meta,
+                    body=resp_body,
+                )
 
         # 'Warning' headers should be reraised as 'ElasticsearchWarning'
         if "warning" in meta.headers:

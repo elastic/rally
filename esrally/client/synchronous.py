@@ -25,6 +25,7 @@ from elastic_transport import (
     HeadApiResponse,
     ListApiResponse,
     ObjectApiResponse,
+    OpenTelemetrySpan,
     TextApiResponse,
 )
 from elastic_transport.client_utils import DEFAULT
@@ -37,12 +38,7 @@ from elasticsearch.exceptions import (
     UnsupportedProductError,
 )
 
-from esrally.client.common import (
-    _WARNING_RE,
-    _quote_query,
-    combine_headers,
-    mimetype_headers_to_compat,
-)
+from esrally.client.common import _WARNING_RE, _quote_query, mimetype_headers_to_compat
 from esrally.utils import versions
 
 
@@ -127,11 +123,8 @@ class _ProductChecker:
 
 
 class RallySyncElasticsearch(Elasticsearch):
-    def __init__(self, *args, **kwargs):
-        distribution_version = kwargs.pop("distribution_version", None)
-        distribution_flavor = kwargs.pop("distribution_flavor", None)
-        super().__init__(*args, **kwargs)
-        self._verified_elasticsearch = None
+    def __init__(self, hosts, *, distribution_version: str | None = None, distribution_flavor: str | None = None, **kwargs):
+        super().__init__(hosts, **kwargs)
         self.distribution_version = distribution_version
         self.distribution_flavor = distribution_flavor
 
@@ -145,7 +138,7 @@ class RallySyncElasticsearch(Elasticsearch):
         new_self.distribution_flavor = self.distribution_flavor
         return new_self
 
-    def perform_request(
+    def _perform_request(
         self,
         method: str,
         path: str,
@@ -153,24 +146,13 @@ class RallySyncElasticsearch(Elasticsearch):
         params: Optional[Mapping[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
         body: Optional[Any] = None,
-        endpoint_id: Optional[str] = None,
-        path_parts: Optional[Mapping[str, Any]] = None,
+        otel_span: OpenTelemetrySpan,
     ) -> ApiResponse[Any]:
-        headers = combine_headers(self._headers, headers)
-        assert isinstance(headers, dict)
-
-        if self._verified_elasticsearch is None:
-            info = self.transport.perform_request(method="GET", target="/", headers=headers)
-            info_meta = info.meta
-            info_body = info.body
-
-            if not 200 <= info_meta.status < 299:
-                raise HTTP_EXCEPTIONS.get(info_meta.status, ApiError)(message=str(info_body), meta=info_meta, body=info_body)
-
-            self._verified_elasticsearch = _ProductChecker.check_product(info_meta.headers, info_body)
-
-            if self._verified_elasticsearch is not True:
-                _ProductChecker.raise_error(self._verified_elasticsearch, info_meta, info_body)
+        if headers:
+            request_headers = self._headers.copy()
+            request_headers.update(headers)
+        else:
+            request_headers = self._headers
 
         if body is not None:
             # It ensures content-type and accept headers are set.
@@ -178,13 +160,13 @@ class RallySyncElasticsearch(Elasticsearch):
             if path.endswith("/_bulk"):
                 mimetype = "application/x-ndjson"
             for header in ("content-type", "accept"):
-                headers.setdefault(header, mimetype)
+                request_headers.setdefault(header, mimetype)
 
-        # Converts all parts of a Accept/Content-Type headers
-        # from application/X -> application/vnd.elasticsearch+X
-        # see https://github.com/elastic/elasticsearch/issues/51816
         if not self.is_serverless:
-            mimetype_headers_to_compat(headers, self.distribution_version)
+            # Converts all parts of an Accept/Content-Type headers
+            # from application/X -> application/vnd.elasticsearch+X
+            # see https://github.com/elastic/elasticsearch/issues/51816
+            mimetype_headers_to_compat(request_headers, self.distribution_version)
 
         if params:
             target = f"{path}?{_quote_query(params)}"
@@ -194,13 +176,14 @@ class RallySyncElasticsearch(Elasticsearch):
         meta, resp_body = self.transport.perform_request(
             method,
             target,
-            headers=headers,
+            headers=request_headers,
             body=body,
             request_timeout=self._request_timeout,
             max_retries=self._max_retries,
             retry_on_status=self._retry_on_status,
             retry_on_timeout=self._retry_on_timeout,
             client_meta=self._client_meta,
+            otel_span=otel_span,
         )
 
         # HEAD with a 404 is returned as a normal response
@@ -223,6 +206,19 @@ class RallySyncElasticsearch(Elasticsearch):
                     pass
 
             raise HTTP_EXCEPTIONS.get(meta.status, ApiError)(message=message, meta=meta, body=resp_body)
+
+        # 'X-Elastic-Product: Elasticsearch' should be on every 2XX response.
+        if not self._verified_elasticsearch:
+            # If the header is set we mark the server as verified.
+            if meta.headers.get("x-elastic-product", "") == "Elasticsearch":
+                self._verified_elasticsearch = True
+            # Otherwise we only raise an error on 2XX responses.
+            elif meta.status >= 200 and meta.status < 300:
+                raise UnsupportedProductError(
+                    message=("The client noticed that the server is not Elasticsearch " "and we do not support this unknown product"),
+                    meta=meta,
+                    body=resp_body,
+                )
 
         # 'Warning' headers should be reraised as 'ElasticsearchWarning'
         if "warning" in meta.headers:
