@@ -5,11 +5,9 @@ from typing import Any
 
 import elastic_transport
 from elastic_transport.client_utils import percent_encode
-from elasticsearch import VERSION as ES_VERSION
 
 from esrally.utils import versions
 
-_MAJOR_SERVER_VERSION = str(ES_VERSION[0])
 _WARNING_RE = re.compile(r"\"([^\"]*)\"")
 _COMPAT_MIMETYPE_RE = re.compile(r"application/(json|x-ndjson|vnd\.mapbox-vector-tile)")
 
@@ -20,11 +18,11 @@ def mimetype_headers_to_compat(
 ) -> None:
     if not headers:
         return
-    if not versions.is_version_identifier(distribution_version):
-        return
-    major_version = versions.Version.from_string(distribution_version).major
-    if major_version < 8:
-        return
+
+    major_version = 8
+    if versions.is_version_identifier(distribution_version):
+        major_version = versions.Version.from_string(distribution_version).major
+
     for header in ("accept", "content-type"):
         mimetype = headers.get(header)
         if not mimetype:
