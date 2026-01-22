@@ -123,7 +123,7 @@ class _ProductChecker:
 
 
 class RallySyncElasticsearch(Elasticsearch):
-    def __init__(self, hosts, *, distribution_version: str | None = None, distribution_flavor: str | None = None, **kwargs):
+    def __init__(self, hosts: Any = None, *, distribution_version: str | None = None, distribution_flavor: str | None = None, **kwargs):
         super().__init__(hosts, **kwargs)
         self.distribution_version = distribution_version
         self.distribution_flavor = distribution_flavor
