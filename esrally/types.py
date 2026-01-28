@@ -145,6 +145,7 @@ Key = Literal[
     "runtime.jdk",
     "sample.key",
     "sample.property",
+    "sample.queue.failure.size",
     "sample.queue.size",
     "seed.hosts",
     "serverless.mode",

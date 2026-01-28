@@ -235,6 +235,7 @@ class DriverActor(actor.RallyActor):
         self.status = "init"
         self.post_process_timer = 0
         self.cluster_details = {}
+        self.max_historical_sample_queue_size: int = 0
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
@@ -301,6 +302,25 @@ class DriverActor(actor.RallyActor):
         if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
             self.driver.reset_relative_time()
         elif not self.driver.finished():
+            sample_queue_failure_size = int(
+                self.driver.config.opts("reporting", "sample.queue.failure.size", mandatory=False, default_value=0)
+            )
+            queue_size = len(self.driver.raw_samples)
+            if 0 < sample_queue_failure_size < queue_size:
+                self.driver.close()
+                self.logger.error("Sample queue failure size [%d] exceeds queue size [%d].", sample_queue_failure_size, queue_size)
+                self.send(
+                    self.benchmark_actor,
+                    actor.BenchmarkFailure(
+                        "Sample queue exceeded limit",
+                        f"Driver accumulated {queue_size} samples (limit: {sample_queue_failure_size}). "
+                        "Consider reducing measured events (e.g. iterations instead of duration, or target throughput).",
+                    ),
+                )
+                return
+            if self.max_historical_sample_queue_size < queue_size:
+                self.max_historical_sample_queue_size = queue_size
+                self.logger.info("New maximum historical sample queue size: %d", self.max_historical_sample_queue_size)
             self.post_process_timer += DriverActor.WAKEUP_INTERVAL_SECONDS
             if self.post_process_timer >= DriverActor.POST_PROCESS_INTERVAL_SECONDS:
                 self.post_process_timer = 0
