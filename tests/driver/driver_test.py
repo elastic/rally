@@ -19,7 +19,7 @@ import collections
 import io
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from unittest import mock
 
@@ -364,6 +364,8 @@ class SampleQueueFailureCase:
     want_wakeup_called: bool
     want_failure_message: str | None = None
     want_failure_cause_contains: tuple[str, ...] = ()
+    want_log_error_calls: list = field(default_factory=list)
+    want_log_info_calls: list = field(default_factory=list)
 
 
 @cases.cases(
@@ -375,6 +377,14 @@ class SampleQueueFailureCase:
         want_wakeup_called=False,
         want_failure_message="Sample queue exceeded limit",
         want_failure_cause_contains=("1500", "1000"),
+        want_log_error_calls=[
+            mock.call(
+                "Sample queue failure size [%d] exceeds queue size [%d].",
+                1000,
+                1500,
+            ),
+        ],
+        want_log_info_calls=[],
     ),
     no_failure_when_disabled=SampleQueueFailureCase(
         raw_samples_count=1500,
@@ -382,6 +392,10 @@ class SampleQueueFailureCase:
         want_close_called=False,
         want_send_called=False,
         want_wakeup_called=True,
+        want_log_error_calls=[],
+        want_log_info_calls=[
+            mock.call("New maximum historical sample queue size: %d", 1500),
+        ],
     ),
     no_failure_when_at_limit=SampleQueueFailureCase(
         raw_samples_count=1000,
@@ -389,6 +403,10 @@ class SampleQueueFailureCase:
         want_close_called=False,
         want_send_called=False,
         want_wakeup_called=True,
+        want_log_error_calls=[],
+        want_log_info_calls=[
+            mock.call("New maximum historical sample queue size: %d", 1000),
+        ],
     ),
 )
 def test_driver_actor_sample_queue_failure_wakeup(case: SampleQueueFailureCase, monkeypatch: pytest.MonkeyPatch):
@@ -396,6 +414,9 @@ def test_driver_actor_sample_queue_failure_wakeup(case: SampleQueueFailureCase, 
     monkeypatch.setattr("esrally.utils.console.set_assume_tty", mock.Mock())
 
     driver_actor = driver.DriverActor()
+    mock_logger = mock.Mock()
+    monkeypatch.setattr(driver_actor, "logger", mock_logger)
+
     driver_actor.benchmark_actor = mock.Mock()
     driver_actor.driver = mock.Mock()
     driver_actor.driver.finished.return_value = False
@@ -430,6 +451,9 @@ def test_driver_actor_sample_queue_failure_wakeup(case: SampleQueueFailureCase, 
         mock_wakeup.assert_called_once()
     else:
         mock_wakeup.assert_not_called()
+
+    assert mock_logger.error.call_args_list == case.want_log_error_calls
+    assert mock_logger.info.call_args_list == case.want_log_info_calls
 
 
 def op(name, operation_type):
