@@ -260,7 +260,7 @@ class EsClientFactory:
             hosts=self.hosts,
             transport_class=RallyAsyncTransport,
             ssl_context=self.ssl_context,
-            maxsize=self.max_connections,
+            connections_per_node=self.max_connections,
             **self.client_options,
         )
 

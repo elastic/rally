@@ -34,17 +34,23 @@ from elastic_transport import (
     HeadApiResponse,
     ListApiResponse,
     ObjectApiResponse,
+    OpenTelemetrySpan,
     TextApiResponse,
 )
 from elastic_transport.client_utils import DEFAULT
 from elasticsearch import AsyncElasticsearch
 from elasticsearch._async.client import IlmClient
 from elasticsearch.compat import warn_stacklevel
-from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWarning
+from elasticsearch.exceptions import (
+    HTTP_EXCEPTIONS,
+    ApiError,
+    ElasticsearchWarning,
+    UnsupportedProductError,
+)
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
-from esrally.client.common import _WARNING_RE, _mimetype_header_to_compat, _quote_query
+from esrally.client.common import _WARNING_RE, _quote_query, mimetype_headers_to_compat
 from esrally.client.context import RequestContextHolder
 from esrally.utils import io, versions
 
@@ -330,10 +336,8 @@ class RallyIlmClient(IlmClient):
 
 
 class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
-    def __init__(self, *args, **kwargs):
-        distribution_version = kwargs.pop("distribution_version", None)
-        distribution_flavor = kwargs.pop("distribution_flavor", None)
-        super().__init__(*args, **kwargs)
+    def __init__(self, hosts: Any = None, *, distribution_version: str | None = None, distribution_flavor: str | None = None, **kwargs):
+        super().__init__(hosts, **kwargs)
         # skip verification at this point; we've already verified this earlier with the synchronous client.
         # The async client is used in the hot code path and we use customized overrides (such as that we don't
         # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
@@ -356,7 +360,7 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         new_self.distribution_flavor = self.distribution_flavor
         return new_self
 
-    async def perform_request(
+    async def _perform_request(
         self,
         method: str,
         path: str,
@@ -364,33 +368,27 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         params: Optional[Mapping[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
         body: Optional[Any] = None,
+        otel_span: OpenTelemetrySpan,
     ) -> ApiResponse[Any]:
-        # We need to ensure that we provide content-type and accept headers
-        if body is not None:
-            if headers is None:
-                headers = {"content-type": "application/json", "accept": "application/json"}
-            else:
-                if headers.get("content-type") is None:
-                    headers["content-type"] = "application/json"
-                if headers.get("accept") is None:
-                    headers["accept"] = "application/json"
-
         if headers:
             request_headers = self._headers.copy()
             request_headers.update(headers)
         else:
             request_headers = self._headers
 
-        # Converts all parts of a Accept/Content-Type headers
-        # from application/X -> application/vnd.elasticsearch+X
-        # see https://github.com/elastic/elasticsearch/issues/51816
-        # Not applicable to serverless
+        if body is not None:
+            # It ensures content-type and accept headers are set.
+            mimetype = "application/json"
+            if path.endswith("/_bulk"):
+                mimetype = "application/x-ndjson"
+            for header in ("content-type", "accept"):
+                request_headers.setdefault(header, mimetype)
+
         if not self.is_serverless:
-            if versions.is_version_identifier(self.distribution_version) and (
-                versions.Version.from_string(self.distribution_version) >= versions.Version.from_string("8.0.0")
-            ):
-                _mimetype_header_to_compat("Accept", request_headers)
-                _mimetype_header_to_compat("Content-Type", request_headers)
+            # Converts all parts of a Accept/Content-Type headers
+            # from application/X -> application/vnd.elasticsearch+X
+            # see https://github.com/elastic/elasticsearch/issues/51816
+            mimetype_headers_to_compat(request_headers, self.distribution_version)
 
         if params:
             target = f"{path}?{_quote_query(params)}"
@@ -407,6 +405,7 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
             retry_on_status=self._retry_on_status,
             retry_on_timeout=self._retry_on_timeout,
             client_meta=self._client_meta,
+            otel_span=otel_span,
         )
 
         # HEAD with a 404 is returned as a normal response
@@ -429,6 +428,19 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
                     pass
 
             raise HTTP_EXCEPTIONS.get(meta.status, ApiError)(message=message, meta=meta, body=resp_body)
+
+        # 'X-Elastic-Product: Elasticsearch' should be on every 2XX response.
+        if not self._verified_elasticsearch:
+            # If the header is set we mark the server as verified.
+            if meta.headers.get("x-elastic-product", "") == "Elasticsearch":
+                self._verified_elasticsearch = True
+            # Otherwise we only raise an error on 2XX responses.
+            elif meta.status >= 200 and meta.status < 300:
+                raise UnsupportedProductError(
+                    message="The client noticed that the server is not Elasticsearch " "and we do not support this unknown product",
+                    meta=meta,
+                    body=resp_body,
+                )
 
         # 'Warning' headers should be reraised as 'ElasticsearchWarning'
         if "warning" in meta.headers:

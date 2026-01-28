@@ -372,7 +372,7 @@ class TestEsClientFactory:
             hosts=["https://localhost:9200"],
             transport_class=RallyAsyncTransport,
             ssl_context=f.ssl_context,
-            maxsize=f.max_connections,
+            connections_per_node=f.max_connections,
             verify_certs=True,
             serializer=f.client_options["serializer"],
             api_key=api_key,
