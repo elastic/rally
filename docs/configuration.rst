@@ -76,6 +76,7 @@ This section defines how metrics are stored.
 
 * ``datastore.type`` (default: "in-memory"): If set to "in-memory" all metrics will be kept in memory while running the benchmark. If set to "elasticsearch" all metrics will instead be written to a persistent metrics store and the data are available for further analysis.
 * ``sample.queue.size`` (default: 2^20): The number of metrics samples that can be stored in Rally's in-memory queue.
+* ``sample.queue.failure.size`` (default: 0): If set to a positive value, the driver will fail the benchmark when the number of samples accumulated before throughput calculation and metric store delivery exceeds this limit. Use this to avoid scalability stalls when the metrics pipeline cannot keep up (e.g. set to 1000000). When 0, this check is disabled.
 * ``metrics.request.downsample.factor`` (default: 1): Determines how many service time and latency samples should be kept in the metrics store. By default all values will be kept. To keep only e.g. every 100th sample, specify 100. This is useful to avoid overwhelming the metrics store in benchmarks with many clients (tens of thousands).
 * ``output.processingtime`` (default: false): If set to "true", Rally will show the additional metric :ref:`processing time <summary_report_processing_time>` in the command line report.
 
