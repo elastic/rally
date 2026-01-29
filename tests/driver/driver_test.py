@@ -421,7 +421,7 @@ def test_driver_actor_sample_queue_failure_wakeup(case: SampleQueueFailureCase, 
     driver_actor.driver = mock.Mock()
     driver_actor.driver.finished.return_value = False
     driver_actor.driver.raw_samples = [None] * case.raw_samples_count
-    driver_actor.driver.config.opts.return_value = case.failure_size_threshold
+    driver_actor.sample_queue_failure_size = case.failure_size_threshold
 
     mock_send = mock.Mock()
     mock_wakeup = mock.Mock()
@@ -454,6 +454,25 @@ def test_driver_actor_sample_queue_failure_wakeup(case: SampleQueueFailureCase, 
 
     assert mock_logger.error.call_args_list == case.want_log_error_calls
     assert mock_logger.info.call_args_list == case.want_log_info_calls
+
+
+def test_driver_actor_reads_sample_queue_failure_size_once_in_prepare_benchmark(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Verify sample_queue_failure_size is read from config once in PrepareBenchmark."""
+    monkeypatch.setattr("esrally.log.post_configure_actor_logging", mock.Mock())
+    monkeypatch.setattr("esrally.utils.console.set_assume_tty", mock.Mock())
+
+    mock_driver = mock.Mock()
+    mock_driver.config.opts.return_value = 50000
+
+    with mock.patch.object(driver, "Driver", return_value=mock_driver):
+        driver_actor = driver.DriverActor()
+        msg = mock.Mock(config=mock.Mock(), track=mock.Mock())
+        driver_actor.receiveMsg_PrepareBenchmark(msg, mock.Mock())
+
+    assert driver_actor.sample_queue_failure_size == 50000
+    mock_driver.prepare_benchmark.assert_called_once_with(msg.track)
 
 
 def op(name, operation_type):

@@ -236,6 +236,7 @@ class DriverActor(actor.RallyActor):
         self.post_process_timer = 0
         self.cluster_details = {}
         self.max_historical_sample_queue_size: int = 0
+        self.sample_queue_failure_size: int = 0
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
@@ -276,6 +277,9 @@ class DriverActor(actor.RallyActor):
         self.benchmark_actor = sender
         self.driver = Driver(self, msg.config)
         self.driver.prepare_benchmark(msg.track)
+        self.sample_queue_failure_size = int(
+            self.driver.config.opts("reporting", "sample.queue.failure.size", mandatory=False, default_value=100000)
+        )
 
     @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
     def receiveMsg_StartBenchmark(self, msg, sender):
@@ -302,18 +306,22 @@ class DriverActor(actor.RallyActor):
         if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
             self.driver.reset_relative_time()
         elif not self.driver.finished():
-            sample_queue_failure_size = int(
-                self.driver.config.opts("reporting", "sample.queue.failure.size", mandatory=False, default_value=0)
-            )
             queue_size = len(self.driver.raw_samples)
-            if 0 < sample_queue_failure_size < queue_size:
+            if 0 < self.sample_queue_failure_size < queue_size:
                 self.driver.close()
-                self.logger.error("Sample queue failure size [%d] exceeds queue size [%d].", sample_queue_failure_size, queue_size)
+                self.logger.error(
+                    "Sample queue failure size [%d] exceeds queue size limit [%d]. "
+                    "You can change the limit editing the sample.queue.failure.size config option in [reporting] section of rally.ini."
+                    "For the context, you can also see the historical maximum queue size in the log messages of level INFO, e.g. 'New maximum historical sample queue size: %d'.",
+                    self.sample_queue_failure_size,
+                    queue_size,
+                    self.max_historical_sample_queue_size,
+                )
                 self.send(
                     self.benchmark_actor,
                     actor.BenchmarkFailure(
                         "Sample queue exceeded limit",
-                        f"Driver accumulated {queue_size} samples (limit: {sample_queue_failure_size}). "
+                        f"Driver accumulated {queue_size} samples (limit: {self.sample_queue_failure_size}). "
                         "Consider reducing measured events (e.g. iterations instead of duration, or target throughput).",
                     ),
                 )
