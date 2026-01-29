@@ -311,8 +311,8 @@ class DriverActor(actor.RallyActor):
                 self.driver.close()
                 self.logger.error(
                     "Sample queue failure size [%d] exceeds queue size limit [%d]. "
-                    "You can change the limit editing the sample.queue.failure.size config option in [reporting] section of rally.ini."
-                    "For the context, you can also see the historical maximum queue size in the log messages of level INFO, e.g. 'New maximum historical sample queue size: %d'.",
+                    "Set sample.queue.failure.size in [reporting] of rally.ini to change it. "
+                    "See INFO log 'New maximum historical sample queue size: %d'.",
                     self.sample_queue_failure_size,
                     queue_size,
                     self.max_historical_sample_queue_size,

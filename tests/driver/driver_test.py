@@ -379,9 +379,12 @@ class SampleQueueFailureCase:
         want_failure_cause_contains=("1500", "1000"),
         want_log_error_calls=[
             mock.call(
-                "Sample queue failure size [%d] exceeds queue size [%d].",
+                "Sample queue failure size [%d] exceeds queue size limit [%d]. "
+                "Set sample.queue.failure.size in [reporting] of rally.ini to change it. "
+                "See INFO log 'New maximum historical sample queue size: %d'.",
                 1000,
                 1500,
+                0,
             ),
         ],
         want_log_info_calls=[],
