@@ -337,7 +337,7 @@ def decompress(zip_name: str, target_directory: str) -> None:
     if extension == ".zip":
         _do_zip_decompress(target_directory, zipfile.ZipFile(zip_name))
     elif extension == ".bz2":
-        decompressor_args = ["pbzip2", "-d", "-k", "-m2000", "-c"]
+        decompressor_args = ["pbzip2", "-d", "-k", "-c"]
         decompressor_lib_bz2 = bz2.open
         _do_decompress_manually(target_directory, zip_name, decompressor_args, decompressor_lib_bz2)
     elif extension == ".zst":

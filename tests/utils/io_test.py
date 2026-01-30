@@ -110,7 +110,7 @@ class TestDecompression:
         archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "test.txt.bz2")
         tmp_dir = tempfile.mkdtemp()
         decompressor_bin = "pbzip2"
-        decompress_cmd = f"{decompressor_bin} -d -k -m10000 -c ${archive_path}"
+        decompress_cmd = f"{decompressor_bin} -d -k -c {archive_path}"
         stderr_msg = "Error details here"
         expected_err = "Failed to decompress [%s] with [%s]. Error [%s]. Falling back to standard library."
         mocked_run.side_effect = subprocess.CalledProcessError(cmd=decompress_cmd, returncode=1, stderr=stderr_msg)
