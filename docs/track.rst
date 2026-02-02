@@ -748,6 +748,7 @@ Properties
 
 * ``bulk-size`` (mandatory): Defines the bulk size in number of documents.
 * ``ingest-percentage`` (optional, defaults to 100): A number between (0, 100] that defines how much of the document corpus will be bulk-indexed.
+* ``ingest-doc-count`` (optional): An optional positive integer that defines the maximum number of documents to ingest. Mutually exclusive with ``ingest-percentage`` (when not 100%).
 * ``corpora`` (optional): A list of document corpus names that should be targeted by this bulk-index operation. Only needed if the ``corpora`` section contains more than one document corpus and you don't want to index all of them with this operation.
 * ``indices`` (optional): A list of index names that defines which indices should be used by this bulk-index operation. Rally will then only select the documents files that have a matching ``target-index`` specified.
 * ``batch-size`` (optional): Defines how many documents Rally will read at once. This is an expert setting and only meant to avoid accidental bottlenecks for very small bulk sizes (e.g. if you want to benchmark with a bulk-size of 1, you should set ``batch-size`` higher).

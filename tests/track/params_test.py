@@ -997,6 +997,103 @@ class TestBulkIndexParamSource:
 
         assert exc.value.args[0] == "'ingest-percentage' must be numeric"
 
+    def test_create_with_ingest_doc_count_zero(self):
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
+
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 5000,
+                    "ingest-doc-count": 0,
+                },
+            )
+
+        assert exc.value.args[0] == "'ingest-doc-count' must be positive but was 0"
+
+    def test_create_with_ingest_doc_count_negative(self):
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
+
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 5000,
+                    "ingest-doc-count": -100,
+                },
+            )
+
+        assert exc.value.args[0] == "'ingest-doc-count' must be positive but was -100"
+
+    def test_create_with_ingest_doc_count_not_numeric(self):
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
+
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 5000,
+                    "ingest-doc-count": "one thousand",
+                },
+            )
+
+        assert exc.value.args[0] == "'ingest-doc-count' must be numeric"
+
+    def test_create_with_ingest_doc_count_and_ingest_percentage_mutually_exclusive(self):
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
+
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 5000,
+                    "ingest-doc-count": 1000,
+                    "ingest-percentage": 50,
+                },
+            )
+
+        assert exc.value.args[0] == "'ingest-doc-count' and 'ingest-percentage' are mutually exclusive"
+
     def test_create_valid_param_source(self):
         corpus = track.DocumentCorpus(
             name="default",
@@ -1277,6 +1374,89 @@ class TestBulkIndexParamSource:
         # should issue three bulks of size 10.000
         assert partition.total_bulks == 3
         assert len(list(schedule(partition))) == 3
+
+    def test_restricts_number_of_bulks_with_ingest_doc_count(self):
+        def create_unit_test_reader(*args):
+            return StaticBulkReader(
+                "idx",
+                "doc",
+                bulks=[
+                    ['{"location" : [-0.1485188, 51.5250666]}'],
+                    ['{"location" : [-0.1479949, 51.5252071]}'],
+                    ['{"location" : [-0.1458559, 51.5289059]}'],
+                    ['{"location" : [-0.1498551, 51.5282564]}'],
+                    ['{"location" : [-0.1487043, 51.5254843]}'],
+                    ['{"location" : [-0.1533367, 51.5261779]}'],
+                    ['{"location" : [-0.1543018, 51.5262398]}'],
+                    ['{"location" : [-0.1522118, 51.5266564]}'],
+                    ['{"location" : [-0.1529092, 51.5263360]}'],
+                    ['{"location" : [-0.1537008, 51.5265365]}'],
+                ],
+            )
+
+        def schedule(param_source):
+            while True:
+                try:
+                    yield param_source.params()
+                except StopIteration:
+                    return
+
+        corpora = [
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=100000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+        ]
+
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 10000,
+                "ingest-doc-count": 25000,
+                "__create_reader": create_unit_test_reader,
+            },
+        )
+
+        partition = source.partition(0, 1)
+        partition._init_internal_params()
+        # 25000 docs / 10000 bulk-size = 2.5, so 3 bulks needed
+        assert partition.total_bulks == 3
+        assert len(list(schedule(partition))) == 3
+
+    def test_ingest_doc_count_does_not_exceed_corpus_size(self):
+        corpora = [
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=50000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+        ]
+
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 10000,
+                "ingest-doc-count": 1000000,  # More than corpus size
+            },
+        )
+
+        partition = source.partition(0, 1)
+        partition._init_internal_params()
+        # Corpus only has 50000 docs = 5 bulks, so should cap at 5 despite asking for 100 bulks
+        assert partition.total_bulks == 5
 
     def test_looped_mode(self):
         def create_unit_test_reader(*args):
