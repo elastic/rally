@@ -643,6 +643,10 @@ class BulkIndexParamSource(ParamSource):
                     raise exceptions.InvalidSyntax("'ingest-doc-count' must be positive but was %d" % self.ingest_doc_count)
             except ValueError:
                 raise exceptions.InvalidSyntax("'ingest-doc-count' must be numeric")
+            if self.ingest_doc_count % self.bulk_size != 0:
+                raise exceptions.InvalidSyntax(
+                    "'ingest-doc-count' must be a multiple of 'bulk-size' (%d) but was %d" % (self.bulk_size, self.ingest_doc_count)
+                )
             total_docs = sum(corpus.number_of_documents(source_format="bulk") for corpus in self.corpora)
             if self.ingest_doc_count > total_docs:
                 raise exceptions.InvalidSyntax(

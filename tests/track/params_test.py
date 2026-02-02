@@ -1094,6 +1094,30 @@ class TestBulkIndexParamSource:
 
         assert exc.value.args[0] == "'ingest-doc-count' and 'ingest-percentage' are mutually exclusive"
 
+    def test_create_with_ingest_doc_count_not_multiple_of_bulk_size(self):
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=100000,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
+        )
+
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 10000,
+                    "ingest-doc-count": 25000,
+                },
+            )
+
+        assert exc.value.args[0] == "'ingest-doc-count' must be a multiple of 'bulk-size' (10000) but was 25000"
+
     def test_create_valid_param_source(self):
         corpus = track.DocumentCorpus(
             name="default",
@@ -1419,14 +1443,14 @@ class TestBulkIndexParamSource:
             track=track.Track(name="unit-test", corpora=corpora),
             params={
                 "bulk-size": 10000,
-                "ingest-doc-count": 25000,
+                "ingest-doc-count": 30000,
                 "__create_reader": create_unit_test_reader,
             },
         )
 
         partition = source.partition(0, 1)
         partition._init_internal_params()
-        # 25000 docs / 10000 bulk-size = 2.5, so 3 bulks needed
+        # 30000 docs / 10000 bulk-size = 3 bulks
         assert partition.total_bulks == 3
         assert len(list(schedule(partition))) == 3
 
