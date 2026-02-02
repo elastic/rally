@@ -4,28 +4,37 @@ repos:
     hooks:
       - id: pyupgrade
         args: [
-          "--py38-plus",
+          "--py39-plus",
           "--keep-percent-format"
         ]
 
-  - repo: https://github.com/psf/black
-    rev: 23.3.0
+  - repo: local
     hooks:
       - id: black
+        name: black
+        entry: black
+        language: system
+        types: [python]
+        args: []
 
   - repo: https://github.com/PyCQA/isort
     rev: 5.12.0
     hooks:
       - id: isort
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.6.1
+  - repo: local
     hooks:
       - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
         args: [
           "--config",
           "pyproject.toml"
         ]
+        # Suppress a flaky internal mypy error appearing randomly when executing make lint.
+        require_serial: true
 
   - repo: local
     hooks:

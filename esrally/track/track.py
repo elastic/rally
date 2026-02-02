@@ -22,6 +22,7 @@ from enum import Enum, auto, unique
 
 from esrally import exceptions
 from esrally.utils import serverless
+from esrally.utils.error_behavior import OnErrorBehavior
 
 
 class Index:
@@ -701,7 +702,7 @@ class OperationType(Enum):
     CompositeAgg = (18, AdminStatus.No, serverless.Status.Public)
     WaitForCurrentSnapshotsCreate = (19, AdminStatus.No, serverless.Status.Internal)
     Downsample = (20, AdminStatus.No, serverless.Status.Internal)
-    Esql = (21, AdminStatus.No, serverless.Status.Blocked)
+    Esql = (21, AdminStatus.No, serverless.Status.Public)
 
     # administrative actions
     ForceMerge = (22, AdminStatus.Yes, serverless.Status.Internal)
@@ -740,6 +741,8 @@ class OperationType(Enum):
     TransformStats = (55, AdminStatus.Yes, serverless.Status.Public)
     CreateIlmPolicy = (56, AdminStatus.Yes, serverless.Status.Blocked)
     DeleteIlmPolicy = (57, AdminStatus.Yes, serverless.Status.Blocked)
+    # this is classed the same as RawRequest, but could potentially be used to call endpoints that are blocked
+    RunUntil = (58, AdminStatus.No, serverless.Status.Public)
 
     def __init__(self, id: int, admin_status: AdminStatus, serverless_status: serverless.Status):
         self.id = id
@@ -873,6 +876,8 @@ class OperationType(Enum):
             return OperationType.Downsample
         elif v == "esql":
             return OperationType.Esql
+        elif v == "run-until":
+            return OperationType.RunUntil
         else:
             raise KeyError(f"No enum value for [{v}]")
 
@@ -1083,21 +1088,21 @@ class Task:
 
         return ignore_response_error_level
 
-    def error_behavior(self, default_error_behavior):
+    def error_behavior(self, default_error_behavior: OnErrorBehavior) -> OnErrorBehavior:
         """
         Returns the desired behavior when encountering errors during task execution.
 
         :param default_error_behavior: (str) the default error behavior for the benchmark
         :return: (str) prescribing error handling when a non-fatal error occurs:
             "abort": will fail when any error gets encountered
-            "continue": will continue for non fatal errors
+            "continue": will continue for non-fatal errors
+            "continue-on-network": will continue for non-fatal errors and network errors
         """
 
-        behavior = "continue"
-        if default_error_behavior == "abort":
-            if self.ignore_response_error_level != "non-fatal":
-                behavior = "abort"
-
+        behavior = default_error_behavior if default_error_behavior in list(OnErrorBehavior) else OnErrorBehavior.CONTINUE
+        if behavior == OnErrorBehavior.ABORT:
+            if self.ignore_response_error_level == "non-fatal":
+                behavior = OnErrorBehavior.CONTINUE
         return behavior
 
     def __hash__(self):

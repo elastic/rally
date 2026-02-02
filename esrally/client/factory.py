@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import contextlib
 import logging
 import time
 
@@ -35,7 +36,8 @@ class EsClientFactory:
         def host_string(host):
             # protocol can be set at either host or client opts level
             protocol = "https" if client_options.get("use_ssl") or host.get("use_ssl") else "http"
-            return f"{protocol}://{host['host']}:{host['port']}"
+            path = host.get("url_prefix", "")
+            return f"{protocol}://{host['host']}:{host['port']}{path}"
 
         self.hosts = [host_string(h) for h in hosts]
         self.client_options = dict(client_options)
@@ -77,7 +79,7 @@ class EsClientFactory:
                 self.ssl_context.verify_mode = ssl.CERT_NONE
                 self.client_options["ssl_show_warn"] = False
 
-                self.logger.warning(
+                self.logger.debug(
                     "User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark."
                 )
             else:
@@ -234,7 +236,13 @@ class EsClientFactory:
         # Rally's implementation of the `on_request_end` callback handler updates the timestamp on every call, Rally
         # will ultimately record the time when it received the *last* chunk. This is what we want because any code
         # that is using the Elasticsearch client library can only act on the response once it is fully received.
+        #
+        # We also keep registering for `TraceConfig.on_request_end()` instead of relying on
+        # `TraceConfig.on_response_chunk_received()` only to handle corner cases during client timeout when aiohttp does
+        # not call request exception handler, but does call request end handler. See
+        # https://github.com/elastic/rally/issues/1860 for details.
         trace_config.on_response_chunk_received.append(on_request_end)
+        trace_config.on_request_end.append(on_request_end)
         # ensure that we also stop the timer when a request "ends" with an exception (e.g. a timeout)
         trace_config.on_request_exception.append(on_request_end)
 
@@ -363,12 +371,19 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
     # if version number is not available default to build flavor
     version_number = version.get("number", version_build_flavor)
 
+    # assume non-operator serverless privileges by default
     serverless_operator = False
     if versions.is_serverless(version_build_flavor):
         # overwrite static serverless version number
         version_number = "serverless"
-        authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
-        serverless_operator = authentication_info.body.get("operator", False)
+
+        # determine serverless operator status if security enabled
+        # pylint: disable=import-outside-toplevel
+        from elasticsearch.exceptions import ApiError
+
+        with contextlib.suppress(ApiError):
+            authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
+            serverless_operator = authentication_info.body.get("operator", False)
 
     if not versions.is_serverless(version_build_flavor) or serverless_operator is True:
         # if available, unconditionally wait for the REST layer - if it's not up, we'll intentionally raise the original error

@@ -1519,6 +1519,79 @@ class TestBulkIndexRunner:
 
 
 class TestForceMergeRunner:
+
+    def _eight_cluster_info_output(self):
+        return {
+            "name": "es01",
+            "cluster_name": "docker-cluster",
+            "cluster_uuid": "7KTGbgcOTgSC0_X8B57-Gg",
+            "version": {
+                "number": "8.1.0",
+                "build_flavor": "default",
+                "build_type": "docker",
+                "build_hash": "3700f7679f7d95e36da0b43762189bab189bc53a",
+                "build_date": "2022-03-03T14:20:00.690422633Z",
+                "build_snapshot": False,
+                "lucene_version": "9.0.0",
+                "minimum_wire_compatibility_version": "7.17.0",
+                "minimum_index_compatibility_version": "7.0.0",
+            },
+            "tagline": "You Know, for Search",
+        }
+
+    def _seven_cluster_info_output(self):
+        return {
+            "name": "es01",
+            "cluster_name": "escluster",
+            "cluster_uuid": "4BgOtWNiQ6-zap9zDW2Q1A",
+            "version": {
+                "number": "7.17.3",
+                "build_flavor": "default",
+                "build_type": "tar",
+                "build_hash": "5ad023604c8d7416c9eb6c0eadb62b14e766caff",
+                "build_date": "2022-04-19T08:11:19.070913226Z",
+                "build_snapshot": False,
+                "lucene_version": "8.11.1",
+                "minimum_wire_compatibility_version": "6.8.0",
+                "minimum_index_compatibility_version": "6.0.0-beta1",
+            },
+            "tagline": "You Know, for Search",
+        }
+
+    def _task_list_output(self):
+        return {
+            "nodes": {
+                "Ap3OfntPT7qL4CBeKvamxg": {
+                    "name": "instance-0000000001",
+                    "transport_address": "10.46.79.231:19693",
+                    "host": "10.46.79.231",
+                    "ip": "10.46.79.231:19693",
+                    "roles": ["data", "ingest", "master", "remote_cluster_client", "transform"],
+                    "attributes": {
+                        "logical_availability_zone": "zone-1",
+                        "server_name": "instance-0000000001.64cb4c66f4f24d85b41f120ef2df5526",
+                        "availability_zone": "us-east4-a",
+                        "xpack.installed": "true",
+                        "instance_configuration": "gcp.data.highio.1",
+                        "transform.node": "true",
+                        "region": "unknown-region",
+                    },
+                    "tasks": {
+                        "Ap3OfntPT7qL4CBeKvamxg:417009036": {
+                            "node": "Ap3OfntPT7qL4CBeKvamxg",
+                            "id": 417009036,
+                            "type": "transport",
+                            "action": "indices:admin/forcemerge",
+                            "start_time_in_millis": 1598018980850,
+                            "running_time_in_nanos": 3659821411,
+                            "cancellable": False,
+                            "headers": {},
+                        }
+                    },
+                }
+            }
+        }
+
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_force_merge_with_defaults(self, es):
@@ -1562,7 +1635,115 @@ class TestForceMergeRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_force_merge_with_polling_no_timeout(self, es):
+        es.indices.forcemerge = mock.AsyncMock(return_value={"task": "Ap3OfntPT7qL4CBeKvamxg"})
+        es.info = mock.AsyncMock(
+            return_value=self._eight_cluster_info_output(),
+        )
+        es.tasks.get = mock.AsyncMock(return_value={"completed": True})
+        es.tasks.list = mock.AsyncMock(
+            side_effect=[
+                self._task_list_output(),
+                {
+                    "nodes": {},
+                },
+            ]
+        )
+
+        force_merge = runner.ForceMerge()
+        await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
+        es.indices.forcemerge.assert_awaited_once_with(index="_all", wait_for_completion=False)
+        es.tasks.get.assert_awaited_once_with(task_id="Ap3OfntPT7qL4CBeKvamxg")
+        es.tasks.list.assert_not_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling(self, es):
+        es.indices.forcemerge = mock.AsyncMock(return_value={"task": "Ap3OfntPT7qL4CBeKvamxg"})
+        es.info = mock.AsyncMock(
+            return_value=self._eight_cluster_info_output(),
+        )
+        es.tasks.get = mock.AsyncMock(return_value={"completed": True})
+        es.tasks.list = mock.AsyncMock(
+            side_effect=[
+                self._task_list_output,
+                {
+                    "nodes": {},
+                },
+            ]
+        )
+        force_merge = runner.ForceMerge()
+        await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
+        es.indices.forcemerge.assert_awaited_once_with(index="_all", wait_for_completion=False)
+        es.tasks.get.assert_awaited_once_with(task_id="Ap3OfntPT7qL4CBeKvamxg")
+        es.tasks.list.assert_not_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling_and_params(self, es):
+        es.indices.forcemerge = mock.AsyncMock(return_value={"task": "Ap3OfntPT7qL4CBeKvamxg"})
+        es.info = mock.AsyncMock(return_value=self._eight_cluster_info_output())
+        es.tasks.get = mock.AsyncMock(return_value={"completed": True})
+        es.tasks.list = mock.AsyncMock(
+            side_effect=[
+                self._task_list_output(),
+                {
+                    "nodes": {},
+                },
+            ]
+        )
+        force_merge = runner.ForceMerge()
+        # request-timeout should be ignored as mode:polling
+        await force_merge(
+            es,
+            params={
+                "index": "_all",
+                "mode": "polling",
+                "max-num-segments": 1,
+                "request-timeout": 50000,
+                "poll-period": 0,
+            },
+        )
+        es.indices.forcemerge.assert_awaited_once_with(index="_all", max_num_segments=1, request_timeout=50000, wait_for_completion=False)
+        es.tasks.get.assert_awaited_once_with(task_id="Ap3OfntPT7qL4CBeKvamxg")
+        es.tasks.list.assert_not_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling_and_params_missing_task_id(self, es):
+        es.indices.forcemerge = mock.AsyncMock(return_value={})
+        es.info = mock.AsyncMock(return_value=self._eight_cluster_info_output())
+        es.tasks.get = mock.AsyncMock(return_value={"completed": True})
+        es.tasks.list = mock.AsyncMock(
+            side_effect=[
+                self._task_list_output(),
+                {
+                    "nodes": {},
+                },
+            ]
+        )
+        force_merge = runner.ForceMerge()
+        # request-timeout should be ignored as mode:polling
+        await force_merge(
+            es,
+            params={
+                "index": "_all",
+                "mode": "polling",
+                "max-num-segments": 1,
+                "request-timeout": 50000,
+                "poll-period": 0,
+            },
+        )
+        es.indices.forcemerge.assert_awaited_once_with(index="_all", max_num_segments=1, request_timeout=50000, wait_for_completion=False)
+        es.tasks.get.assert_not_awaited()
+        es.tasks.list.assert_awaited()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_force_merge_with_polling_no_timeout_pre_8_1(self, es):
         es.indices.forcemerge = mock.AsyncMock()
+        es.info = mock.AsyncMock(
+            return_value=self._seven_cluster_info_output(),
+        )
 
         force_merge = runner.ForceMerge()
         await force_merge(es, params={"index": "_all", "mode": "polling", "poll-period": 0})
@@ -1570,42 +1751,12 @@ class TestForceMergeRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_force_merge_with_polling(self, es):
+    async def test_force_merge_with_polling_pre_8_1(self, es):
         es.indices.forcemerge = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="connection timeout"))
+        es.info = mock.AsyncMock(return_value=self._seven_cluster_info_output())
         es.tasks.list = mock.AsyncMock(
             side_effect=[
-                {
-                    "nodes": {
-                        "Ap3OfntPT7qL4CBeKvamxg": {
-                            "name": "instance-0000000001",
-                            "transport_address": "10.46.79.231:19693",
-                            "host": "10.46.79.231",
-                            "ip": "10.46.79.231:19693",
-                            "roles": ["data", "ingest", "master", "remote_cluster_client", "transform"],
-                            "attributes": {
-                                "logical_availability_zone": "zone-1",
-                                "server_name": "instance-0000000001.64cb4c66f4f24d85b41f120ef2df5526",
-                                "availability_zone": "us-east4-a",
-                                "xpack.installed": "true",
-                                "instance_configuration": "gcp.data.highio.1",
-                                "transform.node": "true",
-                                "region": "unknown-region",
-                            },
-                            "tasks": {
-                                "Ap3OfntPT7qL4CBeKvamxg:417009036": {
-                                    "node": "Ap3OfntPT7qL4CBeKvamxg",
-                                    "id": 417009036,
-                                    "type": "transport",
-                                    "action": "indices:admin/forcemerge",
-                                    "start_time_in_millis": 1598018980850,
-                                    "running_time_in_nanos": 3659821411,
-                                    "cancellable": False,
-                                    "headers": {},
-                                }
-                            },
-                        }
-                    }
-                },
+                self._task_list_output(),
                 {
                     "nodes": {},
                 },
@@ -1617,42 +1768,14 @@ class TestForceMergeRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_force_merge_with_polling_and_params(self, es):
+    async def test_force_merge_with_polling_and_params_pre_8_1(self, es):
         es.indices.forcemerge = mock.AsyncMock(return_value=elasticsearch.ConnectionTimeout("connection timeout"))
+        es.info = mock.AsyncMock(
+            return_value=self._seven_cluster_info_output(),
+        )
         es.tasks.list = mock.AsyncMock(
             side_effect=[
-                {
-                    "nodes": {
-                        "Ap3OfntPT7qL4CBeKvamxg": {
-                            "name": "instance-0000000001",
-                            "transport_address": "10.46.79.231:19693",
-                            "host": "10.46.79.231",
-                            "ip": "10.46.79.231:19693",
-                            "roles": ["data", "ingest", "master", "remote_cluster_client", "transform"],
-                            "attributes": {
-                                "logical_availability_zone": "zone-1",
-                                "server_name": "instance-0000000001.64cb4c66f4f24d85b41f120ef2df5526",
-                                "availability_zone": "us-east4-a",
-                                "xpack.installed": "true",
-                                "instance_configuration": "gcp.data.highio.1",
-                                "transform.node": "true",
-                                "region": "unknown-region",
-                            },
-                            "tasks": {
-                                "Ap3OfntPT7qL4CBeKvamxg:417009036": {
-                                    "node": "Ap3OfntPT7qL4CBeKvamxg",
-                                    "id": 417009036,
-                                    "type": "transport",
-                                    "action": "indices:admin/forcemerge",
-                                    "start_time_in_millis": 1598018980850,
-                                    "running_time_in_nanos": 3659821411,
-                                    "cancellable": False,
-                                    "headers": {},
-                                }
-                            },
-                        }
-                    }
-                },
+                self._task_list_output(),
                 {
                     "nodes": {},
                 },
@@ -3905,8 +4028,14 @@ class TestCreateMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_datafeed_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.put_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
         body = {"job_id": "total-requests", "indices": ["server-metrics"]}
@@ -3935,8 +4064,16 @@ class TestDeleteMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_datafeed_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.delete_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.delete_datafeed = mock.AsyncMock(
+            side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request")
+        )
 
         es.perform_request = mock.AsyncMock()
         datafeed_id = "some-data-feed"
@@ -3969,8 +4106,14 @@ class TestStartMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_start_ml_datafeed_with_body_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.start_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
         body = {"end": "now"}
         params = {"datafeed-id": "some-data-feed", "body": body}
@@ -4018,8 +4161,14 @@ class TestStopMlDatafeed:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_stop_ml_datafeed_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.stop_datafeed = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         params = {
@@ -4070,8 +4219,14 @@ class TestCreateMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_create_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.put_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         body = {
@@ -4113,8 +4268,14 @@ class TestDeleteMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_delete_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.delete_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -4145,8 +4306,14 @@ class TestOpenMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_open_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.open_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         job_id = "an-ml-job"
@@ -4177,8 +4344,14 @@ class TestCloseMlJob:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_close_ml_job_fallback(self, es):
-        error_meta = elastic_transport.ApiResponseMeta(status=400, http_version="1.1", headers=None, duration=0, node=None)
-        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message=400, meta=error_meta, body="Bad Request"))
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0,
+            node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+        )
+        es.ml.close_job = mock.AsyncMock(side_effect=elasticsearch.BadRequestError(message="400", meta=error_meta, body="Bad Request"))
         es.perform_request = mock.AsyncMock()
 
         params = {
@@ -4852,25 +5025,28 @@ class TestRestoreSnapshot:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_restore_snapshot_with_wait(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
 
         params = {
             "repository": "backups",
             "snapshot": "snapshot-001",
             "wait-for-completion": True,
-            "request-params": {"request_timeout": 7200},
+            "request-timeout": 600.0,
         }
 
         r = runner.RestoreSnapshot()
         await r(es, params)
 
+        es.options.assert_called_once_with(request_timeout=600.0)
         es.perform_request.assert_awaited_once_with(
-            method="POST", path="/_snapshot/backups/snapshot-001/_restore", params={"request_timeout": 7200, "wait_for_completion": True}
+            method="POST", path="/_snapshot/backups/snapshot-001/_restore", headers={}, body={}, params={"wait_for_completion": True}
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_restore_snapshot_with_body(self, es):
+        es.options.return_value = es
         es.perform_request = mock.AsyncMock()
         params = {
             "repository": "backups",
@@ -4883,7 +5059,6 @@ class TestRestoreSnapshot:
                 },
             },
             "wait-for-completion": True,
-            "request-params": {"request_timeout": 7200},
         }
 
         r = runner.RestoreSnapshot()
@@ -4892,6 +5067,7 @@ class TestRestoreSnapshot:
         es.perform_request.assert_awaited_once_with(
             method="POST",
             path="/_snapshot/backups/snapshot-001/_restore",
+            headers={},
             body={
                 "indices": "index1,index2",
                 "include_global_state": False,
@@ -4899,7 +5075,7 @@ class TestRestoreSnapshot:
                     "index.number_of_replicas": 0,
                 },
             },
-            params={"request_timeout": 7200, "wait_for_completion": True},
+            params={"wait_for_completion": True},
         )
 
 
@@ -5985,22 +6161,23 @@ class TestDownsampleRunner:
         es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.default_response).encode()))
 
         sql_runner = runner.Downsample()
-        params = {
-            "operation-type": "downsample",
-            "fixed-interval": "1d",
-            "source-index": "source-index",
-            "target-index": "target-index",
-        }
+        params = {"operation-type": "downsample", "fixed-interval": "1d", "source-index": "source-index", "target-index": "target-index"}
+        sampling_method = random.choice(["aggregate", "last_value", None])
+        if sampling_method:
+            params["sampling-method"] = sampling_method
 
         async with sql_runner:
             result = await sql_runner(es, params)
 
         assert result == {"success": True, "weight": 1, "unit": "ops"}
 
+        expected_request_body = {"fixed_interval": params.get("fixed-interval")}
+        if sampling_method:
+            expected_request_body["sampling_method"] = sampling_method
         es.perform_request.assert_awaited_once_with(
             method="POST",
             path="/source-index/_downsample/target-index",
-            body={"fixed_interval": params.get("fixed-interval")},
+            body=expected_request_body,
             params={},
             headers={},
         )
@@ -6069,7 +6246,9 @@ class TestSubmitAsyncSearch:
             # search id is registered in context
             assert runner.CompositeContext.get("search-1") == "12345"
 
-        es.async_search.submit.assert_awaited_once_with(body={"query": {"match_all": {}}}, index="_all", params={})
+        es.async_search.submit.assert_awaited_once_with(
+            body={"query": {"match_all": {}}}, index="_all", params={"wait_for_completion_timeout": 0}
+        )
 
 
 class TestGetAsyncSearch:
@@ -7399,7 +7578,7 @@ class TestRetry:
 
     @pytest.mark.asyncio
     async def test_is_transparent_on_exception_when_no_retries(self):
-        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionError("N/A", "no route to host"))
+        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionError(message="no route to host"))
         es = None
         params = {
             # no retries
@@ -7537,7 +7716,7 @@ class TestRetry:
 
     @pytest.mark.asyncio
     async def test_does_not_retry_on_timeout_if_not_wanted(self):
-        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(408, "timed out"))
+        delegate = mock.AsyncMock(side_effect=elasticsearch.ConnectionTimeout(message="timed out"))
         es = None
         params = {"retries": 3, "retry-wait-period": 0.01, "retry-on-timeout": False, "retry-on-error": True}
         retrier = runner.Retry(delegate)
@@ -7622,13 +7801,13 @@ class TestRetry:
 
 class TestRemovePrefix:
     def test_remove_matching_prefix(self):
-        suffix = runner.remove_prefix("index-20201117", "index")
+        suffix = "index-20201117".removeprefix("index")
 
         assert suffix == "-20201117"
 
     def test_prefix_doesnt_exit(self):
         index_name = "index-20201117"
-        suffix = runner.remove_prefix(index_name, "unrelatedprefix")
+        suffix = index_name.removeprefix("unrelatedprefix")
 
         assert index_name == suffix
 
@@ -7686,7 +7865,7 @@ class TestEsqlRunner:
         esql = runner.Esql()
         result = await esql(es, params={"query": "from logs-* | stats c = count(*)"})
         assert result == {"weight": 1, "unit": "ops", "success": True}
-        expected_body = {"query": "from logs-* | stats c = count(*)", "version": "2024.04.01"}
+        expected_body = {"query": "from logs-* | stats c = count(*)"}
         es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -7698,7 +7877,7 @@ class TestEsqlRunner:
         query_filter = {"range": {"@timestamp": {"gte": "2023"}}}
         result = await esql(es, params={"query": "from * | limit 1", "filter": query_filter})
         assert result == {"weight": 1, "unit": "ops", "success": True}
-        expected_body = {"query": "from * | limit 1", "version": "2024.04.01", "filter": query_filter}
+        expected_body = {"query": "from * | limit 1", "filter": query_filter}
         es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -7711,16 +7890,5 @@ class TestEsqlRunner:
         result = await esql(es, params={"query": "from * | limit 1", "body": {"pragma": pragma}})
         assert result == {"weight": 1, "unit": "ops", "success": True}
 
-        expected_body = {"pragma": pragma, "query": "from * | limit 1", "version": "2024.04.01"}
-        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @pytest.mark.asyncio
-    async def test_esql_with_version(self, es):
-        es.options.return_value = es
-        es.perform_request = mock.AsyncMock()
-        esql = runner.Esql()
-        result = await esql(es, params={"query": "from * | limit 1", "version": "wow"})
-        assert result == {"weight": 1, "unit": "ops", "success": True}
-        expected_body = {"query": "from * | limit 1", "version": "wow"}
+        expected_body = {"pragma": pragma, "query": "from * | limit 1"}
         es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})

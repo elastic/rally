@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
 import argparse
 import datetime
 import logging
@@ -23,6 +22,7 @@ import platform
 import shutil
 import sys
 import time
+import typing
 import uuid
 from enum import Enum
 
@@ -48,9 +48,12 @@ from esrally import (
     types,
     version,
 )
+from esrally.driver.driver import OnErrorBehavior
 from esrally.mechanic import mechanic, team
 from esrally.tracker import tracker
 from esrally.utils import console, convert, io, net, opts, process, versions
+
+LOG = logging.getLogger(__name__)
 
 
 class ExitStatus(Enum):
@@ -180,6 +183,23 @@ def create_arg_parser():
         type=valid_date,
         default=None,
     )
+    list_parser.add_argument(
+        "--challenge",
+        help="Show only records from this challenge",
+        default=None,
+    )
+    list_parser.add_argument(
+        "--format",
+        help="Races output format, defaults to text.",
+        choices=["text", "json"],
+        default="text",
+    )
+    list_parser.add_argument(
+        "--user-tags",
+        "--user-tag",
+        help="Show only races with user-specific key-value pairs (separated by ':'). When multiple tags provided all need to match.",
+        default="",
+    )
     add_track_source(list_parser)
 
     delete_parser = subparsers.add_parser("delete", help="Delete records")
@@ -199,7 +219,7 @@ def create_arg_parser():
     add_track_source(info_parser)
     info_parser.add_argument(
         "--track",
-        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`."
+        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`.",
         # we set the default value later on because we need to determine whether the user has provided this value.
         # default="geonames"
     )
@@ -228,6 +248,11 @@ def create_arg_parser():
         "--track",
         required=True,
         help="Name of the generated track",
+    )
+    create_track_parser.add_argument(
+        "--batch-size",
+        default=1000,
+        help="Number of documents to collect per call to Elasticsearch.",
     )
     indices_or_data_streams_group = create_track_parser.add_mutually_exclusive_group(required=True)
     indices_or_data_streams_group.add_argument(
@@ -298,7 +323,7 @@ def create_arg_parser():
         " 'latest' fetches the latest version on the main branch. It is also possible to specify a commit id or a timestamp."
         ' The timestamp must be specified as: "@ts" where "ts" must be a valid ISO 8601 timestamp, '
         'e.g. "@2013-07-27T10:37:00Z" (default: current). A combination of branch and timestamp is also possible,'
-        'e.g. "@feature-branch@2023-04-06T14:52:31Z".',
+        'e.g. "feature-branch@2023-04-06T14:52:31Z".',
         default="current",
         type=revision,
     )  # optimized for local usage, don't fetch sources
@@ -350,6 +375,12 @@ def create_arg_parser():
         help="Method with which to build Elasticsearch and plugins from source",
         choices=["docker", "default"],
         default="default",
+    )
+    build_parser.add_argument(
+        "--source-build-release",
+        help="Build a release version of Elasticsearch from sources.",
+        default=False,
+        action="store_true",
     )
 
     download_parser = subparsers.add_parser("download", help="Downloads an artifact")
@@ -501,6 +532,12 @@ def create_arg_parser():
         default="default",
     )
     install_parser.add_argument(
+        "--source-build-release",
+        help="Build a release version of Elasticsearch from sources.",
+        default=False,
+        action="store_true",
+    )
+    install_parser.add_argument(
         "--installation-id",
         required=False,
         help="The id to use for the installation",
@@ -557,6 +594,12 @@ def create_arg_parser():
         "--preserve-install",
         help=f"Keep the benchmark candidate and its index. (default: {str(preserve_install).lower()}).",
         default=preserve_install,
+        action="store_true",
+    )
+    stop_parser.add_argument(
+        # default is None, since it can be set via config file
+        "--skip-telemetry",
+        help="Skip telemetry data collection. (default: None).",
         action="store_true",
     )
 
@@ -663,9 +706,11 @@ def create_arg_parser():
     )
     race_parser.add_argument(
         "--on-error",
-        choices=["continue", "abort"],
-        help="Controls how Rally behaves on response errors (default: continue).",
-        default="continue",
+        type=OnErrorBehavior,
+        choices=list(OnErrorBehavior),
+        help="Controls how Rally behaves on response errors (default: continue). 'continue-on-network' will retry on network errors"
+        "(e.g., connection refused).",
+        default=OnErrorBehavior.CONTINUE,
     )
     race_parser.add_argument(
         "--telemetry",
@@ -694,8 +739,8 @@ def create_arg_parser():
         help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.",
     )
     race_parser.add_argument(
-        "--user-tag",
         "--user-tags",
+        "--user-tag",
         help="Define a user-specific key-value pair (separated by ':'). It is added to each metric record as meta info. "
         "Example: intention:baseline-ticket-12345",
         default="",
@@ -785,7 +830,7 @@ def create_arg_parser():
     add_parser.add_argument(
         "configuration",
         metavar="configuration",
-        help="The configuration for which Rally should add records. " "Possible values are: annotation",
+        help="The configuration for which Rally should add records. Possible values are: annotation",
         choices=["annotation"],
     )
     add_parser.add_argument(
@@ -933,27 +978,35 @@ def race(cfg: types.Config, kill_running_processes=False):
 
 
 def with_actor_system(runnable, cfg: types.Config):
-    logger = logging.getLogger(__name__)
+    process_startup_method: actor.ProcessStartupMethod | None = cfg.opts("actor", "actor.process.startup.method", None, mandatory=False)
+    if process_startup_method is not None:
+        if process_startup_method not in typing.get_args(actor.ProcessStartupMethod):
+            valid_options = ", ".join(str(v) for v in typing.get_args(actor.ProcessStartupMethod))
+            raise ValueError(
+                f"Invalid value '{process_startup_method}' for 'actor.process.startup.method' option. Valid values are: {valid_options}"
+            )
+        actor.set_startup_method(process_startup_method)
+
     already_running = actor.actor_system_already_running()
-    logger.info("Actor system already running locally? [%s]", str(already_running))
+    LOG.info("Actor system already running locally? [%s]", already_running)
     try:
-        actors = actor.bootstrap_actor_system(try_join=already_running, prefer_local_only=not already_running)
+        actors = actor.bootstrap_actor_system(try_join=bool(already_running), prefer_local_only=not already_running)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
         cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
     # This happens when the admin process could not be started, e.g. because it could not open a socket.
     except thespian.actors.InvalidActorAddress:
-        logger.info("Falling back to offline actor system.")
+        LOG.info("Falling back to offline actor system.")
         actor.use_offline_actor_system()
         actors = actor.bootstrap_actor_system(try_join=True)
     except KeyboardInterrupt:
         raise exceptions.UserInterrupted("User has cancelled the benchmark (detected whilst bootstrapping actor system).") from None
     except Exception as e:
-        logger.exception("Could not bootstrap actor system.")
+        LOG.exception("Could not bootstrap actor system.")
         if str(e) == "Unable to determine valid external socket address.":
             console.warn(
-                "Could not determine a socket address. Are you running without any network? Switching to degraded mode.", logger=logger
+                "Could not determine a socket address. Are you running without any network? Switching to degraded mode.", logger=LOG
             )
-            logger.info("Falling back to offline actor system.")
+            LOG.info("Falling back to offline actor system.")
             actor.use_offline_actor_system()
             actors = actor.bootstrap_actor_system(try_join=True)
         else:
@@ -961,7 +1014,7 @@ def with_actor_system(runnable, cfg: types.Config):
     try:
         runnable(cfg)
     finally:
-        # We only shutdown the actor system if it was not already running before
+        # We only shut down the actor system if it was not already running before
         if not already_running:
             shutdown_complete = False
             times_interrupted = 0
@@ -969,26 +1022,26 @@ def with_actor_system(runnable, cfg: types.Config):
                 try:
                     # give some time for any outstanding messages to be delivered to the actor system
                     time.sleep(3)
-                    logger.info("Attempting to shutdown internal actor system.")
+                    LOG.info("Attempting to shutdown internal actor system.")
                     actors.shutdown()
                     # note that this check will only evaluate to True for a TCP-based actor system.
                     timeout = 15
                     while actor.actor_system_already_running() and timeout > 0:
-                        logger.info("Actor system is still running. Waiting...")
+                        LOG.info("Actor system is still running. Waiting...")
                         time.sleep(1)
                         timeout -= 1
                     if timeout > 0:
                         shutdown_complete = True
-                        logger.info("Shutdown completed.")
+                        LOG.info("Shutdown completed.")
                     else:
-                        logger.warning("Shutdown timed out. Actor system is still running.")
+                        LOG.warning("Shutdown timed out. Actor system is still running.")
                         break
                 except KeyboardInterrupt:
                     times_interrupted += 1
-                    logger.warning("User interrupted shutdown of internal actor system.")
+                    LOG.warning("User interrupted shutdown of internal actor system.")
                     console.info("Please wait a moment for Rally's internal components to shutdown.")
             if not shutdown_complete and times_interrupted > 0:
-                logger.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.", times_interrupted)
+                LOG.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.", times_interrupted)
                 console.println("")
                 console.warn("Terminating now at the risk of leaving child processes behind.")
                 console.println("")
@@ -1091,8 +1144,11 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "system", "list.max_results", args.limit)
             cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.format", args.format)
+            cfg.add(config.Scope.applicationOverride, "system", "list.races.user_tags", opts.to_dict(args.user_tags))
             cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
             cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
+            cfg.add(config.Scope.applicationOverride, "system", "list.challenge", args.challenge)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False)
             dispatch_list(cfg)
@@ -1115,6 +1171,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "mechanic", "plugin.params", opts.to_dict(args.plugin_params))
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.release", args.source_build_release)
             cfg.add(config.Scope.applicationOverride, "mechanic", "target.os", args.target_os)
             cfg.add(config.Scope.applicationOverride, "mechanic", "target.arch", args.target_arch)
             configure_mechanic_params(args, cfg)
@@ -1130,6 +1187,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.method", args.source_build_method)
+            cfg.add(config.Scope.applicationOverride, "mechanic", "source.build.release", args.source_build_release)
             cfg.add(config.Scope.applicationOverride, "mechanic", "build.type", args.build_type)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             cfg.add(config.Scope.applicationOverride, "mechanic", "node.name", args.node_name)
@@ -1148,6 +1206,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             mechanic.start(cfg)
         elif sub_command == "stop":
             cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
+            cfg.add(config.Scope.applicationOverride, "mechanic", "skip.telemetry", args.skip_telemetry)
             cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
             mechanic.stop(cfg)
         elif sub_command == "race":
@@ -1161,7 +1220,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             # use the race id implicitly also as the install id.
             cfg.add(config.Scope.applicationOverride, "system", "install.id", args.race_id)
             cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
-            cfg.add(config.Scope.applicationOverride, "race", "user.tags", opts.to_dict(args.user_tag))
+            cfg.add(config.Scope.applicationOverride, "race", "user.tags", opts.to_dict(args.user_tags))
             cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
             cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
             cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
@@ -1188,11 +1247,13 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
                 cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+                cfg.add(config.Scope.applicationOverride, "generator", "batch_size", args.batch_size)
             elif args.indices is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
                 cfg.add(config.Scope.applicationOverride, "generator", "data_streams", args.data_streams)
                 cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+                cfg.add(config.Scope.applicationOverride, "generator", "batch_size", args.batch_size)
             configure_connection_params(arg_parser, args, cfg)
 
             tracker.create_track(cfg)
@@ -1230,6 +1291,7 @@ def main():
     # Early init of console output so we start to show everything consistently.
     console.init(quiet=False)
 
+    logger.debug("Command line: %s", " ".join(sys.argv))
     arg_parser = create_arg_parser()
     args = arg_parser.parse_args()
 
@@ -1238,7 +1300,8 @@ def main():
         sys.exit(0)
 
     console.init(quiet=args.quiet)
-    console.println(BANNER)
+    if (not hasattr(args, "format")) or args.format == "text":
+        console.println(BANNER)
 
     cfg = config.Config(config_name=args.configuration_name)
     if not cfg.config_present():
@@ -1274,25 +1337,25 @@ def main():
     logger.info("Cleaning track dependency directory [%s]...", paths.libs())
 
     if sys.version_info.major == 3 and sys.version_info.minor <= 11:
-        # pylint: disable=deprecated-argument
-        shutil.rmtree(paths.libs(), onerror=_trap)
+        shutil.rmtree(paths.libs(), onerror=_trap)  # pylint: disable=deprecated-argument, disable=useless-suppression
     else:
-        shutil.rmtree(paths.libs(), onexc=_trap_exc)
+        shutil.rmtree(paths.libs(), onexc=_trap_exc)  # pylint: disable=unexpected-keyword-arg, disable=useless-suppression
 
     result = dispatch_sub_command(arg_parser, args, cfg)
 
-    end = time.time()
-    if result == ExitStatus.SUCCESSFUL:
-        console.println("")
-        console.info("SUCCESS (took %d seconds)" % (end - start), overline="-", underline="-")
-    elif result == ExitStatus.INTERRUPTED:
-        console.println("")
-        console.info("ABORTED (took %d seconds)" % (end - start), overline="-", underline="-")
-        sys.exit(130)
-    elif result == ExitStatus.ERROR:
-        console.println("")
-        console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
-        sys.exit(64)
+    if (not hasattr(args, "format")) or args.format == "text":
+        end = time.time()
+        if result == ExitStatus.SUCCESSFUL:
+            console.println("")
+            console.info("SUCCESS (took %d seconds)" % (end - start), overline="-", underline="-")
+        elif result == ExitStatus.INTERRUPTED:
+            console.println("")
+            console.info("ABORTED (took %d seconds)" % (end - start), overline="-", underline="-")
+            sys.exit(130)
+        elif result == ExitStatus.ERROR:
+            console.println("")
+            console.info("FAILURE (took %d seconds)" % (end - start), overline="-", underline="-")
+            sys.exit(64)
 
 
 if __name__ == "__main__":

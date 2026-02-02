@@ -1,3 +1,90 @@
+### 2.12.0
+
+#### Highlights
+
+* [#1917](https://github.com/elastic/rally/pull/1917): Upgrade thespian to 4.0.1
+* [#1912](https://github.com/elastic/rally/pull/1912): Preserve pre-existing `rally-metrics` index templates by default
+* [#1893](https://github.com/elastic/rally/pull/1893) (Breaking): feat: Drop support for Python 3.8 [ES-8947]
+
+#### Enhancements
+
+* [#1932](https://github.com/elastic/rally/pull/1932): issue #1931: `create-track` command supports serverless.
+* [#1924](https://github.com/elastic/rally/pull/1924): Introduce tools for pretty printing JSON like objects and their differences.
+* [#1909](https://github.com/elastic/rally/pull/1909): Add check if headers is not None before treating it like a dict
+* [#1908](https://github.com/elastic/rally/pull/1908): Improve error messages regarding track syntax errors
+* [#1892](https://github.com/elastic/rally/pull/1892): feat: Add a parallel JSON log by default
+* [#1885](https://github.com/elastic/rally/pull/1885): feat: Add ability to run esrallyd inside docker [ES-9146]
+
+#### Bug Fixes
+
+* [#1919](https://github.com/elastic/rally/pull/1919): Suppress a flaky internal mypy error appearing randomly when executing `make lint`.
+* [#1913](https://github.com/elastic/rally/pull/1913): Add ability to provide a list as input for disk-usage-stats
+* [#1904](https://github.com/elastic/rally/pull/1904): Reduce log volume forwarded through Thespian framework
+* [#1896](https://github.com/elastic/rally/pull/1896): Add read timeout for retry
+* [#1891](https://github.com/elastic/rally/pull/1891): fix: Use named parameter for `_to_datetime` to pass default_tz
+* [#1888](https://github.com/elastic/rally/pull/1888): fix: Release docker script fix - use `echo` not `git`
+
+#### Miscellaneous Changes
+
+* [#1929](https://github.com/elastic/rally/pull/1929): Upgrade google-auth to 2.38.0
+* [#1922](https://github.com/elastic/rally/pull/1922): Implements a decorator to facilitate creating table-driven unit tests.
+* [#1911](https://github.com/elastic/rally/pull/1911): Replace deprecate use of resources.read_text() function.
+* [#1899](https://github.com/elastic/rally/pull/1899): Bump jinja2 from 3.1.4 to 3.1.5
+
+### 2.11.1
+
+#### Highlights
+
+* [#1875](https://github.com/elastic/rally/pull/1875): Switch to JDK 21
+
+#### Enhancements
+
+* [#1884](https://github.com/elastic/rally/pull/1884): Add Jinja filters for creating dynamic date ranges based on now()
+* [#1871](https://github.com/elastic/rally/pull/1871): [ES-8436] feat: Change Dockerfile base images to Wolfi
+* [#1865](https://github.com/elastic/rally/pull/1865): Add an option to filter by challange in list command
+* [#1859](https://github.com/elastic/rally/pull/1859): Modify rally to allow multiple cars with complex configuration
+* [#1858](https://github.com/elastic/rally/pull/1858): Bump urllib3 from 1.26.18 to 1.26.19
+
+#### Bug Fixes
+
+* [#1882](https://github.com/elastic/rally/pull/1882): fixes #1881 - composite operation failing when track_total_hits is false
+* [#1879](https://github.com/elastic/rally/pull/1879): Pull non-default branch commits selectively
+* [#1877](https://github.com/elastic/rally/pull/1877): Docs: fix level of (warmup-)interations
+* [#1876](https://github.com/elastic/rally/pull/1876): Cast batch size as int
+* [#1863](https://github.com/elastic/rally/pull/1863): Avoid logging ES credentials from running Rally processes
+* [#1861](https://github.com/elastic/rally/pull/1861): Restore time measurement on request end
+* [#1848](https://github.com/elastic/rally/pull/1848): Pin `requests` library until we fix `docker-py`
+
+### 2.11.0
+
+#### Highlights
+
+* [#1839](https://github.com/elastic/rally/pull/1839): Add support for Python 3.12
+
+#### Enhancements
+
+* [#1851](https://github.com/elastic/rally/pull/1851): Assume no operator if security not enabled in serverless
+* [#1846](https://github.com/elastic/rally/pull/1846): Update create track
+* [#1845](https://github.com/elastic/rally/pull/1845): Allow rally to run ESQL operations on serverless for benchmarks
+* [#1831](https://github.com/elastic/rally/pull/1831): Add client ID to metrics
+* [#1830](https://github.com/elastic/rally/pull/1830): Add looped mode to bulk operation
+* [#1827](https://github.com/elastic/rally/pull/1827): Track dataset size
+* [#1819](https://github.com/elastic/rally/pull/1819): Override serverless cluster version in telemetry
+* [#1818](https://github.com/elastic/rally/pull/1818): Override serverless cluster version
+* [#1816](https://github.com/elastic/rally/pull/1816): Add FS metrics to node-stats telemetry device
+
+#### Bug Fixes
+
+* [#1835](https://github.com/elastic/rally/pull/1835): Avoid immense term error in metrics metadata fields
+* [#1825](https://github.com/elastic/rally/pull/1825): Make Jit telelmetry compatible with JDK 9+
+* [#1823](https://github.com/elastic/rally/pull/1823): Measure time until last response chunk
+* [#1805](https://github.com/elastic/rally/pull/1805): Handle raw response exceptions
+
+#### Doc Changes
+
+* [#1824](https://github.com/elastic/rally/pull/1824): Fix telemetry docs 
+* [#1811](https://github.com/elastic/rally/pull/1811): Use composable index templates for metric indices
+
 ### 2.10.0
 
 #### Highlights

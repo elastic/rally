@@ -20,7 +20,8 @@ import os
 import shlex
 import subprocess
 import time
-from typing import Callable, Dict, List
+from collections.abc import Iterable, Mapping
+from typing import IO, Callable, Optional, Union
 
 import psutil
 
@@ -38,7 +39,7 @@ def run_subprocess(command_line: str) -> int:
     return subprocess.call(command_line, shell=True)
 
 
-def run_subprocess_with_output(command_line: str, env: Dict[str, str] = None) -> List[str]:
+def run_subprocess_with_output(command_line: str, env: Optional[Mapping[str, str]] = None) -> list[str]:
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
@@ -46,6 +47,7 @@ def run_subprocess_with_output(command_line: str, env: Dict[str, str] = None) ->
         has_output = True
         lines = []
         while has_output:
+            assert command_line_process.stdout is not None, "stdout is None"
             line = command_line_process.stdout.readline()
             if line:
                 lines.append(line.decode("UTF-8").strip())
@@ -72,10 +74,10 @@ def exit_status_as_bool(runnable: Callable[[], int], quiet: bool = False) -> boo
 
 def run_subprocess_with_logging(
     command_line: str,
-    header: str = None,
+    header: Optional[str] = None,
     level: LogLevel = logging.INFO,
-    stdin: FileId = None,
-    env: Dict[str, str] = None,
+    stdin: Optional[Union[FileId, IO[bytes]]] = None,
+    env: Optional[Mapping[str, str]] = None,
     detach: bool = False,
 ) -> int:
     """
@@ -117,10 +119,10 @@ def run_subprocess_with_logging(
 
 def run_subprocess_with_logging_and_output(
     command_line: str,
-    header: str = None,
+    header: Optional[str] = None,
     level: LogLevel = logging.INFO,
-    stdin: FileId = None,
-    env: Dict[str, str] = None,
+    stdin: Optional[Union[FileId, IO[bytes]]] = None,
+    env: Optional[Mapping[str, str]] = None,
     detach: bool = False,
 ) -> subprocess.CompletedProcess:
     """
@@ -142,7 +144,6 @@ def run_subprocess_with_logging_and_output(
     if header is not None:
         logger.info(header)
 
-    # pylint: disable=subprocess-popen-preexec-fn
     completed = subprocess.run(
         command_line_args,
         stdout=subprocess.PIPE,
@@ -173,15 +174,25 @@ def is_rally_process(p: psutil.Process) -> bool:
     )
 
 
-def find_all_other_rally_processes() -> List[psutil.Process]:
-    others = []
+def find_all_other_rally_processes() -> list[psutil.Process]:
+    others: list[psutil.Process] = []
     for_all_other_processes(is_rally_process, others.append)
     return others
 
 
+def redact_cmdline(cmdline: list) -> list[str]:
+    """
+    Redact client options in cmdline as it contains sensitive information like passwords
+    """
+
+    return ["=".join((value.split("=")[0], '"*****"')) if "--client-options" in value else value for value in cmdline]
+
+
 def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:
-    def kill(p: psutil.Process):
-        logging.getLogger(__name__).info("Killing lingering process with PID [%s] and command line [%s].", p.pid, p.cmdline())
+    def kill(p: psutil.Process) -> None:
+        logging.getLogger(__name__).info(
+            "Killing lingering process with PID [%s] and command line [%s].", p.pid, redact_cmdline(p.cmdline())
+        )
         p.kill()
         # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
         # sockets that are still open.
@@ -219,3 +230,28 @@ def kill_running_rally_instances() -> None:
         )
 
     kill_all(rally_process)
+
+
+def wait_for_child_processes(
+    timeout: Optional[float] = None,
+    callback: Optional[Callable[[psutil.Process], None]] = None,
+    list_callback: Optional[Callable[[Iterable[psutil.Process]], None]] = None,
+) -> bool:
+    """
+    Waits for all child processes to terminate.
+
+    :param timeout: The maximum time to wait for child processes to terminate (default: None).
+    :param callback: A callback to call as each child process terminates.
+        The callback will be passed the PID and the return code of the child process.
+    :param list_callback: A callback to tell caller about the child processes that are being waited for.
+
+    :return: False if no child processes found, True otherwise.
+    """
+    current = psutil.Process()
+    children = current.children(recursive=True)
+    if not children:
+        return False
+    if list_callback is not None:
+        list_callback(children)
+    psutil.wait_procs(children, timeout=timeout, callback=callback)
+    return True

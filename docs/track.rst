@@ -2296,11 +2296,11 @@ In the following example we show how Rally can be used to benchmark a hypothetic
             "body": {
               "include-metrics": ["system", "jvm"],
               "exclude-metrics": ["hardware"]
-            },
-            "warmup-iterations": 100,
-            "iterations": 100,
-            "target-throughput": 10
-          }
+            }
+          },
+          "warmup-iterations": 100,
+          "iterations": 100,
+          "target-throughput": 10
         }
       ]
     }
@@ -2462,9 +2462,7 @@ Properties
 .. note::
     In order to ensure that the track execution only continues after a snapshot has been restored, set ``wait-for-completion`` to ``true`` **and** increase the request timeout. In the example below we set it to 7200 seconds (or 2 hours)::
 
-        "request-params": {
-            "request_timeout": 7200
-        }
+        "request-timeout": 7200
 
     However, this might not work if a proxy is in between the client and Elasticsearch and the proxy has a shorter request timeout configured than the client. In this case, keep the default value for ``wait-for-completion`` and instead add a ``wait-for-recovery`` runner in the next step.
 
@@ -3080,11 +3078,12 @@ Properties
 * ``fixed_interval`` (optional, defaults to ``1h``): The aggregation interval key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals`.
 * ``source-index`` (optional): The index containing data to aggregate which includes a ``@timestamp`` field. Note that this index should be marked read-only prior to the execution of this operation. If there is only one index defined in the ``indices`` of the track definition, that will be used as the default.
 * ``target-index`` (optional, defaults to ``{source-index}-{fixed-interval}``): Tne new target index created by the downsampling operation and including aggregated data.
+* ``sampling-method`` (optional): The downsampling method used to aggregate metric data. It accepts values ``aggregate`` or ``last_value``, when the value is missing downsampling defaults to ``aggregate``.
 
 **Example**
 
 Executes a downsampling operation aggregating data in the source index (test-source-index) and creating a new target index (test-target-index) applying an aggregation
-interval of 1 minute on the @timestamp field::
+interval of 1 minute on the @timestamp field, keeping the last value of the metric fields::
 
     {
       "name": "downsample",
@@ -3092,7 +3091,8 @@ interval of 1 minute on the @timestamp field::
         "operation-type": "downsample",
         "fixed-interval": "1m",
         "source-index": "test-source-index",
-        "target-index": "tsdb-target-index"
+        "target-index": "tsdb-target-index",
+        "sampling-method": "last_value"
       }
     }
 
@@ -3145,7 +3145,6 @@ Properties
 """"""""""
 
 * ``query`` (mandatory): An ES|QL query which starts with a source command followed by processing commands.
-* ``version`` (optional): The version of the ES|QL query language. Defaults to the first released version, ``2024.04.01``. See the docs for `available versions <https://www.elastic.co/guide/en/elasticsearch/reference/master/esql-version.html>`_.
 * ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
 * ``body`` (optional): The query body.
 
@@ -3155,7 +3154,6 @@ Example::
       "name": "default",
       "operation-type": "esql",
       "query": "FROM logs-* | STATS count=count(*) BY agent.hostname | SORT count DESC | LIMIT 20",
-      "version": "2024.04.01",
       "filter": {
         "range": {
           "timestamp": {

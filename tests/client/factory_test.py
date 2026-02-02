@@ -29,7 +29,7 @@ import elasticsearch
 import pytest
 import trustme
 import urllib3.exceptions
-from elastic_transport import ApiResponseMeta
+from elastic_transport import ApiResponseMeta, HttpHeaders, NodeConfig
 from pytest_httpserver import HTTPServer
 
 from esrally import client, doc_link, exceptions
@@ -38,7 +38,17 @@ from esrally.utils import console
 
 
 def _api_error(status, message):
-    return elasticsearch.ApiError(message, ApiResponseMeta(status=status, http_version="1.1", headers={}, duration=0.0, node=None), None)
+    return elasticsearch.ApiError(
+        message,
+        ApiResponseMeta(
+            status=status,
+            http_version="1.1",
+            headers=HttpHeaders(),
+            duration=0.0,
+            node=NodeConfig(scheme="https", host="localhost", port=9200),
+        ),
+        None,
+    )
 
 
 class TestEsClientFactory:
@@ -228,6 +238,7 @@ class TestEsClientFactory:
             [
                 mock.call("SSL support: on"),
                 mock.call("SSL certificate verification: off"),
+                mock.call("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark."),
                 mock.call("SSL client authentication: off"),
             ]
         )
@@ -268,6 +279,7 @@ class TestEsClientFactory:
         mocked_debug_logger.assert_has_calls(
             [
                 mock.call("SSL certificate verification: off"),
+                mock.call("User has enabled SSL but disabled certificate verification. This is dangerous but may be ok for a benchmark."),
                 mock.call("SSL client authentication: on"),
             ],
         )
@@ -318,6 +330,20 @@ class TestEsClientFactory:
         assert f.hosts == ["https://127.0.0.1:9200"]
         assert f.ssl_context.check_hostname is False
         assert f.ssl_context.verify_mode == ssl.CERT_REQUIRED
+
+    def test_create_http_connection_with_path(self):
+        hosts = [{"host": "localhost", "port": 9200, "url_prefix": "/path"}]
+        client_options = {}
+        # make a copy so we can verify later that the factory did not modify it
+        original_client_options = dict(client_options)
+
+        f = client.EsClientFactory(hosts, client_options)
+
+        assert f.hosts == ["http://localhost:9200/path"]
+        assert f.ssl_context is None
+        assert "basic_auth" not in f.client_options
+
+        assert client_options == original_client_options
 
     @mock.patch("esrally.client.asynchronous.RallyAsyncElasticsearch")
     def test_create_async_client_with_api_key_auth_override(self, es):
@@ -518,7 +544,7 @@ class TestRestLayer:
     def test_connection_protocol_error(self, es):
         es.cluster.health.side_effect = elasticsearch.ConnectionError(
             message="N/A",
-            errors=[urllib3.exceptions.ProtocolError("Connection aborted.")],
+            errors=[urllib3.exceptions.ProtocolError("Connection aborted.")],  # type: ignore[arg-type]
         )
         with pytest.raises(
             exceptions.SystemSetupError,

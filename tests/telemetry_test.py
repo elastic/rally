@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from unittest import mock
 from unittest.mock import call
 
+import elastic_transport
 import elasticsearch
 import pytest
 
@@ -275,7 +276,8 @@ class ApiErrorSupplier:
 
     def __call__(self, status=None, body=None, message=None):
         return elasticsearch.ApiError(
-            meta=self.ApiResponseMeta(status=status),
+            # TODO remove this ignore when introducing type hints
+            meta=self.ApiResponseMeta(status=status),  # type: ignore[arg-type]
             body=body,
             message=message,
         )
@@ -1751,7 +1753,18 @@ class TestSearchableSnapshotsStats:
         metrics_store = metrics.EsMetricsStore(cfg)
         client = Client(
             transport_client=TransportClient(
-                force_error=True, error=elasticsearch.NotFoundError("", "", {"error": {"reason": "No searchable snapshots indices found"}})
+                force_error=True,
+                error=elasticsearch.NotFoundError(
+                    message="",
+                    meta=elastic_transport.ApiResponseMeta(
+                        status=404,
+                        http_version="1.1",
+                        headers=elastic_transport.HttpHeaders(),
+                        duration=0,
+                        node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+                    ),
+                    body={"error": {"reason": "No searchable snapshots indices found"}},
+                ),
             )
         )
         recorder = telemetry.SearchableSnapshotsStatsRecorder(
@@ -3012,7 +3025,7 @@ class TestNodeStatsRecorder:
             meta_data=metrics_store_meta_data,
         )
 
-    def test_exception_when_include_indices_metrics_not_valid(self):
+    def test_exception_when_included_indices_metrics_not_valid(self):
         node_stats_response = {}
 
         client = Client(nodes=SubClient(stats=node_stats_response))
@@ -3021,9 +3034,32 @@ class TestNodeStatsRecorder:
         telemetry_params = {"node-stats-include-indices-metrics": {"bad": "input"}}
         with pytest.raises(
             exceptions.SystemSetupError,
-            match="The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string but was <class 'dict'>",
+            match="The telemetry parameter 'node-stats-include-indices-metrics' must be a comma-separated string"
+            " or a list but was <class 'dict'>",
         ):
             telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+
+    def test_comma_seperated_string_of_included_indices_is_accepted(self):
+        logger = logging.getLogger("esrally.telemetry")
+        node_stats_response = {}
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"node-stats-include-indices-metrics": "my-index-one,my-index-two"}
+        with mock.patch.object(logger, "debug") as mocked_debug:
+            telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+            mocked_debug.assert_called_once_with("Including indices metrics: %s", ["my-index-one", "my-index-two"])
+
+    def test_list_of_includes_indices_is_accepted(self):
+        logger = logging.getLogger("esrally.telemetry")
+        node_stats_response = {}
+        client = Client(nodes=SubClient(stats=node_stats_response))
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        telemetry_params = {"node-stats-include-indices-metrics": ["my-index-one", "my-index-two"]}
+        with mock.patch.object(logger, "debug") as mocked_debug:
+            telemetry.NodeStatsRecorder(telemetry_params, cluster_name="remote", client=client, metrics_store=metrics_store)
+            mocked_debug.assert_called_once_with("Including indices metrics: %s", ["my-index-one", "my-index-two"])
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_logs_debug_on_missing_cgroup_stats(self, metrics_store_put_doc):
@@ -4217,22 +4253,24 @@ class TestIndexStats:
 
 
 class TestMlBucketProcessingTime:
+
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_put_doc):
-        es.search.side_effect = elasticsearch.TransportError("unit test error")
+    @mock.patch("elasticsearch.Elasticsearch.search")
+    def test_error_on_retrieval_does_not_store_metrics(self, search, metrics_store_put_doc):
+        search.side_effect = elasticsearch.TransportError("unit test error")
+
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.MlBucketProcessingTime(es, metrics_store)
+        device = telemetry.MlBucketProcessingTime(elasticsearch.Elasticsearch, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_stop()
 
         assert metrics_store_put_doc.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_empty_result_does_not_store_metrics(self, es, metrics_store_put_doc):
-        es.search.return_value = {
+    @mock.patch("elasticsearch.Elasticsearch.search")
+    def test_empty_result_does_not_store_metrics(self, search, metrics_store_put_doc):
+        search.return_value = {
             "aggregations": {
                 "jobs": {
                     "buckets": [],
@@ -4241,16 +4279,16 @@ class TestMlBucketProcessingTime:
         }
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.MlBucketProcessingTime(es, metrics_store)
+        device = telemetry.MlBucketProcessingTime(elasticsearch.Elasticsearch, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_stop()
 
         assert metrics_store_put_doc.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_result_is_stored(self, es, metrics_store_put_doc):
-        es.search.return_value = {
+    @mock.patch("elasticsearch.Elasticsearch.search")
+    def test_result_is_stored(self, search, metrics_store_put_doc):
+        search.return_value = {
             "aggregations": {
                 "jobs": {
                     "buckets": [
@@ -4277,7 +4315,7 @@ class TestMlBucketProcessingTime:
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.MlBucketProcessingTime(es, metrics_store)
+        device = telemetry.MlBucketProcessingTime(elasticsearch.Elasticsearch, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[device])
         t.on_benchmark_stop()
 
@@ -4863,7 +4901,7 @@ class TestDiskUsageStats:
         )
 
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_uses_indices_param_if_specified_instead_of_data_stream_names(self, es):
+    def test_uses_indices_param_as_csv_if_specified_instead_of_data_stream_names(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
         es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
@@ -4880,12 +4918,40 @@ class TestDiskUsageStats:
             ]
         )
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_uses_indices_param_as_list_if_specified_instead_of_data_stream_names(self, es):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
+        device = telemetry.DiskUsageStats(
+            {"disk-usage-stats-indices": ["foo", "bar"]}, es, metrics_store, index_names=[], data_stream_names=["baz"]
+        )
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        es.indices.disk_usage.assert_has_calls(
+            [
+                call(index="foo", run_expensive_tasks=True),
+                call(index="bar", run_expensive_tasks=True),
+            ]
+        )
+
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("elasticsearch.Elasticsearch")
     def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.side_effect = elasticsearch.RequestError(message="error", meta=None, body=None)
+        es.indices.disk_usage.side_effect = elasticsearch.RequestError(
+            message="error",
+            meta=elastic_transport.ApiResponseMeta(
+                status=400,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                duration=0,
+                node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+            ),
+            body=None,
+        )
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4916,7 +4982,17 @@ class TestDiskUsageStats:
     def test_missing_all_fails(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.side_effect = elasticsearch.NotFoundError(message="error", meta=None, body=None)
+        es.indices.disk_usage.side_effect = elasticsearch.NotFoundError(
+            message="error",
+            meta=elastic_transport.ApiResponseMeta(
+                status=404,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                duration=0,
+                node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+            ),
+            body=None,
+        )
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4933,7 +5009,17 @@ class TestDiskUsageStats:
     def test_some_mising_succeeds(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        not_found_response = elasticsearch.NotFoundError(message="error", meta=None, body=None)
+        not_found_response = elasticsearch.NotFoundError(
+            message="error",
+            meta=elastic_transport.ApiResponseMeta(
+                status=404,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                duration=0,
+                node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+            ),
+            body=None,
+        )
         successful_response = {
             "_shards": {"failed": 0},
             "foo": {

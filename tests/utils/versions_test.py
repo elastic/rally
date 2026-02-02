@@ -18,7 +18,7 @@
 import random
 import re
 
-import pytest  # type: ignore
+import pytest
 
 from esrally import exceptions
 from esrally.utils import versions
@@ -44,6 +44,8 @@ class TestsVersions:
         assert versions.is_version_identifier("5", strict=False)
         assert versions.is_version_identifier("23", strict=False)
         assert versions.is_version_identifier("20.3.7-SNAPSHOT", strict=False)
+        assert versions.is_version_identifier("9.2-test", strict=False) is False
+        assert versions.is_version_identifier("9-test", strict=False) is False
 
     def test_is_serverless(self):
         assert versions.is_serverless("serverless")
@@ -147,6 +149,14 @@ class TestsVersions:
         assert (
             versions.best_match(["7", "7.11", "7.2", "5", "6", "master"], "7.1.0") == "7"
         ), "If no exact match and no minor match, next best match is major version"
+
+        assert (
+            versions.best_match(["8.15", "9.2", "master"], "9.3.5") == "9.2"
+        ), "If no exact match best match is the nearest prior minor, even if major does not exist"
+
+        assert (
+            versions.best_match(["8.15", "9.0", "master"], "9.1.0") == "9.0"
+        ), "If no exact match and x.0 minor is nearest prior minor, next best match selects it, even if major does not exist"
 
     def test_version_comparison(self):
         assert versions.Version.from_string("7.10.2") < versions.Version.from_string("7.11.0")

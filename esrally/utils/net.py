@@ -26,7 +26,7 @@ import certifi
 import urllib3
 
 from esrally import exceptions
-from esrally.utils import console, convert
+from esrally.utils import console, pretty
 
 _HTTP = None
 _HTTPS = None
@@ -72,8 +72,7 @@ class Progress:
     def __call__(self, bytes_read, bytes_total):
         if bytes_total:
             completed = bytes_read / bytes_total
-            total_as_mb = convert.bytes_to_human_string(bytes_total)
-            self.p.print("%s (%s total size)" % (self.msg, total_as_mb), self.percent_format % (completed * 100))
+            self.p.print(f"{self.msg} ({pretty.size(bytes_total)} total size)", self.percent_format % (completed * 100))
         else:
             self.p.print(self.msg, ".")
 
@@ -112,7 +111,7 @@ def _download_from_s3_bucket(bucket_name, bucket_path, local_path, expected_size
     if expected_size_in_bytes is None:
         expected_size_in_bytes = bucket.Object(bucket_path).content_length
     progress_callback = S3ProgressAdapter(expected_size_in_bytes, progress_indicator) if progress_indicator else None
-    bucket.download_file(bucket_path, local_path, Callback=progress_callback, Config=boto3.s3.transfer.TransferConfig(use_threads=False))
+    bucket.download_file(bucket_path, local_path, Callback=progress_callback, Config=boto3.s3.transfer.TransferConfig(use_threads=True))
 
 
 def _build_gcs_object_url(bucket_name, bucket_path):
@@ -190,9 +189,12 @@ HTTP_DOWNLOAD_RETRIES = 10
 
 
 def _download_http(url, local_path, expected_size_in_bytes=None, progress_indicator=None):
-    with _request(
-        "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
-    ) as r, open(local_path, "wb") as out_file:
+    with (
+        _request(
+            "GET", url, preload_content=False, enforce_content_length=True, retries=10, timeout=urllib3.Timeout(connect=45, read=240)
+        ) as r,
+        open(local_path, "wb") as out_file,
+    ):
         if r.status > 299:
             raise urllib.error.HTTPError(
                 url,
@@ -202,7 +204,7 @@ def _download_http(url, local_path, expected_size_in_bytes=None, progress_indica
                 None,
             )
         try:
-            size_from_content_header = int(r.getheader("Content-Length", ""))
+            size_from_content_header = int(r.headers.get("Content-Length", ""))
             if expected_size_in_bytes is None:
                 expected_size_in_bytes = size_from_content_header
         except ValueError:
@@ -224,7 +226,7 @@ def download_http(url, local_path, expected_size_in_bytes=None, progress_indicat
     for i in range(HTTP_DOWNLOAD_RETRIES + 1):
         try:
             return _download_http(url, local_path, expected_size_in_bytes, progress_indicator)
-        except urllib3.exceptions.ProtocolError as exc:
+        except (urllib3.exceptions.ProtocolError, urllib3.exceptions.ReadTimeoutError) as exc:
             if i == HTTP_DOWNLOAD_RETRIES:
                 raise
             logger.warning("Retrying after %s", exc)

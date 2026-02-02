@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 
-set -eo pipefail
+set -exo pipefail
 
 source .buildkite/retry.sh
+
+function upload_logs {
+    echo "--- Upload artifacts"
+    buildkite-agent artifact upload "${RALLY_HOME}/.rally/logs/*.log"
+}
 
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
@@ -12,7 +17,7 @@ export DEBIAN_FRONTEND=noninteractive
 sudo mkdir -p /etc/needrestart
 echo "\$nrconf{restart} = 'a';" | sudo tee -a /etc/needrestart/needrestart.conf > /dev/null
 
-PYTHON_VERSION="$1"
+export PY_VERSION="$1"
 TEST_NAME="$2"
 
 echo "--- System dependencies"
@@ -20,14 +25,18 @@ echo "--- System dependencies"
 retry 5 sudo add-apt-repository --yes ppa:deadsnakes/ppa
 retry 5 sudo apt-get update
 retry 5 sudo apt-get install -y \
-    "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-dev" "python${PYTHON_VERSION}-venv" \
-    dnsutils  # provides nslookup
+    "python${PY_VERSION}" "python${PY_VERSION}-dev" "python${PY_VERSION}-venv" \
+    make \
+    dnsutils # provides nslookup
 
-echo "--- Python modules"
+echo "--- Install UV"
 
-"python${PYTHON_VERSION}" -m venv .venv
-source .venv/bin/activate
-pip install nox
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source "${HOME}/.local/bin/env"
+
+echo "--- Create virtual environment"
+
+make venv
 
 echo "--- Run IT serverless test \"$TEST_NAME\" :pytest:"
 
@@ -38,15 +47,20 @@ export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-204800}
 # adjust the default log level from WARNING
 export THESPLOG_THRESHOLD="INFO"
 
+trap upload_logs ERR
+
+
 case $TEST_NAME in
     "user")
-        nox -s it_serverless
+        make -s it_serverless
         ;;
     "operator")
-        nox -s it_serverless -- --operator
+        make -s it_serverless "ARGS=--operator"
         ;;
     *)
         echo "Unknown test type."
         exit 1
         ;;
 esac
+
+upload_logs

@@ -19,48 +19,58 @@ import copy
 import json
 import os
 import time
-from unittest import mock
-from unittest.mock import mock_open, patch
+from typing import Any
 
 import pytest
 
 from esrally import log
 
 
-class TestLog:
-    def _load_logging_template(self, p):
-        with open(p) as f:
-            return json.load(f)
+@pytest.fixture
+def template() -> dict[str, Any]:
+    with open(log.TEMPLATE_PATH) as fd:
+        return json.load(fd)
 
-    @pytest.fixture(autouse=True)
-    def set_configuration(self):
-        p = os.path.join(os.path.join(os.path.dirname(__file__), "..", "esrally", "resources", "logging.json"))
-        self.configuration = self._load_logging_template(p)
 
-    @mock.patch("json.load")
-    def test_add_missing_loggers_to_config_missing(self, mock_json_load, caplog):
-        source_template = copy.deepcopy(self.configuration)
-        existing_configuration = copy.deepcopy(self.configuration)
-        # change existing to differ from source template, showing that we don't overwrite any existing loggers config
-        existing_configuration["loggers"]["rally.profile"]["level"] = "DEBUG"
-        expected_configuration = json.dumps(copy.deepcopy(existing_configuration), indent=2)
-        # simulate user missing 'elastic_transport' in logging.json
-        del existing_configuration["loggers"]["elastic_transport"]
+@pytest.fixture
+def config(tmpdir, template: dict[str, Any]) -> dict[str, Any]:
+    config = copy.deepcopy(template)
+    # change existing to differ from source template, showing that we don't overwrite any existing loggers config
+    config["loggers"]["rally.profile"]["level"] = "DEBUG"
+    # simulate user missing 'elastic_transport' in logging.json
+    del config["loggers"]["elastic_transport"]
+    return config
 
-        # first loads template, then existing configuration
-        mock_json_load.side_effect = [source_template, existing_configuration]
 
-        with patch("builtins.open", mock_open()) as mock_file:
-            log.add_missing_loggers_to_config()
-            handle = mock_file()
-            handle.write.assert_called_once_with(expected_configuration)
+@pytest.fixture
+def config_path(tmpdir, config: dict[str, Any]) -> str:
+    path = os.path.join(tmpdir, "config.json")
+    with open(path, "w") as fd:
+        json.dump(config, fd)
+    return path
 
-    log_format = "%(asctime)s %(message)s"
 
-    def test_configure_formatter_utc(self):
-        formatter = log.configure_utc_formatter(format=self.log_format, datefmt="%Y-%m-%d %H:%M:%S")
-        assert formatter.converter is time.gmtime
+def test_update_logger_config(template: dict[str, Any], config: dict[str, Any], config_path: str) -> None:
+    log.update_logger_config(config_path=config_path)
 
-    def test_configure_formatter_localtime(self):
-        formatter = log.configure_utc_formatter(format=self.log_format, datefmt="%Y-%m-%d %H:%M:%S", timezone="localtime")
-        assert formatter.converter is time.localtime
+    with open(config_path) as fd:
+        got = json.load(fd)
+
+    want = copy.deepcopy(config)
+    want["loggers"].update((k, v) for k, v in template["loggers"].items() if k not in config["loggers"])
+
+    assert got["loggers"] == want["loggers"]
+
+
+LOG_FORMAT = "%(asctime)s %(message)s"
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def test_configure_formatter_utc():
+    formatter = log.configure_utc_formatter(format=LOG_FORMAT, datefmt=DATE_FORMAT)
+    assert formatter.converter is time.gmtime
+
+
+def test_configure_formatter_localtime():
+    formatter = log.configure_utc_formatter(format=LOG_FORMAT, datefmt=DATE_FORMAT, timezone="localtime")
+    assert formatter.converter is time.localtime

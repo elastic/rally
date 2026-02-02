@@ -28,29 +28,20 @@ REMOTE_TRACK_REPO = "https://github.com/elastic/rally-tracks"
 def pytest_addoption(parser):
     group = parser.getgroup("rally")
     group.addoption(
-        "--track-repository",
-        action="store",
-        default=TRACK_REPO_PATH,
-        help=f"Path to a local track repository\n(default: {TRACK_REPO_PATH})",
-    )
-    group.addoption(
-        "--track-revision",
-        action="store",
-        default="master",
-        help="Track repository revision to test\ndefault: `master`",
-    )
-    group.addoption(
         "--track-repository-test-directory",
         action="store",
         dest="track_repo_test_dir",
-        default="it",
-        help="Name of the directory containing the track repo's integration tests\n(default: `it`)",
+        default="it_tracks",
+        help="Name of the directory containing the track repo's integration tests\n(default: `it_tracks`)",
     )
     group.addoption("--operator", action="store_true", help="run as operator (used in serverless testing)")
 
 
 def pytest_cmdline_main(config):
+    # override the default track repository if not provided by the user
     repo = config.option.track_repository
+    if repo is None:
+        repo = config.option.track_repository = TRACK_REPO_PATH
     if not os.path.isdir(repo):
         # we're using the defaults, so perform an initial clone of rally-tracks
         if repo == TRACK_REPO_PATH:

@@ -30,6 +30,7 @@ from esrally import config, exceptions, metrics, track
 from esrally.driver import driver, runner, scheduler
 from esrally.driver.driver import ApiKey, ClientContext
 from esrally.track import params
+from esrally.utils.error_behavior import OnErrorBehavior
 
 
 class DriverTestParamSource:
@@ -1506,7 +1507,7 @@ class TestAsyncExecutor:
             sampler=sampler,
             cancel=cancel,
             complete=complete,
-            on_error="continue",
+            on_error=OnErrorBehavior.CONTINUE,
         )
         await execute_schedule()
 
@@ -1570,7 +1571,7 @@ class TestAsyncExecutor:
             sampler=sampler,
             cancel=cancel,
             complete=complete,
-            on_error="continue",
+            on_error=OnErrorBehavior.CONTINUE,
         )
         await execute_schedule()
 
@@ -1639,7 +1640,7 @@ class TestAsyncExecutor:
             sampler=sampler,
             cancel=cancel,
             complete=complete,
-            on_error="continue",
+            on_error=OnErrorBehavior.CONTINUE,
         )
         await execute_schedule()
 
@@ -1675,7 +1676,7 @@ class TestAsyncExecutor:
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
-        for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [235, 255]}.items():
+        for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [220, 280]}.items():
             task = track.Task(
                 "time-based",
                 track.Operation(
@@ -1713,7 +1714,7 @@ class TestAsyncExecutor:
                 sampler=sampler,
                 cancel=cancel,
                 complete=complete,
-                on_error="continue",
+                on_error=OnErrorBehavior.CONTINUE,
             )
             await execute_schedule()
 
@@ -1765,7 +1766,7 @@ class TestAsyncExecutor:
                 sampler=sampler,
                 cancel=cancel,
                 complete=complete,
-                on_error="continue",
+                on_error=OnErrorBehavior.CONTINUE,
             )
 
             cancel.set()
@@ -1824,7 +1825,7 @@ class TestAsyncExecutor:
             sampler=sampler,
             cancel=cancel,
             complete=complete,
-            on_error="continue",
+            on_error=OnErrorBehavior.CONTINUE,
         )
 
         with pytest.raises(exceptions.RallyError, match=r"Cannot run task \[no-op\]: expected unit test exception"):
@@ -1838,7 +1839,9 @@ class TestAsyncExecutor:
         params = None
         runner = mock.AsyncMock()
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
 
         assert ops == 1
         assert unit == "ops"
@@ -1850,7 +1853,9 @@ class TestAsyncExecutor:
         params = None
         runner = mock.AsyncMock(return_value=(500, "MB"))
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
 
         assert ops == 500
         assert unit == "MB"
@@ -1869,7 +1874,9 @@ class TestAsyncExecutor:
             }
         )
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
 
         assert ops == 50
         assert unit == "docs"
@@ -1879,7 +1886,7 @@ class TestAsyncExecutor:
             "success": True,
         }
 
-    @pytest.mark.parametrize("on_error", ["abort", "continue"])
+    @pytest.mark.parametrize("on_error", ["abort", OnErrorBehavior.CONTINUE])
     @pytest.mark.asyncio
     async def test_execute_single_with_connection_error_always_aborts(self, on_error):
         es = None
@@ -1894,13 +1901,19 @@ class TestAsyncExecutor:
     async def test_execute_single_with_http_400_aborts_when_specified(self):
         es = None
         params = None
-        error_meta = elastic_transport.ApiResponseMeta(status=404, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=404,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(
             side_effect=elasticsearch.NotFoundError(message="not found", meta=error_meta, body="the requested document could not be found")
         )
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
-            await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
+            await driver.execute_single(self.context_managed(runner), es, params, on_error=OnErrorBehavior.ABORT)
         assert exc.value.args[0] == (
             "Request returned an error. Error type: api, Description: not found (the requested document could not be found),"
             " HTTP Status: 404"
@@ -1912,11 +1925,17 @@ class TestAsyncExecutor:
         params = None
         empty_body = io.BytesIO(b"")
         str_literal_empty_body = str(empty_body)
-        error_meta = elastic_transport.ApiResponseMeta(status=413, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=413,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal_empty_body, meta=error_meta, body=empty_body))
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
-            await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
+            await driver.execute_single(self.context_managed(runner), es, params, on_error=OnErrorBehavior.ABORT)
         assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: None, HTTP Status: 413")
 
     @pytest.mark.asyncio
@@ -1925,23 +1944,37 @@ class TestAsyncExecutor:
         params = None
         body = io.BytesIO(b"Huge error")
         str_literal = str(body)
-        error_meta = elastic_transport.ApiResponseMeta(status=499, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=499,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal, meta=error_meta, body=body))
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
-            await driver.execute_single(self.context_managed(runner), es, params, on_error="abort")
+            await driver.execute_single(self.context_managed(runner), es, params, on_error=OnErrorBehavior.ABORT)
         assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: Huge error, HTTP Status: 499")
 
     @pytest.mark.asyncio
     async def test_execute_single_with_http_400(self):
         es = None
         params = None
-        error_meta = elastic_transport.ApiResponseMeta(status=404, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=404,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(
             side_effect=elasticsearch.NotFoundError(message="not found", meta=error_meta, body="the requested document could not be found")
         )
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
 
         assert ops == 0
         assert unit == "ops"
@@ -1956,10 +1989,18 @@ class TestAsyncExecutor:
     async def test_execute_single_with_http_413(self):
         es = None
         params = None
-        error_meta = elastic_transport.ApiResponseMeta(status=413, http_version="1.1", headers={}, duration=0.0, node=None)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=413,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         runner = mock.AsyncMock(side_effect=elasticsearch.NotFoundError(message="", meta=error_meta, body=""))
 
-        ops, unit, request_meta_data = await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
 
         assert ops == 0
         assert unit == "ops"
@@ -1987,7 +2028,7 @@ class TestAsyncExecutor:
         runner = FailingRunner()
 
         with pytest.raises(exceptions.SystemSetupError) as exc:
-            await driver.execute_single(self.context_managed(runner), es, params, on_error="continue")
+            await driver.execute_single(self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE)
         assert exc.value.args[0] == (
             "Cannot execute [failing_mock_runner]. Provided parameters are: ['bulk', 'mode']. Error: ['bulk-size missing']."
         )

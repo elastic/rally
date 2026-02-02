@@ -15,29 +15,67 @@
 # specific language governing permissions and limitations
 # under the License.
 # pylint: disable=protected-access
+from __future__ import annotations
 
 import datetime
 import json
 import logging
 import os
 import random
-import string
 import tempfile
 import uuid
 from dataclasses import dataclass
 from unittest import mock
 
+import elastic_transport
 import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
 
-from esrally import config, exceptions, metrics, paths, track
+from esrally import client, config, exceptions, metrics, paths, track
 from esrally.metrics import GlobalStatsCalculator
 from esrally.track import Challenge, Operation, Task, Track
-from esrally.utils import opts
+from esrally.utils import cases, opts, pretty
+
+
+def rally_metric_template():
+    return {
+        "mappings": {
+            "_source": {"enabled": True},
+            "date_detection": False,
+            "dynamic_templates": [
+                {"strings": {"mapping": {"ignore_above": 8191, "type": "keyword"}, "match": "*", "match_mapping_type": "string"}}
+            ],
+            "properties": {
+                "@timestamp": {"format": "epoch_millis", "type": "date"},
+                "car": {"type": "keyword"},
+                "challenge": {"type": "keyword"},
+                "environment": {"type": "keyword"},
+                "job": {"type": "keyword"},
+                "max": {"type": "float"},
+                "mean": {"type": "float"},
+                "median": {"type": "float"},
+                "meta": {"properties": {"error-description": {"type": "wildcard"}}},
+                "min": {"type": "float"},
+                "name": {"type": "keyword"},
+                "operation": {"type": "keyword"},
+                "operation-type": {"type": "keyword"},
+                "race-id": {"type": "keyword"},
+                "race-timestamp": {"fields": {"raw": {"type": "keyword"}}, "format": "basic_date_time_no_millis", "type": "date"},
+                "relative-time": {"type": "float"},
+                "sample-type": {"type": "keyword"},
+                "task": {"type": "keyword"},
+                "track": {"type": "keyword"},
+                "unit": {"type": "keyword"},
+                "value": {"type": "float"},
+            },
+        },
+        "settings": {"index": {"mapping": {"total_fields": {"limit": "2000"}}, "number_of_replicas": "3", "number_of_shards": "3"}},
+    }
 
 
 class MockClientFactory:
+
     def __init__(self, cfg):
         self._es = mock.create_autospec(metrics.EsClient)
 
@@ -49,14 +87,20 @@ class DummyIndexTemplateProvider:
     def __init__(self, cfg):
         pass
 
-    def metrics_template(self):
-        return "metrics-test-template"
+    def metrics_template(self) -> str:
+        return json.dumps({"index_patterns": ["rally-metrics-*"], "template": provided_metrics_template()})
 
     def races_template(self):
         return "races-test-template"
 
     def results_template(self):
         return "results-test-template"
+
+
+def provided_metrics_template() -> dict:
+    template = rally_metric_template()
+    template["settings"]["index"] = {"mapping.total_fields.limit": 2000, "number_of_shards": 1, "number_of_replicas": 1}
+    return template
 
 
 class StaticClock:
@@ -113,15 +157,14 @@ class TestEsClient:
             self.transport = TestEsClient.TransportMock(hosts)
 
     @pytest.mark.parametrize("password_configuration", [None, "config", "environment"])
-    @mock.patch("esrally.client.EsClientFactory")
-    def test_config_opts_parsing(self, client_esclientfactory, password_configuration, monkeypatch):
+    def test_config_opts_parsing_basic(self, password_configuration, monkeypatch):
         cfg = config.Config()
 
-        _datastore_host = ".".join([str(random.randint(1, 254)) for _ in range(4)])
-        _datastore_port = random.randint(1024, 65535)
-        _datastore_secure = random.choice(["True", "true"])
-        _datastore_user = "".join([random.choice(string.ascii_letters) for _ in range(8)])
-        _datastore_password = "".join([random.choice(string.ascii_letters + string.digits + "_-@#$/") for _ in range(12)])
+        _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
+        _datastore_port = 443
+        _datastore_secure = True
+        _datastore_user = "metricsuser"
+        _datastore_password = "metricspassword"
         _datastore_verify_certs = random.choice([True, False])
         _datastore_probe_version = False
 
@@ -134,13 +177,14 @@ class TestEsClient:
         if password_configuration == "config":
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
         elif password_configuration == "environment":
-            monkeypatch.setenv("RALLY_REPORTING_DATASTORE_PASSWORD", _datastore_password)
+            monkeypatch.setattr(metrics, "DATASTORE_PASSWORD", _datastore_password)
 
         if not _datastore_verify_certs:
             cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
 
+        client_factory = mock.create_autospec(client.EsClientFactory)
         try:
-            metrics.EsClientFactory(cfg)
+            metrics.EsClientFactory(cfg, client_factory=client_factory)
         except exceptions.ConfigError as e:
             if password_configuration is not None:
                 raise
@@ -159,7 +203,106 @@ class TestEsClient:
             "verify_certs": _datastore_verify_certs,
         }
 
-        client_esclientfactory.assert_called_with(
+        client_factory.assert_called_with(
+            hosts=[{"host": _datastore_host, "port": _datastore_port}],
+            client_options=expected_client_options,
+            distribution_version=None,
+            distribution_flavor=None,
+        )
+
+    @pytest.mark.parametrize("apikey_configuration", ["config", "environment"])
+    def test_config_opts_parsing_apikey(self, apikey_configuration, monkeypatch):
+        cfg = config.Config()
+
+        _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
+        _datastore_port = 443
+        _datastore_secure = True
+        _datastore_apikey = "METRICSAPIKEYTEST=="
+        _datastore_verify_certs = False
+        _datastore_probe_version = False
+
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.probe.cluster_version", _datastore_probe_version)
+
+        if apikey_configuration == "config":
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.api_key", _datastore_apikey)
+        elif apikey_configuration == "environment":
+            monkeypatch.setattr(metrics, "DATASTORE_API_KEY", _datastore_apikey)
+
+        if not _datastore_verify_certs:
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
+
+        client_factory = mock.create_autospec(client.EsClientFactory)
+        try:
+            metrics.EsClientFactory(cfg, client_factory=client_factory)
+        except exceptions.ConfigError as e:
+            if apikey_configuration is not None:
+                raise
+
+            assert (
+                e.message == "Either basic authentication (username and password) or an API key is required in the reporting configuration."
+            )
+            return
+
+        expected_client_options = {
+            "use_ssl": True,
+            "timeout": 120,
+            "verify_certs": _datastore_verify_certs,
+            "api_key": _datastore_apikey,
+        }
+
+        client_factory.assert_called_with(
+            hosts=[{"host": _datastore_host, "port": _datastore_port}],
+            client_options=expected_client_options,
+            distribution_version=None,
+            distribution_flavor=None,
+        )
+
+    def test_config_opts_parsing_both_password_apikey(self, monkeypatch):
+        cfg = config.Config()
+
+        _datastore_host = "rally-metrics-123abc.es.us-east-1.aws.elastic.cloud"
+        _datastore_port = 443
+        _datastore_secure = True
+        _datastore_user = "metricsuser"
+        _datastore_password = "metricspassword"
+        _datastore_apikey = "METRICSAPIKEYTEST=="
+        _datastore_verify_certs = False
+        _datastore_probe_version = False
+        _datastore_verify_certs = False
+        _datastore_probe_version = False
+
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.host", _datastore_host)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.port", _datastore_port)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.secure", _datastore_secure)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.user", _datastore_user)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.probe.cluster_version", _datastore_probe_version)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.password", _datastore_password)
+        cfg.add(config.Scope.applicationOverride, "reporting", "datastore.api_key", _datastore_apikey)
+
+        if not _datastore_verify_certs:
+            cfg.add(config.Scope.applicationOverride, "reporting", "datastore.ssl.verification_mode", "none")
+
+        client_factory = mock.create_autospec(client.EsClientFactory)
+        try:
+            metrics.EsClientFactory(cfg, client_factory=client_factory)
+        except exceptions.ConfigError as e:
+            assert (
+                e.message
+                == "Both basic authentication (username/password) and API key are provided. Please provide only one authentication method."
+            )
+            return
+
+        expected_client_options = {
+            "use_ssl": True,
+            "timeout": 120,
+            "verify_certs": _datastore_verify_certs,
+            "api_key": _datastore_apikey,
+        }
+
+        client_factory.assert_called_with(
             hosts=[{"host": _datastore_host, "port": _datastore_port}],
             client_options=expected_client_options,
             distribution_version=None,
@@ -234,7 +377,12 @@ class TestEsClient:
                 return logging_statements
 
             def raise_error(self):
-                err = elasticsearch.exceptions.ApiError("unit-test", meta=TestEsClient.ApiResponseMeta(status=self.status_code), body={})
+                err = elasticsearch.exceptions.ApiError(
+                    "unit-test",
+                    # TODO remove this ignore when introducing type hints
+                    meta=TestEsClient.ApiResponseMeta(status=self.status_code),  # type: ignore[arg-type]
+                    body={},
+                )
                 raise err
 
         class BulkIndexError:
@@ -321,7 +469,9 @@ class TestEsClient:
 
     def test_raises_sytem_setup_error_on_authentication_problems(self):
         def raise_authentication_error():
-            raise elasticsearch.exceptions.AuthenticationException(meta=None, body=None, message="unit-test")
+            raise elasticsearch.exceptions.AuthenticationException(
+                meta=None, body=None, message="unit-test"  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            )
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
@@ -334,7 +484,9 @@ class TestEsClient:
 
     def test_raises_sytem_setup_error_on_authorization_problems(self):
         def raise_authorization_error():
-            raise elasticsearch.exceptions.AuthorizationException(meta=None, body=None, message="unit-test")
+            raise elasticsearch.exceptions.AuthorizationException(
+                meta=None, body=None, message="unit-test"  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            )
 
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
 
@@ -429,6 +581,67 @@ class TestEsMetrics:
         # get hold of the mocked client...
         self.es_mock = self.metrics_store._client
         self.es_mock.exists.return_value = False
+        self.es_mock.template_exists.return_value = False
+        self.es_mock.get_template.return_value = mock.create_autospec(elastic_transport.ObjectApiResponse, body={"index_templates": []})
+        self.metrics_store.logger = mock.create_autospec(logging.Logger)
+
+    @dataclass
+    class OpenCase:
+        create: bool = True
+        template: dict | None = None
+        overwrite_templates: str | None = None
+        want_put_template: bool = False
+        want_logger_call: mock._Call | None = None
+
+    @cases.cases(
+        create_false=OpenCase(create=False),
+        default=OpenCase(
+            want_put_template=True,
+            want_logger_call=mock.call.info("Create index template:\n%s", pretty.dump(provided_metrics_template(), pretty.Flag.FLAT_DICT)),
+        ),
+        template_exists=OpenCase(
+            template=rally_metric_template(),
+            want_logger_call=mock.call.debug(
+                "Keep existing template (datastore.overwrite_existing_templates = false):\n%s",
+                pretty.diff(rally_metric_template(), provided_metrics_template(), pretty.Flag.FLAT_DICT),
+            ),
+        ),
+        keep_identical_template=OpenCase(
+            template=provided_metrics_template(), want_logger_call=mock.call.debug("Keep existing template (it is identical)")
+        ),
+        overwrite_templates_true=OpenCase(
+            template=rally_metric_template(),
+            overwrite_templates="true",
+            want_put_template=True,
+            want_logger_call=mock.call.warning(
+                "Overwrite existing index template (datastore.overwrite_existing_templates = true):\n%s",
+                pretty.diff(rally_metric_template(), provided_metrics_template(), pretty.Flag.FLAT_DICT),
+            ),
+        ),
+        overwrite_templates_false=OpenCase(
+            template=rally_metric_template(),
+            overwrite_templates="false",
+            want_logger_call=mock.call.debug(
+                "Keep existing template (datastore.overwrite_existing_templates = false):\n%s",
+                pretty.diff(rally_metric_template(), provided_metrics_template(), pretty.Flag.FLAT_DICT),
+            ),
+        ),
+    )
+    def test_open(self, case: OpenCase):
+        if case.template is not None:
+            self.metrics_store._client.template_exists.return_value = True
+            self.metrics_store._client.get_template.return_value.body["index_templates"] = [{"index_template": {"template": case.template}}]
+        if case.overwrite_templates is not None:
+            self.cfg.add(
+                scope=config.Scope.application,
+                section="reporting",
+                key="datastore.overwrite_existing_templates",
+                value=case.overwrite_templates,
+            )
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=case.create)
+        assert case.want_put_template == self.metrics_store._client.put_template.called
+        if case.want_logger_call is not None:
+            assert self.metrics_store.logger.method_calls[-1:] == [case.want_logger_call]
 
     def test_put_value_without_meta_info(self):
         throughput = 5000
@@ -1214,7 +1427,9 @@ class TestEsRaceStore:
     def test_filter_race(self):
         self.es_mock.search.return_value = {"hits": {"total": 0}}
         self.cfg.add(config.Scope.application, "system", "admin.track", "unittest")
+        self.cfg.add(config.Scope.application, "system", "list.challenge", "unittest-challenge")
         self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
+        self.cfg.add(config.Scope.application, "system", "list.races.user_tags", {"env-id": "123", "name": "unittest-test2"})
         self.cfg.add(config.Scope.application, "system", "list.to_date", "20160131")
         self.cfg.add(config.Scope.application, "system", "list.from_date", "20160230")
         self.race_store.list()
@@ -1233,6 +1448,9 @@ class TestEsRaceStore:
                                 ]
                             }
                         },
+                        {"term": {"challenge": "unittest-challenge"}},
+                        {"term": {"user-tags.env-id": "123"}},
+                        {"term": {"user-tags.name": "unittest-test2"}},
                     ]
                 }
             },
@@ -1887,7 +2105,7 @@ class TestFileRaceStore:
             race_id=self.RACE_ID,
             race_timestamp=self.RACE_TIMESTAMP,
             pipeline="from-sources",
-            user_tags={"name": "unittest-test"},
+            user_tags={"name": "unittest-test", "env-id": "123"},
             track=t,
             track_params={"clients": 12},
             challenge=t.default_challenge,
@@ -1906,11 +2124,17 @@ class TestFileRaceStore:
         assert len(self.race_store.list()) == 0
         self.cfg.add(config.Scope.application, "system", "list.races.benchmark_name", "unittest-test")
         assert len(self.race_store.list()) == 1
+        self.cfg.add(config.Scope.application, "system", "list.races.user_tags", {"env-id": "321", "name": "unittest-test"})
+        assert len(self.race_store.list()) == 0
+        self.cfg.add(config.Scope.application, "system", "list.races.user_tags", {"env-id": "123", "name": "unittest-test"})
+        assert len(self.race_store.list()) == 1
         self.cfg.add(config.Scope.application, "system", "list.to_date", "20160129")
         assert len(self.race_store.list()) == 0
         self.cfg.add(config.Scope.application, "system", "list.to_date", "20160131")
         assert len(self.race_store.list()) == 1
         self.cfg.add(config.Scope.application, "system", "list.from_date", "20160131")
+        assert len(self.race_store.list()) == 1
+        self.cfg.add(config.Scope.application, "system", "list.challenge", t.default_challenge.name)
         assert len(self.race_store.list()) == 1
 
     def test_delete_race(self):

@@ -70,6 +70,17 @@ To customize Rally you can create your own ``rally.ini`` and bind mount it using
 
     docker run -v /home/<myuser>/custom_rally.ini:/rally/.rally/rally.ini elastic/rally ...
 
+As a quality of life improvement, the ``rally.ini`` and ``logging.json`` files can use ``${CONFIG_DIR}`` in ``rally.ini`` and ``${LOG_PATH}`` in ``logging.json`` in order to
+make the files more portable. For example:
+
+* In ``rally.ini``, you can set ``root.dir = ${CONFIG_DIR}/benchmarks`` instead of hard-coding the path as ``/rally/.rally/benchmarks``
+* In ``logging.json``, you can set ``"filename": "${LOG_PATH}/rally.log"`` instead of hard-coding the path as ``"filename": "/rally/.rally/logs/rally.log"``
+
+These files can then be used with the docker image, with the entire local ``~/.rally`` directory mounted as follows::
+
+    docker run -v type=bind,source=$HOME/.rally,target=/rally/.rally elastic/rally ...
+
+
 Persistence
 -----------
 
@@ -111,7 +122,7 @@ To further examine the contents we can bind mount it from another image e.g.:
 
 .. parsed-literal:: :class: literal-block highlight
 
-    $ docker run --rm -i -v=96256462c3a1f61120443e6d69d9cb0091b28a02234318bdabc52b6801972199:/rallyvolume -ti python:3.8.12-slim-bullseye /bin/bash
+    $ docker run --rm -i -v=96256462c3a1f61120443e6d69d9cb0091b28a02234318bdabc52b6801972199:/rallyvolume -ti python:3.11.11-slim-bullseye /bin/bash
     root@9a7dd7b3d8df:/# cd /rallyvolume/
     root@9a7dd7b3d8df:/rallyvolume# ls
     root@9a7dd7b3d8df:/rallyvolume/.rally# ls

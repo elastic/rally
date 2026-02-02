@@ -103,6 +103,7 @@ EOL
 
     #then create an archive with all dependencies
     tar -czf "${archive_name}" "${RELATIVE_DOWNLOAD_DIR}"
+    sha256sum ${archive_name} > ${archive_name}.sha256
 
     echo "Successfully created ${archive_name}."
     echo ""

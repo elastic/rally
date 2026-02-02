@@ -974,7 +974,9 @@ class TestTemplateRender:
             "key": {{'01-01-2000' | days_ago(now)}},
             "key2": "static value",
             "key3": "{{build_flavor}}",
-            "key4": {{serverless_operator}}
+            "key4": {{serverless_operator}},
+            "key5": {{now | get_start_date('%Y-%m-%d') | tojson}},
+            "key6": {{now | get_end_date(1, '%Y-%m-%d') | tojson}}
         }
         """
 
@@ -985,7 +987,9 @@ class TestTemplateRender:
             "key": 5864,
             "key2": "static value",
             "key3": "test",
-            "key4": False
+            "key4": False,
+            "key5": "2016-01-21",
+            "key6": "2016-01-22"
         }
         """
         assert rendered == expected
@@ -2758,7 +2762,7 @@ class TestTrackSpecificationReader:
             "indices": [
                 {
                     "name": "index-historical",
-                    "body": "body.json"
+                    "body": "body.json",
                     # no type information here
                 }
             ],

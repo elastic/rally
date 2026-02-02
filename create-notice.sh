@@ -43,7 +43,7 @@ function main {
     printf "The source code can be obtained at https://github.com/certifi/python-certifi\n" >> "${OUTPUT_FILE}"
     add_license "certifi" "https://raw.githubusercontent.com/certifi/python-certifi/master/LICENSE"
     add_license "elasticsearch" "https://raw.githubusercontent.com/elastic/elasticsearch-py/main/LICENSE"
-    add_license "jinja2" "https://raw.githubusercontent.com/pallets/jinja/main/LICENSE.rst"
+    add_license "jinja2" "https://raw.githubusercontent.com/pallets/jinja/main/LICENSE.txt"
     add_license "jsonschema" "https://raw.githubusercontent.com/Julian/jsonschema/main/COPYING"
     add_license "psutil" "https://raw.githubusercontent.com/giampaolo/psutil/master/LICENSE"
     add_license "py-cpuinfo" "https://raw.githubusercontent.com/workhorsy/py-cpuinfo/master/LICENSE"
@@ -58,7 +58,7 @@ function main {
 
     # transitive dependencies
     # Jinja2 dependencies
-    add_license "Markupsafe" "https://raw.githubusercontent.com/pallets/markupsafe/main/LICENSE.rst"
+    add_license "Markupsafe" "https://raw.githubusercontent.com/pallets/markupsafe/main/LICENSE.txt"
     # elasticsearch dependencies
     add_license "urllib3" "https://raw.githubusercontent.com/urllib3/urllib3/main/LICENSE.txt"
     #elasticsearch[async] dependencies

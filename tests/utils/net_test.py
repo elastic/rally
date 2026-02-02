@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 import random
+from collections.abc import Mapping
+from typing import Union
 from unittest import mock
 
 import pytest
@@ -135,7 +137,8 @@ def test_download_http(httpserver, tmp_path):
 
 def test_download_http_retry_incomplete_read_retry_failure(httpserver, tmp_path):
     data = b"x" * 10
-    short_resp = Response(headers={"Content-Length": 100, "foo": "bar"})
+    headers: Mapping[str, Union[str, int]] = {"Content-Length": 100, "foo": "bar"}
+    short_resp = Response(headers=headers)
     short_resp.automatically_set_content_length = False
     short_resp.set_data(data)
 
@@ -154,7 +157,8 @@ def test_download_http_retry_incomplete_read_retry_failure(httpserver, tmp_path)
 
 def test_download_http_retry_incomplete_read_retry_success(httpserver, tmp_path):
     data = b"x" * 10
-    short_resp = Response(headers={"Content-Length": 100, "foo": "bar"})
+    headers: Mapping[str, Union[str, int]] = {"Content-Length": 100, "foo": "bar"}
+    short_resp = Response(headers=headers)
     short_resp.automatically_set_content_length = False
     short_resp.set_data(data)
 

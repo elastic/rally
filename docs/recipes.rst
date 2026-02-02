@@ -324,4 +324,3 @@ When a benchmark is executed with ``--enable-assertions`` and this query returns
 
     [ERROR] Cannot race. Error in load generator [0]
         Cannot run task [geo_distance]: Expected [hits] to be > [0] but was [0].
-
