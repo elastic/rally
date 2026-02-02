@@ -643,6 +643,12 @@ class BulkIndexParamSource(ParamSource):
                     raise exceptions.InvalidSyntax("'ingest-doc-count' must be positive but was %d" % self.ingest_doc_count)
             except ValueError:
                 raise exceptions.InvalidSyntax("'ingest-doc-count' must be numeric")
+            total_docs = sum(corpus.number_of_documents(source_format="bulk") for corpus in self.corpora)
+            if self.ingest_doc_count > total_docs:
+                raise exceptions.InvalidSyntax(
+                    "'ingest-doc-count' must be less than or equal to the total number of documents in the corpus (%d) but was %d"
+                    % (total_docs, self.ingest_doc_count)
+                )
         else:
             self.ingest_doc_count = None
         self.refresh = params.get("refresh")
@@ -818,8 +824,6 @@ class PartitionBulkIndexParamSource:
         all_bulks = number_of_bulks(self.corpora, start_index, end_index, self.total_partitions, self.bulk_size)
         if self.ingest_doc_count is not None:
             self.total_bulks = math.ceil(self.ingest_doc_count / self.bulk_size)
-            # Don't exceed the actual number of available bulks
-            self.total_bulks = min(self.total_bulks, all_bulks)
         else:
             self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
 

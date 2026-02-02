@@ -1430,33 +1430,32 @@ class TestBulkIndexParamSource:
         assert partition.total_bulks == 3
         assert len(list(schedule(partition))) == 3
 
-    def test_ingest_doc_count_does_not_exceed_corpus_size(self):
-        corpora = [
-            track.DocumentCorpus(
-                name="default",
-                documents=[
-                    track.Documents(
-                        source_format=track.Documents.SOURCE_FORMAT_BULK,
-                        number_of_documents=50000,
-                        target_index="test-idx",
-                        target_type="test-type",
-                    )
-                ],
-            ),
-        ]
-
-        source = params.BulkIndexParamSource(
-            track=track.Track(name="unit-test", corpora=corpora),
-            params={
-                "bulk-size": 10000,
-                "ingest-doc-count": 1000000,  # More than corpus size
-            },
+    def test_ingest_doc_count_exceeds_corpus_size(self):
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=50000,
+                    target_index="test-idx",
+                    target_type="test-type",
+                )
+            ],
         )
 
-        partition = source.partition(0, 1)
-        partition._init_internal_params()
-        # Corpus only has 50000 docs = 5 bulks, so should cap at 5 despite asking for 100 bulks
-        assert partition.total_bulks == 5
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.BulkIndexParamSource(
+                track=track.Track(name="unit-test", corpora=[corpus]),
+                params={
+                    "bulk-size": 10000,
+                    "ingest-doc-count": 1000000,  # More than corpus size
+                },
+            )
+
+        assert (
+            exc.value.args[0]
+            == "'ingest-doc-count' must be less than or equal to the total number of documents in the corpus (50000) but was 1000000"
+        )
 
     def test_looped_mode(self):
         def create_unit_test_reader(*args):
