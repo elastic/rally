@@ -15,14 +15,21 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import dataclasses
 import json
 import math
 import random
 from unittest import mock
 
 import pytest
+from elasticsearch import AsyncElasticsearch
 
-from esrally.client.asynchronous import RallyTCPConnector, ResponseMatcher
+from esrally.client.asynchronous import (
+    RallyAsyncElasticsearch,
+    RallyTCPConnector,
+    ResponseMatcher,
+)
+from esrally.utils.cases import cases
 
 
 class TestResponseMatcher:
@@ -115,3 +122,133 @@ async def test_resolve_host_even_client_allocation(
         assert num_of_clients == upper_bound or lower_bound
 
     assert sum(ip_alloc.values()) == num_clients
+
+
+def _make_response():
+    return mock.MagicMock()
+
+
+@dataclasses.dataclass
+class PerformRequestCase:
+    distribution_version: str | None
+    distribution_flavor: str | None
+    method: str
+    path: str
+    body: str | None
+    headers: dict[str, str] | None
+    compatibility_mode: int | None
+    want_content_type: str | None = None
+    want_accept: str | None = None
+
+
+@cases(
+    distribution_8_sets_compat_headers=PerformRequestCase(
+        distribution_version="8.0.0",
+        distribution_flavor=None,
+        method="GET",
+        path="/_cluster/health",
+        body="{}",
+        headers=None,
+        compatibility_mode=None,
+        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+    ),
+    distribution_9_bulk_sets_ndjson_compat=PerformRequestCase(
+        distribution_version="9.1.0",
+        distribution_flavor=None,
+        method="POST",
+        path="/_bulk",
+        body='{"index":{}}\n',
+        headers=None,
+        compatibility_mode=None,
+        want_content_type="application/vnd.elasticsearch+x-ndjson; compatible-with=9",
+        want_accept="application/vnd.elasticsearch+x-ndjson; compatible-with=9",
+    ),
+    serverless_no_compat_rewrite=PerformRequestCase(
+        distribution_version="8.0.0",
+        distribution_flavor="serverless",
+        method="GET",
+        path="/",
+        body="{}",
+        headers=None,
+        compatibility_mode=None,
+        want_content_type="application/json",
+        want_accept="application/json",
+    ),
+    explicit_compatibility_mode_overrides=PerformRequestCase(
+        distribution_version="9.0.0",
+        distribution_flavor=None,
+        method="GET",
+        path="/",
+        body="{}",
+        headers=None,
+        compatibility_mode=8,
+        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+    ),
+    no_body_no_default_headers=PerformRequestCase(
+        distribution_version=None,
+        distribution_flavor=None,
+        method="HEAD",
+        path="/my_index/_doc/1",
+        body=None,
+        headers=None,
+        compatibility_mode=None,
+        want_content_type=None,
+        want_accept=None,
+    ),
+    passthrough_method_path_params=PerformRequestCase(
+        distribution_version="8.0.0",
+        distribution_flavor=None,
+        method="POST",
+        path="/my_index/_doc",
+        body='{"a":1}',
+        headers={"x-custom": "value"},
+        compatibility_mode=None,
+        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+    ),
+)
+@pytest.mark.asyncio
+async def test_perform_request(
+    case: PerformRequestCase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # instance=True is not allowed for async functions in create_autospec (Python 3.13)
+    mock_super = mock.create_autospec(AsyncElasticsearch.perform_request, instance=False)
+    mock_super.return_value = mock.AsyncMock(return_value=_make_response())
+    monkeypatch.setattr(
+        "esrally.client.asynchronous.AsyncElasticsearch.perform_request",
+        mock_super,
+    )
+    client = RallyAsyncElasticsearch(
+        hosts=["http://localhost:9200"],
+        distribution_version=case.distribution_version,
+        distribution_flavor=case.distribution_flavor,
+    )
+    await client.perform_request(
+        case.method,
+        case.path,
+        body=case.body,
+        headers=case.headers,
+        compatibility_mode=case.compatibility_mode,
+    )
+    mock_super.assert_called_once_with(
+        client,
+        case.method,
+        case.path,
+        params=None,
+        headers=mock.ANY,
+        body=case.body,
+        endpoint_id=None,
+        path_parts=None,
+    )
+    passed_headers = mock_super.call_args[1]["headers"]
+    if case.want_content_type is not None:
+        assert passed_headers.get("content-type") == case.want_content_type
+    if case.want_accept is not None:
+        assert passed_headers.get("accept") == case.want_accept
+    if case.headers:
+        for key, value in case.headers.items():
+            if key.lower() not in ("content-type", "accept"):
+                assert passed_headers.get(key) == value
