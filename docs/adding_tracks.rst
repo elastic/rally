@@ -299,7 +299,7 @@ Congratulations, you have created your first track! You can test it with ``esral
 
 .. note::
 
-    To test the track with Elasticsearch prior to 7.0.0 you need to update ``index.json`` and ``track.json`` as specified in notes above and then execute ``esrally race --distribution-version=9.2.4 --track-path=~/rally-tracks/tutorial``.
+    Rally supports Elasticsearch 8.0.0 and above. The example above uses 9.2.4. For older track format (e.g. mapping types), see the notes earlier in this section.
 
 
 .. _add_track_test_mode:

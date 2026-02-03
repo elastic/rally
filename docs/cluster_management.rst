@@ -23,7 +23,7 @@ Getting Started: Benchmarking a Single Node
 
 In this section we will setup a single Elasticsearch node locally, run a benchmark and then cleanup.
 
-First we need to install Elasticearch::
+First we need to install Elasticsearch::
 
     esrally install --quiet --distribution-version=9.2.4 --node-name="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
 
