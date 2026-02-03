@@ -118,6 +118,30 @@ class EnsureMimetypeHeadersCase:
         want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
         want_accept="application/vnd.elasticsearch+json; compatible-with=8",
     ),
+    compatibility_mode_skips_missing_headers=EnsureMimetypeHeadersCase(
+        headers=None,
+        path="/_cluster/health",
+        body=None,
+        compatibility_mode=8,
+        want_content_type=None,
+        want_accept=None,
+    ),
+    compatibility_mode_rewrites_only_present_accept=EnsureMimetypeHeadersCase(
+        headers={"accept": "application/json"},
+        path="/_cluster/health",
+        body=None,
+        compatibility_mode=8,
+        want_content_type=None,
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+    ),
+    compatibility_mode_rewrites_only_present_content_type=EnsureMimetypeHeadersCase(
+        headers={"content-type": "application/json"},
+        path="/_cluster/health",
+        body=None,
+        compatibility_mode=8,
+        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
+        want_accept=None,
+    ),
 )
 def test_ensure_mimetype_headers(case: EnsureMimetypeHeadersCase) -> None:
     result = common.ensure_mimetype_headers(

@@ -45,8 +45,11 @@ def ensure_mimetype_headers(
     if compatibility_mode is not None:
         # It ensures compatibility mode is being applied to mime type.
         for header in ("accept", "content-type"):
+            mimetype = headers.get(header)
+            if mimetype is None:
+                continue
             headers[header] = _COMPAT_MIMETYPE_RE.sub(
-                "application/vnd.elasticsearch+%s; compatible-with=%s" % (r"\g<1>", compatibility_mode), headers[header]
+                "application/vnd.elasticsearch+%s; compatible-with=%s" % (r"\g<1>", compatibility_mode), mimetype
             )
     return headers
 
