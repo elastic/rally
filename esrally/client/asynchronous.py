@@ -18,40 +18,20 @@
 import asyncio
 import json
 import logging
-import warnings
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import Any, Optional
 
 import aiohttp
 from aiohttp import BaseConnector, RequestInfo
 from aiohttp.client_proto import ResponseHandler
 from aiohttp.helpers import BaseTimerContext
-from elastic_transport import (
-    AiohttpHttpNode,
-    ApiResponse,
-    AsyncTransport,
-    BinaryApiResponse,
-    HeadApiResponse,
-    ListApiResponse,
-    ObjectApiResponse,
-    OpenTelemetrySpan,
-    TextApiResponse,
-)
-from elastic_transport.client_utils import DEFAULT
+from elastic_transport import AiohttpHttpNode, ApiResponse, AsyncTransport
 from elasticsearch import AsyncElasticsearch
 from elasticsearch._async.client import IlmClient
-from elasticsearch.compat import warn_stacklevel
-from elasticsearch.exceptions import (
-    HTTP_EXCEPTIONS,
-    ApiError,
-    ElasticsearchWarning,
-    UnsupportedProductError,
-)
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
-from esrally.client.common import _WARNING_RE, _quote_query, mimetype_headers_to_compat
-from esrally.client.context import RequestContextHolder
+from esrally.client import common, context
 from esrally.utils import io, versions
 
 
@@ -335,7 +315,7 @@ class RallyIlmClient(IlmClient):
         return await IlmClient.put_lifecycle(self, **kwargs)
 
 
-class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
+class RallyAsyncElasticsearch(AsyncElasticsearch, context.RequestContextHolder):
     def __init__(self, hosts: Any = None, *, distribution_version: str | None = None, distribution_flavor: str | None = None, **kwargs):
         super().__init__(hosts, **kwargs)
         # skip verification at this point; we've already verified this earlier with the synchronous client.
@@ -360,114 +340,25 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         new_self.distribution_flavor = self.distribution_flavor
         return new_self
 
-    async def _perform_request(
+    async def perform_request(
         self,
         method: str,
         path: str,
         *,
-        params: Optional[Mapping[str, Any]] = None,
-        headers: Optional[Mapping[str, str]] = None,
-        body: Optional[Any] = None,
-        otel_span: OpenTelemetrySpan,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        body: Any = None,
+        endpoint_id: str | None = None,
+        path_parts: Mapping[str, Any] | None = None,
+        compatibility_mode: int | None = None,
     ) -> ApiResponse[Any]:
-        if headers:
-            request_headers = self._headers.copy()
-            request_headers.update(headers)
-        else:
-            request_headers = self._headers
-
-        if body is not None:
-            # It ensures content-type and accept headers are set.
-            mimetype = "application/json"
-            if path.endswith("/_bulk"):
-                mimetype = "application/x-ndjson"
-            for header in ("content-type", "accept"):
-                request_headers.setdefault(header, mimetype)
-
-        if not self.is_serverless:
-            # Converts all parts of a Accept/Content-Type headers
-            # from application/X -> application/vnd.elasticsearch+X
-            # see https://github.com/elastic/elasticsearch/issues/51816
-            mimetype_headers_to_compat(request_headers, self.distribution_version)
-
-        if params:
-            target = f"{path}?{_quote_query(params)}"
-        else:
-            target = path
-
-        meta, resp_body = await self.transport.perform_request(
-            method,
-            target,
-            headers=request_headers,
+        headers = common.ensure_mimetype_headers(
+            headers=headers,
+            path=path,
             body=body,
-            request_timeout=self._request_timeout,
-            max_retries=self._max_retries,
-            retry_on_status=self._retry_on_status,
-            retry_on_timeout=self._retry_on_timeout,
-            client_meta=self._client_meta,
-            otel_span=otel_span,
+            compatibility_mode=compatibility_mode
+            or common.compatibility_mode_from_distribution(version=self.distribution_version, flavour=self.distribution_flavor),
         )
-
-        # HEAD with a 404 is returned as a normal response
-        # since this is used as an 'exists' functionality.
-        if not (method == "HEAD" and meta.status == 404) and (
-            not 200 <= meta.status < 299
-            and (self._ignore_status is DEFAULT or self._ignore_status is None or meta.status not in self._ignore_status)
-        ):
-            message = str(resp_body)
-
-            # If the response is an error response try parsing
-            # the raw Elasticsearch error before raising.
-            if isinstance(resp_body, dict):
-                try:
-                    error = resp_body.get("error", message)
-                    if isinstance(error, dict) and "type" in error:
-                        error = error["type"]
-                    message = error
-                except (ValueError, KeyError, TypeError):
-                    pass
-
-            raise HTTP_EXCEPTIONS.get(meta.status, ApiError)(message=message, meta=meta, body=resp_body)
-
-        # 'X-Elastic-Product: Elasticsearch' should be on every 2XX response.
-        if not self._verified_elasticsearch:
-            # If the header is set we mark the server as verified.
-            if meta.headers.get("x-elastic-product", "") == "Elasticsearch":
-                self._verified_elasticsearch = True
-            # Otherwise we only raise an error on 2XX responses.
-            elif meta.status >= 200 and meta.status < 300:
-                raise UnsupportedProductError(
-                    message="The client noticed that the server is not Elasticsearch " "and we do not support this unknown product",
-                    meta=meta,
-                    body=resp_body,
-                )
-
-        # 'Warning' headers should be reraised as 'ElasticsearchWarning'
-        if "warning" in meta.headers:
-            warning_header = (meta.headers.get("warning") or "").strip()
-            warning_messages: Iterable[str] = _WARNING_RE.findall(warning_header) or (warning_header,)
-            stacklevel = warn_stacklevel()
-            for warning_message in warning_messages:
-                warnings.warn(
-                    warning_message,
-                    category=ElasticsearchWarning,
-                    stacklevel=stacklevel,
-                )
-
-        if method == "HEAD":
-            response = HeadApiResponse(meta=meta)
-        elif isinstance(resp_body, dict):
-            response = ObjectApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-        elif isinstance(resp_body, list):
-            response = ListApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-        elif isinstance(resp_body, str):
-            response = TextApiResponse(  # type: ignore[assignment]
-                body=resp_body,
-                meta=meta,
-            )
-        elif isinstance(resp_body, bytes):
-            response = BinaryApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-        else:
-            response = ApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-
-        return response
+        return await super().perform_request(
+            method, path, params=params, headers=headers, body=body, endpoint_id=endpoint_id, path_parts=path_parts
+        )

@@ -12,24 +12,43 @@ _WARNING_RE = re.compile(r"\"([^\"]*)\"")
 _COMPAT_MIMETYPE_RE = re.compile(r"application/(json|x-ndjson|vnd\.mapbox-vector-tile)")
 
 
-def mimetype_headers_to_compat(
-    headers: elastic_transport.HttpHeaders,
-    distribution_version: str | None = None,
-) -> None:
-    if not headers:
-        return
+def compatibility_mode_from_distribution(*, version: str | None = None, flavour: str | None = None) -> int | None:
+    if flavour and versions.is_serverless(flavour):
+        # Serverless doesn't need compatibility mode.
+        return None
+    if version and versions.is_version_identifier(version):
+        return int(versions.Version.from_string(version).major)
 
-    major_version = 8
-    if versions.is_version_identifier(distribution_version):
-        major_version = versions.Version.from_string(distribution_version).major
+    # To improve compatibilit it prefers to ignore compatibility mode in case it can't understand distribution version.
+    return None
 
-    for header in ("accept", "content-type"):
-        mimetype = headers.get(header)
-        if not mimetype:
-            continue
-        headers[header] = _COMPAT_MIMETYPE_RE.sub(
-            "application/vnd.elasticsearch+%s; compatible-with=%s" % (r"\g<1>", major_version), mimetype
-        )
+
+def ensure_mimetype_headers(
+    *,
+    headers: Mapping[str, str] | None = None,
+    path: str | None = None,
+    body: str | None = None,
+    compatibility_mode: int | None = None,
+) -> elastic_transport.HttpHeaders:
+    # It makes sure it uses a case-insensitive copy of input headers.
+    headers = elastic_transport.HttpHeaders(headers or {})
+
+    if body is not None:
+        # It ensures content-type and accept headers are initialized.
+        mimetype = "application/json"
+        if path is not None and path.endswith("/_bulk"):
+            # Server version 9 is picky about this. This should improve compatibility.
+            mimetype = "application/x-ndjson"
+        for header in ("content-type", "accept"):
+            headers.setdefault(header, mimetype)
+
+    if compatibility_mode is not None:
+        # It ensures compatibility mode is being applied to mime type.
+        for header in ("accept", "content-type"):
+            headers[header] = _COMPAT_MIMETYPE_RE.sub(
+                "application/vnd.elasticsearch+%s; compatible-with=%s" % (r"\g<1>", compatibility_mode), headers[header]
+            )
+    return headers
 
 
 def _escape(value: Any) -> str:
