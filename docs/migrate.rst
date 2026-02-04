@@ -213,7 +213,7 @@ Previously a subcommand was optional when running a benchmark. With Rally 2.1.0 
 
 Invoke Rally with the ``race`` subcommand instead::
 
-    esrally race --distribution-version=9.2.4
+    esrally race --distribution-version=7.10.0
 
 
 Running without a track is deprecated
@@ -225,7 +225,7 @@ Previously Rally has implicitly chosen the geonames track as default when ``--tr
 
 Invoke Rally with ``--track=geonames`` instead::
 
-    esrally race --distribution-version=9.2.4 --track=geonames
+    esrally race --distribution-version=7.10.0 --track=geonames
 
 
 Migrating to Rally 2.0.4
@@ -240,7 +240,7 @@ Rally 2.0.4 will warn when invoked without subcommand. So instead of invoking::
 
 Invoke Rally with the ``race`` subcommand instead::
 
-    esrally race --distribution-version=9.2.4
+    esrally race --distribution-version=7.10.0
 
 When Rally is invoked without a subcommand it will issue the following warning on the command line and in the log file::
 
