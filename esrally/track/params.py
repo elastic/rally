@@ -634,6 +634,27 @@ class BulkIndexParamSource(ParamSource):
             raise exceptions.InvalidSyntax("'batch-size' must be numeric")
 
         self.ingest_percentage = self.float_param(params, name="ingest-percentage", default_value=100, min_value=0, max_value=100)
+        if "ingest-doc-count" in params:
+            if "ingest-percentage" in params:
+                raise exceptions.InvalidSyntax("'ingest-doc-count' and 'ingest-percentage' are mutually exclusive")
+            try:
+                self.ingest_doc_count = int(params.get("ingest-doc-count"))
+                if self.ingest_doc_count <= 0:
+                    raise exceptions.InvalidSyntax("'ingest-doc-count' must be positive but was %d" % self.ingest_doc_count)
+            except ValueError:
+                raise exceptions.InvalidSyntax("'ingest-doc-count' must be numeric")
+            if self.ingest_doc_count % self.bulk_size != 0:
+                raise exceptions.InvalidSyntax(
+                    "'ingest-doc-count' must be a multiple of 'bulk-size' (%d) but was %d" % (self.bulk_size, self.ingest_doc_count)
+                )
+            total_docs = sum(corpus.number_of_documents(source_format="bulk") for corpus in self.corpora)
+            if self.ingest_doc_count > total_docs:
+                raise exceptions.InvalidSyntax(
+                    "'ingest-doc-count' must be less than or equal to the total number of documents in the corpus (%d) but was %d"
+                    % (total_docs, self.ingest_doc_count)
+                )
+        else:
+            self.ingest_doc_count = None
         self.refresh = params.get("refresh")
         self.looped = params.get("looped", False)
         self.param_source = PartitionBulkIndexParamSource(
@@ -641,6 +662,7 @@ class BulkIndexParamSource(ParamSource):
             self.batch_size,
             self.bulk_size,
             self.ingest_percentage,
+            self.ingest_doc_count,
             self.id_conflicts,
             self.conflict_probability,
             self.on_conflict,
@@ -704,6 +726,7 @@ class PartitionBulkIndexParamSource:
         batch_size,
         bulk_size,
         ingest_percentage,
+        ingest_doc_count,
         id_conflicts,
         conflict_probability,
         on_conflict,
@@ -719,6 +742,8 @@ class PartitionBulkIndexParamSource:
         :param batch_size: The number of documents to read in one go.
         :param bulk_size: The size of bulk index operations (number of documents per bulk).
         :param ingest_percentage: A number between (0.0, 100.0] that defines how much of the whole corpus should be ingested.
+        :param ingest_doc_count: An optional positive integer that defines the maximum number of documents to ingest.
+                                 Mutually exclusive with ingest_percentage (when not 100%).
         :param id_conflicts: The type of id conflicts.
         :param conflict_probability: A number between (0.0, 100.0] that defines the probability that a document is replaced by another one.
         :param on_conflict: A string indicating which action should be taken on id conflicts (either "index" or "update").
@@ -738,6 +763,7 @@ class PartitionBulkIndexParamSource:
         self.batch_size = batch_size
         self.bulk_size = bulk_size
         self.ingest_percentage = ingest_percentage
+        self.ingest_doc_count = ingest_doc_count
         self.id_conflicts = id_conflicts
         self.conflict_probability = conflict_probability
         self.on_conflict = on_conflict
@@ -800,7 +826,10 @@ class PartitionBulkIndexParamSource:
         )
 
         all_bulks = number_of_bulks(self.corpora, start_index, end_index, self.total_partitions, self.bulk_size)
-        self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
+        if self.ingest_doc_count is not None:
+            self.total_bulks = math.ceil(self.ingest_doc_count / self.bulk_size)
+        else:
+            self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
 
     @property
     def percent_completed(self):
