@@ -26,7 +26,7 @@ def ensure_mimetype_headers(
     body: str | None = None,
     version: str | int | None = None,
 ) -> elastic_transport.HttpHeaders:
-    # It makes sure it uses a case-insensitive copy of input headers.
+    # Ensure will use a case-insensitive copy of input headers.
     headers = elastic_transport.HttpHeaders(headers or {})
 
     if body is not None:
@@ -38,8 +38,8 @@ def ensure_mimetype_headers(
         for header in ("content-type", "accept"):
             headers.setdefault(header, mimetype)
 
-    # It ensures compatibility mode is being applied to mime type.
-    # If we don't set it, the vanilla client version 9 will by default ask for compatibility mode 9, which would not
+    # Ensures compatibility mode is being applied to mime type.
+    # If not doing, the vanilla client version 9 will by default ask for compatibility mode 9, which would not
     # allow connecting to server version 8 clusters.
     compatibility_mode = get_compatibility_mode(version=version)
     for header in ("accept", "content-type"):
@@ -54,7 +54,7 @@ def ensure_mimetype_headers(
 
 def get_compatibility_mode(version: str | int | None = None) -> int:
     if version is None:
-        # By default, it returns the minimum compatibility mode for better compatibility.
+        # By default, return the minimum compatibility mode for better compatibility.
         return _MIN_COMPATIBILITY_MODE
 
     # Normalize version to an integer major version.
