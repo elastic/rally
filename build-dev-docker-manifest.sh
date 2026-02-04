@@ -66,8 +66,8 @@ echo "========================================================"
 echo "Pulling Docker images for Rally $RALLY_VERSION          "
 echo "========================================================"
 
-docker pull "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-amd64"
-docker pull "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-arm64"
+docker pull --platform=linux/amd64 "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-amd64"
+docker pull --platform=linux/arm64 "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-arm64"
 
 echo "======================================================="
 echo "Creating Docker manifest image for Rally $RALLY_VERSION"
