@@ -2326,6 +2326,7 @@ class DiskUsageStats(TelemetryDevice):
             May specify:
             ``disk-usage-stats-indices``: Comma separated list of indices who's disk
                 usage to fetch. Default is all indices in the track.
+            ``disk-usage-stats-timeout``: Timeout in seconds for the disk usage API call. Default is 600s.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         :param index_names: Names of indices defined by this track
@@ -2340,6 +2341,7 @@ class DiskUsageStats(TelemetryDevice):
 
     def on_benchmark_start(self):
         self.indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names + self.data_stream_names))
+        self.timeout = self.telemetry_params.get("disk-usage-stats-timeout", 600)
         if not self.indices:
             msg = (
                 "No indices defined for disk-usage-stats. Set disk-usage-stats-indices "
@@ -2352,19 +2354,24 @@ class DiskUsageStats(TelemetryDevice):
 
     def on_benchmark_stop(self):
         # pylint: disable=import-outside-toplevel
+        import elastic_transport
         import elasticsearch
 
         found = False
         for index in self.indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
-                response = self.client.indices.disk_usage(index=index, run_expensive_tasks=True)
+                response = self.client.options(request_timeout=self.timeout).indices.disk_usage(index=index, run_expensive_tasks=True)
             except elasticsearch.RequestError:
                 msg = f"A transport error occurred while collecting disk usage for {index}"
                 self.logger.exception(msg)
                 raise exceptions.RallyError(msg)
             except elasticsearch.NotFoundError:
                 msg = f"Requested disk usage for missing index {index}"
+                self.logger.warning(msg)
+                continue
+            except elastic_transport.ConnectionTimeout:
+                msg = f"Timeout occurred while collecting disk usage for {index}"
                 self.logger.warning(msg)
                 continue
             found = True
