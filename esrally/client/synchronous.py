@@ -57,8 +57,7 @@ class RallySyncElasticsearch(Elasticsearch):
             headers=headers,
             path=path,
             body=body,
-            compatibility_mode=compatibility_mode
-            or common.compatibility_mode_from_distribution(version=self.distribution_version, flavour=self.distribution_flavor),
+            version=compatibility_mode or self.distribution_version,
         )
         return super().perform_request(
             method=method, path=path, params=params, headers=headers, body=body, endpoint_id=endpoint_id, path_parts=path_parts

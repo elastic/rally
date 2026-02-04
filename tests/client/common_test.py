@@ -17,30 +17,34 @@
 
 import dataclasses
 
+import pytest
+
 from esrally.client import common
 from esrally.utils.cases import cases
 
 
 @dataclasses.dataclass
 class CompatibilityModeCase:
-    version: str | None
-    flavour: str | None
-    want: int | None
+    version: str | int | None
+    want: int | None = None
+    want_error: type[Exception] | None = None
 
 
 @cases(
-    serverless_flavor=CompatibilityModeCase(version="8.0.0", flavour="serverless", want=None),
-    version_8=CompatibilityModeCase(version="8.0.0", flavour=None, want=8),
-    version_9=CompatibilityModeCase(version="9.1.0", flavour=None, want=9),
-    version_7=CompatibilityModeCase(version="7.17.0", flavour=None, want=7),
-    no_version=CompatibilityModeCase(version=None, flavour=None, want=None),
-    empty_version=CompatibilityModeCase(version="", flavour=None, want=None),
-    invalid_version=CompatibilityModeCase(version="invalid", flavour=None, want=None),
-    default_flavor=CompatibilityModeCase(version="8.2.0", flavour="default", want=8),
+    version_8=CompatibilityModeCase(version="8.0.0", want=8),
+    version_9=CompatibilityModeCase(version="9.1.0", want=9),
+    version_7_raises=CompatibilityModeCase(version="7.17.0", want_error=ValueError),
+    no_version=CompatibilityModeCase(version=None, want=8),
+    empty_version_raises=CompatibilityModeCase(version="", want_error=TypeError),
+    invalid_version_raises=CompatibilityModeCase(version="invalid", want_error=TypeError),
 )
-def test_compatibility_mode_from_distribution(case: CompatibilityModeCase) -> None:
-    got = common.compatibility_mode_from_distribution(version=case.version, flavour=case.flavour)
-    assert got == case.want
+def test_get_compatibility_mode(case: CompatibilityModeCase) -> None:
+    if case.want_error is not None:
+        with pytest.raises(case.want_error):
+            common.get_compatibility_mode(version=case.version)
+    else:
+        got = common.get_compatibility_mode(version=case.version)
+        assert got == case.want
 
 
 @dataclasses.dataclass
@@ -48,7 +52,7 @@ class EnsureMimetypeHeadersCase:
     headers: dict[str, str] | None
     path: str | None
     body: str | None
-    compatibility_mode: int | None
+    version: str | int | None
     want_content_type: str | None = None
     want_accept: str | None = None
 
@@ -58,7 +62,7 @@ class EnsureMimetypeHeadersCase:
         headers=None,
         path=None,
         body=None,
-        compatibility_mode=None,
+        version=None,
         want_content_type=None,
         want_accept=None,
     ),
@@ -66,31 +70,31 @@ class EnsureMimetypeHeadersCase:
         headers=None,
         path="/_cluster/health",
         body="{}",
-        compatibility_mode=None,
-        want_content_type="application/json",
-        want_accept="application/json",
+        version="8.0.0",
+        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
     ),
     body_bulk_sets_ndjson=EnsureMimetypeHeadersCase(
         headers=None,
         path="/_bulk",
         body='{"index":{}}\n',
-        compatibility_mode=None,
-        want_content_type="application/x-ndjson",
-        want_accept="application/x-ndjson",
+        version="8.0.0",
+        want_content_type="application/vnd.elasticsearch+x-ndjson; compatible-with=8",
+        want_accept="application/vnd.elasticsearch+x-ndjson; compatible-with=8",
     ),
     body_bulk_path_suffix=EnsureMimetypeHeadersCase(
         headers=None,
         path="/my_index/_bulk",
         body="{}",
-        compatibility_mode=None,
-        want_content_type="application/x-ndjson",
-        want_accept="application/x-ndjson",
+        version="8.0.0",
+        want_content_type="application/vnd.elasticsearch+x-ndjson; compatible-with=8",
+        want_accept="application/vnd.elasticsearch+x-ndjson; compatible-with=8",
     ),
     compatibility_mode_rewrites=EnsureMimetypeHeadersCase(
         headers=None,
         path="/_cluster/health",
         body="{}",
-        compatibility_mode=8,
+        version="8.0.0",
         want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
         want_accept="application/vnd.elasticsearch+json; compatible-with=8",
     ),
@@ -98,7 +102,7 @@ class EnsureMimetypeHeadersCase:
         headers=None,
         path="/_bulk",
         body="{}",
-        compatibility_mode=9,
+        version="9.1.0",
         want_content_type="application/vnd.elasticsearch+x-ndjson; compatible-with=9",
         want_accept="application/vnd.elasticsearch+x-ndjson; compatible-with=9",
     ),
@@ -106,15 +110,15 @@ class EnsureMimetypeHeadersCase:
         headers={"content-type": "application/json", "accept": "application/json"},
         path="/_cluster/health",
         body="{}",
-        compatibility_mode=None,
-        want_content_type="application/json",
-        want_accept="application/json",
+        version="8.0.0",
+        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
     ),
     case_insensitive_headers=EnsureMimetypeHeadersCase(
         headers={"Content-Type": "application/json", "Accept": "application/json"},
         path="/_cluster/health",
         body="{}",
-        compatibility_mode=8,
+        version="8.0.0",
         want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
         want_accept="application/vnd.elasticsearch+json; compatible-with=8",
     ),
@@ -122,7 +126,7 @@ class EnsureMimetypeHeadersCase:
         headers=None,
         path="/_cluster/health",
         body=None,
-        compatibility_mode=8,
+        version=None,
         want_content_type=None,
         want_accept=None,
     ),
@@ -130,7 +134,7 @@ class EnsureMimetypeHeadersCase:
         headers={"accept": "application/json"},
         path="/_cluster/health",
         body=None,
-        compatibility_mode=8,
+        version="8.0.0",
         want_content_type=None,
         want_accept="application/vnd.elasticsearch+json; compatible-with=8",
     ),
@@ -138,7 +142,7 @@ class EnsureMimetypeHeadersCase:
         headers={"content-type": "application/json"},
         path="/_cluster/health",
         body=None,
-        compatibility_mode=8,
+        version="8.0.0",
         want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
         want_accept=None,
     ),
@@ -148,9 +152,19 @@ def test_ensure_mimetype_headers(case: EnsureMimetypeHeadersCase) -> None:
         headers=case.headers,
         path=case.path,
         body=case.body,
-        compatibility_mode=case.compatibility_mode,
+        version=case.version,
     )
     if case.want_content_type is not None:
         assert result.get("content-type") == case.want_content_type
     if case.want_accept is not None:
         assert result.get("accept") == case.want_accept
+
+
+def test_ensure_mimetype_headers_raises_for_unsupported_version() -> None:
+    with pytest.raises(ValueError, match="Elasticsearch version 7 is not supported"):
+        common.ensure_mimetype_headers(
+            headers={"content-type": "application/json"},
+            path="/",
+            body="{}",
+            version=7,
+        )

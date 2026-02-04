@@ -4,23 +4,19 @@ from datetime import date, datetime
 from typing import Any
 
 import elastic_transport
+import elasticsearch
 from elastic_transport.client_utils import percent_encode
 
 from esrally.utils import versions
+from esrally.version import minimum_es_version
 
 _WARNING_RE = re.compile(r"\"([^\"]*)\"")
 _COMPAT_MIMETYPE_RE = re.compile(r"application/(json|x-ndjson|vnd\.mapbox-vector-tile)")
 
-
-def compatibility_mode_from_distribution(*, version: str | None = None, flavour: str | None = None) -> int | None:
-    if flavour and versions.is_serverless(flavour):
-        # Serverless doesn't need compatibility mode.
-        return None
-    if version and versions.is_version_identifier(version):
-        return int(versions.Version.from_string(version).major)
-
-    # To improve compatibilit it prefers to ignore compatibility mode in case it can't understand distribution version.
-    return None
+_MIN_COMPATIBILITY_MODE = int(versions.Version.from_string(minimum_es_version()).major)
+_MAX_COMPATIBILITY_MODE = int(elasticsearch.VERSION[0])
+_VALID_COMPATIBILITY_MODES = tuple(range(_MIN_COMPATIBILITY_MODE, _MAX_COMPATIBILITY_MODE + 1))
+assert len(_VALID_COMPATIBILITY_MODES) > 0, "There should be at least one valid compatibility mode."
 
 
 def ensure_mimetype_headers(
@@ -28,7 +24,7 @@ def ensure_mimetype_headers(
     headers: Mapping[str, str] | None = None,
     path: str | None = None,
     body: str | None = None,
-    compatibility_mode: int | None = None,
+    version: str | int | None = None,
 ) -> elastic_transport.HttpHeaders:
     # It makes sure it uses a case-insensitive copy of input headers.
     headers = elastic_transport.HttpHeaders(headers or {})
@@ -42,16 +38,36 @@ def ensure_mimetype_headers(
         for header in ("content-type", "accept"):
             headers.setdefault(header, mimetype)
 
-    if compatibility_mode is not None:
-        # It ensures compatibility mode is being applied to mime type.
-        for header in ("accept", "content-type"):
-            mimetype = headers.get(header)
-            if mimetype is None:
-                continue
-            headers[header] = _COMPAT_MIMETYPE_RE.sub(
-                "application/vnd.elasticsearch+%s; compatible-with=%s" % (r"\g<1>", compatibility_mode), mimetype
-            )
+    # It ensures compatibility mode is being applied to mime type.
+    # If we don't set it, the vanilla client version 9 will by default ask for compatibility mode 9, which would not
+    # allow connecting to server version 8 clusters.
+    compatibility_mode = get_compatibility_mode(version=version)
+    for header in ("accept", "content-type"):
+        mimetype = headers.get(header)
+        if mimetype is None:
+            continue
+        headers[header] = _COMPAT_MIMETYPE_RE.sub(
+            "application/vnd.elasticsearch+%s; compatible-with=%s" % (r"\g<1>", compatibility_mode), mimetype
+        )
     return headers
+
+
+def get_compatibility_mode(version: str | int | None = None) -> int:
+    if version is None:
+        # By default, it returns the minimum compatibility mode for better compatibility.
+        return _MIN_COMPATIBILITY_MODE
+
+    # Normalize version to an integer major version.
+    if isinstance(version, str) and versions.is_version_identifier(version):
+        version = int(versions.Version.from_string(version).major)
+
+    if not isinstance(version, int):
+        raise TypeError(f"Version must be a valid version string or an integer, but got {version!r}.")
+
+    if version not in _VALID_COMPATIBILITY_MODES:
+        supported = ", ".join(str(v) for v in _VALID_COMPATIBILITY_MODES)
+        raise ValueError(f"Elasticsearch version {version!r} is not supported, supported versions are: {supported}.")
+    return version
 
 
 def _escape(value: Any) -> str:

@@ -356,8 +356,7 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, context.RequestContextHolder):
             headers=headers,
             path=path,
             body=body,
-            compatibility_mode=compatibility_mode
-            or common.compatibility_mode_from_distribution(version=self.distribution_version, flavour=self.distribution_flavor),
+            version=compatibility_mode or self.distribution_version,
         )
         return await super().perform_request(
             method, path, params=params, headers=headers, body=body, endpoint_id=endpoint_id, path_parts=path_parts

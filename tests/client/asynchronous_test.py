@@ -164,7 +164,7 @@ class PerformRequestCase:
         want_content_type="application/vnd.elasticsearch+x-ndjson; compatible-with=9",
         want_accept="application/vnd.elasticsearch+x-ndjson; compatible-with=9",
     ),
-    serverless_no_compat_rewrite=PerformRequestCase(
+    serverless_uses_default_compat_mode=PerformRequestCase(
         distribution_version="8.0.0",
         distribution_flavor="serverless",
         method="GET",
@@ -172,8 +172,8 @@ class PerformRequestCase:
         body="{}",
         headers=None,
         compatibility_mode=None,
-        want_content_type="application/json",
-        want_accept="application/json",
+        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
     ),
     explicit_compatibility_mode_overrides=PerformRequestCase(
         distribution_version="9.0.0",
