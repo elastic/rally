@@ -30,9 +30,10 @@ def ensure_mimetype_headers(
     headers = elastic_transport.HttpHeaders(headers or {})
 
     if body is not None:
-        # It ensures content-type and accept headers are initialized.
+        # Newer Elasticsearch versions are picky about the content-type header when a body is present.
+        # Because tracks are not passing headers explicitly, set them here.
         mimetype = "application/json"
-        if path is not None and path.endswith("/_bulk"):
+        if path and path.endswith("/_bulk"):
             # Server version 9 is picky about this. This should improve compatibility.
             mimetype = "application/x-ndjson"
         for header in ("content-type", "accept"):
