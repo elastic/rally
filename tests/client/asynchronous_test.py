@@ -203,9 +203,14 @@ async def test_perform_request(
     case: PerformRequestCase,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    mock_transport = mock.create_autospec(
-        asynchronous.RallyAsyncTransport.perform_request,
-        return_value=elastic_transport.TransportApiResponse(
+
+    got_headers: list[elastic_transport.HttpHeaders] = []
+
+    async def mock_transport(*_, **kwargs):
+        headers = kwargs.get("headers")
+        assert isinstance(headers, elastic_transport.HttpHeaders)
+        got_headers.append(headers)
+        return elastic_transport.TransportApiResponse(
             meta=elastic_transport.ApiResponseMeta(
                 status=200,
                 http_version="1.1",
@@ -214,12 +219,10 @@ async def test_perform_request(
                 duration=0.0,
             ),
             body={},
-        ),
-    )
-    monkeypatch.setattr(
-        "esrally.client.asynchronous.RallyAsyncTransport.perform_request",
-        mock_transport,
-    )
+        )
+
+    monkeypatch.setattr(asynchronous.RallyAsyncTransport, "perform_request", mock_transport)
+
     client = asynchronous.RallyAsyncElasticsearch(
         hosts=["http://localhost:9200"],
         distribution_version=case.distribution_version,
@@ -234,6 +237,4 @@ async def test_perform_request(
         compatibility_mode=case.compatibility_mode,
     )
 
-    mock_transport.assert_called_once()
-    got_headers = mock_transport.call_args_list[0].kwargs.get("headers")
-    assert got_headers == case.want_headers
+    assert got_headers == [case.want_headers]

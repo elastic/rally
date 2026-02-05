@@ -103,8 +103,7 @@ class PerformRequestCase:
         },
     ),
 )
-@pytest.mark.asyncio
-async def test_perform_request(
+def test_perform_request(
     case: PerformRequestCase,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
