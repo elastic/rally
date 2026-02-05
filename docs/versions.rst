@@ -5,37 +5,33 @@ Minimum supported version
 =========================
 
 Rally |release| can benchmark Elasticsearch |min_es_version| and above.
-However, Rally does not support Elasticsearch clusters using the OSS license.
 
 End-of-life Policy
 ==================
 
-Before version Rally 2.14.0 policy for supporting old Elasticsearch server versions "all currently supported ES versions" (which leads to Y = X-2 with X the version of the Elasticsearch Python client and Y the version of the supported Elasticsearch server). Now we want to change it to Y = X-1.
+Elasticsearch follows `end-of-life (EOL) policy <https://www.elastic.co/support/eol>`_. Prior to version 2.14.0, Rally supported all Elasticsearch versions marked as supported in Elasticsearch EOL policy at the time of Rally release. Starting from version 2.14.0, Rally supports current and previous major Elasticsearch version at the time of Rally release. The oldest supported Elasticsearch version as per Elasticsearch EOL is not guaranteed to be supported by the most recent Rally release.
 
-The following table summarizes the minimum supported Elasticsearch version per Rally release:
+The following table summarizes the minimum and maximum supported Elasticsearch version per Rally release:
 
-.. list-table:: Minimum supported Elasticsearch version
+.. list-table:: Rally-Elasticsearch compatibility matrix
    :header-rows: 1
-   :widths: 25 25 25 25
+   :widths: 33 33 33
 
-   * - Rally version
-     - Python client version
+   * - Rally release
      - Minimum supported server version
      - Maximum supported server version
    * - 2.7.1
-     - 7.14.0
      - 6.8
      - 8.x
-   * - 2.8.0 to 2.13.0
-     - 8.6.1
+   * - 2.8.0 - 2.13.0
      - 6.8
      - 9.x
-   * - >= 2.14.0
-     - 9.2.1
+   * - 2.14.0 - |release|
      - 8.0
-     - 8.0 to 10.x
-
-As a rule of thumbs for the future as `Elasticsearch version reaches end-of-life <https://www.elastic.co/support/eol>`_, Rally will drop support for that version in the next Rally release.
+     - 9.x
+   * - some future release
+     - 9.0
+     - 10.x
 
 Metrics store
 =============
