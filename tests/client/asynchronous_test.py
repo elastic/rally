@@ -21,20 +21,16 @@ import math
 import random
 from unittest import mock
 
+import elastic_transport
 import pytest
-from elasticsearch import AsyncElasticsearch
 
-from esrally.client.asynchronous import (
-    RallyAsyncElasticsearch,
-    RallyTCPConnector,
-    ResponseMatcher,
-)
+from esrally.client import asynchronous
 from esrally.utils.cases import cases
 
 
 class TestResponseMatcher:
     def test_matches(self):
-        matcher = ResponseMatcher(
+        matcher = asynchronous.ResponseMatcher(
             responses=[
                 {
                     "path": "*/_bulk",
@@ -96,9 +92,9 @@ async def test_resolve_host_even_client_allocation(
     for i in range(num_clients):
         hostinfo.append(
             # pylint: disable=protected-access
-            await RallyTCPConnector(limit_per_host=256, use_dns_cache=True, enable_cleanup_closed=True, client_id=i)._resolve_host(
-                "rally-dns-test.es.us-east-1.aws.found.io", 443
-            )
+            await asynchronous.RallyTCPConnector(
+                limit_per_host=256, use_dns_cache=True, enable_cleanup_closed=True, client_id=i
+            )._resolve_host("rally-dns-test.es.us-east-1.aws.found.io", 443)
         )
 
     first_host_per_client = []
@@ -124,21 +120,16 @@ async def test_resolve_host_even_client_allocation(
     assert sum(ip_alloc.values()) == num_clients
 
 
-def _make_response():
-    return mock.MagicMock()
-
-
 @dataclasses.dataclass
 class PerformRequestCase:
     distribution_version: str | None
     distribution_flavor: str | None
     method: str
     path: str
-    body: str | None
-    headers: dict[str, str] | None
-    compatibility_mode: int | None
-    want_content_type: str | None = None
-    want_accept: str | None = None
+    body: str | None = None
+    headers: dict[str, str] | None = None
+    compatibility_mode: int | None = None
+    want_headers: dict = dataclasses.field(default_factory=dict)
 
 
 @cases(
@@ -148,10 +139,10 @@ class PerformRequestCase:
         method="GET",
         path="/_cluster/health",
         body="{}",
-        headers=None,
-        compatibility_mode=None,
-        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
-        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+        want_headers={
+            "content-type": "application/vnd.elasticsearch+json; compatible-with=8",
+            "accept": "application/vnd.elasticsearch+json; compatible-with=8",
+        },
     ),
     distribution_9_bulk_sets_ndjson_compat=PerformRequestCase(
         distribution_version="9.1.0",
@@ -159,10 +150,10 @@ class PerformRequestCase:
         method="POST",
         path="/_bulk",
         body='{"index":{}}\n',
-        headers=None,
-        compatibility_mode=None,
-        want_content_type="application/vnd.elasticsearch+x-ndjson; compatible-with=9",
-        want_accept="application/vnd.elasticsearch+x-ndjson; compatible-with=9",
+        want_headers={
+            "content-type": "application/vnd.elasticsearch+x-ndjson; compatible-with=9",
+            "accept": "application/vnd.elasticsearch+x-ndjson; compatible-with=9",
+        },
     ),
     serverless_uses_default_compat_mode=PerformRequestCase(
         distribution_version="8.0.0",
@@ -170,10 +161,10 @@ class PerformRequestCase:
         method="GET",
         path="/",
         body="{}",
-        headers=None,
-        compatibility_mode=None,
-        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
-        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+        want_headers={
+            "content-type": "application/vnd.elasticsearch+json; compatible-with=8",
+            "accept": "application/vnd.elasticsearch+json; compatible-with=8",
+        },
     ),
     explicit_compatibility_mode_overrides=PerformRequestCase(
         distribution_version="9.0.0",
@@ -181,21 +172,17 @@ class PerformRequestCase:
         method="GET",
         path="/",
         body="{}",
-        headers=None,
         compatibility_mode=8,
-        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
-        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+        want_headers={
+            "content-type": "application/vnd.elasticsearch+json; compatible-with=8",
+            "accept": "application/vnd.elasticsearch+json; compatible-with=8",
+        },
     ),
     no_body_no_default_headers=PerformRequestCase(
         distribution_version=None,
         distribution_flavor=None,
         method="HEAD",
         path="/my_index/_doc/1",
-        body=None,
-        headers=None,
-        compatibility_mode=None,
-        want_content_type=None,
-        want_accept=None,
     ),
     passthrough_method_path_params=PerformRequestCase(
         distribution_version="8.0.0",
@@ -204,9 +191,11 @@ class PerformRequestCase:
         path="/my_index/_doc",
         body='{"a":1}',
         headers={"x-custom": "value"},
-        compatibility_mode=None,
-        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
-        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+        want_headers={
+            "content-type": "application/vnd.elasticsearch+json; compatible-with=8",
+            "accept": "application/vnd.elasticsearch+json; compatible-with=8",
+            "x-custom": "value",
+        },
     ),
 )
 @pytest.mark.asyncio
@@ -214,17 +203,28 @@ async def test_perform_request(
     case: PerformRequestCase,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # instance=True is not allowed for async functions in create_autospec (Python 3.13)
-    mock_super = mock.create_autospec(AsyncElasticsearch.perform_request, instance=False)
-    mock_super.return_value = mock.AsyncMock(return_value=_make_response())
-    monkeypatch.setattr(
-        "esrally.client.asynchronous.AsyncElasticsearch.perform_request",
-        mock_super,
+    mock_transport = mock.create_autospec(
+        asynchronous.RallyAsyncTransport.perform_request,
+        return_value=elastic_transport.TransportApiResponse(
+            meta=elastic_transport.ApiResponseMeta(
+                status=200,
+                http_version="1.1",
+                headers=elastic_transport.HttpHeaders(),
+                node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+                duration=0.0,
+            ),
+            body={},
+        ),
     )
-    client = RallyAsyncElasticsearch(
+    monkeypatch.setattr(
+        "esrally.client.asynchronous.RallyAsyncTransport.perform_request",
+        mock_transport,
+    )
+    client = asynchronous.RallyAsyncElasticsearch(
         hosts=["http://localhost:9200"],
         distribution_version=case.distribution_version,
         distribution_flavor=case.distribution_flavor,
+        transport_class=asynchronous.RallyAsyncTransport,
     )
     await client.perform_request(
         case.method,
@@ -233,22 +233,7 @@ async def test_perform_request(
         headers=case.headers,
         compatibility_mode=case.compatibility_mode,
     )
-    mock_super.assert_called_once_with(
-        client,
-        case.method,
-        case.path,
-        params=None,
-        headers=mock.ANY,
-        body=case.body,
-        endpoint_id=None,
-        path_parts=None,
-    )
-    passed_headers = mock_super.call_args[1]["headers"]
-    if case.want_content_type is not None:
-        assert passed_headers.get("content-type") == case.want_content_type
-    if case.want_accept is not None:
-        assert passed_headers.get("accept") == case.want_accept
-    if case.headers:
-        for key, value in case.headers.items():
-            if key.lower() not in ("content-type", "accept"):
-                assert passed_headers.get(key) == value
+
+    mock_transport.assert_called_once()
+    got_headers = mock_transport.call_args_list[0].kwargs.get("headers")
+    assert got_headers == case.want_headers

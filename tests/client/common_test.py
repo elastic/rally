@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import contextlib
 import dataclasses
 
 import pytest
@@ -34,9 +34,13 @@ class CompatibilityModeCase:
     version_8=CompatibilityModeCase(version="8.0.0", want=8),
     version_9=CompatibilityModeCase(version="9.1.0", want=9),
     version_7_raises=CompatibilityModeCase(version="7.17.0", want_error=ValueError),
+    version_int_7_raises=CompatibilityModeCase(version=7, want_error=ValueError),
+    version_int_8=CompatibilityModeCase(version=8, want=8),
+    version_int_9=CompatibilityModeCase(version=9, want=9),
+    version_int_10=CompatibilityModeCase(version=10, want=10, want_error=ValueError),
     no_version=CompatibilityModeCase(version=None, want=8),
-    empty_version_raises=CompatibilityModeCase(version="", want_error=TypeError),
-    invalid_version_raises=CompatibilityModeCase(version="invalid", want_error=TypeError),
+    empty_version_raises=CompatibilityModeCase(version="", want_error=ValueError),
+    invalid_version_raises=CompatibilityModeCase(version="invalid", want_error=ValueError),
 )
 def test_get_compatibility_mode(case: CompatibilityModeCase) -> None:
     if case.want_error is not None:
@@ -55,6 +59,7 @@ class EnsureMimetypeHeadersCase:
     version: str | int | None
     want_content_type: str | None = None
     want_accept: str | None = None
+    want_warning_message: str | None = None
 
 
 @cases(
@@ -63,8 +68,6 @@ class EnsureMimetypeHeadersCase:
         path=None,
         body=None,
         version=None,
-        want_content_type=None,
-        want_accept=None,
     ),
     body_sets_json=EnsureMimetypeHeadersCase(
         headers=None,
@@ -127,15 +130,12 @@ class EnsureMimetypeHeadersCase:
         path="/_cluster/health",
         body=None,
         version=None,
-        want_content_type=None,
-        want_accept=None,
     ),
     compatibility_mode_rewrites_only_present_accept=EnsureMimetypeHeadersCase(
         headers={"accept": "application/json"},
         path="/_cluster/health",
         body=None,
         version="8.0.0",
-        want_content_type=None,
         want_accept="application/vnd.elasticsearch+json; compatible-with=8",
     ),
     compatibility_mode_rewrites_only_present_content_type=EnsureMimetypeHeadersCase(
@@ -144,27 +144,49 @@ class EnsureMimetypeHeadersCase:
         body=None,
         version="8.0.0",
         want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
-        want_accept=None,
+    ),
+    unsupported_version_int=EnsureMimetypeHeadersCase(
+        headers={"content-type": "application/json"},
+        path="/",
+        body="{}",
+        version=7,
+        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+    ),
+    unsupported_version_str=EnsureMimetypeHeadersCase(
+        headers={"accept": "application/json"},
+        path="/",
+        body=None,
+        version="7.0.0",
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+    ),
+    valid_version_no_warning=EnsureMimetypeHeadersCase(
+        headers={"content-type": "application/json"},
+        path="/",
+        body="{}",
+        version="8.0.0",
+        want_accept="application/vnd.elasticsearch+json; compatible-with=8",
+        want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
     ),
 )
 def test_ensure_mimetype_headers(case: EnsureMimetypeHeadersCase) -> None:
-    result = common.ensure_mimetype_headers(
-        headers=case.headers,
-        path=case.path,
-        body=case.body,
-        version=case.version,
-    )
-    if case.want_content_type is not None:
-        assert result.get("content-type") == case.want_content_type
-    if case.want_accept is not None:
-        assert result.get("accept") == case.want_accept
+    if case.want_warning_message is not None:
+        catch_warnings = pytest.warns(Warning, match=case.want_warning_message)
+    else:
+        catch_warnings = contextlib.nullcontext()
 
-
-def test_ensure_mimetype_headers_raises_for_unsupported_version() -> None:
-    with pytest.raises(ValueError, match="Elasticsearch version 7 is not supported"):
-        common.ensure_mimetype_headers(
-            headers={"content-type": "application/json"},
-            path="/",
-            body="{}",
-            version=7,
+    with catch_warnings as warnings:
+        got = common.ensure_mimetype_headers(
+            headers=case.headers,
+            path=case.path,
+            body=case.body,
+            version=case.version,
         )
+
+    assert got.get("content-type") == case.want_content_type
+    assert got.get("accept") == case.want_accept
+    if case.want_warning_message is not None:
+        assert len(warnings) == 1
+        assert str(warnings[0].message) == case.want_warning_message
+    else:
+        assert warnings is None

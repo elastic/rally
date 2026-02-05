@@ -1,4 +1,5 @@
 import re
+import warnings
 from collections.abc import Mapping
 from datetime import date, datetime
 from typing import Any
@@ -42,7 +43,11 @@ def ensure_mimetype_headers(
     # Ensures compatibility mode is being applied to mime type.
     # If not doing, the vanilla client version 9 will by default ask for compatibility mode 9, which would not
     # allow connecting to server version 8 clusters.
-    compatibility_mode = get_compatibility_mode(version=version)
+    try:
+        compatibility_mode = get_compatibility_mode(version=version)
+    except ValueError as ex:
+        warnings.warn(f"Invalid compatibility mode {version!r}, defaulting to {_MIN_COMPATIBILITY_MODE!r}: {ex}")
+        compatibility_mode = _MIN_COMPATIBILITY_MODE
     for header in ("accept", "content-type"):
         mimetype = headers.get(header)
         if mimetype is None:
@@ -59,7 +64,9 @@ def get_compatibility_mode(version: str | int | None = None) -> int:
         return _MIN_COMPATIBILITY_MODE
 
     # Normalize version to an integer major version.
-    if isinstance(version, str) and versions.is_version_identifier(version):
+    if isinstance(version, str):
+        if not versions.is_version_identifier(version):
+            raise ValueError(f"Elasticsearch version {version!r} is not valid.")
         version = int(versions.Version.from_string(version).major)
 
     if not isinstance(version, int):
