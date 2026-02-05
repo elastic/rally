@@ -834,7 +834,7 @@ class PartitionBulkIndexParamSource:
             if docs_for_this_partition % self.bulk_size != 0:
                 raise exceptions.InvalidSyntax(
                     f"'ingest-doc-count' divided by the number of partitions ({self.total_partitions})"
-                    " must be a multiple of 'bulk-size' ({self.bulk_size}) but was {docs_for_this_partition}"
+                    f" must be a multiple of 'bulk-size' ({self.bulk_size}) but was {docs_for_this_partition}"
                 )
             self.total_bulks = docs_for_this_partition // self.bulk_size
         else:
