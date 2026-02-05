@@ -42,7 +42,7 @@ classifiers = [
 ################################################################################################
 dependencies = [
     # License: Apache 2.0
-    "elasticsearch[async]==9.2.1",
+    "elasticsearch[async]==9.3.0",
     "elastic-transport==9.2.1",
     # License: MIT
     "urllib3==2.6.3",

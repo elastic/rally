@@ -585,7 +585,7 @@ wheels = [
 
 [[package]]
 name = "elasticsearch"
-version = "9.2.1"
+version = "9.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -594,9 +594,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bc/6c/67bb17ca0035b0cac4cfbbe64e18d120203fef22da66dd4c636563a0ea63/elasticsearch-9.2.1.tar.gz", hash = "sha256:97f473418e8976611349757287ac982acf12f4e305182863d985d5a031c36830", size = 878062, upload-time = "2025-12-23T14:37:31.694Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0d/15/283459c9299d412ffa2aaab69b082857631c519233f5491d6c567e3320ca/elasticsearch-9.3.0.tar.gz", hash = "sha256:f76e149c0a22d5ccbba58bdc30c9f51cf894231b359ef4fd7e839b558b59f856", size = 893538, upload-time = "2026-02-03T20:26:38.914Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c0/d5/84264c29ec67f2f8129676ce11f05defb52f44e97e5f411db9a220f2aa43/elasticsearch-9.2.1-py3-none-any.whl", hash = "sha256:8665f5a0b4d29a7c2772851c05ea8a09279abb7928b7d727524613bd61d75958", size = 963593, upload-time = "2025-12-23T14:37:28.047Z" },
+    { url = "https://files.pythonhosted.org/packages/05/37/3a196f8918743f2104cb66b1f56218079ecac6e128c061de7df7f4faef02/elasticsearch-9.3.0-py3-none-any.whl", hash = "sha256:67bd2bb4f0800f58c2847d29cd57d6e7bf5bc273483b4f17421f93e75ba09f39", size = 979405, upload-time = "2026-02-03T20:26:34.552Z" },
 ]
 
 [package.optional-dependencies]
@@ -684,7 +684,7 @@ requires-dist = [
     { name = "docker", specifier = ">=7.1.0" },
     { name = "ecs-logging", specifier = "==2.2.0" },
     { name = "elastic-transport", specifier = "==9.2.1" },
-    { name = "elasticsearch", extras = ["async"], specifier = "==9.2.1" },
+    { name = "elasticsearch", extras = ["async"], specifier = "==9.3.0" },
     { name = "furo", marker = "extra == 'develop'", specifier = "==2022.6.21" },
     { name = "github3-py", marker = "extra == 'develop'", specifier = "==3.2.0" },
     { name = "gitpython", marker = "extra == 'develop'", specifier = "==3.1.30" },
