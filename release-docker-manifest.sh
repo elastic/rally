@@ -44,9 +44,9 @@ export RALLY_VERSION_TAG="${RALLY_VERSION}-${DATE}"
 export DOCKER_TAG_VERSION="${RALLY_VERSION}"
 export DOCKER_TAG_LATEST="latest"
 
-echo "======================================================="
-echo "Creating Docker manifest list for Rally $RALLY_VERSION_TAG"
-echo "======================================================="
+echo "================================================================"
+echo "Creating Docker manifest list elastic/rally:${RALLY_VERSION_TAG}"
+echo "================================================================"
 
 trap push_failed ERR
 docker buildx imagetools create --tag "elastic/rally:${RALLY_VERSION_TAG}" \
@@ -55,9 +55,9 @@ docker buildx imagetools create --tag "elastic/rally:${RALLY_VERSION_TAG}" \
 trap - ERR
 
 if [[ $PUSH_LATEST == "true" ]]; then
-    echo "======================================================="
-    echo "Creating Docker manifest list for Rally $DOCKER_TAG_VERSION"
-    echo "======================================================="
+    echo "================================================================"
+    echo "Creating Docker manifest list elastic/rally:${DOCKER_TAG_VERSION}"
+    echo "================================================================"
 
     trap push_failed ERR
     docker buildx imagetools create --tag "elastic/rally:${DOCKER_TAG_VERSION}" \
@@ -65,9 +65,9 @@ if [[ $PUSH_LATEST == "true" ]]; then
         "elastic/rally:${RALLY_VERSION_TAG}-arm64"
     trap - ERR
 
-    echo "======================================================="
-    echo "Creating Docker manifest list for Rally $DOCKER_TAG_LATEST"
-    echo "======================================================="
+    echo "================================================================"
+    echo "Creating Docker manifest list elastic/rally:${DOCKER_TAG_LATEST}"
+    echo "================================================================"
 
     trap push_failed ERR
     docker buildx imagetools create --tag "elastic/rally:${DOCKER_TAG_LATEST}" \
