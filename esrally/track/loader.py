@@ -144,7 +144,7 @@ def tracks(cfg: types.Config):
     :return: A list of tracks that are available for the provided distribution version or else for the main version.
     """
     repo = track_repo(cfg)
-    return [_load_single_track(cfg, repo, track_name) for track_name in repo.track_names]
+    return [_load_single_track(cfg, repo, track_name, install_dependencies=True) for track_name in repo.track_names]
 
 
 def list_tracks(cfg: types.Config):
