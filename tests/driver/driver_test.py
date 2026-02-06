@@ -19,6 +19,7 @@ import collections
 import io
 import threading
 import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from unittest import mock
 
@@ -26,10 +27,11 @@ import elastic_transport
 import elasticsearch
 import pytest
 
-from esrally import config, exceptions, metrics, track
+from esrally import actor, config, exceptions, metrics, track
 from esrally.driver import driver, runner, scheduler
 from esrally.driver.driver import ApiKey, ClientContext
 from esrally.track import params
+from esrally.utils import cases
 from esrally.utils.error_behavior import OnErrorBehavior
 
 
@@ -349,6 +351,131 @@ class TestDriver:
         )
         # Were the right API keys deleted?
         delete.assert_called_once_with(d.default_sync_es_client, d.generated_api_key_ids)
+
+
+@dataclass
+class SampleQueueFailureCase:
+    """Case for DriverActor sample queue failure (reporting.sample.queue.failure.size)."""
+
+    raw_samples_count: int
+    failure_size_threshold: int
+    want_close_called: bool
+    want_send_called: bool
+    want_wakeup_called: bool
+    want_failure_message: str | None = None
+    want_failure_cause_contains: tuple[str, ...] = ()
+    want_log_error_calls: list = field(default_factory=list)
+    want_log_info_calls: list = field(default_factory=list)
+
+
+@cases.cases(
+    failure_when_exceeded=SampleQueueFailureCase(
+        raw_samples_count=1500,
+        failure_size_threshold=1000,
+        want_close_called=True,
+        want_send_called=True,
+        want_wakeup_called=False,
+        want_failure_message="Sample queue exceeded limit",
+        want_failure_cause_contains=("1500", "1000"),
+        want_log_error_calls=[
+            mock.call(
+                "Sample queue failure size [%d] exceeds queue size limit [%d]. "
+                "Set sample.queue.failure.size in [reporting] of rally.ini to change it. "
+                "See INFO log 'New maximum historical sample queue size: %d'.",
+                1000,
+                1500,
+                0,
+            ),
+        ],
+        want_log_info_calls=[],
+    ),
+    no_failure_when_disabled=SampleQueueFailureCase(
+        raw_samples_count=1500,
+        failure_size_threshold=0,
+        want_close_called=False,
+        want_send_called=False,
+        want_wakeup_called=True,
+        want_log_error_calls=[],
+        want_log_info_calls=[
+            mock.call("New maximum historical sample queue size: %d", 1500),
+        ],
+    ),
+    no_failure_when_at_limit=SampleQueueFailureCase(
+        raw_samples_count=1000,
+        failure_size_threshold=1000,
+        want_close_called=False,
+        want_send_called=False,
+        want_wakeup_called=True,
+        want_log_error_calls=[],
+        want_log_info_calls=[
+            mock.call("New maximum historical sample queue size: %d", 1000),
+        ],
+    ),
+)
+def test_driver_actor_sample_queue_failure_wakeup(case: SampleQueueFailureCase, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("esrally.log.post_configure_actor_logging", mock.Mock())
+    monkeypatch.setattr("esrally.utils.console.set_assume_tty", mock.Mock())
+
+    driver_actor = driver.DriverActor()
+    mock_logger = mock.Mock()
+    monkeypatch.setattr(driver_actor, "logger", mock_logger)
+
+    driver_actor.benchmark_actor = mock.Mock()
+    driver_actor.driver = mock.Mock()
+    driver_actor.driver.finished.return_value = False
+    driver_actor.driver.raw_samples = [None] * case.raw_samples_count
+    driver_actor.sample_queue_failure_size = case.failure_size_threshold
+
+    mock_send = mock.Mock()
+    mock_wakeup = mock.Mock()
+    monkeypatch.setattr(driver_actor, "send", mock_send)
+    monkeypatch.setattr(driver_actor, "wakeupAfter", mock_wakeup)
+
+    msg = mock.Mock(payload=None)
+    driver_actor.receiveMsg_WakeupMessage(msg, None)
+
+    if case.want_close_called:
+        driver_actor.driver.close.assert_called_once()
+    else:
+        driver_actor.driver.close.assert_not_called()
+
+    if case.want_send_called:
+        mock_send.assert_called_once_with(driver_actor.benchmark_actor, mock.ANY)
+        failure = mock_send.call_args[0][1]
+        assert isinstance(failure, actor.BenchmarkFailure)
+        if case.want_failure_message is not None:
+            assert failure.message == case.want_failure_message
+        for part in case.want_failure_cause_contains:
+            assert part in failure.cause
+    else:
+        mock_send.assert_not_called()
+
+    if case.want_wakeup_called:
+        mock_wakeup.assert_called_once()
+    else:
+        mock_wakeup.assert_not_called()
+
+    assert mock_logger.error.call_args_list == case.want_log_error_calls
+    assert mock_logger.info.call_args_list == case.want_log_info_calls
+
+
+def test_driver_actor_reads_sample_queue_failure_size_once_in_prepare_benchmark(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Verify sample_queue_failure_size is read from config once in PrepareBenchmark."""
+    monkeypatch.setattr("esrally.log.post_configure_actor_logging", mock.Mock())
+    monkeypatch.setattr("esrally.utils.console.set_assume_tty", mock.Mock())
+
+    mock_driver = mock.Mock()
+    mock_driver.config.opts.return_value = 50000
+
+    with mock.patch.object(driver, "Driver", return_value=mock_driver):
+        driver_actor = driver.DriverActor()
+        msg = mock.Mock(config=mock.Mock(), track=mock.Mock())
+        driver_actor.receiveMsg_PrepareBenchmark(msg, mock.Mock())
+
+    assert driver_actor.sample_queue_failure_size == 50000
+    mock_driver.prepare_benchmark.assert_called_once_with(msg.track)
 
 
 def op(name, operation_type):
