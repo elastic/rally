@@ -1481,6 +1481,79 @@ class TestBulkIndexParamSource:
             == "'ingest-doc-count' must be less than or equal to the total number of documents in the corpus (50000) but was 1000000"
         )
 
+    def test_ingest_doc_count_with_multiple_partitions(self):
+        def create_unit_test_reader(*args):
+            return StaticBulkReader(
+                "idx",
+                "doc",
+                bulks=[
+                    ['{"location" : [-0.1485188, 51.5250666]}'],
+                    ['{"location" : [-0.1479949, 51.5252071]}'],
+                    ['{"location" : [-0.1458559, 51.5289059]}'],
+                    ['{"location" : [-0.1498551, 51.5282564]}'],
+                ],
+            )
+
+        corpora = [
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=120000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+        ]
+
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 10000,
+                "ingest-doc-count": 30000,  # 30000 total across 3 partitions = 10000 each
+                "__create_reader": create_unit_test_reader,
+            },
+        )
+
+        # With 3 partitions, each partition should ingest 10000 docs = 1 bulk each
+        partition = source.partition(0, 3)
+        partition._init_internal_params()
+        assert partition.total_bulks == 1  # 30000 / 3 partitions / 10000 bulk-size = 1
+
+    def test_ingest_doc_count_not_divisible_by_partitions_and_bulk_size(self):
+        corpora = [
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=120000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+        ]
+
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 10000,
+                "ingest-doc-count": 30000,  # 30000 / 4 = 7500 which is not a multiple of 10000
+            },
+        )
+
+        partition = source.partition(0, 4)
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            partition._init_internal_params()
+
+        assert (
+            exc.value.args[0]
+            == "'ingest-doc-count' divided by the number of partitions (4) must be a multiple of 'bulk-size' (10000) but was 7500"
+        )
+
     def test_looped_mode(self):
         def create_unit_test_reader(*args):
             return StaticBulkReader(

@@ -742,7 +742,9 @@ class PartitionBulkIndexParamSource:
         :param batch_size: The number of documents to read in one go.
         :param bulk_size: The size of bulk index operations (number of documents per bulk).
         :param ingest_percentage: A number between (0.0, 100.0] that defines how much of the whole corpus should be ingested.
-        :param ingest_doc_count: An optional positive integer that defines the maximum number of documents to ingest.
+        :param ingest_doc_count: An optional positive integer that defines the total number of documents to ingest
+                                 across all partitions. Must be a multiple of bulk_size, and when divided by the
+                                 number of partitions must also be a multiple of bulk_size.
                                  Mutually exclusive with ingest_percentage (when not 100%).
         :param id_conflicts: The type of id conflicts.
         :param conflict_probability: A number between (0.0, 100.0] that defines the probability that a document is replaced by another one.
@@ -827,7 +829,14 @@ class PartitionBulkIndexParamSource:
 
         all_bulks = number_of_bulks(self.corpora, start_index, end_index, self.total_partitions, self.bulk_size)
         if self.ingest_doc_count is not None:
-            self.total_bulks = math.ceil(self.ingest_doc_count / self.bulk_size)
+            # ingest_doc_count is the total across all partitions, so divide by partition count
+            docs_for_this_partition = self.ingest_doc_count // self.total_partitions
+            if docs_for_this_partition % self.bulk_size != 0:
+                raise exceptions.InvalidSyntax(
+                    f"'ingest-doc-count' divided by the number of partitions ({self.total_partitions})"
+                    f" must be a multiple of 'bulk-size' ({self.bulk_size}) but was {docs_for_this_partition}"
+                )
+            self.total_bulks = docs_for_this_partition // self.bulk_size
         else:
             self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
 
