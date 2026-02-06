@@ -22,6 +22,7 @@ import io
 import json
 import math
 import random
+import typing
 from unittest import mock
 
 import elastic_transport
@@ -5968,7 +5969,9 @@ class TestCreateIlmPolicyRunner:
 
     @mock.patch("esrally.client.asynchronous.IlmClient")
     @pytest.mark.asyncio
+    @typing.no_type_check
     async def test_RallyIlmClient_rewrites_kwargs(self, es_ilm):
+
         es = RallyAsyncElasticsearch(hosts=["http://localhost:9200"])
         es_ilm.put_lifecycle = mock.AsyncMock(return_value={})
 
