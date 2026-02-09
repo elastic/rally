@@ -76,14 +76,12 @@ if [[ $PUSH_LATEST == "true" ]]; then
         --amend elastic/rally:${RALLY_VERSION_TAG}-amd64 \
         --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
 
+    trap push_failed ERR
     echo "======================================================="
     echo "Publishing Docker manifest list elastic/rally:${DOCKER_TAG_LATEST}"
     echo "======================================================="
-
-    trap push_failed ERR
     docker manifest push elastic/rally:${DOCKER_TAG_VERSION}
     docker manifest push elastic/rally:${DOCKER_TAG_LATEST}
+    trap - ERR
 fi
-
-trap - ERR
 
