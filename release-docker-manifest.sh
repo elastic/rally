@@ -44,13 +44,6 @@ export RALLY_VERSION_TAG="${RALLY_VERSION}-${DATE}"
 export DOCKER_TAG_VERSION="${RALLY_VERSION}"
 export DOCKER_TAG_LATEST="latest"
 
-echo "========================================================"
-echo "Pulling Docker images for Rally $RALLY_VERSION_TAG          "
-echo "========================================================"
-
-docker pull elastic/rally:${RALLY_VERSION_TAG}-amd64
-docker pull elastic/rally:${RALLY_VERSION_TAG}-arm64
-
 echo "======================================================="
 echo "Creating Docker manifest image for Rally $RALLY_VERSION_TAG"
 echo "======================================================="
