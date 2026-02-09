@@ -82,7 +82,6 @@ echo "======================================================="
 echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION   "
 echo "======================================================="
 docker manifest push ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}
-
 trap - ERR
 
 if [[ $PUSH_LATEST == "true" ]]; then
@@ -99,6 +98,5 @@ if [[ $PUSH_LATEST == "true" ]]; then
     echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     echo "======================================================="
     docker manifest push ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
+    trap - ERR
 fi
-
-trap - ERR

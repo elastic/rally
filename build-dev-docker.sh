@@ -92,7 +92,7 @@ echo "========================================================"
 echo "Building Docker image for Rally $RALLY_VERSION          "
 echo "========================================================"
 
-docker build -t "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile "${rally_dir}"
+docker build --provenance=false -t "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile "${rally_dir}"
 
 echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
