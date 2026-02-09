@@ -44,34 +44,44 @@ export RALLY_VERSION_TAG="${RALLY_VERSION}-${DATE}"
 export DOCKER_TAG_VERSION="${RALLY_VERSION}"
 export DOCKER_TAG_LATEST="latest"
 
-echo "================================================================"
-echo "Creating Docker manifest list elastic/rally:${RALLY_VERSION_TAG}"
-echo "================================================================"
+echo "======================================================="
+echo "Creating Docker manifest list for Rally $RALLY_VERSION_TAG"
+echo "======================================================="
+
+docker manifest create elastic/rally:${RALLY_VERSION_TAG} \
+    --amend elastic/rally:${RALLY_VERSION_TAG}-amd64 \
+    --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
 
 trap push_failed ERR
-docker buildx imagetools create --tag "elastic/rally:${RALLY_VERSION_TAG}" \
-    "elastic/rally:${RALLY_VERSION_TAG}-amd64" \
-    "elastic/rally:${RALLY_VERSION_TAG}-arm64"
+echo "======================================================="
+echo "Publishing Docker manifest list elastic/rally:$RALLY_VERSION_TAG"
+echo "======================================================="
+docker manifest push elastic/rally:${RALLY_VERSION_TAG}
 trap - ERR
 
 if [[ $PUSH_LATEST == "true" ]]; then
-    echo "================================================================"
-    echo "Creating Docker manifest list elastic/rally:${DOCKER_TAG_VERSION}"
-    echo "================================================================"
+    echo "======================================================="
+    echo "Creating Docker manifest list for Rally $DOCKER_TAG_VERSION"
+    echo "======================================================="
+
+    docker manifest create elastic/rally:${DOCKER_TAG_VERSION} \
+        --amend elastic/rally:${RALLY_VERSION_TAG}-amd64 \
+        --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
+
+    echo "======================================================="
+    echo "Creating Docker manifest list for Rally $DOCKER_TAG_LATEST"
+    echo "======================================================="
+
+    docker manifest create elastic/rally:${DOCKER_TAG_LATEST} \
+        --amend elastic/rally:${RALLY_VERSION_TAG}-amd64 \
+        --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
 
     trap push_failed ERR
-    docker buildx imagetools create --tag "elastic/rally:${DOCKER_TAG_VERSION}" \
-        "elastic/rally:${RALLY_VERSION_TAG}-amd64" \
-        "elastic/rally:${RALLY_VERSION_TAG}-arm64"
-    trap - ERR
-
-    echo "================================================================"
-    echo "Creating Docker manifest list elastic/rally:${DOCKER_TAG_LATEST}"
-    echo "================================================================"
-
-    trap push_failed ERR
-    docker buildx imagetools create --tag "elastic/rally:${DOCKER_TAG_LATEST}" \
-        "elastic/rally:${RALLY_VERSION_TAG}-amd64" \
-        "elastic/rally:${RALLY_VERSION_TAG}-arm64"
+    echo "======================================================="
+    echo "Publishing Docker manifest list elastic/rally:${DOCKER_TAG_LATEST}"
+    echo "======================================================="
+    docker manifest push elastic/rally:${DOCKER_TAG_VERSION}
+    docker manifest push elastic/rally:${DOCKER_TAG_LATEST}
     trap - ERR
 fi
+

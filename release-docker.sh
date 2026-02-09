@@ -47,7 +47,7 @@ echo "========================================================"
 echo "Building Docker image Rally release $RALLY_VERSION_TAG  "
 echo "========================================================"
 
-docker build -t elastic/rally:${RALLY_VERSION_TAG} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/release/Dockerfile $PWD
+docker build --provenance=false -t elastic/rally:${RALLY_VERSION_TAG} --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/release/Dockerfile $PWD
 
 echo "======================================================="
 echo "Testing Docker image Rally release $RALLY_VERSION_TAG  "
