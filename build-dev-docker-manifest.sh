@@ -62,24 +62,43 @@ else
     export DOCKER_TAG_LATEST="${branch_name}-latest"
 fi
 
-echo "===================================================================="
-echo "Creating Docker manifest list ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}"
-echo "===================================================================="
+echo "========================================================"
+echo "Pulling Docker images for Rally $RALLY_VERSION          "
+echo "========================================================"
+
+docker pull "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-amd64"
+docker pull "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-arm64"
+
+echo "======================================================="
+echo "Creating Docker manifest image for Rally $RALLY_VERSION"
+echo "======================================================="
+
+docker manifest create ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION} \
+    --amend ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-amd64 \
+    --amend ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-arm64
 
 trap push_failed ERR
-docker buildx imagetools create --tag "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" \
-    "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-amd64" \
-    "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-arm64"
+echo "======================================================="
+echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION   "
+echo "======================================================="
+docker manifest push ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}
+
 trap - ERR
 
 if [[ $PUSH_LATEST == "true" ]]; then
-    echo "===================================================================="
-    echo "Creating Docker manifest list ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
-    echo "===================================================================="
+    echo "======================================================="
+    echo "Creating Docker manifest image for Rally $DOCKER_TAG_LATEST"
+    echo "======================================================="
+
+    docker manifest create ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST} \
+        --amend ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}-amd64 \
+        --amend ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}-arm64
 
     trap push_failed ERR
-    docker buildx imagetools create --tag "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}" \
-        "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}-amd64" \
-        "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}-arm64"
-    trap - ERR
+    echo "======================================================="
+    echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
+    echo "======================================================="
+    docker manifest push ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}
 fi
+
+trap - ERR
