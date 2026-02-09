@@ -45,7 +45,7 @@ export DOCKER_TAG_VERSION="${RALLY_VERSION}"
 export DOCKER_TAG_LATEST="latest"
 
 echo "======================================================="
-echo "Creating Docker manifest image for Rally $RALLY_VERSION_TAG"
+echo "Creating Docker manifest list for Rally $RALLY_VERSION_TAG"
 echo "======================================================="
 
 docker manifest create elastic/rally:${RALLY_VERSION_TAG} \
@@ -54,14 +54,14 @@ docker manifest create elastic/rally:${RALLY_VERSION_TAG} \
 
 trap push_failed ERR
 echo "======================================================="
-echo "Publishing Docker image elastic/rally:$RALLY_VERSION_TAG"
+echo "Publishing Docker manifest list elastic/rally:$RALLY_VERSION_TAG"
 echo "======================================================="
 docker manifest push elastic/rally:${RALLY_VERSION_TAG}
 trap - ERR
 
 if [[ $PUSH_LATEST == "true" ]]; then
     echo "======================================================="
-    echo "Creating Docker manifest image for Rally $DOCKER_TAG_VERSION"
+    echo "Creating Docker manifest list for Rally $DOCKER_TAG_VERSION"
     echo "======================================================="
 
     docker manifest create elastic/rally:${DOCKER_TAG_VERSION} \
@@ -69,7 +69,7 @@ if [[ $PUSH_LATEST == "true" ]]; then
         --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
 
     echo "======================================================="
-    echo "Creating Docker manifest image for Rally $DOCKER_TAG_LATEST"
+    echo "Creating Docker manifest list for Rally $DOCKER_TAG_LATEST"
     echo "======================================================="
 
     docker manifest create elastic/rally:${DOCKER_TAG_LATEST} \
@@ -77,7 +77,7 @@ if [[ $PUSH_LATEST == "true" ]]; then
         --amend elastic/rally:${RALLY_VERSION_TAG}-arm64
 
     echo "======================================================="
-    echo "Publishing Docker image elastic/rally:${DOCKER_TAG_LATEST}"
+    echo "Publishing Docker manifest list elastic/rally:${DOCKER_TAG_LATEST}"
     echo "======================================================="
 
     trap push_failed ERR
