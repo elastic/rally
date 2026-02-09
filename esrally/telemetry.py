@@ -2354,7 +2354,6 @@ class DiskUsageStats(TelemetryDevice):
 
     def on_benchmark_stop(self):
         # pylint: disable=import-outside-toplevel
-        import elastic_transport
         import elasticsearch
 
         found = False
@@ -2370,7 +2369,7 @@ class DiskUsageStats(TelemetryDevice):
                 msg = f"Requested disk usage for missing index {index}"
                 self.logger.warning(msg)
                 continue
-            except elastic_transport.ConnectionTimeout:
+            except elasticsearch.ConnectionTimeout:
                 msg = f"Timeout occurred while collecting disk usage for {index}"
                 self.logger.warning(msg)
                 continue
