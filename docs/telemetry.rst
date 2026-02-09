@@ -301,6 +301,7 @@ The disk-usage-stats telemetry device runs the `_disk_usage <https://www.elastic
 Supported telemetry parameters:
 
 * ``disk-usage-stats-indices`` (default all indices in the track): Comma separated string or a list of indices who's disk usage to fetch.
+* ``disk-usage-stats-timeout`` (default 600s): A time value specifying the timeout for the disk usage API call.
 
 Example::
 

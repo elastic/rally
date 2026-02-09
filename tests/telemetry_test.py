@@ -4854,12 +4854,12 @@ class TestDiskUsageStats:
     def test_uses_indices_by_default(self, es):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
+        es.options.return_value.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        es.indices.disk_usage.assert_has_calls(
+        es.options.return_value.indices.disk_usage.assert_has_calls(
             [
                 call(index="foo", run_expensive_tasks=True),
                 call(index="bar", run_expensive_tasks=True),
@@ -4869,13 +4869,13 @@ class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_data_streams_by_default(self, es):
         cfg = create_config()
+        es.options.return_value.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=["foo", "bar"])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        es.indices.disk_usage.assert_has_calls(
+        es.options.return_value.indices.disk_usage.assert_has_calls(
             [
                 call(index="foo", run_expensive_tasks=True),
                 call(index="bar", run_expensive_tasks=True),
@@ -4885,15 +4885,15 @@ class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_indices_param_if_specified_instead_of_index_names(self, es):
         cfg = create_config()
+        es.options.return_value.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats(
             {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=["baz"], data_stream_names=[]
         )
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        es.indices.disk_usage.assert_has_calls(
+        es.options.return_value.indices.disk_usage.assert_has_calls(
             [
                 call(index="foo", run_expensive_tasks=True),
                 call(index="bar", run_expensive_tasks=True),
@@ -4903,15 +4903,15 @@ class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_indices_param_as_csv_if_specified_instead_of_data_stream_names(self, es):
         cfg = create_config()
+        es.options.return_value.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats(
             {"disk-usage-stats-indices": "foo,bar"}, es, metrics_store, index_names=[], data_stream_names=["baz"]
         )
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        es.indices.disk_usage.assert_has_calls(
+        es.options.return_value.indices.disk_usage.assert_has_calls(
             [
                 call(index="foo", run_expensive_tasks=True),
                 call(index="bar", run_expensive_tasks=True),
@@ -4921,15 +4921,15 @@ class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_uses_indices_param_as_list_if_specified_instead_of_data_stream_names(self, es):
         cfg = create_config()
+        es.options.return_value.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats(
             {"disk-usage-stats-indices": ["foo", "bar"]}, es, metrics_store, index_names=[], data_stream_names=["baz"]
         )
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
-        es.indices.disk_usage.assert_has_calls(
+        es.options.return_value.indices.disk_usage.assert_has_calls(
             [
                 call(index="foo", run_expensive_tasks=True),
                 call(index="bar", run_expensive_tasks=True),
@@ -4940,8 +4940,7 @@ class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_error_on_retrieval_does_not_store_metrics(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.side_effect = elasticsearch.RequestError(
+        es.options.return_value.indices.disk_usage.side_effect = elasticsearch.RequestError(
             message="error",
             meta=elastic_transport.ApiResponseMeta(
                 status=400,
@@ -4952,6 +4951,7 @@ class TestDiskUsageStats:
             ),
             body=None,
         )
+        metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -4964,8 +4964,8 @@ class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_no_indices_fails(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
+        es.options.return_value.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=[], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         with pytest.raises(exceptions.RallyError):
@@ -4981,8 +4981,7 @@ class TestDiskUsageStats:
     @mock.patch("elasticsearch.Elasticsearch")
     def test_missing_all_fails(self, es, metrics_store_cluster_level, caplog):
         cfg = create_config()
-        metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.side_effect = elasticsearch.NotFoundError(
+        es.options.return_value.indices.disk_usage.side_effect = elasticsearch.NotFoundError(
             message="error",
             meta=elastic_transport.ApiResponseMeta(
                 status=404,
@@ -4993,6 +4992,7 @@ class TestDiskUsageStats:
             ),
             body=None,
         )
+        metrics_store = metrics.EsMetricsStore(cfg)
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -5032,7 +5032,7 @@ class TestDiskUsageStats:
                 }
             },
         }
-        es.indices.disk_usage.side_effect = [not_found_response, successful_response]
+        es.options.return_value.indices.disk_usage.side_effect = [not_found_response, successful_response]
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo", "bar"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
@@ -5045,7 +5045,7 @@ class TestDiskUsageStats:
     def test_successful_shards(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {
+        es.options.return_value.indices.disk_usage.return_value = {
             "_shards": {"total": 1, "successful": 1, "failed": 0},
         }
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
@@ -5059,7 +5059,7 @@ class TestDiskUsageStats:
     def test_unsuccessful_shards(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {
+        es.options.return_value.indices.disk_usage.return_value = {
             "_shards": {"total": 1, "successful": 0, "failed": 1, "failures": "hello there!"},
         }
         device = telemetry.DiskUsageStats({}, es, metrics_store, index_names=["foo"], data_stream_names=[])
@@ -5074,7 +5074,7 @@ class TestDiskUsageStats:
     def test_source(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {
+        es.options.return_value.indices.disk_usage.return_value = {
             "_shards": {"failed": 0},
             "foo": {
                 "fields": {
@@ -5099,7 +5099,7 @@ class TestDiskUsageStats:
     def test_id(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {
+        es.options.return_value.indices.disk_usage.return_value = {
             "_shards": {"failed": 0},
             "foo": {
                 "fields": {
@@ -5131,7 +5131,7 @@ class TestDiskUsageStats:
         """
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {
+        es.options.return_value.indices.disk_usage.return_value = {
             "_shards": {"failed": 0},
             "foo": {
                 "fields": {
@@ -5158,7 +5158,7 @@ class TestDiskUsageStats:
     def test_number(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {
+        es.options.return_value.indices.disk_usage.return_value = {
             "_shards": {"failed": 0},
             "foo": {
                 "fields": {
@@ -5185,7 +5185,7 @@ class TestDiskUsageStats:
     def test_keyword(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {
+        es.options.return_value.indices.disk_usage.return_value = {
             "_shards": {"failed": 0},
             "foo": {
                 "fields": {
@@ -5212,7 +5212,7 @@ class TestDiskUsageStats:
     def test_indexed_vector(self, es, metrics_store_cluster_level):
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        es.indices.disk_usage.return_value = {
+        es.options.return_value.indices.disk_usage.return_value = {
             "_shards": {"failed": 0},
             "foo": {"fields": {"title_vector": {"total_in_bytes": 64179820, "doc_values_in_bytes": 0, "knn_vectors_in_bytes": 64179820}}},
         }
@@ -5227,6 +5227,33 @@ class TestDiskUsageStats:
 
     def _mock_store(self, name, size, field):
         return mock.call(name, size, meta_data={"index": "foo", "field": field}, unit="byte")
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_can_override_timeout(self, es, metrics_store_cluster_level):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es.options.return_value.indices.disk_usage.return_value = {
+            "_shards": {"failed": 0},
+            "foo": {"fields": {"title_vector": {"total_in_bytes": 64179820, "doc_values_in_bytes": 0, "knn_vectors_in_bytes": 64179820}}},
+        }
+        device = telemetry.DiskUsageStats({"disk-usage-stats-timeout": 999}, es, metrics_store, index_names=["foo"], data_stream_names=[])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        es.options.assert_called_with(request_timeout=999)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_print_warning_on_timeout(self, es, caplog):
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        es.options.return_value.indices.disk_usage.side_effect = elastic_transport.ConnectionTimeout(message="Timed out")
+        device = telemetry.DiskUsageStats({"disk-usage-stats-timeout": 999}, es, metrics_store, index_names=["foo"], data_stream_names=[])
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        with pytest.raises(exceptions.RallyError):
+            t.on_benchmark_stop()
+        assert "Timeout occurred while collecting disk usage for foo" in caplog.text
 
 
 class TestBlobStoreStats:
