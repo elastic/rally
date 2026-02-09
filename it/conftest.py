@@ -30,7 +30,7 @@ def check_prerequisites():
     print("Checking prerequisites...")
     if process.run_subprocess_with_logging("docker ps") != 0:
         raise AssertionError("Docker must be installed and the daemon must be up and running to run integration tests.")
-    if process.run_subprocess_with_logging("docker-compose --help") != 0:
+    if process.run_subprocess_with_logging("docker compose --help") != 0:
         raise AssertionError("Docker Compose is required to run integration tests.")
 
 

@@ -137,17 +137,6 @@ Then store the following mapping file as ``index.json`` in the tutorial director
       }
     }
 
-.. note::
-   This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the mapping type above so ``index.json`` will look like::
-
-      ...
-      "mappings": {
-        "docs": {
-          ...
-        }
-      }
-      ...
-
 
 For details on the allowed syntax, see the Elasticsearch documentation on `mappings <https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html>`_ and the `create index API <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html>`__.
 
@@ -229,20 +218,6 @@ Finally, store the track as ``track.json`` in the tutorial directory::
 The numbers under the ``documents`` property are needed to verify integrity and provide progress reports. Determine the correct document count with ``wc -l documents.json``. For the size in bytes, use ``stat -f %z documents.json`` on macOS and ``stat -c %s documents.json`` on GNU/Linux.
 
 .. note::
-   This tutorial assumes that you want to benchmark a version of Elasticsearch 7.0.0 or later. If you want to benchmark Elasticsearch prior to 7.0.0 you need to add the ``types`` property above so ``track.json`` will look like::
-
-      ...
-      "indices": [
-        {
-          "name": "geonames",
-          "body": "index.json",
-          "types": [ "docs" ]
-        }
-      ],
-      ...
-
-
-.. note::
 
     You can store any supporting scripts along with your track. However, you need to place them in a directory starting with "_", e.g. "_support". Rally loads track plugins (see below) from any directory but will ignore directories starting with "_".
 
@@ -295,12 +270,10 @@ You can also show details about your track with ``esrally info --track-path=~/ra
     5. force-merge
     6. query-match-all (8 clients)
 
-Congratulations, you have created your first track! You can test it with ``esrally race --distribution-version=7.14.1 --track-path=~/rally-tracks/tutorial``.
+Congratulations, you have created your first track! You can test it with:
 
-.. note::
-
-    To test the track with Elasticsearch prior to 7.0.0 you need to update ``index.json`` and ``track.json`` as specified in notes above and then execute ``esrally race --distribution-version=6.5.3 --track-path=~/rally-tracks/tutorial``.
-
+.. parsed-literal::
+   esrally race --distribution-version=\ |ES_CLIENT_VER| --track-path=~/rally-tracks/tutorial
 
 .. _add_track_test_mode:
 
@@ -405,10 +378,6 @@ To specify different workloads in the same track you can use so-called challenge
 .. note::
 
     If you define multiple challenges, Rally runs the challenge where ``default`` is set to ``true``. If you want to run a different challenge, provide the command line option ``--challenge=YOUR_CHALLENGE_NAME``.
-
-.. note::
-
-    To use the track with Elasticsearch prior to 7.0.0 you need to update ``index.json`` and ``track.json`` with index and mapping types accordingly as specified in notes above.
 
 When should you use challenges? Challenges are useful when you want to run completely different workloads based on the same track but for the majority of cases you should get away without using challenges:
 

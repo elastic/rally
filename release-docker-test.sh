@@ -32,7 +32,7 @@ function check_prerequisites {
         exit 1
     fi
 
-    if ! type docker-compose > /dev/null; then
+    if ! type docker compose > /dev/null; then
         echo "docker compose is necessary to run the integration tests"
         exit 1
     fi
@@ -84,11 +84,11 @@ function exit_if_docker_not_running {
 
 function docker_compose {
     if [[ "$1" == "up" ]]; then
-        docker-compose -f docker/docker-compose-tests.yml up --abort-on-container-exit
+        docker compose -f docker/docker-compose-tests.yml up --abort-on-container-exit
     elif [[ "$1" == "down" ]]; then
-        docker-compose -f docker/docker-compose-tests.yml down -v
+        docker compose -f docker/docker-compose-tests.yml down -v
     else
-        error "Unknown argument [$1] for docker-compose, exiting."
+        error "Unknown argument [$1] for docker compose, exiting."
     fi
 }
 

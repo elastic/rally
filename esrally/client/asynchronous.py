@@ -18,34 +18,20 @@
 import asyncio
 import json
 import logging
-import warnings
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import Any, Optional
 
 import aiohttp
 from aiohttp import BaseConnector, RequestInfo
 from aiohttp.client_proto import ResponseHandler
 from aiohttp.helpers import BaseTimerContext
-from elastic_transport import (
-    AiohttpHttpNode,
-    ApiResponse,
-    AsyncTransport,
-    BinaryApiResponse,
-    HeadApiResponse,
-    ListApiResponse,
-    ObjectApiResponse,
-    TextApiResponse,
-)
-from elastic_transport.client_utils import DEFAULT
+from elastic_transport import AiohttpHttpNode, ApiResponse, AsyncTransport
 from elasticsearch import AsyncElasticsearch
 from elasticsearch._async.client import IlmClient
-from elasticsearch.compat import warn_stacklevel
-from elasticsearch.exceptions import HTTP_EXCEPTIONS, ApiError, ElasticsearchWarning
 from multidict import CIMultiDict, CIMultiDictProxy
 from yarl import URL
 
-from esrally.client.common import _WARNING_RE, _mimetype_header_to_compat, _quote_query
-from esrally.client.context import RequestContextHolder
+from esrally.client import common, context
 from esrally.utils import io, versions
 
 
@@ -329,11 +315,9 @@ class RallyIlmClient(IlmClient):
         return await IlmClient.put_lifecycle(self, **kwargs)
 
 
-class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
-    def __init__(self, *args, **kwargs):
-        distribution_version = kwargs.pop("distribution_version", None)
-        distribution_flavor = kwargs.pop("distribution_flavor", None)
-        super().__init__(*args, **kwargs)
+class RallyAsyncElasticsearch(AsyncElasticsearch, context.RequestContextHolder):
+    def __init__(self, hosts: Any = None, *, distribution_version: str | None = None, distribution_flavor: str | None = None, **kwargs):
+        super().__init__(hosts, **kwargs)
         # skip verification at this point; we've already verified this earlier with the synchronous client.
         # The async client is used in the hot code path and we use customized overrides (such as that we don't
         # parse response bodies in some cases for performance reasons, e.g. when using the bulk API).
@@ -361,101 +345,39 @@ class RallyAsyncElasticsearch(AsyncElasticsearch, RequestContextHolder):
         method: str,
         path: str,
         *,
-        params: Optional[Mapping[str, Any]] = None,
-        headers: Optional[Mapping[str, str]] = None,
-        body: Optional[Any] = None,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
+        body: Any = None,
+        endpoint_id: str | None = None,
+        path_parts: Mapping[str, Any] | None = None,
+        compatibility_mode: int | None = None,
     ) -> ApiResponse[Any]:
-        # We need to ensure that we provide content-type and accept headers
-        if body is not None:
-            if headers is None:
-                headers = {"content-type": "application/json", "accept": "application/json"}
-            else:
-                if headers.get("content-type") is None:
-                    headers["content-type"] = "application/json"
-                if headers.get("accept") is None:
-                    headers["accept"] = "application/json"
+        """
+        Perform an HTTP request to Elasticsearch, ensuring Accept/Content-Type headers
+        match the cluster's compatibility mode (or distribution version), then delegate
+        to the base async client.
 
-        if headers:
-            request_headers = self._headers.copy()
-            request_headers.update(headers)
-        else:
-            request_headers = self._headers
+        Parameters passed to the Elasticsearch client:
 
-        # Converts all parts of a Accept/Content-Type headers
-        # from application/X -> application/vnd.elasticsearch+X
-        # see https://github.com/elastic/elasticsearch/issues/51816
-        # Not applicable to serverless
-        if not self.is_serverless:
-            if versions.is_version_identifier(self.distribution_version) and (
-                versions.Version.from_string(self.distribution_version) >= versions.Version.from_string("8.0.0")
-            ):
-                _mimetype_header_to_compat("Accept", request_headers)
-                _mimetype_header_to_compat("Content-Type", request_headers)
+        :param method: HTTP method (e.g. ``GET``, ``POST``).
+        :param path: URL path for the request.
+        :param params: Optional query string parameters.
+        :param headers: Optional request headers; may be augmented with compatibility headers.
+        :param body: Optional request body.
+        :param endpoint_id: Optional endpoint identifier for the API.
+        :param path_parts: Optional mapping for parameterized path segments.
 
-        if params:
-            target = f"{path}?{_quote_query(params)}"
-        else:
-            target = path
-
-        meta, resp_body = await self.transport.perform_request(
-            method,
-            target,
-            headers=request_headers,
+        Parameters added by Rally:
+        :param compatibility_mode: Optional Elasticsearch major version used to choose Accept/Content-Type
+            headers; defaults to the minimal supported compatibility mode.
+        :return: The API response from Elasticsearch.
+        """
+        headers = common.ensure_mimetype_headers(
+            headers=headers,
+            path=path,
             body=body,
-            request_timeout=self._request_timeout,
-            max_retries=self._max_retries,
-            retry_on_status=self._retry_on_status,
-            retry_on_timeout=self._retry_on_timeout,
-            client_meta=self._client_meta,
+            version=compatibility_mode or self.distribution_version,
         )
-
-        # HEAD with a 404 is returned as a normal response
-        # since this is used as an 'exists' functionality.
-        if not (method == "HEAD" and meta.status == 404) and (
-            not 200 <= meta.status < 299
-            and (self._ignore_status is DEFAULT or self._ignore_status is None or meta.status not in self._ignore_status)
-        ):
-            message = str(resp_body)
-
-            # If the response is an error response try parsing
-            # the raw Elasticsearch error before raising.
-            if isinstance(resp_body, dict):
-                try:
-                    error = resp_body.get("error", message)
-                    if isinstance(error, dict) and "type" in error:
-                        error = error["type"]
-                    message = error
-                except (ValueError, KeyError, TypeError):
-                    pass
-
-            raise HTTP_EXCEPTIONS.get(meta.status, ApiError)(message=message, meta=meta, body=resp_body)
-
-        # 'Warning' headers should be reraised as 'ElasticsearchWarning'
-        if "warning" in meta.headers:
-            warning_header = (meta.headers.get("warning") or "").strip()
-            warning_messages: Iterable[str] = _WARNING_RE.findall(warning_header) or (warning_header,)
-            stacklevel = warn_stacklevel()
-            for warning_message in warning_messages:
-                warnings.warn(
-                    warning_message,
-                    category=ElasticsearchWarning,
-                    stacklevel=stacklevel,
-                )
-
-        if method == "HEAD":
-            response = HeadApiResponse(meta=meta)
-        elif isinstance(resp_body, dict):
-            response = ObjectApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-        elif isinstance(resp_body, list):
-            response = ListApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-        elif isinstance(resp_body, str):
-            response = TextApiResponse(  # type: ignore[assignment]
-                body=resp_body,
-                meta=meta,
-            )
-        elif isinstance(resp_body, bytes):
-            response = BinaryApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-        else:
-            response = ApiResponse(body=resp_body, meta=meta)  # type: ignore[assignment]
-
-        return response
+        return await super().perform_request(
+            method, path, params=params, headers=headers, body=body, endpoint_id=endpoint_id, path_parts=path_parts
+        )

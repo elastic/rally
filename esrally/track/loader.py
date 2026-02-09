@@ -235,6 +235,7 @@ def _install_dependencies(dependencies):
     if dependencies:
         log_path = os.path.join(paths.logs(), "dependency.log")
         console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
         try:
             with open(log_path, "ab") as install_log:
                 subprocess.check_call(

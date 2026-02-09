@@ -16,18 +16,22 @@
 # under the License.
 
 import copy
+import dataclasses
 import os
 import random
 import re
+import subprocess
+import sys
 import textwrap
 import urllib.error
 from unittest import mock
 
 import pytest
 
-from esrally import config, exceptions
+from esrally import config, exceptions, paths
 from esrally.track import loader, track
-from esrally.utils import io
+from esrally.utils import console, io
+from esrally.utils.cases import cases
 
 
 def strip_ws(s):
@@ -4323,3 +4327,40 @@ class TestTrackProcessorRegistry:
         ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         assert len(expected_processors) == len(actual_processors)
+
+
+@dataclasses.dataclass
+class InstallDependenciesCase:
+    requirements: list[str]
+
+
+@cases(
+    empty=InstallDependenciesCase(requirements=[]),
+    simple=InstallDependenciesCase(requirements=["pyyaml"]),
+)
+def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest.MonkeyPatch, tmpdir) -> None:
+    # pylint: disable=protected-access
+    monkeypatch.chdir(str(tmpdir))
+    monkeypatch.setattr(paths, "logs", lambda: "./logs")
+    monkeypatch.setattr(paths, "libs", lambda: "./libs")
+    monkeypatch.setattr(console, "info", mock.create_autospec(console.info))
+    monkeypatch.setattr(subprocess, "check_call", mock.create_autospec(subprocess.check_call))
+    loader._install_dependencies(case.requirements)
+
+    if not case.requirements:
+        subprocess.check_call.assert_not_called()
+        assert not os.path.isdir("./logs")
+        return
+
+    subprocess.check_call.assert_called_once()
+    assert subprocess.check_call.call_args[0][0] == [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        *case.requirements,
+        "--upgrade",
+        "--target",
+        "./libs",
+    ]
+    assert os.path.isfile("./logs/dependency.log")
