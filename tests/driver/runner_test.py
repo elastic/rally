@@ -27,6 +27,7 @@ from unittest import mock
 import elastic_transport
 import elasticsearch
 import pytest
+from elastic_transport import ApiResponse, ApiResponseMeta, HttpHeaders, NodeConfig
 
 from esrally import client, config, exceptions
 from esrally.client.asynchronous import RallyAsyncElasticsearch
@@ -408,6 +409,12 @@ def _build_bulk_body(*lines):
 
 
 class TestBulkIndexRunner:
+    _headers = HttpHeaders()
+    _headers["content-type"] = "application/json"
+    _node = NodeConfig(scheme="http", host="localhost", port=9200)
+
+    BULK_RESPONSE_META = ApiResponseMeta(status=200, http_version="1.1", headers=_headers, duration=0.1, node=_node)
+
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_bulk_index_missing_params(self, es):
@@ -415,7 +422,9 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
+        )
 
         bulk = runner.BulkIndex()
 
@@ -444,7 +453,10 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
+        )
 
         bulk = runner.BulkIndex()
 
@@ -466,6 +478,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 8,
             "index": None,
             "weight": 3,
@@ -484,7 +498,9 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
+        )
 
         bulk = runner.BulkIndex()
 
@@ -505,6 +521,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 8,
             "index": None,
             "weight": 3,
@@ -523,7 +541,9 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
+        )
 
         bulk = runner.BulkIndex()
 
@@ -546,6 +566,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 8,
             "index": "test1",
             "weight": 3,
@@ -572,7 +594,9 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
+        )
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -591,6 +615,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 8,
             "index": "test-index",
             "weight": 3,
@@ -609,7 +635,9 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
+        )
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -627,6 +655,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 8,
             "index": "test-index",
             "weight": 3,
@@ -641,7 +671,7 @@ class TestBulkIndexRunner:
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_bulk_index_error(self, es):
-        bulk_response = {
+        bulk_response_body = {
             "took": 5,
             "errors": True,
             "items": [
@@ -650,8 +680,9 @@ class TestBulkIndexRunner:
                 {"index": {"status": 404, "_shards": {"total": 2, "successful": 0, "failed": 2}}},
             ],
         }
-
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response_body).encode()), meta=self.BULK_RESPONSE_META)
+        )
 
         bulk = runner.BulkIndex()
 
@@ -673,6 +704,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "max-doc-status": 500,
+            "request-status": 200,
             "took": 5,
             "index": "test",
             "weight": 3,
@@ -723,7 +756,9 @@ class TestBulkIndexRunner:
             ],
         }
 
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
+        )
 
         bulk = runner.BulkIndex()
 
@@ -746,6 +781,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 429,
             "took": 20,
             "index": "test",
             "weight": 3,
@@ -819,7 +856,9 @@ class TestBulkIndexRunner:
                 },
             ],
         }
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
+        )
         bulk = runner.BulkIndex()
 
         bulk_params = {
@@ -843,6 +882,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 500,
             "took": 30,
             "index": "test",
             "weight": 4,
@@ -861,89 +902,92 @@ class TestBulkIndexRunner:
     @pytest.mark.asyncio
     async def test_mixed_bulk_with_detailed_stats_body_as_string(self, es):
         es.bulk = mock.AsyncMock(
-            return_value={
-                "took": 30,
-                "ingest_took": 20,
-                "errors": True,
-                "items": [
-                    {
-                        "index": {
-                            "_index": "test",
-                            "_type": "type1",
-                            "_id": "1",
-                            "_version": 1,
-                            "result": "created",
-                            "_shards": {"total": 2, "successful": 1, "failed": 0},
-                            "created": True,
-                            "status": 201,
-                            "_seq_no": 0,
-                        }
-                    },
-                    {
-                        "update": {
-                            "_index": "test",
-                            "_type": "type1",
-                            "_id": "2",
-                            "_version": 2,
-                            "result": "updated",
-                            "_shards": {"total": 2, "successful": 1, "failed": 0},
-                            "status": 200,
-                            "_seq_no": 1,
-                        }
-                    },
-                    {
-                        "index": {
-                            "_index": "test",
-                            "_type": "type1",
-                            "_id": "3",
-                            "_version": 1,
-                            "result": "noop",
-                            "_shards": {"total": 2, "successful": 0, "failed": 2},
-                            "created": False,
-                            "status": 500,
-                            "_seq_no": -2,
-                        }
-                    },
-                    {
-                        "index": {
-                            "_index": "test",
-                            "_type": "type1",
-                            "_id": "4",
-                            "_version": 1,
-                            "result": "noop",
-                            "_shards": {"total": 2, "successful": 1, "failed": 1},
-                            "created": False,
-                            "status": 500,
-                            "_seq_no": -2,
-                        }
-                    },
-                    {
-                        "index": {
-                            "_index": "test",
-                            "_type": "type1",
-                            "_id": "5",
-                            "_version": 1,
-                            "result": "created",
-                            "_shards": {"total": 2, "successful": 1, "failed": 0},
-                            "created": True,
-                            "status": 201,
-                            "_seq_no": 4,
-                        }
-                    },
-                    {
-                        "update": {
-                            "_index": "test",
-                            "_type": "type1",
-                            "_id": "6",
-                            "_version": 2,
-                            "result": "noop",
-                            "_shards": {"total": 2, "successful": 0, "failed": 2},
-                            "status": 404,
-                            "_seq_no": 5,
-                        }
-                    },
-                ],
-            }
+            return_value=ApiResponse(
+                body={
+                    "took": 30,
+                    "ingest_took": 20,
+                    "errors": True,
+                    "items": [
+                        {
+                            "index": {
+                                "_index": "test",
+                                "_type": "type1",
+                                "_id": "1",
+                                "_version": 1,
+                                "result": "created",
+                                "_shards": {"total": 2, "successful": 1, "failed": 0},
+                                "created": True,
+                                "status": 201,
+                                "_seq_no": 0,
+                            }
+                        },
+                        {
+                            "update": {
+                                "_index": "test",
+                                "_type": "type1",
+                                "_id": "2",
+                                "_version": 2,
+                                "result": "updated",
+                                "_shards": {"total": 2, "successful": 1, "failed": 0},
+                                "status": 200,
+                                "_seq_no": 1,
+                            }
+                        },
+                        {
+                            "index": {
+                                "_index": "test",
+                                "_type": "type1",
+                                "_id": "3",
+                                "_version": 1,
+                                "result": "noop",
+                                "_shards": {"total": 2, "successful": 0, "failed": 2},
+                                "created": False,
+                                "status": 500,
+                                "_seq_no": -2,
+                            }
+                        },
+                        {
+                            "index": {
+                                "_index": "test",
+                                "_type": "type1",
+                                "_id": "4",
+                                "_version": 1,
+                                "result": "noop",
+                                "_shards": {"total": 2, "successful": 1, "failed": 1},
+                                "created": False,
+                                "status": 500,
+                                "_seq_no": -2,
+                            }
+                        },
+                        {
+                            "index": {
+                                "_index": "test",
+                                "_type": "type1",
+                                "_id": "5",
+                                "_version": 1,
+                                "result": "created",
+                                "_shards": {"total": 2, "successful": 1, "failed": 0},
+                                "created": True,
+                                "status": 201,
+                                "_seq_no": 4,
+                            }
+                        },
+                        {
+                            "update": {
+                                "_index": "test",
+                                "_type": "type1",
+                                "_id": "6",
+                                "_version": 2,
+                                "result": "noop",
+                                "_shards": {"total": 2, "successful": 0, "failed": 2},
+                                "status": 404,
+                                "_seq_no": 5,
+                            }
+                        },
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            )
         )
         bulk = runner.BulkIndex()
 
@@ -972,6 +1016,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 500,
             "took": 30,
             "ingest_took": 20,
             "index": "test",
@@ -1005,26 +1051,29 @@ class TestBulkIndexRunner:
     @pytest.mark.asyncio
     async def test_simple_bulk_with_detailed_stats_body_as_list(self, es):
         es.bulk = mock.AsyncMock(
-            return_value={
-                "took": 30,
-                "ingest_took": 20,
-                "errors": False,
-                "items": [
-                    {
-                        "index": {
-                            "_index": "test",
-                            "_type": "type1",
-                            "_id": "1",
-                            "_version": 1,
-                            "result": "created",
-                            "_shards": {"total": 2, "successful": 1, "failed": 0},
-                            "created": True,
-                            "status": 201,
-                            "_seq_no": 0,
+            return_value=ApiResponse(
+                body={
+                    "took": 30,
+                    "ingest_took": 20,
+                    "errors": False,
+                    "items": [
+                        {
+                            "index": {
+                                "_index": "test",
+                                "_type": "type1",
+                                "_id": "1",
+                                "_version": 1,
+                                "result": "created",
+                                "_shards": {"total": 2, "successful": 1, "failed": 0},
+                                "created": True,
+                                "status": 201,
+                                "_seq_no": 0,
+                            }
                         }
-                    }
-                ],
-            }
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            )
         )
         bulk = runner.BulkIndex()
 
@@ -1043,6 +1092,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 30,
             "ingest_took": 20,
             "index": "test",
@@ -1074,26 +1125,29 @@ class TestBulkIndexRunner:
     @pytest.mark.asyncio
     async def test_simple_bulk_with_detailed_stats_body_as_bytes(self, es):
         es.bulk = mock.AsyncMock(
-            return_value={
-                "took": 30,
-                "ingest_took": 20,
-                "errors": False,
-                "items": [
-                    {
-                        "index": {
-                            "_index": "bytes",
-                            "_type": "bytes1",
-                            "_id": "1",
-                            "_version": 1,
-                            "result": "created",
-                            "_shards": {"total": 1, "successful": 1, "failed": 0},
-                            "created": True,
-                            "status": 201,
-                            "_seq_no": 0,
+            return_value=ApiResponse(
+                body={
+                    "took": 30,
+                    "ingest_took": 20,
+                    "errors": False,
+                    "items": [
+                        {
+                            "index": {
+                                "_index": "bytes",
+                                "_type": "bytes1",
+                                "_id": "1",
+                                "_version": 1,
+                                "result": "created",
+                                "_shards": {"total": 1, "successful": 1, "failed": 0},
+                                "created": True,
+                                "status": 201,
+                                "_seq_no": 0,
+                            }
                         }
-                    }
-                ],
-            }
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            )
         )
         bulk = runner.BulkIndex()
 
@@ -1109,6 +1163,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 30,
             "ingest_took": 20,
             "index": "test",
@@ -1140,26 +1196,29 @@ class TestBulkIndexRunner:
     @pytest.mark.asyncio
     async def test_simple_bulk_with_detailed_stats_body_as_unrecognized_type(self, es):
         es.bulk = mock.AsyncMock(
-            return_value={
-                "took": 30,
-                "ingest_took": 20,
-                "errors": False,
-                "items": [
-                    {
-                        "index": {
-                            "_index": "test",
-                            "_type": "type1",
-                            "_id": "1",
-                            "_version": 1,
-                            "result": "created",
-                            "_shards": {"total": 2, "successful": 1, "failed": 0},
-                            "created": True,
-                            "status": 201,
-                            "_seq_no": 0,
+            return_value=ApiResponse(
+                body={
+                    "took": 30,
+                    "ingest_took": 20,
+                    "errors": False,
+                    "items": [
+                        {
+                            "index": {
+                                "_index": "test",
+                                "_type": "type1",
+                                "_id": "1",
+                                "_version": 1,
+                                "result": "created",
+                                "_shards": {"total": 2, "successful": 1, "failed": 0},
+                                "created": True,
+                                "status": 201,
+                                "_seq_no": 0,
+                            }
                         }
-                    }
-                ],
-            }
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            )
         )
         bulk = runner.BulkIndex()
 
@@ -1183,25 +1242,28 @@ class TestBulkIndexRunner:
     @pytest.mark.asyncio
     async def test_bulk_index_error_logs_warning_with_detailed_stats_body(self, es):
         es.bulk = mock.AsyncMock(
-            return_value={
-                "took": 5,
-                "errors": True,
-                "items": [
-                    {
-                        "create": {
-                            "_index": "test",
-                            "_type": "_doc",
-                            "_id": "6UNLsn0BfMD3e6iftbdV",
-                            "status": 429,
-                            "error": {
-                                "type": "cluster_block_exception",
-                                "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
-                                "flood-stage watermark, index has read-only-allow-delete block];",
-                            },
+            return_value=ApiResponse(
+                body={
+                    "took": 5,
+                    "errors": True,
+                    "items": [
+                        {
+                            "create": {
+                                "_index": "test",
+                                "_type": "_doc",
+                                "_id": "6UNLsn0BfMD3e6iftbdV",
+                                "status": 429,
+                                "error": {
+                                    "type": "cluster_block_exception",
+                                    "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
+                                    "flood-stage watermark, index has read-only-allow-delete block];",
+                                },
+                            }
                         }
-                    }
-                ],
-            }
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            )
         )
 
         bulk = runner.BulkIndex()
@@ -1223,6 +1285,8 @@ class TestBulkIndexRunner:
             mocked_warning_logger.assert_has_calls([mock.call("Bulk request failed: [%s]", result["error-description"])])
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 429,
             "took": 5,
             "index": "test",
             "weight": 1,
@@ -1247,83 +1311,86 @@ class TestBulkIndexRunner:
     @pytest.mark.asyncio
     async def test_bulk_index_error_produces_detailed_stats_body_with_limit(self, es):
         es.bulk = mock.AsyncMock(
-            return_value={
-                "took": 5,
-                "errors": True,
-                "items": [
-                    {
-                        "create": {
-                            "_index": "test",
-                            "status": 409,
-                            "error": {
-                                "type": "version_conflict_engine_exception",
-                                "reason": "[1]: version conflict, document already exists (current version [1])",
-                            },
-                        }
-                    },
-                    {
-                        "create": {
-                            "_index": "test",
-                            "status": 409,
-                            "error": {
-                                "type": "version_conflict_engine_exception",
-                                "reason": "[2]: version conflict, document already exists (current version [1])",
-                            },
-                        }
-                    },
-                    {
-                        "create": {
-                            "_index": "test",
-                            "status": 409,
-                            "error": {
-                                "type": "version_conflict_engine_exception",
-                                "reason": "[3]: version conflict, document already exists (current version [1])",
-                            },
-                        }
-                    },
-                    {
-                        "create": {
-                            "_index": "test",
-                            "status": 409,
-                            "error": {
-                                "type": "version_conflict_engine_exception",
-                                "reason": "[4]: version conflict, document already exists (current version [1])",
-                            },
-                        }
-                    },
-                    {
-                        "create": {
-                            "_index": "test",
-                            "status": 409,
-                            "error": {
-                                "type": "version_conflict_engine_exception",
-                                "reason": "[5]: version conflict, document already exists (current version [1])",
-                            },
-                        }
-                    },
-                    {
-                        "create": {
-                            "_index": "test",
-                            "status": 409,
-                            "error": {
-                                "type": "version_conflict_engine_exception",
-                                "reason": "[6]: version conflict, document already exists (current version [1])",
-                            },
-                        }
-                    },
-                    {
-                        "create": {
-                            "_index": "test",
-                            "status": 429,
-                            "error": {
-                                "type": "cluster_block_exception",
-                                "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
-                                "flood-stage watermark, index has read-only-allow-delete block];",
-                            },
-                        }
-                    },
-                ],
-            }
+            return_value=ApiResponse(
+                body={
+                    "took": 5,
+                    "errors": True,
+                    "items": [
+                        {
+                            "create": {
+                                "_index": "test",
+                                "status": 409,
+                                "error": {
+                                    "type": "version_conflict_engine_exception",
+                                    "reason": "[1]: version conflict, document already exists (current version [1])",
+                                },
+                            }
+                        },
+                        {
+                            "create": {
+                                "_index": "test",
+                                "status": 409,
+                                "error": {
+                                    "type": "version_conflict_engine_exception",
+                                    "reason": "[2]: version conflict, document already exists (current version [1])",
+                                },
+                            }
+                        },
+                        {
+                            "create": {
+                                "_index": "test",
+                                "status": 409,
+                                "error": {
+                                    "type": "version_conflict_engine_exception",
+                                    "reason": "[3]: version conflict, document already exists (current version [1])",
+                                },
+                            }
+                        },
+                        {
+                            "create": {
+                                "_index": "test",
+                                "status": 409,
+                                "error": {
+                                    "type": "version_conflict_engine_exception",
+                                    "reason": "[4]: version conflict, document already exists (current version [1])",
+                                },
+                            }
+                        },
+                        {
+                            "create": {
+                                "_index": "test",
+                                "status": 409,
+                                "error": {
+                                    "type": "version_conflict_engine_exception",
+                                    "reason": "[5]: version conflict, document already exists (current version [1])",
+                                },
+                            }
+                        },
+                        {
+                            "create": {
+                                "_index": "test",
+                                "status": 409,
+                                "error": {
+                                    "type": "version_conflict_engine_exception",
+                                    "reason": "[6]: version conflict, document already exists (current version [1])",
+                                },
+                            }
+                        },
+                        {
+                            "create": {
+                                "_index": "test",
+                                "status": 429,
+                                "error": {
+                                    "type": "cluster_block_exception",
+                                    "reason": "index [test] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded "
+                                    "flood-stage watermark, index has read-only-allow-delete block];",
+                                },
+                            }
+                        },
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            )
         )
 
         bulk = runner.BulkIndex()
@@ -1357,6 +1424,8 @@ class TestBulkIndexRunner:
             mocked_warning_logger.assert_has_calls([mock.call("Bulk request failed: [%s]", result["error-description"])])
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 429,
             "took": 5,
             "index": "test",
             "weight": 7,
@@ -1389,7 +1458,7 @@ class TestBulkIndexRunner:
             "took": 8,
             "items": [{"create": {"_index": "test", "result": "created", "status": 201}}],
         }
-        es.bulk = mock.AsyncMock(return_value=bulk_response)
+        es.bulk = mock.AsyncMock(return_value=ApiResponse(body=bulk_response, meta=self.BULK_RESPONSE_META))
 
         bulk = runner.BulkIndex()
 
@@ -1407,6 +1476,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, dict(bulk_params))
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 8,
             "index": "test",
             "weight": 1,
@@ -1430,7 +1501,7 @@ class TestBulkIndexRunner:
             "took": 8,
             "items": [{"create": {"_index": "test", "result": "created", "status": 201, "forced_refresh": True}}],
         }
-        es.bulk = mock.AsyncMock(return_value=bulk_response)
+        es.bulk = mock.AsyncMock(return_value=ApiResponse(body=bulk_response, meta=self.BULK_RESPONSE_META))
 
         bulk = runner.BulkIndex()
 
@@ -1448,6 +1519,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, dict(bulk_params))
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 8,
             "index": "test",
             "weight": 1,
@@ -1470,7 +1543,9 @@ class TestBulkIndexRunner:
             "errors": False,
             "took": 8,
         }
-        es.bulk = mock.AsyncMock(return_value=io.BytesIO(json.dumps(bulk_response).encode()))
+        es.bulk = mock.AsyncMock(
+            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
+        )
 
         bulk = runner.BulkIndex()
 
@@ -1487,6 +1562,8 @@ class TestBulkIndexRunner:
         result = await bulk(es, bulk_params)
 
         assert result == {
+            "request-status": 200,
+            "max-doc-status": 200,
             "took": 8,
             "index": "test",
             "weight": 1,
