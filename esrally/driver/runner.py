@@ -3039,6 +3039,9 @@ class Retry(Runner, Delegator):
                 if last_attempt or not retry_on_timeout:
                     raise
                 await asyncio.sleep(sleep_time)
+            except elasticsearch.BadRequestError as e:
+                self.logger.warning("[%s] %s", str(self.delegate), str(e))
+                raise e
             except elasticsearch.ApiError as e:
                 if last_attempt or not retry_on_timeout:
                     raise e
