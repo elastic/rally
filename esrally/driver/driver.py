@@ -2028,6 +2028,16 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
     # pylint: disable=import-outside-toplevel
     import elasticsearch
 
+    def _parse_headers(e):
+        tracked_headers = [{"request_id": "X-Cloud-Request-Id", "handling_node": "X-Found-Handling-Instance"}]
+        headers_meta = {}
+        if hasattr(e, "errors") and e.errors and len(e.errors) > 0 and hasattr(e.errors[0], "headers"):
+            for header in tracked_headers:
+                for key, value in header.items():
+                    if value in e.errors[0].headers:
+                        headers_meta[key] = e.errors[0].headers[value]
+        return headers_meta
+
     is_connection_error = False
 
     try:
@@ -2063,6 +2073,7 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
         if e.errors:
             if hasattr(e.errors[0], "status"):
                 request_meta_data["http-status"] = e.errors[0].status
+            request_meta_data.update(_parse_headers(e))
         # connection timeout errors don't provide a helpful description
         if isinstance(e, elasticsearch.ConnectionTimeout):
             request_meta_data["error-description"] = "network connection timed out"
@@ -2117,6 +2128,7 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
         request_meta_data["error-description"] = error_description
         if e.status_code:
             request_meta_data["http-status"] = e.status_code
+        request_meta_data.update(_parse_headers(e))
 
     except KeyError as e:
         logging.getLogger(__name__).exception("Cannot execute runner [%s]; most likely due to missing parameters.", str(runner))
