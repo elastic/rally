@@ -2029,7 +2029,13 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
     import elasticsearch
 
     def _parse_headers(e):
-        tracked_headers = [{"request_id": "X-Cloud-Request-Id", "handling_node": "X-Found-Handling-Instance"}]
+        tracked_headers = [
+            {
+                "request_id": "X-Cloud-Request-Id",
+                "handling_node": "X-Found-Handling-Instance",
+                "handling_cluster": "X-Found-Handling-Cluster",
+            }
+        ]
         headers_meta = {}
         if hasattr(e, "errors") and e.errors and len(e.errors) > 0 and hasattr(e.errors[0], "headers"):
             for header in tracked_headers:

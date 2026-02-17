@@ -2042,7 +2042,12 @@ class TestAsyncExecutor:
 
         # Create a mock error object with headers
         mock_error = mock.Mock()
-        mock_error.headers = {"X-Cloud-Request-Id": "req-12345", "X-Found-Handling-Instance": "node-67890", "Other-Header": "other-value"}
+        mock_error.headers = {
+            "X-Cloud-Request-Id": "req-12345",
+            "X-Found-Handling-Instance": "node-67890",
+            "X-Found-Handling-Cluster": "cluster-abc123",
+            "Other-Header": "other-value",
+        }
 
         # Create TransportError with mock errors containing headers
         transport_error = elasticsearch.TransportError(message="Transport failed")
@@ -2060,6 +2065,7 @@ class TestAsyncExecutor:
         assert request_meta_data["error-type"] == "transport"
         assert request_meta_data["request_id"] == "req-12345"
         assert request_meta_data["handling_node"] == "node-67890"
+        assert request_meta_data["handling_cluster"] == "cluster-abc123"
         # Verify other headers are not included
         assert "other-header" not in request_meta_data
         assert "Other-Header" not in request_meta_data
@@ -2088,8 +2094,9 @@ class TestAsyncExecutor:
         assert request_meta_data["success"] is False
         assert request_meta_data["error-type"] == "transport"
         assert request_meta_data["request_id"] == "req-54321"
-        # This header should not be present since it wasn't in the error
+        # These headers should not be present since they weren't in the error
         assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
 
     @pytest.mark.asyncio
     async def test_execute_single_transport_error_with_no_tracking_headers(self):
@@ -2117,6 +2124,7 @@ class TestAsyncExecutor:
         # None of the tracked headers should be present
         assert "request_id" not in request_meta_data
         assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
 
     @pytest.mark.asyncio
     async def test_execute_single_transport_error_without_headers_attribute(self):
@@ -2145,6 +2153,7 @@ class TestAsyncExecutor:
         # None of the tracked headers should be present
         assert "request_id" not in request_meta_data
         assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
 
     @pytest.mark.asyncio
     async def test_execute_single_transport_error_without_errors_attribute(self):
@@ -2168,6 +2177,7 @@ class TestAsyncExecutor:
         # None of the tracked headers should be present
         assert "request_id" not in request_meta_data
         assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
 
     @pytest.mark.asyncio
     async def test_execute_single_api_error_with_headers(self):
@@ -2180,6 +2190,7 @@ class TestAsyncExecutor:
         mock_error.headers = {
             "X-Cloud-Request-Id": "api-req-98765",
             "X-Found-Handling-Instance": "api-node-13579",
+            "X-Found-Handling-Cluster": "api-cluster-xyz789",
             "Content-Type": "application/json",
         }
 
@@ -2208,6 +2219,7 @@ class TestAsyncExecutor:
         assert request_meta_data["http-status"] == 500
         assert request_meta_data["request_id"] == "api-req-98765"
         assert request_meta_data["handling_node"] == "api-node-13579"
+        assert request_meta_data["handling_cluster"] == "api-cluster-xyz789"
 
     @pytest.mark.asyncio
     async def test_execute_single_api_error_with_partial_headers(self):
@@ -2242,8 +2254,9 @@ class TestAsyncExecutor:
         assert request_meta_data["error-type"] == "api"
         assert request_meta_data["http-status"] == 403
         assert request_meta_data["handling_node"] == "api-node-only"
-        # This header should not be present since it wasn't in the error
+        # These headers should not be present since they weren't in the error
         assert "request_id" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
 
     @pytest.mark.asyncio
     async def test_execute_single_api_error_without_errors_attribute(self):
@@ -2276,6 +2289,7 @@ class TestAsyncExecutor:
         # None of the tracked headers should be present
         assert "request_id" not in request_meta_data
         assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
 
 
 class TestAsyncProfiler:
