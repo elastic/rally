@@ -159,17 +159,18 @@ jobs:
 
       - name: Post or update PR comment
         if: github.event_name == 'pull_request' && !cancelled()
+        working-directory: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ ! -f comment-body.md ]; then exit 0; fi
+          if [ ! -f ../comment-body.md ]; then exit 0; fi
           PR=${{ github.event.pull_request.number }}
           COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR}/comments" \
             --jq '.[] | select(.body | startswith("<!-- benchmark-comparison -->")) | .id' \
             | tail -1)
           if [ -n "$COMMENT_ID" ]; then
             gh api "repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" \
-              -X PATCH -F body=@comment-body.md
+              -X PATCH -F body=@../comment-body.md
           else
-            gh pr comment "${PR}" --body-file comment-body.md
+            gh pr comment "${PR}" --body-file ../comment-body.md
           fi
