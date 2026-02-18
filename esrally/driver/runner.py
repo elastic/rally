@@ -25,6 +25,7 @@ import sys
 import time
 from collections import Counter, OrderedDict
 from copy import deepcopy
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import total_ordering
 from io import BytesIO
@@ -457,6 +458,80 @@ def escape(v):
         return str(v)
 
 
+@dataclass
+class BulkStats:
+    """Metrics collected from a single bulk indexing request."""
+
+    success_count: Optional[int]
+    error_count: int
+    took: Optional[int]
+    request_status: int
+    max_doc_status: int = -1
+    error_description: Optional[str] = None
+    error_429_indices: list = field(default_factory=list, repr=False)
+    ops: Optional[dict] = None
+    shards_histogram: Optional[list] = None
+    bulk_request_size_bytes: int = 0
+    total_document_size_bytes: int = 0
+    ingest_took: Optional[int] = None
+    retry_count: int = 0
+
+    @property
+    def success(self) -> bool:
+        if self.retry_count > 0:
+            return len(self.error_429_indices) == 0
+        return self.error_count == 0
+
+    @property
+    def is_detailed(self) -> bool:
+        return self.ops is not None
+
+    def accumulate(self, other: "BulkStats"):
+        """Merge another attempt's stats into this aggregate result."""
+        self.success_count = (self.success_count or 0) + (other.success_count or 0)
+        self.error_count += other.error_count
+        self.took = (self.took or 0) + (other.took or 0)
+        self.bulk_request_size_bytes += other.bulk_request_size_bytes
+        self.total_document_size_bytes += other.total_document_size_bytes
+        if self.retry_count == 0:
+            self.retry_count = 2
+        else:
+            self.retry_count += 1
+        self.error_429_indices = other.error_429_indices
+        self.request_status = other.request_status
+        self.max_doc_status = other.max_doc_status
+        self.error_description = None
+        if self.is_detailed:
+            self.ops = {}
+            self.shards_histogram = []
+        self.ingest_took = None
+
+    def as_dict(self) -> dict:
+        d = {
+            "took": self.took,
+            "success": self.success,
+            "success-count": self.success_count,
+            "error-count": self.error_count,
+            "request-status": self.request_status,
+            "max-doc-status": self.max_doc_status if self.max_doc_status > 0 else self.request_status,
+        }
+        if self.retry_count > 0:
+            d["retry-count"] = self.retry_count
+            d["retried"] = True
+        if not self.success:
+            d["error-type"] = "bulk"
+        if self.error_description:
+            d["error-description"] = self.error_description
+        if self.is_detailed:
+            d["ops"] = self.ops
+            d["shards_histogram"] = self.shards_histogram
+            d["bulk-request-size-bytes"] = self.bulk_request_size_bytes
+            d["total-document-size-bytes"] = self.total_document_size_bytes
+        if self.ingest_took is not None:
+            d["ingest_took"] = self.ingest_took
+        return d
+
+
 class BulkIndex(Runner):
     """
     Bulk indexes the given documents.
@@ -516,8 +591,7 @@ class BulkIndex(Runner):
         bulk_size = mandatory(params, "bulk-size", self)
         unit = mandatory(params, "unit", self)
         retries_on_429 = params.get("retries_on_429", 0)
-        # parse responses lazily in the standard case - responses might be large thus parsing skews results and if no
-        # errors have occurred we only need a small amount of information from the potentially large response.
+
         if not detailed_results:
             es.return_raw_response()
 
@@ -526,75 +600,45 @@ class BulkIndex(Runner):
             response = await es.bulk(params=bulk_params, **api_kwargs)
         else:
             response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
-        retry_stats = []
-        total_success = total_error = total_time = sum_bulk_request_size_bytes = sum_total_document_size_bytes = 0
-        stats, lines_to_retry = (
-            self.detailed_stats(params, response, emit_lines_to_retry=retries_on_429 > 0)
-            if detailed_results
-            else self.simple_stats(bulk_size, unit, response, api_kwargs, emit_lines_to_retry=retries_on_429 > 0)
-        )
-        retry_stats.append(stats)
+
+        stats = self._parse_stats(params, bulk_size, unit, response, api_kwargs, detailed_results)
+
         for _ in range(retries_on_429):
-            if len(lines_to_retry) == 0:
+            if not stats.error_429_indices:
                 break
+            lines_to_retry = self._build_retry_body(api_kwargs, stats.error_429_indices)
             self.logger.warning("Retrying %d documents that previously resulted in a 429.", len(lines_to_retry) / 2)
             api_kwargs["body"] = lines_to_retry
-            bulk_size = len(lines_to_retry) / 2  # at this point the data always contains action metadata.
+            bulk_size = len(lines_to_retry) / 2
             response = await es.bulk(params=bulk_params, **api_kwargs)
-            stats, lines_to_retry = (
-                self.detailed_stats(params, response, emit_lines_to_retry=True)
-                if detailed_results
-                else self.simple_stats(bulk_size, unit, response, api_kwargs, emit_lines_to_retry=True)
-            )
-            retry_stats.append(stats)
-            request_status = response.meta.status
-            if request_status not in (200, 201, 429):
-                self.logger.warning("%s after bulk request retry. Payload: %s", request_status, lines_to_retry)
+            retry_result = self._parse_stats(params, bulk_size, unit, response, api_kwargs, detailed_results)
+            stats.accumulate(retry_result)
+            if response.meta.status not in (200, 201, 429):
+                self.logger.warning("%s after bulk request retry. Payload: %s", response.meta.status, lines_to_retry)
                 break
-        if len(retry_stats) == 1:
-            stats = retry_stats[0]
-        else:
-            for stats in retry_stats:
-                total_success += stats["success-count"]
-                total_error += stats["error-count"]
-                total_time += stats["took"]
-                sum_bulk_request_size_bytes += stats.get("bulk-request-size-bytes", 0)
-                sum_total_document_size_bytes += stats.get("total-document-size-bytes", 0)
-            retry_count = len(retry_stats)
-            if detailed_results:
-                stats = {
-                    "success-count": total_success,
-                    "error-count": total_error,
-                    "retry-count": retry_count,
-                    "took": total_time,
-                    "success": len(lines_to_retry) == 0,
-                    "retried": retry_count > 0,
-                    "bulk-request-size-bytes": sum_bulk_request_size_bytes,
-                    "total-document-size-bytes": sum_total_document_size_bytes,
-                    "ops": {},  # detailed per-op stats are not aggregated over retries
-                    "shards_histogram": [],  # detailed per-shard stats are not aggregated over retries
-                }
-            else:
-                stats = {
-                    "success-count": total_success,
-                    "error-count": total_error,
-                    "retry-count": retry_count,
-                    "took": total_time,
-                    "success": len(lines_to_retry) == 0,
-                    "retried": retry_count > 0,
-                }
 
         meta_data = {
             "index": params.get("index"),
             "weight": params.get("bulk-size"),
             "unit": unit,
         }
-        meta_data.update(stats)
-        if not stats["success"]:
-            meta_data["error-type"] = "bulk"
+        meta_data.update(stats.as_dict())
         return meta_data
 
-    def detailed_stats(self, params, response, emit_lines_to_retry=False):
+    def _parse_stats(self, params, bulk_size, unit, response, api_kwargs, detailed_results):
+        if detailed_results:
+            return self.detailed_stats(params, response)
+        return self.simple_stats(bulk_size, unit, response, api_kwargs)
+
+    def _build_retry_body(self, api_kwargs, error_429_indices):
+        bulk_lines = self.get_bulk_lines(api_kwargs)
+        lines = []
+        for idx in error_429_indices:
+            lines.append(bulk_lines[idx * 2])
+            lines.append(bulk_lines[idx * 2 + 1])
+        return lines
+
+    def detailed_stats(self, params, response):
         def _utf8len(line):
             if isinstance(line, bytes):
                 return len(line)
@@ -611,7 +655,7 @@ class BulkIndex(Runner):
         with_action_metadata = mandatory(params, "action-metadata-present", self)
         request_status = response.meta.status
         bulk_lines = self.get_bulk_lines(params)
-        lines_to_retry = []
+        error_429_indices = []
 
         for line_number, data in enumerate(bulk_lines):
             line_size = _utf8len(data)
@@ -624,7 +668,6 @@ class BulkIndex(Runner):
             bulk_request_size_bytes += line_size
         max_doc_status = -1
         for i, item in enumerate(response["items"]):
-            # there is only one (top-level) item
             op, data = next(iter(item.items()))
             if op not in ops:
                 ops[op] = Counter()
@@ -642,31 +685,29 @@ class BulkIndex(Runner):
                 bulk_error_count += 1
                 max_doc_status = max(max_doc_status, data["status"])
                 self.extract_error_details(error_details, data)
-                if data["status"] == 429 and emit_lines_to_retry:  # don't retry other statuses right now.
-                    lines_to_retry.append(bulk_lines[(i * 2)])
-                    lines_to_retry.append(bulk_lines[(i * 2) + 1])
+                if data["status"] == 429:
+                    error_429_indices.append(i)
             else:
                 bulk_success_count += 1
-        stats = {
-            "took": response.get("took"),
-            "success": bulk_error_count == 0,
-            "success-count": bulk_success_count,
-            "error-count": bulk_error_count,
-            "ops": ops,
-            "shards_histogram": list(shards_histogram.values()),
-            "bulk-request-size-bytes": bulk_request_size_bytes,
-            "total-document-size-bytes": total_document_size_bytes,
-            "request-status": request_status,
-            "max-doc-status": max_doc_status if max_doc_status > 0 else request_status,
-        }
-        if bulk_error_count > 0:
-            stats["error-type"] = "bulk"
-            stats["error-description"] = self.error_description(error_details)
-            self.logger.warning("Bulk request failed: [%s]", stats["error-description"])
-        if "ingest_took" in response:
-            stats["ingest_took"] = response["ingest_took"]
 
-        return stats, lines_to_retry
+        error_desc = self.error_description(error_details) if bulk_error_count > 0 else None
+        if error_desc:
+            self.logger.warning("Bulk request failed: [%s]", error_desc)
+
+        return BulkStats(
+            success_count=bulk_success_count,
+            error_count=bulk_error_count,
+            took=response.get("took"),
+            request_status=request_status,
+            max_doc_status=max_doc_status,
+            error_description=error_desc,
+            error_429_indices=error_429_indices,
+            ops=ops,
+            shards_histogram=list(shards_histogram.values()),
+            bulk_request_size_bytes=bulk_request_size_bytes,
+            total_document_size_bytes=total_document_size_bytes,
+            ingest_took=response.get("ingest_took"),
+        )
 
     def get_bulk_lines(self, params):
         if isinstance(params["body"], bytes):
@@ -678,47 +719,38 @@ class BulkIndex(Runner):
         else:
             raise exceptions.DataError("bulk body is not of type bytes, string, or list")
 
-    def simple_stats(self, bulk_size, unit, response, params, emit_lines_to_retry=False):
+    def simple_stats(self, bulk_size, unit, response, params):
         bulk_success_count = bulk_size if unit == "docs" else None
         bulk_error_count = 0
         error_details = set()
         request_status = response.meta.status
         max_doc_status = -1
-        # parse lazily on the fast path
         props = parse(response, ["errors", "took"])
 
-        lines_to_retry = []
+        error_429_indices = []
         if props.get("errors", False):
-            bulk_lines = self.get_bulk_lines(params)
-            # determine success count regardless of unit because we need to iterate through all items anyway
             bulk_success_count = 0
-            # Reparse fully in case of errors - this will be slower
             parsed_response = json.loads(response.getvalue())
             for i, item in enumerate(parsed_response["items"]):
                 data = next(iter(item.values()))
                 max_doc_status = max(max_doc_status, data["status"])
                 if data["status"] > 299 or ("_shards" in data and data["_shards"]["failed"] > 0):
                     bulk_error_count += 1
-                    if data["status"] == 429 and emit_lines_to_retry:  # don't retry other statuses right now.
-                        lines_to_retry.append(bulk_lines[(i * 2)])
-                        lines_to_retry.append(bulk_lines[(i * 2) + 1])
+                    if data["status"] == 429:
+                        error_429_indices.append(i)
                     self.extract_error_details(error_details, data)
                 else:
                     bulk_success_count += 1
-        stats = {
-            "took": props.get("took"),
-            "success": bulk_error_count == 0,
-            "success-count": bulk_success_count,
-            "error-count": bulk_error_count,
-            "request-status": request_status,
-            "max-doc-status": (
-                max_doc_status if max_doc_status > 0 else request_status
-            ),  # if we have not encountered any errors, we will never have inspected the status for each doc
-        }
-        if bulk_error_count > 0:
-            stats["error-type"] = "bulk"
-            stats["error-description"] = self.error_description(error_details)
-        return stats, lines_to_retry
+
+        return BulkStats(
+            success_count=bulk_success_count,
+            error_count=bulk_error_count,
+            took=props.get("took"),
+            request_status=request_status,
+            max_doc_status=max_doc_status,
+            error_description=self.error_description(error_details) if bulk_error_count > 0 else None,
+            error_429_indices=error_429_indices,
+        )
 
     def extract_error_details(self, error_details, data):
         error_data = data.get("error", {})
