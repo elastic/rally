@@ -1,0 +1,175 @@
+name: Benchmarks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          path: pr
+
+      - name: Checkout base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.22"
+
+      - name: Benchmarks (base)
+        working-directory: base
+        run: |
+          uv venv --allow-existing --seed
+          uv sync --locked --extra=develop
+          uv run -- pytest benchmarks/ -s \
+            --benchmark-json=${{ github.workspace }}/base.json
+
+      - name: Benchmarks (PR)
+        working-directory: pr
+        run: |
+          uv venv --allow-existing --seed
+          uv sync --locked --extra=develop
+          uv run -- pytest benchmarks/ -s \
+            --benchmark-json=${{ github.workspace }}/pr.json
+
+      - name: Compare results
+        id: compare
+        working-directory: ${{ github.workspace }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys
+
+          with open("base.json") as f:
+              base_benchmarks = {b["fullname"]: b for b in json.load(f)["benchmarks"]}
+          with open("pr.json") as f:
+              pr_benchmarks = {b["fullname"]: b for b in json.load(f)["benchmarks"]}
+
+          common = sorted(set(base_benchmarks) & set(pr_benchmarks))
+          only_base = sorted(set(base_benchmarks) - set(pr_benchmarks))
+          only_pr = sorted(set(pr_benchmarks) - set(base_benchmarks))
+
+          THRESHOLD = 5  # percent
+
+          def fmt_ops(ops):
+              if ops >= 1_000_000:
+                  return f"{ops / 1_000_000:.1f}M"
+              if ops >= 1_000:
+                  return f"{ops / 1_000:.1f}K"
+              return f"{ops:.0f}"
+
+          lines = [
+              "<!-- benchmark-comparison -->",
+              "## Benchmark Comparison",
+              "",
+              "| Benchmark | Base (mean) | PR (mean) | Change | Base (ops/s) | PR (ops/s) |",
+              "|:---|---:|---:|---:|---:|---:|",
+          ]
+
+          regressions = []
+          throughput_rows = []
+          for name in common:
+              b_mean = base_benchmarks[name]["stats"]["mean"]
+              p_mean = pr_benchmarks[name]["stats"]["mean"]
+              pct = (p_mean - b_mean) / b_mean * 100
+              short = name.split("::")[-1]
+              flag = " :warning:" if pct > THRESHOLD else ""
+              b_ops = 1.0 / b_mean if b_mean > 0 else 0
+              p_ops = 1.0 / p_mean if p_mean > 0 else 0
+              lines.append(
+                  f"| `{short}` | {b_mean * 1e6:.1f} µs | {p_mean * 1e6:.1f} µs"
+                  f" | {pct:+.1f}%{flag} | {fmt_ops(b_ops)} | {fmt_ops(p_ops)} |"
+              )
+              if pct > THRESHOLD:
+                  regressions.append((short, pct))
+
+              bulk_size = base_benchmarks[name].get("extra_info", {}).get("bulk_size")
+              if bulk_size:
+                  throughput_rows.append((short, bulk_size, b_ops * bulk_size, p_ops * bulk_size))
+
+          if throughput_rows:
+              lines += [
+                  "",
+                  "### Throughput (docs/s)",
+                  "",
+                  "| Benchmark | Bulk size | Base | PR | Change |",
+                  "|:---|---:|---:|---:|---:|",
+              ]
+              for short, bs, b_docs, p_docs in throughput_rows:
+                  docs_pct = (p_docs - b_docs) / b_docs * 100 if b_docs > 0 else 0
+                  flag = " :warning:" if docs_pct < -THRESHOLD else ""
+                  lines.append(
+                      f"| `{short}` | {bs:,} | {fmt_ops(b_docs)} docs/s"
+                      f" | {fmt_ops(p_docs)} docs/s | {docs_pct:+.1f}%{flag} |"
+                  )
+
+          if only_pr:
+              lines.append("")
+              lines.append(
+                  "**New benchmarks:** "
+                  + ", ".join(f'`{n.split("::")[-1]}`' for n in only_pr)
+              )
+
+          if only_base:
+              lines.append("")
+              lines.append(
+                  "**Removed benchmarks:** "
+                  + ", ".join(f'`{n.split("::")[-1]}`' for n in only_base)
+              )
+
+          lines.append("")
+          if regressions:
+              lines.append(
+                  f":warning: **{len(regressions)} benchmark(s) regressed by >{THRESHOLD}%**"
+              )
+          else:
+              lines.append(":white_check_mark: **No significant regressions detected**")
+
+          body = "\n".join(lines)
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a") as f:
+                  f.write(body + "\n")
+
+          with open("comment-body.md", "w") as f:
+              f.write(body)
+
+          print(body)
+
+          if regressions:
+              sys.exit(1)
+          PYEOF
+
+      - name: Post or update PR comment
+        if: github.event_name == 'pull_request' && !cancelled()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -f comment-body.md ]; then exit 0; fi
+          PR=${{ github.event.pull_request.number }}
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR}/comments" \
+            --jq '.[] | select(.body | startswith("<!-- benchmark-comparison -->")) | .id' \
+            | tail -1)
+          if [ -n "$COMMENT_ID" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" \
+              -X PATCH -F body=@comment-body.md
+          else
+            gh pr comment "${PR}" --body-file comment-body.md
+          fi
