@@ -408,6 +408,7 @@ def _build_bulk_body(*lines):
     return "".join(line + "\n" for line in lines)
 
 
+# pylint: disable=too-many-public-methods
 class TestBulkIndexRunner:
     _headers = HttpHeaders()
     _headers["content-type"] = "application/json"
@@ -1593,6 +1594,189 @@ class TestBulkIndexRunner:
             await bulk(es, dict(bulk_params))
 
         assert exc.value.args[0] == ("Unsupported bulk refresh value: invalidvalue. Use one of [wait_for, true, false].")
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_with_retries(self, es):
+        params = {
+            "body": _build_bulk_body("action_line", "index_line", "action_line", "index_line", "action_line", "index_line"),
+            "index": "test",
+            "action-metadata-present": True,
+            "retries_on_429": 2,
+            "bulk-size": 3,
+            "detailed-results": True,
+            "unit": "docs",
+        }
+        bulk_responses = [
+            ApiResponse(
+                body={
+                    "errors": True,
+                    "took": 100,
+                    "items": [
+                        {"index": {"_index": "test", "result": "created", "status": 201}},
+                        {"index": {"_index": "test", "result": "created", "status": 429}},
+                        {"index": {"_index": "test", "result": "created", "status": 201}},
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            ),
+            ApiResponse(
+                body={
+                    "errors": True,
+                    "took": 100,
+                    "items": [
+                        {"index": {"_index": "test", "result": "created", "status": 429}},
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            ),
+            ApiResponse(
+                body={
+                    "errors": True,
+                    "took": 50,
+                    "items": [
+                        {"index": {"_index": "test", "result": "created", "status": 201}},
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            ),
+        ]
+        es.bulk = mock.AsyncMock(side_effect=bulk_responses)
+        bulk = runner.BulkIndex()
+        result = await bulk(es, dict(params))
+        assert result["index"] == "test"
+        assert result["unit"] == "docs"
+        assert result["weight"] == 3
+        assert result["retried"] is True
+        assert result["retry-count"] == 3
+        assert result["success"] is True
+        assert result["success-count"] == 3
+        assert result["error-count"] == 2
+        assert result["took"] == 250
+        assert result["ops"] == {}
+        assert result["shards_histogram"] == []
+        assert es.bulk.await_count == 3
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_with_retries_enabled_but_all_works(self, es):
+        params = {
+            "body": _build_bulk_body("action_line", "index_line", "action_line", "index_line", "action_line", "index_line"),
+            "index": "test",
+            "action-metadata-present": True,
+            "retries_on_429": 2,
+            "detailed-results": True,
+            "bulk-size": 3,
+            "unit": "docs",
+        }
+        bulk_responses = [
+            ApiResponse(
+                body={
+                    "errors": True,
+                    "took": 100,
+                    "items": [
+                        {"index": {"_index": "test", "result": "created", "status": 201}},
+                        {"index": {"_index": "test", "result": "created", "status": 201}},
+                        {"index": {"_index": "test", "result": "created", "status": 201}},
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            ),
+            ApiResponse(
+                body={
+                    "errors": True,
+                    "took": 100,
+                    "items": [
+                        {"index": {"_index": "test", "result": "created", "status": 429}},
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            ),
+            ApiResponse(
+                body={
+                    "errors": True,
+                    "took": 50,
+                    "items": [
+                        {"index": {"_index": "test", "result": "created", "status": 201}},
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            ),
+        ]
+        es.bulk = mock.AsyncMock(side_effect=bulk_responses)
+        bulk = runner.BulkIndex()
+        result = await bulk(es, dict(params))
+        assert result["index"] == "test"
+        assert result["unit"] == "docs"
+        assert result["weight"] == 3
+        assert result["success"] is True
+        assert result["success-count"] == 3
+        assert result["error-count"] == 0
+        assert result["took"] == 100
+        assert result["request-status"] == 200
+        assert result["max-doc-status"] == 200
+        assert "retried" not in result
+        assert result["ops"]["index"]["item-count"] == 3
+        assert result["ops"]["index"]["created"] == 3
+        assert es.bulk.await_count == 1
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_bulk_index_retries_on_429_exhausted_all_retries_fail(self, es):
+        """With retries_on_429=2, initial request and both retries get 429s; final result is failure."""
+        params = {
+            "body": _build_bulk_body("action_line", "index_line", "action_line", "index_line"),
+            "index": "test",
+            "action-metadata-present": True,
+            "retries_on_429": 2,
+            "bulk-size": 2,
+            "detailed-results": True,
+            "unit": "docs",
+        }
+        # First response: 2 items, both 429. Then 2 retries: each 1 item, still 429.
+        bulk_responses = [
+            ApiResponse(
+                body={
+                    "errors": True,
+                    "took": 10,
+                    "items": [
+                        {"index": {"_index": "test", "status": 429}},
+                        {"index": {"_index": "test", "status": 429}},
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            ),
+            ApiResponse(
+                body={
+                    "errors": True,
+                    "took": 10,
+                    "items": [
+                        {"index": {"_index": "test", "status": 429}},
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            ),
+            ApiResponse(
+                body={
+                    "errors": True,
+                    "took": 10,
+                    "items": [
+                        {"index": {"_index": "test", "status": 429}},
+                    ],
+                },
+                meta=self.BULK_RESPONSE_META,
+            ),
+        ]
+        es.bulk = mock.AsyncMock(side_effect=bulk_responses)
+        bulk = runner.BulkIndex()
+        result = await bulk(es, dict(params))
+        assert result["index"] == "test"
+        assert result["weight"] == 2
+        assert result["success"] is False
+        assert result["error-count"] >= 1
+        assert result["retried"] is True
+        assert result["retry-count"] == 3
+        assert es.bulk.await_count == 3
 
 
 class TestForceMergeRunner:
