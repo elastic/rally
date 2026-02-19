@@ -494,7 +494,7 @@ class BulkStats:
         self.bulk_request_size_bytes += other.bulk_request_size_bytes
         self.total_document_size_bytes += other.total_document_size_bytes
         if self.retry_count == 0:
-            self.retry_count = 2
+            self.retry_count = 1
         else:
             self.retry_count += 1
         self.error_429_indices = other.error_429_indices
@@ -603,7 +603,7 @@ class BulkIndex(Runner):
 
         stats = self._parse_stats(params, bulk_size, unit, response, api_kwargs, detailed_results)
 
-        for _ in range(retries_on_429):
+        for i in range(retries_on_429):
             if not stats.error_429_indices:
                 break
             lines_to_retry = self._build_retry_body(api_kwargs, stats.error_429_indices)
@@ -614,7 +614,8 @@ class BulkIndex(Runner):
             retry_result = self._parse_stats(params, bulk_size, unit, response, api_kwargs, detailed_results)
             stats.accumulate(retry_result)
             if response.meta.status not in (200, 201, 429):
-                self.logger.warning("%s after bulk request retry. Payload: %s", response.meta.status, lines_to_retry)
+                self.logger.debug("%s after bulk request retry. Payload: %s", response.meta.status, lines_to_retry)
+                self.logger.warning("Bulk request retry failed after %d attempts: [%s]", i, response.meta.status)
                 break
 
         meta_data = {

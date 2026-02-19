@@ -1648,7 +1648,7 @@ class TestBulkIndexRunner:
         assert result["unit"] == "docs"
         assert result["weight"] == 3
         assert result["retried"] is True
-        assert result["retry-count"] == 3
+        assert result["retry-count"] == 2
         assert result["success"] is True
         assert result["success-count"] == 3
         assert result["error-count"] == 2
@@ -1775,7 +1775,7 @@ class TestBulkIndexRunner:
         assert result["success"] is False
         assert result["error-count"] >= 1
         assert result["retried"] is True
-        assert result["retry-count"] == 3
+        assert result["retry-count"] == 2
         assert es.bulk.await_count == 3
 
 
