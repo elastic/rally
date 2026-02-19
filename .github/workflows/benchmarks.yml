@@ -157,8 +157,15 @@ jobs:
               sys.exit(1)
           PYEOF
 
+      - name: Upload comment body
+        if: github.event_name == 'pull_request' && always() && hashFiles('comment-body.md') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-body
+          path: comment-body.md
+
       - name: Post or update PR comment
-        if: github.event_name == 'pull_request' && !cancelled()
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !cancelled()
         working-directory: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
