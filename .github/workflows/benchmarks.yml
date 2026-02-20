@@ -158,14 +158,14 @@ jobs:
           PYEOF
 
       - name: Upload comment body
-        if: github.event_name == 'pull_request' && always() && hashFiles('comment-body.md') != ''
+        if: always() && github.event_name == 'pull_request' && (steps.compare.outcome == 'success' || steps.compare.outcome == 'failure')
         uses: actions/upload-artifact@v4
         with:
           name: comment-body
           path: comment-body.md
 
       - name: Post or update PR comment
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !cancelled()
+        if: always() && !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.compare.outcome == 'success' || steps.compare.outcome == 'failure')
         working-directory: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
