@@ -1391,6 +1391,7 @@ class TestScheduler:
             assert params == {"body": ["a"], "operation-type": "bulk", "size": 11}
 
 
+# pylint: disable=too-many-public-methods
 class TestAsyncExecutor:
     class NoopContextManager:
         def __init__(self, mock):
@@ -2032,6 +2033,263 @@ class TestAsyncExecutor:
         assert exc.value.args[0] == (
             "Cannot execute [failing_mock_runner]. Provided parameters are: ['bulk', 'mode']. Error: ['bulk-size missing']."
         )
+
+    @pytest.mark.asyncio
+    async def test_execute_single_transport_error_with_headers(self):
+        """Test that TransportError with headers correctly extracts tracking headers."""
+        es = None
+        params = None
+
+        # Create a mock error object with headers
+        mock_error = mock.Mock()
+        mock_error.headers = {
+            "X-Cloud-Request-Id": "req-12345",
+            "X-Found-Handling-Instance": "node-67890",
+            "X-Found-Handling-Cluster": "cluster-abc123",
+            "Other-Header": "other-value",
+        }
+
+        # Create TransportError with mock errors containing headers
+        transport_error = elasticsearch.TransportError(message="Transport failed")
+        transport_error.errors = [mock_error]
+
+        runner = mock.AsyncMock(side_effect=transport_error)
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
+
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data["success"] is False
+        assert request_meta_data["error-type"] == "transport"
+        assert request_meta_data["request_id"] == "req-12345"
+        assert request_meta_data["handling_node"] == "node-67890"
+        assert request_meta_data["handling_cluster"] == "cluster-abc123"
+        # Verify other headers are not included
+        assert "other-header" not in request_meta_data
+        assert "Other-Header" not in request_meta_data
+
+    @pytest.mark.asyncio
+    async def test_execute_single_transport_error_with_partial_headers(self):
+        """Test that TransportError with only some tracking headers extracts what's available."""
+        es = None
+        params = None
+
+        # Create a mock error object with only one of the tracked headers
+        mock_error = mock.Mock()
+        mock_error.headers = {"X-Cloud-Request-Id": "req-54321", "Some-Other-Header": "ignored"}
+
+        transport_error = elasticsearch.TransportError(message="Transport failed")
+        transport_error.errors = [mock_error]
+
+        runner = mock.AsyncMock(side_effect=transport_error)
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
+
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data["success"] is False
+        assert request_meta_data["error-type"] == "transport"
+        assert request_meta_data["request_id"] == "req-54321"
+        # These headers should not be present since they weren't in the error
+        assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
+
+    @pytest.mark.asyncio
+    async def test_execute_single_transport_error_with_no_tracking_headers(self):
+        """Test that TransportError with no tracking headers doesn't add any extra fields."""
+        es = None
+        params = None
+
+        # Create a mock error object with headers but none of the tracked ones
+        mock_error = mock.Mock()
+        mock_error.headers = {"Content-Type": "application/json", "Some-Other-Header": "value"}
+
+        transport_error = elasticsearch.TransportError(message="Transport failed")
+        transport_error.errors = [mock_error]
+
+        runner = mock.AsyncMock(side_effect=transport_error)
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
+
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data["success"] is False
+        assert request_meta_data["error-type"] == "transport"
+        # None of the tracked headers should be present
+        assert "request_id" not in request_meta_data
+        assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
+
+    @pytest.mark.asyncio
+    async def test_execute_single_transport_error_without_headers_attribute(self):
+        """Test that TransportError without headers attribute doesn't cause errors."""
+        es = None
+        params = None
+
+        # Create a mock error object without headers attribute
+        mock_error = mock.Mock()
+        # Explicitly delete headers attribute to mimic an error object without it
+        del mock_error.headers
+
+        transport_error = elasticsearch.TransportError(message="Transport failed")
+        transport_error.errors = [mock_error]
+
+        runner = mock.AsyncMock(side_effect=transport_error)
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
+
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data["success"] is False
+        assert request_meta_data["error-type"] == "transport"
+        # None of the tracked headers should be present
+        assert "request_id" not in request_meta_data
+        assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
+
+    @pytest.mark.asyncio
+    async def test_execute_single_transport_error_without_errors_attribute(self):
+        """Test that TransportError without errors attribute doesn't cause errors."""
+        es = None
+        params = None
+
+        transport_error = elasticsearch.TransportError(message="Transport failed")
+        # Don't set the errors attribute or set it to None
+
+        runner = mock.AsyncMock(side_effect=transport_error)
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
+
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data["success"] is False
+        assert request_meta_data["error-type"] == "transport"
+        # None of the tracked headers should be present
+        assert "request_id" not in request_meta_data
+        assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
+
+    @pytest.mark.asyncio
+    async def test_execute_single_api_error_with_headers(self):
+        """Test that ApiError with headers correctly extracts tracking headers."""
+        es = None
+        params = None
+
+        # Create a mock error object with headers
+        mock_error = mock.Mock()
+        mock_error.headers = {
+            "X-Cloud-Request-Id": "api-req-98765",
+            "X-Found-Handling-Instance": "api-node-13579",
+            "X-Found-Handling-Cluster": "api-cluster-xyz789",
+            "Content-Type": "application/json",
+        }
+
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=500,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+
+        # Create ApiError with mock errors containing headers
+        api_error = elasticsearch.ApiError(message="API failed", meta=error_meta, body="Internal server error")
+        api_error.errors = [mock_error]
+
+        runner = mock.AsyncMock(side_effect=api_error)
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
+
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data["success"] is False
+        assert request_meta_data["error-type"] == "api"
+        assert request_meta_data["http-status"] == 500
+        assert request_meta_data["request_id"] == "api-req-98765"
+        assert request_meta_data["handling_node"] == "api-node-13579"
+        assert request_meta_data["handling_cluster"] == "api-cluster-xyz789"
+
+    @pytest.mark.asyncio
+    async def test_execute_single_api_error_with_partial_headers(self):
+        """Test that ApiError with only some tracking headers extracts what's available."""
+        es = None
+        params = None
+
+        # Create a mock error object with only one tracked header
+        mock_error = mock.Mock()
+        mock_error.headers = {"X-Found-Handling-Instance": "api-node-only", "Authorization": "Bearer token"}
+
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=403,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+
+        api_error = elasticsearch.ApiError(message="Forbidden", meta=error_meta, body="Access denied")
+        api_error.errors = [mock_error]
+
+        runner = mock.AsyncMock(side_effect=api_error)
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
+
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data["success"] is False
+        assert request_meta_data["error-type"] == "api"
+        assert request_meta_data["http-status"] == 403
+        assert request_meta_data["handling_node"] == "api-node-only"
+        # These headers should not be present since they weren't in the error
+        assert "request_id" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
+
+    @pytest.mark.asyncio
+    async def test_execute_single_api_error_without_errors_attribute(self):
+        """Test that ApiError without errors attribute doesn't cause errors."""
+        es = None
+        params = None
+
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+
+        # Create ApiError without setting errors attribute
+        api_error = elasticsearch.ApiError(message="Bad request", meta=error_meta, body="Invalid input")
+
+        runner = mock.AsyncMock(side_effect=api_error)
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
+
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data["success"] is False
+        assert request_meta_data["error-type"] == "api"
+        assert request_meta_data["http-status"] == 400
+        # None of the tracked headers should be present
+        assert "request_id" not in request_meta_data
+        assert "handling_node" not in request_meta_data
+        assert "handling_cluster" not in request_meta_data
 
 
 class TestAsyncProfiler:
