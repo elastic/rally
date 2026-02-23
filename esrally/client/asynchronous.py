@@ -304,6 +304,7 @@ class RallyAiohttpHttpNode(AiohttpHttpNode):
             cookie_jar=aiohttp.DummyCookieJar(),
             request_class=self._request_class,
             response_class=self._response_class,
+            trust_env=True,
             connector=connector,
             trace_configs=self.trace_configs,
         )
