@@ -108,6 +108,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.RunUntil, Retry(RunUntil()), async_runner=True)
+    register_runner(track.OperationType.CreateEnrichPolicy, Retry(CreateEnrichPolicy()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -3385,3 +3386,50 @@ class RunUntil(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "run-until"
+
+
+class CreateEnrichPolicy(Runner):
+
+    async def _delete_enrich_policy(self, es, policy_data):
+        reqs = []
+        for policy in policy_data.keys():
+            reqs.append(es.enrich.delete_policy(name=policy, ignore=[404]))
+        res = await asyncio.gather(*reqs)
+        self.logger.debug("Deleted %s enrich policies: %s", len(res), [r.body for r in res])
+
+    async def _create_enrich_policy(self, es, policy_data):
+        reqs = []
+        for p, req_body in policy_data.items():
+            reqs.append(es.enrich.put_policy(name=p, **req_body))
+        res = await asyncio.gather(*reqs)
+        self.logger.debug("Created %s enrich policies: %s", len(res), [r.body for r in res])
+
+    async def _refresh_indices(self, es):
+        res = await es.indices.refresh(index="_all")
+        self.logger.debug("Refreshed all indices: %s", res.body)
+
+    async def _execute_enrich_policy(self, es, policy_data):
+        reqs = []
+        for policy_name in policy_data:
+            reqs.append(es.enrich.execute_policy(name=policy_name, wait_for_completion=True))
+        res = await asyncio.gather(*reqs)
+        self.logger.debug("Executed %s enrich policies: %s", len(res), [r.body for r in res])
+
+    async def __call__(self, es, params):
+        enrich_policies = mandatory(params, "policies", self)
+
+        if params.get("delete", True):
+            await self._delete_enrich_policy(es, enrich_policies)
+
+        await self._create_enrich_policy(es, enrich_policies)
+        await self._refresh_indices(es)
+        await self._execute_enrich_policy(es, enrich_policies)
+
+        return {
+            "weight": len(enrich_policies),
+            "unit": "ops",
+            "success": True,
+        }
+
+    def __str__(self) -> str:
+        return "create-enrich-policy"
