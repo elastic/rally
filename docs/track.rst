@@ -3170,6 +3170,8 @@ Meta-data
 
 The following meta-data are always returned:
 
+* ``weight``: The "weight" of an operation, always ``1`` for ES|QL queries.
+* ``unit``: The unit in which to interpret ``weight``, always ``ops``.
 * ``success``: A boolean indicating whether the query has succeeded. This will be ``false`` if the response contains ``is_partial: true``.
 * ``is_partial``: Whether the query returned partial results. If ``true``, the operation is marked as failed and will cause the benchmark to abort if ``--on-error=abort`` is specified.
 
