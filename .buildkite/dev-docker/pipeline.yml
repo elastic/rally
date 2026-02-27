@@ -45,7 +45,7 @@ steps:
       zone: "us-central1-a"
       provider: "gcp"
   - label: ":docker: build docker manifest"
-    command: bash .buildkite/dev-docker/run.sh manifest both
+    command: bash .buildkite/dev-docker/run.sh manifest
     key: "manifest"
     depends_on:
       - "amd64"
