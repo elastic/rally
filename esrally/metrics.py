@@ -302,6 +302,9 @@ class IndexTemplateProvider:
         self._config = cfg
         self._number_of_shards = self._config.opts("reporting", "datastore.number_of_shards", default_value=None, mandatory=False)
         self._number_of_replicas = self._config.opts("reporting", "datastore.number_of_replicas", default_value=None, mandatory=False)
+        self._use_data_streams = convert.to_bool(
+            self._config.opts("reporting", "datastore.use_data_streams", default_value=True, mandatory=False)
+        )
         self.script_dir = self._config.opts("node", "rally.root")
 
     def metrics_template(self):
@@ -314,9 +317,9 @@ class IndexTemplateProvider:
         return self._read("results-template")
 
     def annotations_template(self):
-        return self._read("annotation-template")
+        return self._read("annotation-template", support_data_streams=False)
 
-    def _read(self, template_name):
+    def _read(self, template_name, support_data_streams=True):
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
             template = json.load(f)
             if self._number_of_shards is not None:
@@ -328,6 +331,8 @@ class IndexTemplateProvider:
                 template["template"]["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
             if self._number_of_replicas is not None:
                 template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
+            if self._use_data_streams and support_data_streams:
+                template["data_stream"] = {}
             return json.dumps(template)
 
 

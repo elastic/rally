@@ -72,6 +72,7 @@ Key = Literal[
     "datastore.number_of_shards",
     "datastore.overwrite_existing_templates",
     "datastore.password",
+    "datastore.use_data_streams",
     "datastore.port",
     "datastore.probe.cluster_version",
     "datastore.secure",
