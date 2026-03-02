@@ -16,12 +16,12 @@
 # under the License.
 
 import os
-import re
 from unittest import mock
 
 import pytest
 
 from esrally import config, exceptions, racecontrol
+from esrally.utils import opts
 
 
 @pytest.fixture
@@ -54,6 +54,7 @@ def test_finds_available_pipelines():
         ["from-sources", "Builds and provisions Elasticsearch, runs a benchmark and reports results."],
         ["from-distribution", "Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results."],
         ["benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results"],
+        ["multi-cluster", "Runs the benchmark against each cluster in --target-hosts (one full run per cluster)."],
     ]
 
     assert expected == racecontrol.available_pipelines()
@@ -89,10 +90,10 @@ def test_fails_without_benchmark_only_pipeline_in_docker(running_in_docker, unit
     with pytest.raises(
         exceptions.SystemSetupError,
         match=(
-            f"Only the {re.escape('[benchmark-only]')} pipeline is supported by the Rally Docker image.\n"
-            "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
-            "For more details read the docs for the benchmark-only pipeline in "
-            "https://esrally.readthedocs.io/en/.*/pipelines.html#benchmark-only\n"
+            "Only the \\[benchmark-only\\] and \\[multi-cluster\\] pipelines are supported by the Rally Docker image.\n"
+            "Add --pipeline=benchmark-only or --pipeline=multi-cluster in your Rally arguments and try again.\n"
+            "For more details read the docs at "
+            "https://esrally.readthedocs.io/en/.*/pipelines.html\n"
         ),
     ):
         racecontrol.run(cfg)
@@ -107,3 +108,55 @@ def test_runs_a_known_pipeline(unittest_pipeline):
     racecontrol.run(cfg)
 
     unittest_pipeline.target.assert_called_once_with(cfg)
+
+
+def test_multi_cluster_requires_multiple_clusters():
+    cfg = config.Config()
+    cfg.add(config.Scope.applicationOverride, "system", "race.id", "test-race-id")
+    cfg.add(config.Scope.applicationOverride, "race", "pipeline", "multi-cluster")
+    # Single cluster (only "default" key)
+    cfg.add(
+        config.Scope.applicationOverride,
+        "client",
+        "hosts",
+        opts.TargetHosts("127.0.0.1:9200"),
+    )
+    cfg.add(
+        config.Scope.applicationOverride,
+        "client",
+        "options",
+        opts.ClientOptions("timeout:60", target_hosts=cfg.opts("client", "hosts")),
+    )
+
+    with pytest.raises(
+        exceptions.SystemSetupError,
+        match="The multi-cluster pipeline requires multiple named clusters in --target-hosts",
+    ):
+        racecontrol.multi_cluster(cfg)
+
+
+@mock.patch("esrally.racecontrol.race")
+def test_multi_cluster_runs_single_race_with_all_clusters(mock_race):
+    """Multi-cluster runs one race with full multi-cluster config; driver runs each task against each cluster."""
+    cfg = config.Config()
+    cfg.add(config.Scope.applicationOverride, "system", "race.id", "base-race-id")
+    cfg.add(
+        config.Scope.applicationOverride,
+        "client",
+        "hosts",
+        opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"], "cluster-b": ["10.0.0.1:9200"]}'),
+    )
+    cfg.add(
+        config.Scope.applicationOverride,
+        "client",
+        "options",
+        opts.ClientOptions(
+            '{"cluster-a": {"timeout": 60}, "cluster-b": {"timeout": 60}}',
+            target_hosts=cfg.opts("client", "hosts"),
+        ),
+    )
+
+    racecontrol.multi_cluster(cfg)
+
+    assert mock_race.call_count == 1
+    mock_race.assert_called_once_with(cfg, external=True)
