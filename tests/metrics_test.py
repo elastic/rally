@@ -2931,3 +2931,77 @@ class TestIndexTemplateProvider:
             t = json.loads(template)
             assert t["template"]["settings"]["index"]["number_of_shards"] == 200
             assert t["template"]["settings"]["index"]["number_of_replicas"] == 1
+
+    def test_use_data_streams_enabled_by_default(self):
+        _datastore_type = "elasticsearch"
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        # annotations template should NOT have data_stream (remains a normal index)
+        annotations_template = json.loads(_index_template_provider.annotations_template())
+        assert "data_stream" not in annotations_template
+
+        data_stream_templates = [
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
+
+        for template in data_stream_templates:
+            t = json.loads(template)
+            assert "data_stream" in t
+            assert t["data_stream"] == {}
+
+    def test_use_data_streams_disabled(self):
+        _datastore_type = "elasticsearch"
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.use_data_streams", False)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        # other templates should have data_stream enabled
+        all_templates = [
+            _index_template_provider.annotations_template(),
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
+
+        for template in all_templates:
+            t = json.loads(template)
+            assert "data_stream" not in t
+
+    def test_use_data_streams_with_shard_settings(self):
+        _datastore_type = "elasticsearch"
+        _datastore_number_of_shards = random.randint(1, 100)
+        _datastore_number_of_replicas = random.randint(0, 100)
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.use_data_streams", True)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_replicas", _datastore_number_of_replicas)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        # annotations template should have shard settings but NOT data_stream
+        annotations_template = json.loads(_index_template_provider.annotations_template())
+        assert "data_stream" not in annotations_template
+        assert annotations_template["template"]["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+        assert annotations_template["template"]["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+
+        # other templates should have both data_stream and shard settings
+        data_stream_templates = [
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
+
+        for template in data_stream_templates:
+            t = json.loads(template)
+            assert "data_stream" in t
+            assert t["data_stream"] == {}
+            assert t["template"]["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+            assert t["template"]["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
