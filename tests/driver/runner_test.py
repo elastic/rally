@@ -8273,4 +8273,3 @@ class TestEsqlProfileRunner:
         assert result["node_reduction.logical_optimization.took_ms"] == 1.0
         assert result["node_reduction.physical_optimization.took_ms"] == 2.0
         assert result["node_reduction.reduction.took_ms"] == 0.5
-
