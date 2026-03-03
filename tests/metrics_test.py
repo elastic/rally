@@ -667,11 +667,12 @@ class TestEsMetrics:
             "value": throughput,
             "unit": "docs/s",
             "meta": {},
+            "_op_type": "create",
         }
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
@@ -695,11 +696,12 @@ class TestEsMetrics:
             "value": throughput,
             "unit": "docs/s",
             "meta": {},
+            "_op_type": "create",
         }
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_put_value_with_meta_info(self):
         throughput = 5000
@@ -737,11 +739,12 @@ class TestEsMetrics:
                 "os_name": "Darwin",
                 "os_version": "15.4.0",
             },
+            "_op_type": "create",
         }
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_put_doc_no_meta_data(self):
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
@@ -768,11 +771,12 @@ class TestEsMetrics:
             "total": 1234567,
             "per-shard": [17, 18, 1289, 273, 222],
             "unit": "byte",
+            "_op_type": "create",
         }
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_put_doc_with_metadata(self):
         # add a user-defined tag
@@ -822,11 +826,12 @@ class TestEsMetrics:
                 "os_version": "15.4.0",
                 "node_type": "hot",
             },
+            "_op_type": "create",
         }
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_get_one(self):
         duration = StaticClock.NOW * 1000
@@ -1560,6 +1565,7 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
+                "_op_type": "create",
             },
             {
                 "rally-version": "0.4.4",
@@ -1592,6 +1598,7 @@ class TestEsResultsStore:
                     "saturation": "70% saturated",
                     "op-type": "bulk",
                 },
+                "_op_type": "create",
             },
             {
                 "rally-version": "0.4.4",
@@ -1616,9 +1623,10 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
+                "_op_type": "create",
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs, use_data_streams=True)
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs)
 
     def test_store_results_with_missing_version(self):
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
@@ -1698,6 +1706,7 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
+                "_op_type": "create",
             },
             {
                 "rally-version": "0.4.4",
@@ -1728,6 +1737,7 @@ class TestEsResultsStore:
                     "saturation": "70% saturated",
                     "op-type": "bulk",
                 },
+                "_op_type": "create",
             },
             {
                 "rally-version": "0.4.4",
@@ -1750,9 +1760,10 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
+                "_op_type": "create",
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs, use_data_streams=True)
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs)
 
 
 class TestInMemoryMetricsStore:
