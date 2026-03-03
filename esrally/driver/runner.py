@@ -984,7 +984,7 @@ def parse_optional_props(text: BytesIO, props: list[str]) -> dict:
     parser = ijson.parse(text)
     parsed = {}
     try:
-        for prefix, event, value in parser:
+        for prefix, _, value in parser:
             if prefix in props:
                 parsed[prefix] = value
     except ijson.IncompleteJSONError:

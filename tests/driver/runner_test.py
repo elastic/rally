@@ -2699,9 +2699,7 @@ class TestQueryRunner:
                 "hits": [],
             },
         }
-        es.perform_request = mock.AsyncMock(
-            return_value=io.BytesIO(json.dumps(search_response).encode())
-        )
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
         params = {
@@ -2760,9 +2758,7 @@ class TestQueryRunner:
                 ],
             },
         }
-        es.perform_request = mock.AsyncMock(
-            return_value=io.BytesIO(json.dumps(search_response).encode())
-        )
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
         params = {
@@ -2799,9 +2795,7 @@ class TestQueryRunner:
             },
             "hits": {"total": {"value": 0, "relation": "eq"}, "hits": []},
         }
-        es.perform_request = mock.AsyncMock(
-            return_value=io.BytesIO(json.dumps(search_response).encode())
-        )
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
         params = {
