@@ -671,7 +671,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
 
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
@@ -699,7 +699,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
 
     def test_put_value_with_meta_info(self):
         throughput = 5000
@@ -741,7 +741,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
 
     def test_put_doc_no_meta_data(self):
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
@@ -772,7 +772,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
 
     def test_put_doc_with_metadata(self):
         # add a user-defined tag
@@ -826,7 +826,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
         self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc], use_data_streams=True)
 
     def test_get_one(self):
         duration = StaticClock.NOW * 1000
@@ -1363,7 +1363,7 @@ class TestEsRaceStore:
                 ],
             },
         }
-        self.es_mock.index.assert_called_with(index=f"{metrics.EsRaceStore.INDEX_PREFIX}{metrics.EsRaceStore.TEMPLATE_VERSION}", id=self.RACE_ID, item=expected_doc)
+        self.es_mock.index.assert_called_with(index=f"{metrics.EsRaceStore.INDEX_PREFIX}{metrics.EsRaceStore.TEMPLATE_VERSION}", id=self.RACE_ID, item=expected_doc, use_data_streams=True)
 
     @mock.patch("esrally.utils.console.println")
     def test_delete_race(self, console):
@@ -1618,7 +1618,7 @@ class TestEsResultsStore:
                 },
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs)
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs, use_data_streams=True)
 
     def test_store_results_with_missing_version(self):
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
@@ -1752,7 +1752,7 @@ class TestEsResultsStore:
                 },
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs)
+        self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs, use_data_streams=True)
 
 
 class TestInMemoryMetricsStore:
