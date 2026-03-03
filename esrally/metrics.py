@@ -307,6 +307,10 @@ class IndexTemplateProvider:
         )
         self.script_dir = self._config.opts("node", "rally.root")
 
+    @property
+    def use_data_streams(self):
+        return self._use_data_streams
+
     def metrics_template(self):
         return self._read("metrics-template")
 
@@ -886,8 +890,11 @@ class MetricsStore:
 
 class EsMetricsStore(MetricsStore):
     """
-    A metrics store backed by Elasticsearch.
+    A metrics store for telemetry backed by Elasticsearch.
     """
+    
+    INDEX_PREFIX = "rally-metrics-"
+    TEMPLATE_VERSION = "v1"
 
     def __init__(
         self,
@@ -961,8 +968,10 @@ class EsMetricsStore(MetricsStore):
         self._client.put_template("rally-metrics", new_template)
 
     def index_name(self):
+        if self._index_template_provider.use_data_streams:
+            return f"{EsMetricsStore.INDEX_PREFIX}{EsMetricsStore.TEMPLATE_VERSION}"
         ts = time.from_iso8601(self._race_timestamp)
-        return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
+        return f"{EsMetricsStore.INDEX_PREFIX}{ts.year:04d}-{ts.month:02d}"
 
     def _migrated_index_name(self, original_name):
         return f"{original_name}.new"
@@ -1798,7 +1807,11 @@ class FileRaceStore(RaceStore):
 
 
 class EsRaceStore(RaceStore):
+    """
+    A metric store for race information backed by Elasticsearch.
+    """
     INDEX_PREFIX = "rally-races-"
+    TEMPLATE_VERSION = "v1"
 
     def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -1819,6 +1832,8 @@ class EsRaceStore(RaceStore):
         self.client.index(index=self.index_name(race), item=doc, id=race.race_id)
 
     def index_name(self, race):
+        if self.index_template_provider.use_data_streams:
+            return f"{EsRaceStore.INDEX_PREFIX}{EsRaceStore.TEMPLATE_VERSION}"
         race_timestamp = race.race_timestamp
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
@@ -2033,6 +2048,7 @@ class EsResultsStore:
     """
 
     INDEX_PREFIX = "rally-results-"
+    TEMPLATE_VERSION = "v1"
 
     def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -2052,6 +2068,8 @@ class EsResultsStore:
         self.client.bulk_index(index=self.index_name(race), items=race.to_result_dicts())
 
     def index_name(self, race):
+        if self.index_template_provider.use_data_streams:
+            return f"{EsResultsStore.INDEX_PREFIX}{EsResultsStore.TEMPLATE_VERSION}"
         race_timestamp = race.race_timestamp
         return f"{EsResultsStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
