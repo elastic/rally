@@ -76,17 +76,23 @@ class EsClient:
     def refresh(self, index):
         return self.guarded(self._client.indices.refresh, index=index)
 
-    def bulk_index(self, index, items):
+    def bulk_index(self, index, items, use_data_streams=True):
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
 
+        if use_data_streams:
+            # Data streams only support op_type=create
+            for item in items:
+                item["_op_type"] = "create"
+
         self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
 
-    def index(self, index, item, id=None):
+    def index(self, index, item, id=None, use_data_streams=True):
         doc = {"_source": item}
-        if id:
+        if id and not use_data_streams:
+            # Data streams don't support explicit document IDs
             doc["_id"] = id
-        self.bulk_index(index, [doc])
+        self.bulk_index(index, [doc], use_data_streams=use_data_streams)
 
     def search(self, index, body):
         return self.guarded(self._client.search, index=index, body=body)
@@ -983,7 +989,11 @@ class EsMetricsStore(MetricsStore):
         if self._docs:
             sw = time.StopWatch()
             sw.start()
-            self._client.bulk_index(index=self._index, items=self._docs)
+            self._client.bulk_index(
+                index=self._index,
+                items=self._docs,
+                use_data_streams=self._index_template_provider.use_data_streams,
+            )
             sw.stop()
             self.logger.info(
                 "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
@@ -1829,7 +1839,12 @@ class EsRaceStore(RaceStore):
         doc = race.as_dict()
         # always update the mapping to the latest version
         self.client.put_template("rally-races", self.index_template_provider.races_template())
-        self.client.index(index=self.index_name(race), item=doc, id=race.race_id)
+        self.client.index(
+            index=self.index_name(race),
+            item=doc,
+            id=race.race_id,
+            use_data_streams=self.index_template_provider.use_data_streams,
+        )
 
     def index_name(self, race):
         if self.index_template_provider.use_data_streams:
@@ -2065,7 +2080,11 @@ class EsResultsStore:
     def store_results(self, race):
         # always update the mapping to the latest version
         self.client.put_template("rally-results", self.index_template_provider.results_template())
-        self.client.bulk_index(index=self.index_name(race), items=race.to_result_dicts())
+        self.client.bulk_index(
+            index=self.index_name(race),
+            items=race.to_result_dicts(),
+            use_data_streams=self.index_template_provider.use_data_streams,
+        )
 
     def index_name(self, race):
         if self.index_template_provider.use_data_streams:
