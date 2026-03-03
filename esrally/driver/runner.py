@@ -3102,6 +3102,25 @@ class FieldCaps(Runner):
 
 
 class Esql(Runner):
+    """
+    Runs an ES|QL query against Elasticsearch.
+
+    It expects at least the following keys in the `params` hash:
+
+    * `query`: The ES|QL query string to execute.
+
+    The following parameters are optional:
+
+    * `body`: Additional body parameters to include in the request.
+    * `filter`: A filter to apply to the query.
+    * `detailed-results` (default: ``False``): Records more detailed meta-data about queries. As it analyzes the
+                                               corresponding response in more detail, this might incur additional
+                                               overhead which can skew measurement results.
+
+    If the response contains ``is_partial: true``, the operation is marked as failed. This will cause the benchmark
+    to abort if ``--on-error=abort`` is specified, or record an error and continue otherwise.
+    """
+
     async def __call__(self, es, params):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
@@ -3114,10 +3133,54 @@ class Esql(Runner):
         if not bool(headers):
             # counter-intuitive, but preserves prior behavior
             headers = None
+        detailed_results = params.get("detailed-results", False)
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
-        await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
-        return {"success": True, "unit": "ops", "weight": 1}
+        r = await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
+
+        if detailed_results:
+            props = parse(
+                r,
+                [
+                    "took",
+                    "is_partial",
+                    "documents_found",
+                    "values_loaded",
+                    "completion_time_in_millis",
+                    "start_time_in_millis",
+                    "expiration_time_in_millis",
+                ],
+            )
+            is_partial = props.get("is_partial", False)
+            result = {
+                "weight": 1,
+                "unit": "ops",
+                "success": not is_partial,
+                "is_partial": is_partial,
+                "took": props.get("took"),
+                "documents_found": props.get("documents_found"),
+                "values_loaded": props.get("values_loaded"),
+                "completion_time_in_millis": props.get("completion_time_in_millis"),
+                "start_time_in_millis": props.get("start_time_in_millis"),
+                "expiration_time_in_millis": props.get("expiration_time_in_millis"),
+            }
+            if is_partial:
+                result["error-type"] = "esql"
+                result["error-description"] = "ES|QL query returned partial results"
+            return result
+        else:
+            props = parse(r, ["is_partial"])
+            is_partial = props.get("is_partial", False)
+            result = {
+                "weight": 1,
+                "unit": "ops",
+                "success": not is_partial,
+                "is_partial": is_partial,
+            }
+            if is_partial:
+                result["error-type"] = "esql"
+                result["error-description"] = "ES|QL query returned partial results"
+            return result
 
     def __repr__(self, *args, **kwargs):
         return "esql"
