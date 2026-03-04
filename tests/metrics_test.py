@@ -32,7 +32,7 @@ import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
 
-from esrally import client, config, exceptions, metrics, paths, track
+from esrally import client, config, exceptions, metrics, paths, time, track
 from esrally.metrics import GlobalStatsCalculator
 from esrally.track import Challenge, Operation, Task, Track
 from esrally.utils import cases, opts, pretty
@@ -1337,6 +1337,7 @@ class TestEsRaceStore:
             "environment": "unittest",
             "race-id": self.RACE_ID,
             "race-timestamp": "20160131T000000Z",
+            "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
             "pipeline": "from-sources",
             "user-tags": {"os": "Linux"},
             "track": "unittest",
@@ -1543,6 +1544,7 @@ class TestEsResultsStore:
 
         expected_docs = [
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": "123abc",
                 "environment": "unittest",
@@ -1568,6 +1570,7 @@ class TestEsResultsStore:
                 "_op_type": "create",
             },
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": "123abc",
                 "environment": "unittest",
@@ -1601,6 +1604,7 @@ class TestEsResultsStore:
                 "_op_type": "create",
             },
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": "123abc",
                 "environment": "unittest",
@@ -1686,6 +1690,7 @@ class TestEsResultsStore:
 
         expected_docs = [
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": None,
                 "environment": "unittest",
@@ -1709,6 +1714,7 @@ class TestEsResultsStore:
                 "_op_type": "create",
             },
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": None,
                 "environment": "unittest",
@@ -1740,6 +1746,7 @@ class TestEsResultsStore:
                 "_op_type": "create",
             },
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": None,
                 "environment": "unittest",
