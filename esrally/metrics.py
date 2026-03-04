@@ -76,23 +76,20 @@ class EsClient:
     def refresh(self, index):
         return self.guarded(self._client.indices.refresh, index=index)
 
-    def bulk_index(self, index, items, use_data_streams=True):
+    def bulk_index(self, index, items):
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
-
-        if use_data_streams:
-            # Data streams only support op_type=create
-            for item in items:
-                item["_op_type"] = "create"
 
         self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
 
     def index(self, index, item, id=None, use_data_streams=True):
         doc = {"_source": item}
-        if id and not use_data_streams:
-            # Data streams don't support explicit document IDs
+        if use_data_streams:
+            # Data streams only support op_type=create
+            doc["_op_type"] = "create"
+        elif id:
             doc["_id"] = id
-        self.bulk_index(index, [doc], use_data_streams=use_data_streams)
+        self.bulk_index(index, [doc])
 
     def search(self, index, body):
         return self.guarded(self._client.search, index=index, body=body)
@@ -992,7 +989,6 @@ class EsMetricsStore(MetricsStore):
             self._client.bulk_index(
                 index=self._index,
                 items=self._docs,
-                use_data_streams=self._index_template_provider.use_data_streams,
             )
             sw.stop()
             self.logger.info(
@@ -1010,6 +1006,9 @@ class EsMetricsStore(MetricsStore):
             self._client.refresh(index=self._index)
 
     def _add(self, doc):
+        if self._index_template_provider.use_data_streams:
+            # Data streams only support op_type=create
+            doc["_op_type"] = "create"
         self._docs.append(doc)
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
@@ -1537,6 +1536,7 @@ class Race:
         :return: A dict representation suitable for persisting this race instance as JSON.
         """
         d = {
+            "@timestamp": time.to_epoch_millis(self.race_timestamp.timestamp()),
             "rally-version": self.rally_version,
             "rally-revision": self.rally_revision,
             "environment": self.environment_name,
@@ -1576,6 +1576,7 @@ class Race:
         :return: a list of dicts, suitable for persisting the results of this race in a format that is Kibana-friendly.
         """
         result_template = {
+            "@timestamp": time.to_epoch_millis(self.race_timestamp.timestamp()),
             "rally-version": self.rally_version,
             "rally-revision": self.rally_revision,
             "environment": self.environment_name,
@@ -2080,10 +2081,13 @@ class EsResultsStore:
     def store_results(self, race):
         # always update the mapping to the latest version
         self.client.put_template("rally-results", self.index_template_provider.results_template())
+        items = race.to_result_dicts()
+        if self.index_template_provider.use_data_streams:
+            for item in items:
+                item["_op_type"] = "create"
         self.client.bulk_index(
             index=self.index_name(race),
-            items=race.to_result_dicts(),
-            use_data_streams=self.index_template_provider.use_data_streams,
+            items=items,
         )
 
     def index_name(self, race):
