@@ -25,7 +25,7 @@ steps:
     command: bash .buildkite/release-docker/run.sh build amd64
     # Run on GCP to use `docker`
     key: "amd64"
-    timeout_in_mins: 20
+    timeout_in_minutes: 20
     agents:
       machineType: "n2-standard-8"
       image: family/core-ubuntu-2204
@@ -33,13 +33,13 @@ steps:
     command: bash .buildkite/release-docker/run.sh build arm64
     # Run on GCP to use `docker`
     key: "arm64"
-    timeout_in_mins: 20
+    timeout_in_minutes: 20
     agents:
       machineType: "t2a-standard-8"
       image: family/core-ubuntu-2204-aarch64
   - label: ":docker: build docker manifest"
     command: bash .buildkite/release-docker/run.sh manifest
-    timeout_in_mins: 5
+    timeout_in_minutes: 5
     key: "manifest"
     depends_on:
       - "amd64"
