@@ -23,8 +23,10 @@ from esrally import config
 from esrally.utils import compose
 
 TRACK_NAMES_FILE = os.path.join(os.path.dirname(__file__), "resources", "track-names.txt")
+TRACK_NAMES: list[str] = []
 with open(TRACK_NAMES_FILE) as f:
-    TRACK_NAMES = f.read().splitlines()
+    for line in f.read().splitlines():
+        TRACK_NAMES.append(line.split("#", 1)[0].strip())
 
 
 @pytest.fixture(scope="module", autouse=True)
