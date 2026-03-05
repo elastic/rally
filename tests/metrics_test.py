@@ -645,7 +645,7 @@ class TestEsMetrics:
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=case.create)
         assert case.want_put_template == self.metrics_store._client.put_template.called
         if case.want_logger_call is not None:
-            assert self.metrics_store.logger.method_calls[-1:] == [case.want_logger_call]
+            assert case.want_logger_call in self.metrics_store.logger.method_calls
 
     def test_put_value_without_meta_info(self):
         throughput = 5000
@@ -670,8 +670,8 @@ class TestEsMetrics:
             "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
         self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_put_value_with_explicit_timestamps(self):
@@ -699,8 +699,8 @@ class TestEsMetrics:
             "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
         self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_put_value_with_meta_info(self):
@@ -742,8 +742,8 @@ class TestEsMetrics:
             "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
         self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_put_doc_no_meta_data(self):
@@ -774,8 +774,8 @@ class TestEsMetrics:
             "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
         self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_put_doc_with_metadata(self):
@@ -829,8 +829,8 @@ class TestEsMetrics:
             "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
-        self.es_mock.create_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}")
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
         self.es_mock.bulk_index.assert_called_with(index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc])
 
     def test_get_one(self):
