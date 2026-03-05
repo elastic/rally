@@ -170,6 +170,27 @@ def run(
     )
 
 
+def build(
+    *,
+    cfg: types.Config = None,
+    compose_cmd: list[str] | None = None,
+    compose_options: list[str] | None = None,
+    compose_file: str | None = None,
+    compose_service: str | None = None,
+    **kwargs,
+) -> subprocess.CompletedProcess:
+    compose_options = compose_options or []
+    return run_compose(
+        "build",
+        cfg=cfg,
+        compose_cmd=compose_cmd,
+        compose_options=compose_options,
+        compose_file=compose_file,
+        compose_service=compose_service,
+        **kwargs,
+    )
+
+
 def _rally_command(
     command: str,
     args: list[str] | None = None,
@@ -182,7 +203,11 @@ def _rally_command(
     rally_command = rally_command or cfg.rally_command
     rally_options = rally_options or []
     args = args or []
-    return rally_command + [command] + rally_options + args
+    return [command] + rally_options + args
+
+
+def build_rally() -> None:
+    build(compose_service="rally")
 
 
 def run_rally(

@@ -35,12 +35,17 @@ def compose_config() -> Generator[compose.ComposeConfig]:
     config.clear_config()
 
 
+@pytest.fixture(scope="module", autouse=True)
+def build_rally(compose_config):
+    compose.build_rally()
+
+
 @pytest.fixture(params=TRACK_NAMES)
 def track_name(request) -> Generator[str]:
     yield request.param
 
 
-def test_tracks(compose_config: compose.ComposeConfig, track_name: str):
+def test_tracks(compose_config: compose.ComposeConfig, track_name: str, build_rally):
     if track_name not in TRACK_NAMES:
         pytest.skip(f"Track not selected for testing [{track_name}].")
     compose.race(track_name=track_name, test_mode=True, target_hosts=["es01:9200"])
