@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     image: rally:latest
     depends_on:
-      - es01
+      es01:
+        condition: service_healthy
     container_name: rally
     # Run as root so GoReplay can capture on loopback (pcap needs it in containers).
     # Output .gor file is chown'd to host user (UID:GID) at the end.

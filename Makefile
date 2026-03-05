@@ -210,6 +210,10 @@ it_serverless: install_pytest_rally_plugin
 it_tracks_compat: install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
 
+# It runs rally_tracks integration tests.
+it_tracks: install_pytest_rally_plugin
+	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/tracks_test.py $(ARGS)
+
 # It runs benchmark tests.
 benchmark: venv
 	$(MAKE) test ARGS=benchmarks/
