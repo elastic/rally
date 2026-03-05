@@ -24,7 +24,6 @@ services:
       timeout: 5s
       retries: 5
 
-
   rally:
     build:
       context: .
@@ -40,7 +39,6 @@ services:
     # command: "esrally list tracks"
     networks:
       - elastic-net
-
 
 networks:
   elastic-net:
