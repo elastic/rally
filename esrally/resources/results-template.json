@@ -22,10 +22,6 @@
       "enabled": true
     },
     "properties": {
-      "@timestamp": {
-        "type": "date",
-        "format": "epoch_millis"
-      },
       "race-id": {
         "type": "keyword"
       },

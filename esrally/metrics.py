@@ -340,6 +340,8 @@ class IndexTemplateProvider:
                 template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
             if self._use_data_streams and support_data_streams:
                 template["data_stream"] = {}
+                if not template["template"]["mappings"]["properties"].get("@timestamp"):
+                    template["template"]["mappings"]["properties"]["@timestamp"] = {"type": "date", "format": "epoch_millis"}
             return json.dumps(template)
 
 
@@ -895,7 +897,7 @@ class EsMetricsStore(MetricsStore):
     """
     A metrics store for telemetry backed by Elasticsearch.
     """
-    
+
     INDEX_PREFIX = "rally-metrics-"
     TEMPLATE_VERSION = "v1"
 
@@ -926,23 +928,24 @@ class EsMetricsStore(MetricsStore):
         self._docs = []
         MetricsStore.open(self, race_id, race_timestamp, track_name, challenge_name, car_name, ctx, create)
         self._index = self.index_name()
-        # Data streams are created implicitly on first write
-        if not self._index_template_provider.use_data_streams:
-            # reduce a bit of noise in the metrics cluster log
-            if create:
-                self._ensure_index_template()
+        # reduce a bit of noise in the metrics cluster log
+        if create:
+            self._ensure_index_template()
+            # Data streams are created implicitly on first write
+            if not self._index_template_provider.use_data_streams:
+                # We want to create the index if it does not exist.
                 if not self._client.exists(index=self._index):
                     self._client.create_index(index=self._index)
                 else:
                     self.logger.info("[%s] already exists.", self._index)
-            else:
-                # we still need to check for the correct index name - prefer the one with the suffix
-                new_name = self._migrated_index_name(self._index)
-                if self._client.exists(index=new_name):
-                    self._index = new_name
-        
+        else:
+            # we still need to check for the correct index name - prefer the one with the suffix
+            new_name = self._migrated_index_name(self._index)
+            if self._client.exists(index=new_name):
+                self._index = new_name
+
         # Skip refresh when creating with data streams - the data stream won't exist until first write
-        if not (create and self._index_template_provider.use_data_streams):
+        if not self._index_template_provider.use_data_streams:
             # ensure we can search immediately after opening
             self._client.refresh(index=self._index)
 
@@ -1825,6 +1828,7 @@ class EsRaceStore(RaceStore):
     """
     A metric store for race information backed by Elasticsearch.
     """
+
     INDEX_PREFIX = "rally-races-"
     TEMPLATE_VERSION = "v1"
 
