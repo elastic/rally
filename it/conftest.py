@@ -96,7 +96,7 @@ class EsMetricsStore:
 ES_METRICS_STORE = EsMetricsStore()
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session", autouse=False)
 def shared_setup():
     print("\nStarting shared setup...")
     check_prerequisites()

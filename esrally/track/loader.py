@@ -149,6 +149,24 @@ def tracks(cfg: types.Config):
 
 def list_tracks(cfg: types.Config):
     available_tracks = tracks(cfg)
+    format = cfg.opts("system", "list.races.format", default_value="text", mandatory=False)
+    if format == "json":
+        result = {
+            "rally_version": version.version(),
+            "tracks": [
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "number_of_documents": t.number_of_documents,
+                    "compressed_size_in_bytes": t.compressed_size_in_bytes,
+                    "uncompressed_size_in_bytes": t.uncompressed_size_in_bytes,
+                }
+                for t in available_tracks
+            ],
+        }
+        console.println(json.dumps(result, indent=2, sort_keys=True))
+        return
+
     only_auto_generated_challenges = all(t.default_challenge.auto_generated for t in available_tracks)
 
     data = []
