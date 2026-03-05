@@ -990,6 +990,9 @@ class EsMetricsStore(MetricsStore):
         if self._docs:
             sw = time.StopWatch()
             sw.start()
+            if self._index_template_provider.use_data_streams:
+                for doc in self._docs:
+                    doc["_op_type"] = "create"
             self._client.bulk_index(
                 index=self._index,
                 items=self._docs,
