@@ -315,18 +315,18 @@ class IndexTemplateProvider:
         return self._use_data_streams
 
     def metrics_template(self):
-        return self._read("metrics-template")
+        return self._read("metrics-ds-template") if self.use_data_streams else self._read("metrics-template")
 
     def races_template(self):
-        return self._read("races-template")
+        return self._read("races-ds-template") if self.use_data_streams else self._read("races-template")
 
     def results_template(self):
-        return self._read("results-template")
+        return self._read("results-ds-template") if self.use_data_streams else self._read("results-template")
 
     def annotations_template(self):
-        return self._read("annotation-template", support_data_streams=False)
+        return self._read("annotation-template")
 
-    def _read(self, template_name, support_data_streams=True):
+    def _read(self, template_name):
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
             template = json.load(f)
             if self._number_of_shards is not None:
@@ -338,10 +338,6 @@ class IndexTemplateProvider:
                 template["template"]["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
             if self._number_of_replicas is not None:
                 template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
-            if self._use_data_streams and support_data_streams:
-                template["data_stream"] = {}
-                if not template["template"]["mappings"]["properties"].get("@timestamp"):
-                    template["template"]["mappings"]["properties"]["@timestamp"] = {"type": "date", "format": "epoch_millis"}
             return json.dumps(template)
 
 
@@ -899,7 +895,7 @@ class EsMetricsStore(MetricsStore):
     """
 
     INDEX_PREFIX = "rally-metrics-"
-    TEMPLATE_VERSION = "v1"
+    DATA_STREAM_VERSIONED = "rally-metrics-v1"
 
     def __init__(
         self,
@@ -951,10 +947,11 @@ class EsMetricsStore(MetricsStore):
 
     def _ensure_index_template(self):
         new_template: str = self._get_template()
-
         old_template: dict | None = None
-        if self._client.template_exists("rally-metrics"):
-            for t in self._client.get_template("rally-metrics").body.get("index_templates", []):
+        # We are adding -ds suffix to ensure backwards compatibility with existing index templates
+        target_index_template_name = "rally-metrics-ds" if self._index_template_provider.use_data_streams else "rally-metrics"
+        if self._client.template_exists(target_index_template_name):
+            for t in self._client.get_template(target_index_template_name).body.get("index_templates", []):
                 old_template = t.get("index_template", {}).get("template", {})
                 break
 
@@ -975,11 +972,11 @@ class EsMetricsStore(MetricsStore):
                 return
             self.logger.warning("Overwrite existing index template (datastore.overwrite_existing_templates = true):\n%s", diff)
 
-        self._client.put_template("rally-metrics", new_template)
+        self._client.put_template(target_index_template_name, new_template)
 
     def index_name(self):
         if self._index_template_provider.use_data_streams:
-            return f"{EsMetricsStore.INDEX_PREFIX}{EsMetricsStore.TEMPLATE_VERSION}"
+            return f"{EsMetricsStore.DATA_STREAM_VERSIONED}"
         ts = time.from_iso8601(self._race_timestamp)
         return f"{EsMetricsStore.INDEX_PREFIX}{ts.year:04d}-{ts.month:02d}"
 
@@ -1830,7 +1827,7 @@ class EsRaceStore(RaceStore):
     """
 
     INDEX_PREFIX = "rally-races-"
-    TEMPLATE_VERSION = "v1"
+    DATA_STREAM_VERSIONED = "rally-races-v1"
 
     def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -1857,7 +1854,7 @@ class EsRaceStore(RaceStore):
 
     def index_name(self, race):
         if self.index_template_provider.use_data_streams:
-            return f"{EsRaceStore.INDEX_PREFIX}{EsRaceStore.TEMPLATE_VERSION}"
+            return EsRaceStore.DATA_STREAM_VERSIONED
         race_timestamp = race.race_timestamp
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
@@ -2072,7 +2069,7 @@ class EsResultsStore:
     """
 
     INDEX_PREFIX = "rally-results-"
-    TEMPLATE_VERSION = "v1"
+    DATA_STREAM_VERSIONED = "rally-results-v1"
 
     def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -2100,7 +2097,7 @@ class EsResultsStore:
 
     def index_name(self, race):
         if self.index_template_provider.use_data_streams:
-            return f"{EsResultsStore.INDEX_PREFIX}{EsResultsStore.TEMPLATE_VERSION}"
+            return EsResultsStore.DATA_STREAM_VERSIONED
         race_timestamp = race.race_timestamp
         return f"{EsResultsStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
