@@ -23,6 +23,7 @@ import json
 import math
 import random
 from unittest import mock
+from uuid import uuid4
 
 import elastic_transport
 import elasticsearch
@@ -8263,3 +8264,44 @@ class TestEsqlRunner:
         assert result["completion_time_in_millis"] is None
         assert result["start_time_in_millis"] is None
         assert result["expiration_time_in_millis"] is None
+
+
+class TestCreateEnrichPolicy:
+
+    @pytest.mark.asyncio
+    async def test_call(self):
+        policy_count = 5
+        policy_data = {uuid4().hex: mock.MagicMock() for _ in range(policy_count)}
+        params = {"policies": policy_data}
+        es = mock.AsyncMock()
+
+        await runner.CreateEnrichPolicy()(es, params)
+
+        es.enrich.delete_policy.assert_has_awaits(
+            [mock.call(name=policy_name, ignore=[404]) for policy_name in policy_data], any_order=True
+        )
+        es.enrich.put_policy.assert_has_awaits(
+            [mock.call(name=policy, **req_params) for policy, req_params in policy_data.items()], any_order=True
+        )
+        es.indices.refresh.assert_awaited_once_with(index="_all")
+        es.enrich.execute_policy.assert_has_awaits(
+            [mock.call(name=policy_name, wait_for_completion=True) for policy_name in policy_data], any_order=True
+        )
+
+    @mock.patch("esrally.driver.runner.CreateEnrichPolicy._execute_enrich_policy", new_callable=mock.AsyncMock)
+    @mock.patch("esrally.driver.runner.CreateEnrichPolicy._refresh_indices", new_callable=mock.AsyncMock)
+    @mock.patch("esrally.driver.runner.CreateEnrichPolicy._create_enrich_policy", new_callable=mock.AsyncMock)
+    @pytest.mark.asyncio
+    async def test_delete_is_false(self, create_mock, refresh_mock, exec_mock):
+        es = mock.AsyncMock()
+        params = {"policies": {uuid4().hex: {}}, "delete": False}
+
+        await runner.CreateEnrichPolicy()(es, params)
+
+        es.enrich.delete_policy.assert_not_awaited()
+        create_mock.assert_awaited()
+        refresh_mock.assert_awaited()
+        exec_mock.assert_awaited()
+
+    def test_str(self):
+        assert str(runner.CreateEnrichPolicy()) == "create-enrich-policy"
