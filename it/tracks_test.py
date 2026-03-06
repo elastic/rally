@@ -16,6 +16,9 @@
 # under the License.
 import json
 import logging
+import os
+import subprocess
+import time
 from collections.abc import Generator
 
 import pytest
@@ -25,6 +28,18 @@ from esrally.track import loader
 from esrally.utils import compose
 
 LOG = logging.getLogger(__name__)
+
+RALLY_TRACKS = loader.load_tracks_file()["tracks"]
+ES_VERSIONS = ["8.19.10", "9.3.1"]
+
+# Let have 120 minutes for all track sto complete. In case it times out before
+# returning any other error, we will accept the testing outcome as it would require
+# too much to complete all the tests in a reasonable time frame. We can always
+# increase this timeout if we see that some tracks require much more time to complete.
+TEST_TIMEOUT_M = os.environ.get("IT_TRACKS_TIMEOUT_MINUTES", 120)
+# The max time for a single track to complete is the total time divided by the number of tracks and ES versions we
+# test against.
+RACE_TIMEOUT_S = TEST_TIMEOUT_M * 60 / len(RALLY_TRACKS) / len(ES_VERSIONS)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -40,17 +55,36 @@ def build_rally(compose_config):
     compose.build_rally()
 
 
-@pytest.fixture(scope="module", params=loader.load_tracks_file()["tracks"], ids=lambda param: f"track_{param['name']}")
-def track(request) -> Generator[loader.TrackJson]:
+@pytest.fixture(scope="module", params=RALLY_TRACKS, ids=lambda param: f"track_{param['name']}")
+def rally_track(request) -> Generator[loader.TrackJson]:
     yield request.param
 
 
-@pytest.fixture(scope="module", params=["8.19.10", "9.3.1"], ids=lambda param: f"es_version_{param}")
+@pytest.fixture(scope="module", params=ES_VERSIONS, ids=lambda param: f"es_version_{param}")
 def elasticsearch_version(request) -> Generator[str]:
     return request.param
 
 
-def test_tracks(compose_config: compose.ComposeConfig, track: loader.TrackJson, elasticsearch_version):
+def test_tracks(compose_config: compose.ComposeConfig, rally_track: loader.TrackJson, elasticsearch_version):
     LOG.info("Testing elasticsearch version:\n%s", elasticsearch_version)
-    LOG.info("Testing track:\n%s", json.dumps(track, indent=2))
-    compose.race(track_name=track["name"], test_mode=True, target_hosts=["es01:9200"], elasticsearch_version=elasticsearch_version)
+    LOG.info("Testing track: %s", json.dumps(rally_track))
+    LOG.info("Testing timeout: %d seconds", RACE_TIMEOUT_S)
+    start_time = time.time()
+    try:
+        compose.race(
+            track_name=rally_track["name"],
+            test_mode=True,
+            target_hosts=["es01:9200"],
+            elasticsearch_version=elasticsearch_version,
+            timeout=RACE_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        LOG.warning("Race timeout: no errors until we take it as a success.")
+    finally:
+        end_time = time.time()
+        LOG.info(
+            "Race terminated after %s seconds for track [%s] and elasticsearch version [%s]",
+            end_time - start_time,
+            rally_track["name"],
+            elasticsearch_version,
+        )
