@@ -49,6 +49,12 @@ class ComposeConfig(config.Config):
         return self.opts(section="compose", key="compose.dir", default_value=os.path.dirname(self.compose_file), mandatory=False)
 
 
+def decode(output: bytes | None) -> str:
+    if not output:
+        return ""
+    return "\n  " + "\n  ".join([line.rstrip() for line in output.decode("utf-8").splitlines()]) + "\n"
+
+
 def run_compose(
     command: str,
     service: str | None = None,
@@ -82,21 +88,22 @@ def run_compose(
         logger.debug("Running compose command: %s", cmd)
         result = subprocess.run(cfg.compose_cmd + cmd, check=check, **kwargs)
     except subprocess.CalledProcessError as e:
-        logger.warning(
-            "Compose command returned nonzero exit status (%s): %s\nstdout: %s\nstderr: %s\n",
+        logger.error(
+            "Compose command returned nonzero exit status (%s): %s\nstdout:%s\nstderr:%s",
             e.returncode,
             e,
-            e.stdout.decode("utf-8") if e.stdout else None,
-            e.stderr.decode("utf-8") if e.stderr else None,
+            decode(e.stdout),
+            decode(e.stderr),
             exc_info=logger.isEnabledFor(logging.DEBUG),
         )
         raise e
+
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(
-            "Compose command finished with exit code %s.\nstdout: %s\nstderr: %s\n",
+            "Compose command finished with exit code %s.\nstdout:%s\nstderr:%s",
             result.returncode,
-            result.stdout.decode("utf-8") if result.stdout else None,
-            result.stderr.decode("utf-8") if result.stderr else None,
+            decode(result.stdout),
+            decode(result.stderr),
         )
     return result
 
@@ -225,17 +232,12 @@ def rally_race(
         rally_options += ["--target-hosts", ",".join(target_hosts)]
     if pipeline:
         rally_options += ["--pipeline", pipeline]
-    logger.info("Running rally race (options = %s).", rally_options)
+    logger.info("Running rally race (options=%s, ES_VERSION=%s).", rally_options, os.environ["ES_VERSION"])
     run_rally("race", rally_options=rally_options, logger=logger, **kwargs)
     logger.info("Terminated rally race.")
 
 
-def start_elasticsearch(
-    service: str, version: str | None = None, detach: bool = True, *, logger: logging.Logger = LOG, **kwargs: Any
-) -> None:
-    if version:
-        env = kwargs.setdefault("env", os.environ.copy())
-        env["ELASTICSEARCH_VERSION"] = version
-    logger.info("Starting Elasticsearch (service=%s, version=%s).", service, version)
+def start_elasticsearch(service: str, detach: bool = True, *, logger: logging.Logger = LOG, **kwargs: Any) -> None:
+    logger.info("Starting Elasticsearch (service=%s, ES_VERSION=%s).", service, os.environ["ES_VERSION"])
     start_service(service, detach=detach, logger=logger, **kwargs)
     logger.info("Started Elasticsearch server.")
