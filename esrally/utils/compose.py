@@ -249,6 +249,7 @@ def race(
     test_mode: bool = False,
     target_hosts: list[str] | None = None,
     pipeline: str | None = "benchmark-only",
+    elasticsearch_version: str | None = None,
     **kwargs,
 ) -> None:
     rally_options = rally_options or []
@@ -259,4 +260,7 @@ def race(
         rally_options += ["--target-hosts", ",".join(target_hosts)]
     if pipeline:
         rally_options += ["--pipeline", pipeline]
+    if elasticsearch_version:
+        env = kwargs.setdefault("env", os.environ.copy())
+        env["ELASTICSEARCH_VERSION"] = elasticsearch_version
     run_rally("race", rally_options=rally_options, **kwargs)

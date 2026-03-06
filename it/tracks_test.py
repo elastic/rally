@@ -14,19 +14,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import os
+import json
+import logging
 from collections.abc import Generator
 
 import pytest
 
 from esrally import config
+from esrally.track import loader
 from esrally.utils import compose
 
-TRACK_NAMES_FILE = os.path.join(os.path.dirname(__file__), "resources", "track-names.txt")
-TRACK_NAMES: list[str] = []
-with open(TRACK_NAMES_FILE) as f:
-    for line in f.read().splitlines():
-        TRACK_NAMES.append(line.split("#", 1)[0].strip())
+LOG = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -42,12 +40,17 @@ def build_rally(compose_config):
     compose.build_rally()
 
 
-@pytest.fixture(params=TRACK_NAMES)
-def track_name(request) -> Generator[str]:
+@pytest.fixture(scope="module", params=loader.load_tracks_file()["tracks"], ids=lambda param: f"track_{param['name']}")
+def track(request) -> Generator[loader.TrackJson]:
     yield request.param
 
 
-def test_tracks(compose_config: compose.ComposeConfig, track_name: str, build_rally):
-    if track_name not in TRACK_NAMES:
-        pytest.skip(f"Track not selected for testing [{track_name}].")
-    compose.race(track_name=track_name, test_mode=True, target_hosts=["es01:9200"])
+@pytest.fixture(scope="module", params=["8.19.10", "9.3.1"], ids=lambda param: f"es_version_{param}")
+def elasticsearch_version(request) -> Generator[str]:
+    return request.param
+
+
+def test_tracks(compose_config: compose.ComposeConfig, track: loader.TrackJson, elasticsearch_version):
+    LOG.info("Testing elasticsearch version:\n%s", elasticsearch_version)
+    LOG.info("Testing track:\n%s", json.dumps(track, indent=2))
+    compose.race(track_name=track["name"], test_mode=True, target_hosts=["es01:9200"], elasticsearch_version=elasticsearch_version)
