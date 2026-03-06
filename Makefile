@@ -17,18 +17,27 @@
 
 SHELL := /bin/bash
 
+DEFAULT_PY_VERSION = $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
+
+
 # We assume an active virtualenv for development
-VIRTUAL_ENV := $(or $(VIRTUAL_ENV),.venv$(if $(PY_VERSION),-$(PY_VERSION)))
-VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
+
+VENV_DIR = $(if $(PY_VERSION),.venv-$(PY_VERSION),.venv)
+
+VENV_ACTIVATE_FILE := $(VENV_DIR)/bin/activate
 VENV_ACTIVATE := source $(VENV_ACTIVATE_FILE)
 
-PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
-export UV_PYTHON := $(PY_VERSION)
-export UV_PROJECT_ENVIRONMENT := $(VIRTUAL_ENV)
+export UV_PYTHON = $(or $(PY_VERSION),$(DEFAULT_PY_VERSION))
+
+export UV_PROJECT_ENVIRONMENT = $(VENV_DIR)
 
 PRE_COMMIT_HOOK_PATH := .git/hooks/pre-commit
 
-LOG_CI_LEVEL := INFO
+TESTS = tests/
+LOG_LEVEL =
+OPTS = $(if $(LOG_LEVEL), --log-cli-level=$(LOG_LEVEL),)
+RUN_TESTS ?= uv run -- pytest $(OPTS) $(TESTS)
+
 
 # --- Global goals ---
 
@@ -85,9 +94,7 @@ uv:
 
 # It adds a list of packages to the project.
 uv-add:
-ifndef ARGS
-	$(error Missing arguments. Use make uv-add ARGS="...")
-endif
+	$(if args,,$(error Missing arguments. Use make uv-add ARGS="..."))
 	uv add $$ARGS
 
 # It updates the uv lock file.
@@ -106,11 +113,11 @@ $(VENV_ACTIVATE_FILE):
 
 # It delete the project virtual environment from disk.
 clean-venv:
-	rm -fR '$(VIRTUAL_ENV)'
+	rm -fR '$(VENV_DIR)'
 
 # It installs the Rally PyTest plugin.
 install_pytest_rally_plugin: venv
-	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
+	$(VENV_ACTIVATE); pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
 
 # Old legacy alias goals
 install: venv
@@ -140,7 +147,7 @@ lint: venv
 	uv run -- pre-commit run --all-files
 
 # It run all linters on changed files using pre-commit.
-precommit pre-commit: venv
+pre-commit: venv
 	uv run -- pre-commit run
 
 # It install a pre-commit hook in the project .git dir so modified files are checked before creating every commit.
@@ -174,49 +181,65 @@ clean-docs: venv
 
 # It runs unit tests using the default python interpreter version.
 test: venv
-	uv run -- pytest -s $(or $(ARGS), tests/)
+	$(RUN_TESTS)
 
 # It runs unit tests using all supported python versions.
 test-all: test-3.10 test-3.11 test-3.12 test-3.13
 
 # It runs unit tests using Python 3.10.
-test-3.10:
-	$(MAKE) test PY_VERSION=3.10
+test-3.10: PY_VERSION = 3.10
+test-3.10: venv
+	$(RUN_TESTS)
 
 # It runs unit tests using Python 3.11.
+test-3.11: PY_VERSION = 3.11
 test-3.11:
-	$(MAKE) test PY_VERSION=3.11
+	$(RUN_TESTS)
 
 # It runs unit tests using Python 3.12.
+test-3.12: PY_VERSION = 3.12
 test-3.12:
-	$(MAKE) test PY_VERSION=3.12
+	$(RUN_TESTS)
 
 # It runs unit tests using Python 3.13.
+test-3.13: PY_VERSION = 3.13
 test-3.13:
-	$(MAKE) test PY_VERSION=3.13
+	$(RUN_TESTS)
+
+# It runs unit tests using Python 3.14.
+test-3.14: PY_VERSION = 3.14
+test-3.14:
+	$(RUN_TESTS)
 
 
 # --- Integration tests goals ---
 
 # It runs integration tests.
+it: TESTS = it/
 it: venv
-	$(MAKE) test ARGS=$(or $(ARGS),it/)
+	$(RUN_TESTS)
 
-# It runs serverless integration tests.
+# It runs track_repo_compatibility integration tests for serverless tracks.
+it_serverless: TESTS = it/track_repo_compatibility
+it_serverless: OPTS = --track-repository-test-directory=it_tracks_serverless
 it_serverless: install_pytest_rally_plugin
-	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_tracks_serverless it/track_repo_compatibility $(ARGS)
+	$(RUN_TESTS)
 
-# It runs rally_tracks_compat integration tests.
+# It runs track_repo_compatibility integration tests.
+it_tracks_compat: TESTS = it/track_repo_compatibility
 it_tracks_compat: install_pytest_rally_plugin
-	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
+	$(RUN_TESTS)
 
 # It runs rally_tracks integration tests.
+it_tracks: TESTS = it/tracks_test.py
 it_tracks: install_pytest_rally_plugin
-	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/tracks_test.py $(ARGS)
+	$(RUN_TESTS)
 
 # It runs benchmark tests.
+benchmark: TESTS = benchmarks/
 benchmark: venv
-	$(MAKE) test ARGS=benchmarks/
+	$(RUN_TESTS)
+
 
 # --- Release goals ---
 

@@ -66,11 +66,11 @@ class ElasticsearchServer:
 
 
 @pytest.fixture(scope="function", params=ES_VERSIONS, ids=lambda param: f"es_version_{param}")
-def elasticsearch(request) -> Generator[ElasticsearchServer]:
+def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     compose.remove_service("es01", force=True, volumes=True)
-
+    monkeypatch.setenv("ES_VERSION", request.param)
     es = ElasticsearchServer(version=request.param)
-    compose.start_elasticsearch("es01", es.version)
+    compose.start_elasticsearch("es01")
 
     yield es
 
