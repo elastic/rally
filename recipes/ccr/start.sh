@@ -4,10 +4,10 @@ set -e
 source .elastic-version
 
 # Start metrics store
-docker-compose -f ./metricstore-docker-compose.yml up -d 
+docker compose -f ./metricstore-docker-compose.yml up -d
 
 # Start Elasticsearch
-docker-compose up -d
+docker compose up -d
 
 printf "Waiting for clusters to get ready "
 
