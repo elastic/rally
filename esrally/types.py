@@ -68,7 +68,6 @@ Key = Literal[
     "compose.cmd",
     "compose.dir",
     "compose.file",
-    "compose.rally_src_dir",
     "config.version",
     "data_streams",
     "datastore.api_key",
