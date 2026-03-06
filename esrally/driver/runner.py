@@ -971,6 +971,59 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     return parsed
 
 
+def parse_optional_props(text: BytesIO, props: list[str]) -> dict:
+    """
+    Parse the provided text as JSON and extract whichever of the given property paths are present.
+    Does not require all props to be found; iterates until the stream is exhausted.
+
+    :param text: A text to parse (will be seek(0) at start).
+    :param props: List of dot-separated property paths to extract.
+    :return: A dict containing only the properties that were found.
+    """
+    text.seek(0)
+    parser = ijson.parse(text)
+    parsed = {}
+    try:
+        for prefix, _, value in parser:
+            if prefix in props:
+                parsed[prefix] = value
+    except ijson.IncompleteJSONError:
+        pass
+    return parsed
+
+
+def extract_cluster_details(response: BytesIO) -> dict:
+    """
+    Extract _clusters.details from a search response as a dict of cluster name -> detail object.
+    Each detail contains status, indices, took, timed_out, and _shards (when present).
+
+    :param response: Response body (BytesIO or file-like with seek/read).
+    :return: Dict mapping cluster name to {status, indices, took, timed_out, _shards}.
+             Empty dict if _clusters.details is absent or on parse error.
+    """
+    response.seek(0)
+    details = {}
+    try:
+        for cluster_name, detail in ijson.kvitems(response, "_clusters.details"):
+            if not isinstance(detail, dict):
+                continue
+            entry = {}
+            if "status" in detail:
+                entry["status"] = detail["status"]
+            if "indices" in detail:
+                entry["indices"] = detail["indices"]
+            if "took" in detail:
+                entry["took"] = detail["took"]
+            if "timed_out" in detail:
+                entry["timed_out"] = detail["timed_out"]
+            if "_shards" in detail and isinstance(detail["_shards"], dict):
+                entry["_shards"] = detail["_shards"]
+            details[cluster_name] = entry
+    except (ijson.IncompleteJSONError, KeyError, TypeError):
+        pass
+    return details
+
+
 class Query(Runner):
     """
     Runs a request body search against Elasticsearch.
@@ -1228,7 +1281,7 @@ class Query(Runner):
                 shards_skipped = props.get("_shards.skipped", 0)
                 shards_failed = props.get("_shards.failed", 0)
 
-                return {
+                result = {
                     "weight": 1,
                     "unit": "ops",
                     "success": True,
@@ -1243,6 +1296,37 @@ class Query(Runner):
                         "failed": shards_failed,
                     },
                 }
+
+                # Optional fields (cross-cluster search, num_reduce_phases)
+                optional_props = [
+                    "num_reduce_phases",
+                    "_clusters.total",
+                    "_clusters.successful",
+                    "_clusters.skipped",
+                    "_clusters.running",
+                    "_clusters.partial",
+                    "_clusters.failed",
+                ]
+                optional = parse_optional_props(r, optional_props)
+                if "num_reduce_phases" in optional and optional["num_reduce_phases"] is not None:
+                    result["num_reduce_phases"] = optional["num_reduce_phases"]
+                if "_clusters.total" in optional or "_clusters.successful" in optional:
+                    result["clusters"] = {}
+                    for key, dest in [
+                        ("_clusters.total", "total"),
+                        ("_clusters.successful", "successful"),
+                        ("_clusters.skipped", "skipped"),
+                        ("_clusters.running", "running"),
+                        ("_clusters.partial", "partial"),
+                        ("_clusters.failed", "failed"),
+                    ]:
+                        if key in optional and optional[key] is not None:
+                            result["clusters"][dest] = optional[key]
+                    cluster_details = extract_cluster_details(r)
+                    if cluster_details:
+                        result["clusters"]["details"] = cluster_details
+
+                return result
             else:
                 return {
                     "weight": 1,
