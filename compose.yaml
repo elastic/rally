@@ -1,0 +1,47 @@
+services:
+
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION:-9.2.6}
+    container_name: es01
+    networks:
+      - elastic-net
+    environment:
+      - node.name=es01
+      - discovery.type=single-node
+      - xpack.security.enabled=false # Disabled for simpler benchmarking setup
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rally:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rally-driver
+    depends_on:
+      es01:
+        condition: service_healthy
+    volumes:
+      - rally_data:/rally/.rally
+    # The command below lists tracks by default so the container doesn't exit immediately.
+    # You will likely override this via CLI to run actual benchmarks.
+    # command: "esrally list tracks"
+    networks:
+      - elastic-net
+
+networks:
+  elastic-net:
+    driver: bridge
+
+volumes:
+  es_data:
+  rally_data:
