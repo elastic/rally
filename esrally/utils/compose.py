@@ -18,10 +18,9 @@ import logging
 import os
 import shlex
 import subprocess
+from typing import Any
 
-from esrally import config, types
-
-COMPOSE_SERVICE = os.environ.get("RALLY_COMPOSE_SERVICE", "rally")
+from esrally import config, paths, types
 
 LOG = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class ComposeConfig(config.Config):
     @property
     def compose_cmd(self) -> list[str]:
         cmd = self.opts(
-            section="compose", key="compose.cmd", default_value=os.environ.get("RALLY_COMPOSE_COMMAND", "docker compose"), mandatory=False
+            section="compose", key="compose.cmd", default_value=os.environ.get("COMPOSE_COMMAND", "docker compose"), mandatory=False
         )
         if isinstance(cmd, str):
             cmd = shlex.split(cmd)
@@ -39,103 +38,61 @@ class ComposeConfig(config.Config):
             raise TypeError(f"Expected compose.cmd to be a string or list of strings, but got [{type(cmd).__name__}]")
         return cmd
 
-    DEFAULT_COMPOSE_SERVICE = os.environ.get("RALLY_COMPOSE_SERVICE", "rally")
-
-    @property
-    def compose_service(self) -> str:
-        return self.opts(section="compose", key="compose.service", default_value=self.DEFAULT_COMPOSE_SERVICE, mandatory=False)
-
-    DEFAULT_RALLY_COMMAND = os.environ.get("RALLY_COMMAND", "esrally")
-
-    @property
-    def rally_command(self) -> list[str]:
-        return shlex.split(
-            self.opts(section="compose", key="compose.rally_command", default_value=self.DEFAULT_RALLY_COMMAND, mandatory=False)
-        )
-
-    DEFAULT_SRC_DIR = os.environ.get("RALLY_SRC_DIR", os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-
-    def rally_src_dir(self) -> str:
-        return self.opts(section="compose", key="compose.rally_src_dir", default_value=self.DEFAULT_SRC_DIR, mandatory=False)
-
-    DEFAULT_COMPOSE_FILE = os.environ.get("RALLY_COMPOSE_FILE", os.path.join(DEFAULT_SRC_DIR, "compose.yaml"))
+    DEFAULT_COMPOSE_FILE = os.environ.get("COMPOSE_FILE", os.path.join(os.path.dirname(paths.rally_root()), "compose.yaml"))
 
     @property
     def compose_file(self) -> str:
-        return self.opts(
-            section="compose",
-            key="compose.file",
-            default_value=os.environ.get("RALLY_COMPOSE_FILE", self.DEFAULT_COMPOSE_FILE),
-            mandatory=False,
-        )
+        return self.opts(section="compose", key="compose.file", default_value=self.DEFAULT_COMPOSE_FILE, mandatory=False)
 
     @property
     def compose_dir(self) -> str:
         return self.opts(section="compose", key="compose.dir", default_value=os.path.dirname(self.compose_file), mandatory=False)
 
 
-def _compose_command(
-    cfg: ComposeConfig,
-    command: str,
-    args: list[str] | None = None,
-    *,
-    compose_cmd: list[str] | None = None,
-    compose_options: list[str] | None = None,
-    compose_file: str | None,
-    compose_service: str | None = None,
-) -> list[str]:
-    compose_cmd = compose_cmd or cfg.compose_cmd
-    compose_options = compose_options or []
-    compose_file = compose_file or cfg.compose_file
-    if compose_file:
-        compose_cmd += ["--file", compose_file]
-    compose_service = compose_service or cfg.compose_service
-    args = args or []
-    return compose_cmd + [command] + compose_options + [compose_service] + args
-
-
 def run_compose(
     command: str,
+    service: str | None = None,
     args: list[str] | None = None,
     *,
-    cfg: types.Config = None,
+    cfg: types.Config | None = None,
     compose_dir: str | None = None,
-    compose_cmd: list[str] | None = None,
     compose_options: list[str] | None = None,
     compose_file: str | None = None,
-    compose_service: str | None = None,
-    compose_logger: logging.Logger = LOG,
+    logger: logging.Logger = LOG,
     check: bool = True,
-    **kwargs,
+    **kwargs: Any,
 ) -> subprocess.CompletedProcess:
     cfg = ComposeConfig.from_config(cfg)
-    cmd = _compose_command(
-        cfg,
-        command,
-        args,
-        compose_cmd=compose_cmd,
-        compose_options=compose_options,
-        compose_file=compose_file,
-        compose_service=compose_service,
-    )
+    cmd = []
+    compose_file = compose_file or cfg.compose_file
+    if compose_file:
+        cmd += ["--file", compose_file]
+    cmd += [command]
+    if compose_options:
+        cmd += compose_options
+    if service:
+        cmd += [service]
+    if args:
+        cmd += args
+
     compose_dir = compose_dir or cfg.compose_dir
     kwargs.setdefault("stderr", subprocess.PIPE)
     kwargs.setdefault("cwd", compose_dir)
     try:
-        LOG.debug("Running compose command: %s", cmd)
-        result = subprocess.run(cmd, check=check, **kwargs)
+        logger.debug("Running compose command: %s", cmd)
+        result = subprocess.run(cfg.compose_cmd + cmd, check=check, **kwargs)
     except subprocess.CalledProcessError as e:
-        LOG.warning(
+        logger.warning(
             "Compose command returned nonzero exit status (%s): %s\nstdout: %s\nstderr: %s\n",
             e.returncode,
             e,
             e.stdout.decode("utf-8") if e.stdout else None,
             e.stderr.decode("utf-8") if e.stderr else None,
-            exc_info=compose_logger.isEnabledFor(logging.DEBUG),
+            exc_info=logger.isEnabledFor(logging.DEBUG),
         )
         raise e
-    if compose_logger.isEnabledFor(logging.DEBUG):
-        compose_logger.debug(
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
             "Compose command finished with exit code %s.\nstdout: %s\nstderr: %s\n",
             result.returncode,
             result.stdout.decode("utf-8") if result.stdout else None,
@@ -144,113 +101,121 @@ def run_compose(
     return result
 
 
-def run(
+def run_service(
+    service: str | None = None,
     args: list[str] | None = None,
     *,
-    cfg: types.Config = None,
-    compose_cmd: list[str] | None = None,
+    remove: bool = True,
+    cfg: types.Config | None = None,
     compose_options: list[str] | None = None,
     compose_file: str | None = None,
-    compose_remove: bool = True,
-    compose_service: str | None = None,
-    **kwargs,
+    logger: logging.Logger = LOG,
+    **kwargs: Any,
 ) -> subprocess.CompletedProcess:
     compose_options = compose_options or []
-    if compose_remove:
+    if remove:
         compose_options += ["--rm"]
-    return run_compose(
-        "run",
-        args,
-        cfg=cfg,
-        compose_cmd=compose_cmd,
-        compose_options=compose_options,
-        compose_file=compose_file,
-        compose_service=compose_service,
-        **kwargs,
-    )
+    logger.info("Run service '%s' (options=%s)", service, compose_options)
+    result = run_compose("run", service, args, cfg=cfg, compose_options=compose_options, compose_file=compose_file, logger=logger, **kwargs)
+    logger.info("Ran service '%s'.", service)
+    return result
 
 
-def build(
+def build_image(
+    service: str | None = None,
     *,
-    cfg: types.Config = None,
-    compose_cmd: list[str] | None = None,
+    logger: logging.Logger = LOG,
+    **kwargs: Any,
+) -> subprocess.CompletedProcess:
+    logger.info("Build image (service=%s).", service)
+    result = run_compose("build", service=service, logger=logger, **kwargs)
+    logger.info("Built image.")
+    return result
+
+
+def start_service(
+    service: str | None = None,
+    *,
+    detach: bool = False,
     compose_options: list[str] | None = None,
-    compose_file: str | None = None,
-    compose_service: str | None = None,
-    **kwargs,
+    logger: logging.Logger = LOG,
+    **kwargs: Any,
+) -> subprocess.CompletedProcess:
+    if detach:
+        compose_options = (compose_options or []) + ["--detach"]
+
+    logger.info("Starting service '%s' (options=%s).", service, compose_options)
+    result = run_compose("up", service, compose_options=compose_options, logger=logger, **kwargs)
+    logger.info("Started service.")
+    return result
+
+
+def remove_service(
+    service: str | None = None,
+    *,
+    force: bool = False,
+    check: bool = False,
+    volumes: bool = False,
+    logger: logging.Logger = LOG,
+    compose_options: list[str] | None = None,
+    **kwargs: Any,
 ) -> subprocess.CompletedProcess:
     compose_options = compose_options or []
-    return run_compose(
-        "build",
-        cfg=cfg,
-        compose_cmd=compose_cmd,
-        compose_options=compose_options,
-        compose_file=compose_file,
-        compose_service=compose_service,
-        **kwargs,
-    )
-
-
-def _rally_command(
-    command: str,
-    args: list[str] | None = None,
-    *,
-    cfg: types.Config = None,
-    rally_command: list[str] | None = None,
-    rally_options: list[str] | None = None,
-) -> list[str]:
-    cfg = ComposeConfig.from_config(cfg)
-    rally_command = rally_command or cfg.rally_command
-    rally_options = rally_options or []
-    args = args or []
-    return [command] + rally_options + args
-
-
-def build_rally() -> None:
-    build(compose_service="rally")
+    if force:
+        compose_options += ["--force"]
+    if volumes:
+        compose_options += ["--volumes"]
+    logger.info("Removing service '%s' (options=%s)", service, compose_options)
+    result = run_compose("rm", service, compose_options=compose_options, check=check, logger=logger, **kwargs)
+    logger.info("Removed service.")
+    return result
 
 
 def run_rally(
     command: str,
     args: list[str] | None = None,
     *,
-    cfg: types.Config = None,
-    rally_command: list[str] | None = None,
     rally_options: list[str] | None = None,
-    rally_logger: logging.Logger = LOG,
-    **kwargs,
+    logger: logging.Logger = LOG,
+    **kwargs: Any,
 ) -> subprocess.CompletedProcess:
-    cmd = _rally_command(command, args, cfg=cfg, rally_command=rally_command, rally_options=rally_options)
-    rally_logger.info("Running rally command: %s", cmd)
+    rally_options = rally_options or []
+    args = args or []
+    rally_args = [command] + rally_options + args
+    logger.info("Running rally (args=%s).", rally_args)
     try:
-        return run(cmd, **kwargs)
+        return run_service("rally", rally_args, logger=logger, **kwargs)
     except subprocess.CalledProcessError as e:
-        rally_logger.warning(
-            "Rally command %r returned nonzero exit status (%s): %s\nstdout: %s\nstderr: %s\n",
-            cmd,
+        logger.error(
+            "Rally returned nonzero exit status (%s): %s\nstdout: %s\nstderr: %s\n",
             e.returncode,
             e,
             e.stdout.decode("utf-8") if e.stdout else None,
             e.stderr.decode("utf-8") if e.stderr else None,
-            exc_info=rally_logger.isEnabledFor(logging.DEBUG),
+            exc_info=logger.isEnabledFor(logging.DEBUG),
         )
         raise e
+    finally:
+        logger.info("Terminated rally.")
 
 
-def list_tracks(**kwargs) -> list[dict[str, str]]:
-    result = run_rally("list", ["tracks"], stdout=subprocess.PIPE, **kwargs)
-    return [t.strip() for t in result.stdout.decode("utf-8").splitlines() if t.strip()]
+def list_rally_tracks(*, logger: logging.Logger = LOG, **kwargs: Any) -> list[dict[str, str]]:
+    logger.info("Listing rally tracks.")
+    result = run_rally("list", ["tracks"], stdout=subprocess.PIPE, logger=logger, **kwargs)
+    tracks = [t.strip() for t in result.stdout.decode("utf-8").splitlines() if t.strip()]
+    logger.info("Listed %d rally track(s).", len(tracks))
+    return tracks
 
 
-def race(
+def rally_race(
     track_name: str,
     *,
-    rally_options: list[str] | None = None,
     test_mode: bool = False,
     target_hosts: list[str] | None = None,
     pipeline: str | None = "benchmark-only",
-    elasticsearch_version: str | None = None,
-    **kwargs,
+    rally_options: list[str] | None = None,
+    logger: logging.Logger = LOG,
+    **kwargs: Any,
 ) -> None:
     rally_options = rally_options or []
     rally_options += ["--track", track_name]
@@ -260,7 +225,17 @@ def race(
         rally_options += ["--target-hosts", ",".join(target_hosts)]
     if pipeline:
         rally_options += ["--pipeline", pipeline]
-    if elasticsearch_version:
+    logger.info("Running rally race (options = %s).", rally_options)
+    run_rally("race", rally_options=rally_options, logger=logger, **kwargs)
+    logger.info("Terminated rally race.")
+
+
+def start_elasticsearch(
+    service: str, version: str | None = None, detach: bool = True, *, logger: logging.Logger = LOG, **kwargs: Any
+) -> None:
+    if version:
         env = kwargs.setdefault("env", os.environ.copy())
-        env["ELASTICSEARCH_VERSION"] = elasticsearch_version
-    run_rally("race", rally_options=rally_options, **kwargs)
+        env["ELASTICSEARCH_VERSION"] = version
+    logger.info("Starting Elasticsearch (service=%s, version=%s).", service, version)
+    start_service(service, detach=detach, logger=logger, **kwargs)
+    logger.info("Started Elasticsearch server.")

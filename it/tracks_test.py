@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import json
+import dataclasses
 import logging
 import os
 import subprocess
@@ -52,39 +52,50 @@ def compose_config() -> Generator[compose.ComposeConfig]:
 
 @pytest.fixture(scope="module", autouse=True)
 def build_rally(compose_config):
-    compose.build_rally()
+    compose.build_image("rally")
 
 
-@pytest.fixture(scope="module", params=RALLY_TRACKS, ids=lambda param: f"track_{param['name']}")
+@pytest.fixture(scope="function", params=RALLY_TRACKS, ids=lambda param: f"track_{param['name']}")
 def rally_track(request) -> Generator[loader.TrackJson]:
     yield request.param
 
 
-@pytest.fixture(scope="module", params=ES_VERSIONS, ids=lambda param: f"es_version_{param}")
-def elasticsearch_version(request) -> Generator[str]:
-    return request.param
+@dataclasses.dataclass
+class ElasticsearchServer:
+    version: str
 
 
-def test_tracks(compose_config: compose.ComposeConfig, rally_track: loader.TrackJson, elasticsearch_version):
-    LOG.info("Testing elasticsearch version:\n%s", elasticsearch_version)
-    LOG.info("Testing track: %s", json.dumps(rally_track))
+@pytest.fixture(scope="function", params=ES_VERSIONS, ids=lambda param: f"es_version_{param}")
+def elasticsearch(request) -> Generator[ElasticsearchServer]:
+    compose.remove_service("es01", force=True, volumes=True)
+
+    es = ElasticsearchServer(version=request.param)
+    compose.start_elasticsearch("es01", es.version)
+
+    yield es
+
+    compose.remove_service("es01", force=True, volumes=True)
+
+
+def test_tracks(rally_track: loader.TrackJson, elasticsearch: ElasticsearchServer):
+    LOG.info("Testing track name: %s (%s)", rally_track["name"], rally_track["description"])
     LOG.info("Testing timeout: %d seconds", RACE_TIMEOUT_S)
+    LOG.info("Testing with elasticsearch version: %s", elasticsearch.version)
     start_time = time.time()
     try:
-        compose.race(
+        compose.rally_race(
             track_name=rally_track["name"],
             test_mode=True,
             target_hosts=["es01:9200"],
-            elasticsearch_version=elasticsearch_version,
             timeout=RACE_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
-        LOG.warning("Race timeout: no errors until we take it as a success.")
+        LOG.warning("Race timeout: no errors until now and we take it as a success.")
     finally:
         end_time = time.time()
         LOG.info(
-            "Race terminated after %s seconds for track [%s] and elasticsearch version [%s]",
+            "Race terminated after %d seconds for track [%s] and elasticsearch version [%s]",
             end_time - start_time,
             rally_track["name"],
-            elasticsearch_version,
+            elasticsearch.version,
         )
