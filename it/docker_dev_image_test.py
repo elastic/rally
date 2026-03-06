@@ -16,59 +16,42 @@
 # under the License.
 
 import os
+import subprocess
+
+import pytest
 
 import it
 from esrally import version
-from esrally.utils import process
+from esrally.utils import cases
 
 
-def test_docker_geonames():
-    test_command = (
-        "race --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
-    )
-    run_docker_compose_test(test_command)
+@cases.cases(
+    arg_name="command",
+    help="--help",
+    race_geonames=(
+        "race --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only " "--target-hosts=es01:9200"
+    ),
+    list_tracks="list tracks",
+)
+def test_docker_compose(command: str):
+    env = os.environ.copy()
+    env["TEST_COMMAND"] = command
+    env["RALLY_DOCKER_IMAGE"] = "elastic/rally"
+    env["RALLY_VERSION"] = version.__version__
+    env["RALLY_VERSION_TAG"] = version.__version__
 
-
-def test_docker_list_tracks():
-    test_command = "list tracks"
-    run_docker_compose_test(test_command)
-
-
-def test_docker_help():
-    test_command = "--help"
-    run_docker_compose_test(test_command)
-
-
-def test_docker_override_cmd():
-    test_command = (
-        "esrally race --pipeline=benchmark-only --test-mode --track=geonames "
-        "--challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
-    )
-    run_docker_compose_test(test_command)
-
-
-def run_docker_compose_test(test_command):
     try:
-        if run_docker_compose_up(test_command) != 0:
-            raise AssertionError(f"The docker-compose test failed with test command: {test_command}")
+        return subprocess.run(
+            f"docker compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml up --abort-on-container-exit",
+            env=env,
+            capture_output=False,  # We'll define streams manually
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=True,
+            shell=True,
+        )
+    except subprocess.CalledProcessError as err:
+        pytest.fail(f"Docker compose test failed:\n{err.stdout}")
     finally:
-        # Always ensure proper cleanup regardless of results
-        run_docker_compose_down()
-
-
-def run_docker_compose_up(test_command):
-    env_variables = os.environ.copy()
-    env_variables["TEST_COMMAND"] = test_command
-    env_variables["RALLY_DOCKER_IMAGE"] = "elastic/rally"
-    env_variables["RALLY_VERSION"] = version.__version__
-    env_variables["RALLY_VERSION_TAG"] = version.__version__
-
-    return process.run_subprocess_with_logging(
-        f"docker-compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml up --abort-on-container-exit",
-        env=env_variables,
-    )
-
-
-def run_docker_compose_down():
-    if process.run_subprocess_with_logging(f"docker-compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml down -v") != 0:
-        raise AssertionError("Failed to stop running containers from docker-compose-tests.yml")
+        subprocess.run(f"docker compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml down -v", shell=True, check=False)
