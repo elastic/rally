@@ -32,7 +32,7 @@ import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
 
-from esrally import client, config, exceptions, metrics, paths, track
+from esrally import client, config, exceptions, metrics, paths, time, track
 from esrally.metrics import GlobalStatsCalculator
 from esrally.track import Challenge, Operation, Task, Track
 from esrally.utils import cases, opts, pretty
@@ -86,6 +86,10 @@ class MockClientFactory:
 class DummyIndexTemplateProvider:
     def __init__(self, cfg):
         pass
+
+    @property
+    def use_data_streams(self):
+        return True
 
     def metrics_template(self) -> str:
         return json.dumps({"index_patterns": ["rally-metrics-*"], "template": provided_metrics_template()})
@@ -641,7 +645,7 @@ class TestEsMetrics:
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=case.create)
         assert case.want_put_template == self.metrics_store._client.put_template.called
         if case.want_logger_call is not None:
-            assert self.metrics_store.logger.method_calls[-1:] == [case.want_logger_call]
+            assert case.want_logger_call in self.metrics_store.logger.method_calls
 
     def test_put_value_without_meta_info(self):
         throughput = 5000
@@ -663,11 +667,12 @@ class TestEsMetrics:
             "value": throughput,
             "unit": "docs/s",
             "meta": {},
+            "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
@@ -691,11 +696,12 @@ class TestEsMetrics:
             "value": throughput,
             "unit": "docs/s",
             "meta": {},
+            "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_put_value_with_meta_info(self):
         throughput = 5000
@@ -733,11 +739,12 @@ class TestEsMetrics:
                 "os_name": "Darwin",
                 "os_version": "15.4.0",
             },
+            "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_put_doc_no_meta_data(self):
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
@@ -764,11 +771,12 @@ class TestEsMetrics:
             "total": 1234567,
             "per-shard": [17, 18, 1289, 273, 222],
             "unit": "byte",
+            "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_put_doc_with_metadata(self):
         # add a user-defined tag
@@ -818,11 +826,12 @@ class TestEsMetrics:
                 "os_version": "15.4.0",
                 "node_type": "hot",
             },
+            "_op_type": "create",
         }
         self.metrics_store.close()
-        self.es_mock.exists.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
+        self.es_mock.exists.assert_not_called()
+        self.es_mock.create_index.assert_not_called()
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_get_one(self):
         duration = StaticClock.NOW * 1000
@@ -857,7 +866,7 @@ class TestEsMetrics:
             "service_time", task="task1", mapper=lambda doc: doc["relative-time"], sort_key="relative-time", sort_reverse=True
         )
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_duration == duration
 
@@ -886,7 +895,7 @@ class TestEsMetrics:
             "latency", task="task2", mapper=lambda doc: doc["value"], sort_key="value", sort_reverse=False
         )
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_duration == duration
 
@@ -931,7 +940,7 @@ class TestEsMetrics:
 
         actual_throughput = self.metrics_store.get_one("indexing_throughput")
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_throughput == throughput
 
@@ -969,7 +978,7 @@ class TestEsMetrics:
 
         actual_index_size = self.metrics_store.get_one("final_index_size_bytes", node_name="rally-node-3")
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_index_size == index_size
 
@@ -1015,7 +1024,7 @@ class TestEsMetrics:
 
         actual_mean_throughput = self.metrics_store.get_mean("indexing_throughput", operation_type="bulk")
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_mean_throughput == mean_throughput
 
@@ -1060,7 +1069,7 @@ class TestEsMetrics:
 
         actual_median_throughput = self.metrics_store.get_median("indexing_throughput", operation_type="bulk")
 
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_median_throughput == median_throughput
 
@@ -1205,7 +1214,7 @@ class TestEsMetrics:
         }
 
         actual_error_rate = self.metrics_store.get_error_rate("scroll_query")
-        self.es_mock.search.assert_called_with(index="rally-metrics-2016-01", body=expected_query)
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
         return actual_error_rate
 
 
@@ -1328,6 +1337,7 @@ class TestEsRaceStore:
             "environment": "unittest",
             "race-id": self.RACE_ID,
             "race-timestamp": "20160131T000000Z",
+            "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
             "pipeline": "from-sources",
             "user-tags": {"os": "Linux"},
             "track": "unittest",
@@ -1359,7 +1369,12 @@ class TestEsRaceStore:
                 ],
             },
         }
-        self.es_mock.index.assert_called_with(index="rally-races-2016-01", id=self.RACE_ID, item=expected_doc)
+        self.es_mock.index.assert_called_with(
+            index=metrics.EsRaceStore.DATA_STREAM_VERSIONED,
+            id=self.RACE_ID,
+            item=expected_doc,
+            use_data_streams=True,
+        )
 
     @mock.patch("esrally.utils.console.println")
     def test_delete_race(self, console):
@@ -1534,6 +1549,7 @@ class TestEsResultsStore:
 
         expected_docs = [
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": "123abc",
                 "environment": "unittest",
@@ -1556,8 +1572,10 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
+                "_op_type": "create",
             },
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": "123abc",
                 "environment": "unittest",
@@ -1588,8 +1606,10 @@ class TestEsResultsStore:
                     "saturation": "70% saturated",
                     "op-type": "bulk",
                 },
+                "_op_type": "create",
             },
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": "123abc",
                 "environment": "unittest",
@@ -1612,9 +1632,10 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
+                "_op_type": "create",
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", items=expected_docs)
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsResultsStore.DATA_STREAM_VERSIONED, items=expected_docs)
 
     def test_store_results_with_missing_version(self):
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
@@ -1674,6 +1695,7 @@ class TestEsResultsStore:
 
         expected_docs = [
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": None,
                 "environment": "unittest",
@@ -1694,8 +1716,10 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
+                "_op_type": "create",
             },
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": None,
                 "environment": "unittest",
@@ -1724,8 +1748,10 @@ class TestEsResultsStore:
                     "saturation": "70% saturated",
                     "op-type": "bulk",
                 },
+                "_op_type": "create",
             },
             {
+                "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
                 "rally-version": "0.4.4",
                 "rally-revision": None,
                 "environment": "unittest",
@@ -1746,9 +1772,10 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
+                "_op_type": "create",
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(index="rally-results-2016-01", items=expected_docs)
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsResultsStore.DATA_STREAM_VERSIONED, items=expected_docs)
 
 
 class TestInMemoryMetricsStore:
@@ -2931,3 +2958,198 @@ class TestIndexTemplateProvider:
             t = json.loads(template)
             assert t["template"]["settings"]["index"]["number_of_shards"] == 200
             assert t["template"]["settings"]["index"]["number_of_replicas"] == 1
+
+    def test_use_data_streams_enabled_by_default(self):
+        _datastore_type = "elasticsearch"
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        # annotations template should NOT have data_stream (remains a normal index)
+        annotations_template = json.loads(_index_template_provider.annotations_template())
+        assert "data_stream" not in annotations_template
+
+        data_stream_templates = [
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
+
+        for template in data_stream_templates:
+            t = json.loads(template)
+            assert "data_stream" in t
+            assert t["data_stream"] == {}
+
+    def test_use_data_streams_disabled(self):
+        _datastore_type = "elasticsearch"
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.use_data_streams", False)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        # other templates should have data_stream enabled
+        all_templates = [
+            _index_template_provider.annotations_template(),
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
+
+        for template in all_templates:
+            t = json.loads(template)
+            assert "data_stream" not in t
+
+    def test_use_data_streams_with_shard_settings(self):
+        _datastore_type = "elasticsearch"
+        _datastore_number_of_shards = random.randint(1, 100)
+        _datastore_number_of_replicas = random.randint(0, 100)
+
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", _datastore_type)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.use_data_streams", True)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", _datastore_number_of_shards)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_replicas", _datastore_number_of_replicas)
+
+        _index_template_provider = metrics.IndexTemplateProvider(self.cfg)
+
+        # annotations template should have shard settings but NOT data_stream
+        annotations_template = json.loads(_index_template_provider.annotations_template())
+        assert "data_stream" not in annotations_template
+        assert annotations_template["template"]["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+        assert annotations_template["template"]["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+
+        # other templates should have both data_stream and shard settings
+        data_stream_templates = [
+            _index_template_provider.metrics_template(),
+            _index_template_provider.races_template(),
+            _index_template_provider.results_template(),
+        ]
+
+        for template in data_stream_templates:
+            t = json.loads(template)
+            assert "data_stream" in t
+            assert t["data_stream"] == {}
+            assert t["template"]["settings"]["index"]["number_of_shards"] == _datastore_number_of_shards
+            assert t["template"]["settings"]["index"]["number_of_replicas"] == _datastore_number_of_replicas
+
+
+class TestDataStreamsIndexNaming:
+    """Tests for index naming when data streams are enabled vs disabled."""
+
+    RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
+
+    class DataStreamsEnabledTemplateProvider:
+        def __init__(self, cfg):
+            pass
+
+        @property
+        def use_data_streams(self):
+            return True
+
+        def metrics_template(self) -> str:
+            return json.dumps({"index_patterns": ["rally-metrics-*"], "template": {}})
+
+        def races_template(self):
+            return json.dumps({"index_patterns": ["rally-races-*"], "template": {}})
+
+        def results_template(self):
+            return json.dumps({"index_patterns": ["rally-results-*"], "template": {}})
+
+    class DataStreamsDisabledTemplateProvider:
+        def __init__(self, cfg):
+            pass
+
+        @property
+        def use_data_streams(self):
+            return False
+
+        def metrics_template(self) -> str:
+            return json.dumps({"index_patterns": ["rally-metrics-*"], "template": {}})
+
+        def races_template(self):
+            return json.dumps({"index_patterns": ["rally-races-*"], "template": {}})
+
+        def results_template(self):
+            return json.dumps({"index_patterns": ["rally-results-*"], "template": {}})
+
+    def setup_method(self, method):
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.cfg.add(config.Scope.application, "system", "time.start", self.RACE_TIMESTAMP)
+        self.cfg.add(config.Scope.application, "system", "race.id", self.RACE_ID)
+        self.cfg.add(config.Scope.application, "system", "list.max_results", 100)
+        self.cfg.add(config.Scope.application, "track", "params", {})
+
+    def test_es_metrics_store_index_name_with_data_streams_enabled(self):
+        metrics_store = metrics.EsMetricsStore(
+            self.cfg,
+            client_factory_class=MockClientFactory,
+            index_template_provider_class=self.DataStreamsEnabledTemplateProvider,
+            clock=StaticClock,
+        )
+        es_mock = metrics_store._client
+        es_mock.exists.return_value = False
+        es_mock.template_exists.return_value = False
+        es_mock.get_template.return_value = mock.create_autospec(elastic_transport.ObjectApiResponse, body={"index_templates": []})
+
+        metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        assert metrics_store.index_name() == metrics.EsMetricsStore.DATA_STREAM_VERSIONED
+        metrics_store.close()
+
+    def test_es_metrics_store_index_name_with_data_streams_disabled(self):
+        metrics_store = metrics.EsMetricsStore(
+            self.cfg,
+            client_factory_class=MockClientFactory,
+            index_template_provider_class=self.DataStreamsDisabledTemplateProvider,
+            clock=StaticClock,
+        )
+        es_mock = metrics_store._client
+        es_mock.exists.return_value = False
+        es_mock.template_exists.return_value = False
+        es_mock.get_template.return_value = mock.create_autospec(elastic_transport.ObjectApiResponse, body={"index_templates": []})
+
+        metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        assert metrics_store.index_name() == f"{metrics.EsMetricsStore.INDEX_PREFIX}2016-01"
+        metrics_store.close()
+
+    def test_es_race_store_index_name_with_data_streams_enabled(self):
+        race_store = metrics.EsRaceStore(
+            self.cfg,
+            client_factory_class=MockClientFactory,
+            index_template_provider_class=self.DataStreamsEnabledTemplateProvider,
+        )
+        race = mock.MagicMock()
+        race.race_timestamp = self.RACE_TIMESTAMP
+        assert race_store.index_name(race) == metrics.EsRaceStore.DATA_STREAM_VERSIONED
+
+    def test_es_race_store_index_name_with_data_streams_disabled(self):
+        race_store = metrics.EsRaceStore(
+            self.cfg,
+            client_factory_class=MockClientFactory,
+            index_template_provider_class=self.DataStreamsDisabledTemplateProvider,
+        )
+        race = mock.MagicMock()
+        race.race_timestamp = self.RACE_TIMESTAMP
+        assert race_store.index_name(race) == f"{metrics.EsRaceStore.INDEX_PREFIX}2016-01"
+
+    def test_es_results_store_index_name_with_data_streams_enabled(self):
+        results_store = metrics.EsResultsStore(
+            self.cfg,
+            client_factory_class=MockClientFactory,
+            index_template_provider_class=self.DataStreamsEnabledTemplateProvider,
+        )
+        race = mock.MagicMock()
+        race.race_timestamp = self.RACE_TIMESTAMP
+        assert results_store.index_name(race) == metrics.EsResultsStore.DATA_STREAM_VERSIONED
+
+    def test_es_results_store_index_name_with_data_streams_disabled(self):
+        results_store = metrics.EsResultsStore(
+            self.cfg,
+            client_factory_class=MockClientFactory,
+            index_template_provider_class=self.DataStreamsDisabledTemplateProvider,
+        )
+        race = mock.MagicMock()
+        race.race_timestamp = self.RACE_TIMESTAMP
+        assert results_store.index_name(race) == f"{metrics.EsResultsStore.INDEX_PREFIX}2016-01"

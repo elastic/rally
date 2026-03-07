@@ -78,6 +78,7 @@ Key = Literal[
     "datastore.ssl.certificate_authorities",
     "datastore.ssl.verification_mode",
     "datastore.type",
+    "datastore.use_data_streams",
     "datastore.user",
     "delete.config.option",
     "delete.id",
