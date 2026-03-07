@@ -1847,7 +1847,10 @@ class EsRaceStore(RaceStore):
     def store_race(self, race):
         doc = race.as_dict()
         # always update the mapping to the latest version
-        self.client.put_template("rally-races", self.index_template_provider.races_template())
+        self.client.put_template(
+            "rally-races-ds" if self.index_template_provider.use_data_streams else "rally-races",
+            self.index_template_provider.races_template(),
+        )
         self.client.index(
             index=self.index_name(race),
             item=doc,
@@ -2088,7 +2091,10 @@ class EsResultsStore:
 
     def store_results(self, race):
         # always update the mapping to the latest version
-        self.client.put_template("rally-results", self.index_template_provider.results_template())
+        self.client.put_template(
+            "rally-results-ds" if self.index_template_provider.use_data_streams else "rally-results",
+            self.index_template_provider.results_template(),
+        )
         items = race.to_result_dicts()
         if self.index_template_provider.use_data_streams:
             for item in items:
