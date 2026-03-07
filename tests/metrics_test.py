@@ -672,9 +672,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_not_called()
         self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc]
-        )
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_put_value_with_explicit_timestamps(self):
         throughput = 5000
@@ -703,9 +701,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_not_called()
         self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc]
-        )
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_put_value_with_meta_info(self):
         throughput = 5000
@@ -748,9 +744,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_not_called()
         self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc]
-        )
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_put_doc_no_meta_data(self):
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
@@ -782,9 +776,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_not_called()
         self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc]
-        )
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_put_doc_with_metadata(self):
         # add a user-defined tag
@@ -839,9 +831,7 @@ class TestEsMetrics:
         self.metrics_store.close()
         self.es_mock.exists.assert_not_called()
         self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc]
-        )
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, items=[expected_doc])
 
     def test_get_one(self):
         duration = StaticClock.NOW * 1000
@@ -876,9 +866,7 @@ class TestEsMetrics:
             "service_time", task="task1", mapper=lambda doc: doc["relative-time"], sort_key="relative-time", sort_reverse=True
         )
 
-        self.es_mock.search.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query
-        )
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_duration == duration
 
@@ -907,9 +895,7 @@ class TestEsMetrics:
             "latency", task="task2", mapper=lambda doc: doc["value"], sort_key="value", sort_reverse=False
         )
 
-        self.es_mock.search.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query
-        )
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_duration == duration
 
@@ -954,9 +940,7 @@ class TestEsMetrics:
 
         actual_throughput = self.metrics_store.get_one("indexing_throughput")
 
-        self.es_mock.search.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query
-        )
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_throughput == throughput
 
@@ -994,9 +978,7 @@ class TestEsMetrics:
 
         actual_index_size = self.metrics_store.get_one("final_index_size_bytes", node_name="rally-node-3")
 
-        self.es_mock.search.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query
-        )
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_index_size == index_size
 
@@ -1042,9 +1024,7 @@ class TestEsMetrics:
 
         actual_mean_throughput = self.metrics_store.get_mean("indexing_throughput", operation_type="bulk")
 
-        self.es_mock.search.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query
-        )
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_mean_throughput == mean_throughput
 
@@ -1089,9 +1069,7 @@ class TestEsMetrics:
 
         actual_median_throughput = self.metrics_store.get_median("indexing_throughput", operation_type="bulk")
 
-        self.es_mock.search.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query
-        )
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
 
         assert actual_median_throughput == median_throughput
 
@@ -1236,9 +1214,7 @@ class TestEsMetrics:
         }
 
         actual_error_rate = self.metrics_store.get_error_rate("scroll_query")
-        self.es_mock.search.assert_called_with(
-            index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query
-        )
+        self.es_mock.search.assert_called_with(index=metrics.EsMetricsStore.DATA_STREAM_VERSIONED, body=expected_query)
         return actual_error_rate
 
 
@@ -1659,9 +1635,7 @@ class TestEsResultsStore:
                 "_op_type": "create",
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(
-            index=metrics.EsResultsStore.DATA_STREAM_VERSIONED, items=expected_docs
-        )
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsResultsStore.DATA_STREAM_VERSIONED, items=expected_docs)
 
     def test_store_results_with_missing_version(self):
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
@@ -1801,9 +1775,7 @@ class TestEsResultsStore:
                 "_op_type": "create",
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(
-            index=metrics.EsResultsStore.DATA_STREAM_VERSIONED, items=expected_docs
-        )
+        self.es_mock.bulk_index.assert_called_with(index=metrics.EsResultsStore.DATA_STREAM_VERSIONED, items=expected_docs)
 
 
 class TestInMemoryMetricsStore:
