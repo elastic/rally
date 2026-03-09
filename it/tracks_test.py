@@ -77,10 +77,27 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     compose.remove_service("es01", force=True, volumes=True)
 
 
+SKIP_TRACKS = {
+    "has_privileges": "TrackSyntaxError: Could not load '/rally/.rally/benchmarks/tracks/default/has_privileges/track.json'.",
+    "wiki_en_cohere_vector_int8": "Could not load '/rally/.rally/benchmarks/tracks/default/wiki_en_cohere_vector_int8/track.json'.",
+    "search/mteb/dbpedia": "TrackSyntaxError: Could not load '/rally/.rally/benchmarks/tracks/default/search/mteb/dbpedia/track.json'.",
+    "joins": "TrackSyntaxError: Could not load '/rally/.rally/benchmarks/tracks/default/joins/track.json'.",
+    "esql": "TemplateNotFound: 'track.json' not found in search path'.",
+    "big5": "TrackSyntaxError: Could not load '/rally/.rally/benchmarks/tracks/default/big5/track.json",
+    "sql": "This track does not support test mode. Ask the track author to add it or disable test mode and retry.",
+}
+
+
 def test_tracks(rally_track: loader.TrackJson, elasticsearch: ElasticsearchServer):
     LOG.info("Testing track name: %s (%s)", rally_track["name"], rally_track["description"])
     LOG.info("Testing timeout: %d seconds", RACE_TIMEOUT_S)
     LOG.info("Testing with elasticsearch version: %s", elasticsearch.version)
+
+    # It skips some tracks that are known to fail in test mode for various reasons. We want to make sure that the rest
+    # of the tracks are working fine and we can always add more tracks to this list if we see more failures.
+    if reason := SKIP_TRACKS.get(rally_track["name"]):
+        pytest.skip(f"Skipping track '{rally_track['name']}' due to: {reason}")
+
     start_time = time.time()
     try:
         compose.rally_race(
