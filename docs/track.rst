@@ -3171,6 +3171,50 @@ Meta-data
 * ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
 * ``success``: A boolean indicating whether the query has succeeded.
 
+esql-profile
+~~~~~~~~~~~~~
+
+With the operation type ``esql-profile`` you can execute an `ES|QL query <https://www.elastic.co/guide/en/elasticsearch/reference/current/esql.html>`_ with profiling enabled (``profile: true``). This captures detailed timing information across all phases of query execution.
+
+Properties
+""""""""""
+
+* ``query`` (mandatory): An ES|QL query which starts with a source command followed by processing commands.
+* ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
+* ``body`` (optional): The query body.
+
+Example::
+
+    {
+      "name": "profile-query",
+      "operation-type": "esql-profile",
+      "query": "FROM logs-* | STATS count=count(*) BY agent.hostname | SORT count DESC | LIMIT 20"
+    }
+
+Meta-data
+"""""""""
+
+* ``weight``: Number of operations, always ``1``.
+* ``unit``: Always ``ops``.
+* ``success``: A boolean indicating whether the query has succeeded.
+
+The following metrics are included when profile data is present:
+
+* ``query.took_ms``: Total query execution time in milliseconds.
+* ``planning.took_ms``: Total planning time (includes parsing, preanalysis, and analysis).
+* ``parsing.took_ms``: Time to parse the ES|QL query.
+* ``preanalysis.took_ms``: Preanalysis time (field_caps, enrich policies, lookup indices).
+* ``dependency_resolution.took_ms``: Dependency resolution time.
+* ``analysis.took_ms``: Analysis time before optimizations.
+* ``<driver>.number``: Count of driver instances for the given driver.
+* ``<driver>.took_ms``: Maximum took time across all driver instances (milliseconds).
+* ``<driver>.cpu_ms``: Maximum CPU time across all driver instances (milliseconds).
+* ``<driver>.took_total_ms``: Sum of took times across all driver instances (milliseconds).
+* ``<driver>.cpu_total_ms``: Sum of CPU times across all driver instances (milliseconds).
+* ``<driver>.<operator>.process_ms``: Cumulative processing time for an operator across all driver instances (milliseconds).
+* ``<driver>.<operator>.processed_slices``: Cumulative processed slices for an operator across all driver instances.
+* ``<plan>.<optimization>.took_ms``: Time spent on a plan optimization step (``logical_optimization``, ``physical_optimization``, or ``reduction``), in milliseconds.
+
 .. _track_dependencies:
 
 dependencies
