@@ -163,6 +163,56 @@ class TestGitRepository:
         assert repo.track_file("unittest") == "/tmp/tracks/default/unittest/track.json"
 
 
+class TestRenderTrack:
+    @mock.patch("esrally.track.loader.track_repo")
+    @mock.patch("esrally.track.loader.render_template_from_file")
+    def test_render_track_to_stdout(self, mock_render, mock_repo, capsys):
+        mock_repo.return_value.track_name = "unittest"
+        mock_repo.return_value.track_file.return_value = "/path/to/track/unittest/track.json"
+        mock_render.return_value = '{"short-description": "test", "indices": [{"name": "test"}]}'
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        loader.render_track(cfg)
+
+        mock_render.assert_called_once_with("/path/to/track/unittest/track.json", {})
+        captured = capsys.readouterr()
+        assert '"short-description": "test"' in captured.out
+        assert '"indices"' in captured.out
+
+    @mock.patch("esrally.track.loader.track_repo")
+    @mock.patch("esrally.track.loader.render_template_from_file")
+    def test_render_track_to_file(self, mock_render, mock_repo, tmp_path):
+        mock_repo.return_value.track_name = "unittest"
+        mock_repo.return_value.track_file.return_value = "/path/to/track/unittest/track.json"
+        mock_render.return_value = '{"short-description": "test"}'
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        output_file = tmp_path / "rendered.json"
+        loader.render_track(cfg, output_path=str(output_file))
+
+        assert output_file.exists()
+        contents = output_file.read_text()
+        assert '"short-description": "test"' in contents
+        assert contents.endswith("\n")
+
+    @mock.patch("esrally.track.loader.track_repo")
+    @mock.patch("esrally.track.loader.render_template_from_file")
+    def test_render_track_invalid_json_raises(self, mock_render, mock_repo):
+        mock_repo.return_value.track_name = "unittest"
+        mock_repo.return_value.track_file.return_value = "/path/to/track/unittest/track.json"
+        mock_render.return_value = "not valid json {{"
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        with pytest.raises(Exception):
+            loader.render_track(cfg)
+
+
 class TestTrackPreparation:
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")
