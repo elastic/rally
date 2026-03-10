@@ -153,10 +153,12 @@ class EsClientFactory:
             console.warn("You set the deprecated client option 'compressed‘. Please use 'http_compress' instead.", logger=self.logger)
             self.client_options["http_compress"] = self.client_options.pop("compressed")
 
-        if self._is_set(self.client_options, "http_compress"):
-            self.logger.debug("HTTP compression: on")
+        if "http_compress" in self.client_options:
+            http_compress = convert.to_bool(self.client_options.get("http_compress"))
+            self.logger.debug("HTTP compression: Explicetly set to %s", http_compress)
         else:
-            self.logger.debug("HTTP compression: off")
+            self.client_options["http_compress"] = True
+            self.logger.debug("HTTP compression: on (default)")
 
         self.enable_cleanup_closed = convert.to_bool(self.client_options.pop("enable_cleanup_closed", True))
         self.max_connections = max(256, self.client_options.pop("max_connections", 0))

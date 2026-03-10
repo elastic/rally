@@ -741,7 +741,8 @@ You can choose between two authentication modes:
 
 **HTTP compression**
 
-Enable HTTP compression using ``--client-options="http_compress:true"``.
+Since Rally 2.13.0, HTTP compression is enabled.
+Disable HTTP compression using ``--client-options="http_compress:false"``.
 
 **TLS/SSL**
 
