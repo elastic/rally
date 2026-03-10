@@ -3147,6 +3147,7 @@ Properties
 * ``query`` (mandatory): An ES|QL query which starts with a source command followed by processing commands.
 * ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
 * ``body`` (optional): The query body.
+* ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results.
 
 Example::
 
@@ -3167,9 +3168,21 @@ Example::
 Meta-data
 """""""""
 
-* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
-* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
-* ``success``: A boolean indicating whether the query has succeeded.
+The following meta-data are always returned:
+
+* ``weight``: The "weight" of an operation, always ``1`` for ES|QL queries.
+* ``unit``: The unit in which to interpret ``weight``, always ``ops``.
+* ``success``: A boolean indicating whether the query has succeeded. This will be ``false`` if the response contains ``is_partial: true``.
+* ``is_partial``: Whether the query returned partial results. If ``true``, the operation is marked as failed and will cause the benchmark to abort if ``--on-error=abort`` is specified.
+
+If ``detailed-results`` is ``true`` the following meta-data are returned in addition:
+
+* ``took``: Value of the ``took`` property in the query response (in milliseconds).
+* ``documents_found``: Number of documents found by the query.
+* ``values_loaded``: Number of values loaded by the query.
+* ``completion_time_in_millis``: Timestamp when the query completed.
+* ``start_time_in_millis``: Timestamp when the query started.
+* ``expiration_time_in_millis``: Timestamp when the query results expire.
 
 esql-profile
 ~~~~~~~~~~~~~
