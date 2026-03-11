@@ -901,7 +901,7 @@ def create_arg_parser():
         p.add_argument(
             "--quiet",
             help="Suppress as much as output as possible (default: false).",
-            default=False,
+            default=p is not render_track_parser,
             action="store_true",
         )
         p.add_argument(
