@@ -3156,7 +3156,7 @@ class EsqlProfile(Runner):
                     operator_name = operator.get("operator", f"operator_{idx}")
                     safe_operator_name = operator_name.split("[")[0] if "[" in operator_name else operator_name
                     status = operator.get("status", {})
-                    process_nanos = status.get("process_nanos", 0)
+                    process_nanos = status.get("process_nanos", 0) + status.get("receive_nanos", 0) + status.get("emit_nanos", 0)
                     if process_nanos > 0:
                         key = f"{driver_name}.{safe_operator_name}.process_ms"
                         result[key] = result.get(key, 0) + process_nanos / 1_000_000
