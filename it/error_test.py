@@ -19,7 +19,7 @@ from esrally.utils import process
 
 
 @it.rally_in_mem
-def test_error_prints_when_quiet(cfg):
+def test_error_prints_when_quiet(shared_setup, cfg):
     cmd = it.esrally_command_line_for(cfg, "build --revision=nonsense --quiet")
     output = process.run_subprocess_with_output(cmd)
     expected = "[ERROR] Cannot build."

@@ -69,7 +69,9 @@ def build_docker_image():
 
 def remove_integration_test_config():
     for config_name in CONFIG_NAMES:
-        os.remove(config.ConfigFile(config_name).location)
+        path = config.ConfigFile(config_name).location
+        if os.path.isfile(path):
+            os.remove(path)
 
 
 class EsMetricsStore:
@@ -97,16 +99,41 @@ ES_METRICS_STORE = EsMetricsStore()
 
 
 @pytest.fixture(scope="session", autouse=False)
-def shared_setup():
-    print("\nStarting shared setup...")
+def integration_test_prerequisites():
+    """Verify Docker and docker-compose are available. No teardown."""
     check_prerequisites()
+    yield
+
+
+@pytest.fixture(scope="session", autouse=False)
+def integration_test_config():
+    """Install rally-in-memory-it.ini and rally-es-it.ini; remove on teardown."""
     install_integration_test_config()
+    yield
+    remove_integration_test_config()
+
+
+@pytest.fixture(scope="session", autouse=False)
+def es_metrics_store(integration_test_prerequisites, integration_test_config):
+    """Start the in-memory Elasticsearch metrics store; stop on teardown."""
     ES_METRICS_STORE.start()
+    yield
+    ES_METRICS_STORE.stop()
+
+
+@pytest.fixture(scope="session", autouse=False)
+def rally_docker_image(integration_test_prerequisites):
+    """Build the elastic/rally Docker image. No teardown."""
     build_docker_image()
     yield
+
+
+@pytest.fixture(scope="session", autouse=False)
+def shared_setup(integration_test_config, es_metrics_store, rally_docker_image):
+    """Full integration test environment. Composes config, metrics store, and Docker image."""
+    print("\nStarting shared setup...")
+    yield
     print("\nStopping shared setup...")
-    ES_METRICS_STORE.stop()
-    remove_integration_test_config()
 
 
 class ConfigFile:
