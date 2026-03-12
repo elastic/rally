@@ -78,7 +78,7 @@ It is also possible to use task filters (e.g. ``--include-tasks``) or to refer t
 
 The ``render-track`` subcommand renders a track's Jinja2 templates and outputs the resulting JSON. This is useful for debugging track templates or inspecting the final track definition after template variables have been substituted. Example::
 
-    esrally render-track --track=geonames --quiet
+    esrally render-track --track=geonames
 
 This will print the fully rendered track JSON to stdout. To write the output to a file instead::
 
@@ -86,7 +86,7 @@ This will print the fully rendered track JSON to stdout. To write the output to 
 
 You can also pass track parameters to see how they affect the rendered output::
 
-    esrally render-track --track=geonames --quiet --track-params='bulk_indexing_clients:100'
+    esrally render-track --track=geonames --track-params='bulk_indexing_clients:100'
 
 It is also possible to refer to a track via its path (``--track-path``) or use a different track repository (``--track-repository``).
 
