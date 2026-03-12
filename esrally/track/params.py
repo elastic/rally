@@ -830,13 +830,16 @@ class PartitionBulkIndexParamSource:
         all_bulks = number_of_bulks(self.corpora, start_index, end_index, self.total_partitions, self.bulk_size)
         if self.ingest_doc_count is not None:
             # ingest_doc_count is the total across all partitions, so divide by partition count
-            docs_for_this_partition = self.ingest_doc_count // self.total_partitions
-            if docs_for_this_partition % self.bulk_size != 0:
+            # and multiply by the number of partitions this instance serves (a single worker may
+            # serve multiple partitions/clients)
+            num_partitions_served = end_index - start_index + 1
+            docs_for_these_partitions = (self.ingest_doc_count // self.total_partitions) * num_partitions_served
+            if docs_for_these_partitions % self.bulk_size != 0:
                 raise exceptions.InvalidSyntax(
                     f"'ingest-doc-count' divided by the number of partitions ({self.total_partitions})"
-                    f" must be a multiple of 'bulk-size' ({self.bulk_size}) but was {docs_for_this_partition}"
+                    f" must be a multiple of 'bulk-size' ({self.bulk_size}) but was {docs_for_these_partitions // num_partitions_served}"
                 )
-            self.total_bulks = docs_for_this_partition // self.bulk_size
+            self.total_bulks = docs_for_these_partitions // self.bulk_size
         else:
             self.total_bulks = math.ceil((all_bulks * self.ingest_percentage) / 100)
 
