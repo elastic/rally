@@ -82,9 +82,12 @@ class EsClient:
 
         self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
 
-    def index(self, index, item, id=None):
+    def index(self, index, item, id=None, use_data_streams=True):
         doc = {"_source": item}
-        if id:
+        if use_data_streams:
+            # Data streams only support op_type=create
+            doc["_op_type"] = "create"
+        elif id:
             doc["_id"] = id
         self.bulk_index(index, [doc])
 
@@ -302,16 +305,23 @@ class IndexTemplateProvider:
         self._config = cfg
         self._number_of_shards = self._config.opts("reporting", "datastore.number_of_shards", default_value=None, mandatory=False)
         self._number_of_replicas = self._config.opts("reporting", "datastore.number_of_replicas", default_value=None, mandatory=False)
+        self._use_data_streams = convert.to_bool(
+            self._config.opts("reporting", "datastore.use_data_streams", default_value=True, mandatory=False)
+        )
         self.script_dir = self._config.opts("node", "rally.root")
 
+    @property
+    def use_data_streams(self):
+        return self._use_data_streams
+
     def metrics_template(self):
-        return self._read("metrics-template")
+        return self._read("metrics-ds-template") if self.use_data_streams else self._read("metrics-template")
 
     def races_template(self):
-        return self._read("races-template")
+        return self._read("races-ds-template") if self.use_data_streams else self._read("races-template")
 
     def results_template(self):
-        return self._read("results-template")
+        return self._read("results-ds-template") if self.use_data_streams else self._read("results-template")
 
     def annotations_template(self):
         return self._read("annotation-template")
@@ -881,8 +891,11 @@ class MetricsStore:
 
 class EsMetricsStore(MetricsStore):
     """
-    A metrics store backed by Elasticsearch.
+    A metrics store for telemetry backed by Elasticsearch.
     """
+
+    INDEX_PREFIX = "rally-metrics-"
+    DATA_STREAM_VERSIONED = "rally-metrics-v1"
 
     def __init__(
         self,
@@ -914,25 +927,31 @@ class EsMetricsStore(MetricsStore):
         # reduce a bit of noise in the metrics cluster log
         if create:
             self._ensure_index_template()
-            if not self._client.exists(index=self._index):
-                self._client.create_index(index=self._index)
-            else:
-                self.logger.info("[%s] already exists.", self._index)
+            # Data streams are created implicitly on first write
+            if not self._index_template_provider.use_data_streams:
+                # We want to create the index if it does not exist.
+                if not self._client.exists(index=self._index):
+                    self._client.create_index(index=self._index)
+                else:
+                    self.logger.info("[%s] already exists.", self._index)
         else:
             # we still need to check for the correct index name - prefer the one with the suffix
             new_name = self._migrated_index_name(self._index)
             if self._client.exists(index=new_name):
                 self._index = new_name
 
-        # ensure we can search immediately after opening
-        self._client.refresh(index=self._index)
+        # Skip refresh when creating with data streams - the data stream won't exist until first write
+        if not self._index_template_provider.use_data_streams:
+            # ensure we can search immediately after opening
+            self._client.refresh(index=self._index)
 
     def _ensure_index_template(self):
         new_template: str = self._get_template()
-
         old_template: dict | None = None
-        if self._client.template_exists("rally-metrics"):
-            for t in self._client.get_template("rally-metrics").body.get("index_templates", []):
+        # We are adding -ds suffix to ensure backwards compatibility with existing index templates
+        target_index_template_name = "rally-metrics-ds" if self._index_template_provider.use_data_streams else "rally-metrics"
+        if self._client.template_exists(target_index_template_name):
+            for t in self._client.get_template(target_index_template_name).body.get("index_templates", []):
                 old_template = t.get("index_template", {}).get("template", {})
                 break
 
@@ -953,11 +972,13 @@ class EsMetricsStore(MetricsStore):
                 return
             self.logger.warning("Overwrite existing index template (datastore.overwrite_existing_templates = true):\n%s", diff)
 
-        self._client.put_template("rally-metrics", new_template)
+        self._client.put_template(target_index_template_name, new_template)
 
     def index_name(self):
+        if self._index_template_provider.use_data_streams:
+            return f"{EsMetricsStore.DATA_STREAM_VERSIONED}"
         ts = time.from_iso8601(self._race_timestamp)
-        return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
+        return f"{EsMetricsStore.INDEX_PREFIX}{ts.year:04d}-{ts.month:02d}"
 
     def _migrated_index_name(self, original_name):
         return f"{original_name}.new"
@@ -969,7 +990,13 @@ class EsMetricsStore(MetricsStore):
         if self._docs:
             sw = time.StopWatch()
             sw.start()
-            self._client.bulk_index(index=self._index, items=self._docs)
+            if self._index_template_provider.use_data_streams:
+                for doc in self._docs:
+                    doc["_op_type"] = "create"
+            self._client.bulk_index(
+                index=self._index,
+                items=self._docs,
+            )
             sw.stop()
             self.logger.info(
                 "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
@@ -986,6 +1013,9 @@ class EsMetricsStore(MetricsStore):
             self._client.refresh(index=self._index)
 
     def _add(self, doc):
+        if self._index_template_provider.use_data_streams:
+            # Data streams only support op_type=create
+            doc["_op_type"] = "create"
         self._docs.append(doc)
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
@@ -1513,6 +1543,7 @@ class Race:
         :return: A dict representation suitable for persisting this race instance as JSON.
         """
         d = {
+            "@timestamp": time.to_epoch_millis(self.race_timestamp.timestamp()),
             "rally-version": self.rally_version,
             "rally-revision": self.rally_revision,
             "environment": self.environment_name,
@@ -1552,6 +1583,7 @@ class Race:
         :return: a list of dicts, suitable for persisting the results of this race in a format that is Kibana-friendly.
         """
         result_template = {
+            "@timestamp": time.to_epoch_millis(self.race_timestamp.timestamp()),
             "rally-version": self.rally_version,
             "rally-revision": self.rally_revision,
             "environment": self.environment_name,
@@ -1793,7 +1825,12 @@ class FileRaceStore(RaceStore):
 
 
 class EsRaceStore(RaceStore):
+    """
+    A metric store for race information backed by Elasticsearch.
+    """
+
     INDEX_PREFIX = "rally-races-"
+    DATA_STREAM_VERSIONED = "rally-races-v1"
 
     def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -1810,10 +1847,20 @@ class EsRaceStore(RaceStore):
     def store_race(self, race):
         doc = race.as_dict()
         # always update the mapping to the latest version
-        self.client.put_template("rally-races", self.index_template_provider.races_template())
-        self.client.index(index=self.index_name(race), item=doc, id=race.race_id)
+        self.client.put_template(
+            "rally-races-ds" if self.index_template_provider.use_data_streams else "rally-races",
+            self.index_template_provider.races_template(),
+        )
+        self.client.index(
+            index=self.index_name(race),
+            item=doc,
+            id=race.race_id,
+            use_data_streams=self.index_template_provider.use_data_streams,
+        )
 
     def index_name(self, race):
+        if self.index_template_provider.use_data_streams:
+            return EsRaceStore.DATA_STREAM_VERSIONED
         race_timestamp = race.race_timestamp
         return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
@@ -2028,6 +2075,7 @@ class EsResultsStore:
     """
 
     INDEX_PREFIX = "rally-results-"
+    DATA_STREAM_VERSIONED = "rally-results-v1"
 
     def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
         """
@@ -2043,10 +2091,22 @@ class EsResultsStore:
 
     def store_results(self, race):
         # always update the mapping to the latest version
-        self.client.put_template("rally-results", self.index_template_provider.results_template())
-        self.client.bulk_index(index=self.index_name(race), items=race.to_result_dicts())
+        self.client.put_template(
+            "rally-results-ds" if self.index_template_provider.use_data_streams else "rally-results",
+            self.index_template_provider.results_template(),
+        )
+        items = race.to_result_dicts()
+        if self.index_template_provider.use_data_streams:
+            for item in items:
+                item["_op_type"] = "create"
+        self.client.bulk_index(
+            index=self.index_name(race),
+            items=items,
+        )
 
     def index_name(self, race):
+        if self.index_template_provider.use_data_streams:
+            return EsResultsStore.DATA_STREAM_VERSIONED
         race_timestamp = race.race_timestamp
         return f"{EsResultsStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
 
