@@ -21,7 +21,7 @@ from esrally.utils import process
 
 
 @it.random_rally_config
-def test_sources(cfg):
+def test_sources(shared_setup, cfg):
     port = 19200
     it.wait_until_port_is_free(port_number=port)
 
@@ -70,7 +70,7 @@ def test_sources(cfg):
 
 
 @it.random_rally_config
-def test_build_es_and_plugin_with_docker(cfg):
+def test_build_es_and_plugin_with_docker(shared_setup, cfg):
     assert (
         it.esrally(
             cfg,
@@ -82,7 +82,7 @@ def test_build_es_and_plugin_with_docker(cfg):
 
 
 @it.random_rally_config
-def test_build_es(cfg):
+def test_build_es(shared_setup, cfg):
     assert (
         it.esrally(
             cfg,

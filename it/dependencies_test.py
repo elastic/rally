@@ -20,7 +20,7 @@ import it
 
 
 @it.random_rally_config
-def test_track_dependencies(cfg):
+def test_track_dependencies(shared_setup, cfg):
     port = 19200
     it.wait_until_port_is_free(port_number=port)
     dist_version = it.DISTRIBUTIONS[-1]

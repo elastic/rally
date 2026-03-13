@@ -22,7 +22,7 @@ from esrally.utils import process
 
 
 @it.rally_in_mem
-def test_run_without_arguments(cfg):
+def test_run_without_arguments(shared_setup, cfg):
     cmd = it.esrally_command_line_for(cfg, "")
     output = process.run_subprocess_with_output(cmd)
     expected = "usage: esrally [-h] [--version]"
@@ -30,7 +30,7 @@ def test_run_without_arguments(cfg):
 
 
 @it.rally_in_mem
-def test_run_with_help(cfg):
+def test_run_with_help(shared_setup, cfg):
     cmd = it.esrally_command_line_for(cfg, "--help")
     output = process.run_subprocess_with_output(cmd)
     expected = "usage: esrally [-h] [--version]"
@@ -38,7 +38,7 @@ def test_run_with_help(cfg):
 
 
 @it.rally_in_mem
-def test_run_without_http_connection(cfg):
+def test_run_without_http_connection(shared_setup, cfg):
     cmd = it.esrally_command_line_for(cfg, "list tracks")
     with tempfile.TemporaryDirectory() as tmpdir:
         env = os.environ.copy()

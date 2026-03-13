@@ -23,7 +23,7 @@ import it
 
 
 @pytest.fixture(scope="module")
-def test_cluster():
+def test_cluster(shared_setup):
     cluster = it.TestCluster("in-memory-it")
     # test with a recent distribution
     dist = it.DISTRIBUTIONS[-1]
@@ -38,7 +38,7 @@ def test_cluster():
 
 
 @it.rally_in_mem
-def test_create_track(cfg, tmp_path, test_cluster):
+def test_create_track(shared_setup, cfg, tmp_path, test_cluster):
     # use 0.05% of geonames corpus to generate data. We need something small but >1000 docs to properly test
     # the -1k corpus too.
     cmd = (
