@@ -1,0 +1,264 @@
+{
+  "rally_version": "2.12.0.dev0 (git revision: e4ab9dfb1eccee0c8dadb842691540bde211c882)",
+  "tracks": [
+    {
+      "compressed_size_in_bytes": 265208777,
+      "description": "POIs from Geonames",
+      "name": "geonames",
+      "number_of_documents": 11396503,
+      "uncompressed_size_in_bytes": 3547613828
+    },
+    {
+      "compressed_size_in_bytes": 124009,
+      "description": "Percolator benchmark based on AOL queries",
+      "name": "percolator",
+      "number_of_documents": 2000000,
+      "uncompressed_size_in_bytes": 110039748
+    },
+    {
+      "compressed_size_in_bytes": 449209442991,
+      "description": "GitHub timeline from gharchive.org",
+      "name": "github_archive",
+      "number_of_documents": 1517739660,
+      "uncompressed_size_in_bytes": 6576632228137
+    },
+    {
+      "compressed_size_in_bytes": 1240208124,
+      "description": "HTTP server log data",
+      "name": "http_logs",
+      "number_of_documents": 247249096,
+      "uncompressed_size_in_bytes": 33365244237
+    },
+    {
+      "compressed_size_in_bytes": 19186224906,
+      "description": "Benchmark for search with Wikipedia data",
+      "name": "wikipedia",
+      "number_of_documents": 22986185,
+      "uncompressed_size_in_bytes": 82409155844
+    },
+    {
+      "compressed_size_in_bytes": 18247252143,
+      "description": "Shapes from PlanetOSM",
+      "name": "geoshape",
+      "number_of_documents": 84220567,
+      "uncompressed_size_in_bytes": 63030399057
+    },
+    {
+      "compressed_size_in_bytes": null,
+      "description": "Elastic APM benchmark for Rally",
+      "name": "elastic/apm",
+      "number_of_documents": 19556,
+      "uncompressed_size_in_bytes": 54563720
+    },
+    {
+      "compressed_size_in_bytes": null,
+      "description": "Track for simulating Elastic Security workloads",
+      "name": "elastic/security",
+      "number_of_documents": 77513777,
+      "uncompressed_size_in_bytes": null
+    },
+    {
+      "compressed_size_in_bytes": null,
+      "description": "Track for simulating logging workloads",
+      "name": "elastic/logs",
+      "number_of_documents": 16469078,
+      "uncompressed_size_in_bytes": null
+    },
+    {
+      "compressed_size_in_bytes": 0,
+      "description": "Endpoint track",
+      "name": "elastic/endpoint",
+      "number_of_documents": 0,
+      "uncompressed_size_in_bytes": 0
+    },
+    {
+      "compressed_size_in_bytes": null,
+      "description": "metricbeat information for elastic-app k8s cluster",
+      "name": "tsdb",
+      "number_of_documents": 116633698,
+      "uncompressed_size_in_bytes": 132046338827
+    },
+    {
+      "compressed_size_in_bytes": 91964149,
+      "description": "Metricbeat data",
+      "name": "metricbeat",
+      "number_of_documents": 1079600,
+      "uncompressed_size_in_bytes": 1249705758
+    },
+    {
+      "compressed_size_in_bytes": 0,
+      "description": "Benchmarks _has_privileges API with index and Kibana application privileges",
+      "name": "has_privileges",
+      "number_of_documents": 0,
+      "uncompressed_size_in_bytes": 0
+    },
+    {
+      "compressed_size_in_bytes": 505542241,
+      "description": "Point coordinates from PlanetOSM",
+      "name": "geopoint",
+      "number_of_documents": 60844404,
+      "uncompressed_size_in_bytes": 2448564579
+    },
+    {
+      "compressed_size_in_bytes": 4820107679,
+      "description": "Taxi rides in New York in 2015",
+      "name": "nyc_taxis",
+      "number_of_documents": 165346708,
+      "uncompressed_size_in_bytes": 79802445979
+    },
+    {
+      "compressed_size_in_bytes": 49481928181,
+      "description": "Benchmark for vector search using Cohere embed-multilingual-v3 int8 embeddings on English Wikipedia",
+      "name": "wiki_en_cohere_vector_int8",
+      "number_of_documents": 41488110,
+      "uncompressed_size_in_bytes": 76350276957
+    },
+    {
+      "compressed_size_in_bytes": null,
+      "description": "metricbeat information for elastic-app k8s cluster",
+      "name": "tsdb_k8s_queries",
+      "number_of_documents": 17280000,
+      "uncompressed_size_in_bytes": 64764567025
+    },
+    {
+      "compressed_size_in_bytes": null,
+      "description": "Benchmark weighted terms queries on ELSER tokens on the MS MARCO passage dataset",
+      "name": "elser-ingest-speedtest",
+      "number_of_documents": 1050000,
+      "uncompressed_size_in_bytes": 2151343326
+    },
+    {
+      "compressed_size_in_bytes": 457869350,
+      "description": "Benchmark text search relevance with different configurations",
+      "name": "search/mteb/dbpedia",
+      "number_of_documents": 4635922,
+      "uncompressed_size_in_bytes": 1787414603
+    },
+    {
+      "compressed_size_in_bytes": 493689712,
+      "description": "Point coordinates from PlanetOSM indexed as geoshapes",
+      "name": "geopointshape",
+      "number_of_documents": 60844404,
+      "uncompressed_size_in_bytes": 2780550484
+    },
+    {
+      "compressed_size_in_bytes": 9600716233,
+      "description": "Indexing benchmark using up to questions and answers from StackOverflow",
+      "name": "so",
+      "number_of_documents": 36062278,
+      "uncompressed_size_in_bytes": 35564808298
+    },
+    {
+      "compressed_size_in_bytes": 20174550228,
+      "description": "Benchmark for vector search with StackOverflow data",
+      "name": "so_vector",
+      "number_of_documents": 4000000,
+      "uncompressed_size_in_bytes": 44987493316
+    },
+    {
+      "compressed_size_in_bytes": 3868383848,
+      "description": "Indexes for JOIN tests",
+      "name": "joins",
+      "number_of_documents": 118011000,
+      "uncompressed_size_in_bytes": 92117848440
+    },
+    {
+      "compressed_size_in_bytes": 0,
+      "description": "Benchmarking filtered search on random vectors",
+      "name": "random_vector",
+      "number_of_documents": 0,
+      "uncompressed_size_in_bytes": 0
+    },
+    {
+      "compressed_size_in_bytes": 11514726102,
+      "description": "Benchmark for dense vector indexing and search",
+      "name": "dense_vector",
+      "number_of_documents": 20000000,
+      "uncompressed_size_in_bytes": 26165226599
+    },
+    {
+      "compressed_size_in_bytes": 200637637087,
+      "description": "Benchmark for vector search with Cohere Wikipedia data",
+      "name": "cohere_vector",
+      "number_of_documents": 32893221,
+      "uncompressed_size_in_bytes": 544425585910
+    },
+    {
+      "compressed_size_in_bytes": 4875067116,
+      "description": "EQL benchmarks based on endgame index of SIEM demo cluster",
+      "name": "eql",
+      "number_of_documents": 60782211,
+      "uncompressed_size_in_bytes": 117268958204
+    },
+    {
+      "compressed_size_in_bytes": 11243465,
+      "description": "Indexes for JOIN tests",
+      "name": "esql",
+      "number_of_documents": 500000,
+      "uncompressed_size_in_bytes": 206388950
+    },
+    {
+      "compressed_size_in_bytes": 695550727,
+      "description": "StackOverflow Q&A stored as nested docs",
+      "name": "nested",
+      "number_of_documents": 11203029,
+      "uncompressed_size_in_bytes": 3637747670
+    },
+    {
+      "compressed_size_in_bytes": 995480468,
+      "description": "Global daily weather measurements from NOAA",
+      "name": "noaa",
+      "number_of_documents": 33659481,
+      "uncompressed_size_in_bytes": 9684262698
+    },
+    {
+      "compressed_size_in_bytes": 1897431047403,
+      "description": "Benchmark for vector search with msmarco-v2 passage data",
+      "name": "msmarco-v2-vector",
+      "number_of_documents": 276728396,
+      "uncompressed_size_in_bytes": 4010862422588
+    },
+    {
+      "compressed_size_in_bytes": 59782751079,
+      "description": "Benchmark for the Big5 workload",
+      "name": "big5",
+      "number_of_documents": 1171840430,
+      "uncompressed_size_in_bytes": 1084097769420
+    },
+    {
+      "compressed_size_in_bytes": 50206939974,
+      "description": "Benchmark for vector search using the OpenAI text-embedding-ada-002 model",
+      "name": "openai_vector",
+      "number_of_documents": 5361922,
+      "uncompressed_size_in_bytes": 117191056651
+    },
+    {
+      "compressed_size_in_bytes": 2274777276,
+      "description": "Index refresh benchmarks with a Kubernetes pod metrics dataset",
+      "name": "k8s_metrics",
+      "number_of_documents": 8642016,
+      "uncompressed_size_in_bytes": 92459082163
+    },
+    {
+      "compressed_size_in_bytes": 5931724449,
+      "description": "Full text benchmark with academic papers from PMC",
+      "name": "pmc",
+      "number_of_documents": 574199,
+      "uncompressed_size_in_bytes": 23256051757
+    },
+    {
+      "compressed_size_in_bytes": 17469732480,
+      "description": "Benchmark bm25, semantic and hybrid search on the MS MARCO passage dataset",
+      "name": "msmarco-passage-ranking",
+      "number_of_documents": 8841823,
+      "uncompressed_size_in_bytes": 57547673734
+    },
+    {
+      "compressed_size_in_bytes": 995480468,
+      "description": "SQL query performance based on NOAA Weather data",
+      "name": "sql",
+      "number_of_documents": 33659481,
+      "uncompressed_size_in_bytes": 9684262698
+    }
+  ]
+}
