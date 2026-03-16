@@ -346,7 +346,7 @@ class IndexTemplateProvider:
                     index_pattern.replace("-*", "-v*")
 
                 if not template["template"]["mappings"]["properties"].get("@timestamp"):
-                    template["template"]["mappings"]["properties"]["@timestamp"] = {"type": "date", "format": "epoch_millis"}                
+                    template["template"]["mappings"]["properties"]["@timestamp"] = {"type": "date", "format": "epoch_millis"}
             return json.dumps(template)
 
 
