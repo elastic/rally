@@ -646,6 +646,7 @@ class TestEsMetrics:
         assert case.want_put_template == self.metrics_store._client.put_template.called
         if case.want_logger_call is not None:
             assert case.want_logger_call in self.metrics_store.logger.method_calls
+            assert self.metrics_store.logger.method_calls[-1:] == [case.want_logger_call]
 
     def test_put_value_without_meta_info(self):
         throughput = 5000
