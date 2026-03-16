@@ -16,6 +16,7 @@
 # under the License.
 # pylint: disable=protected-access
 
+import hashlib
 import io
 import os
 import sys
@@ -342,7 +343,15 @@ class MockClock:
         return self._stop_watch
 
 
+def _docker_compose_expected(compose_dir, cmd):
+    """Build expected docker-compose command with project name and project directory."""
+    project_name = "rally-" + hashlib.sha256(compose_dir.encode()).hexdigest()[:16]
+    compose_file = os.path.join(compose_dir, "docker-compose.yml")
+    return f'docker-compose -f "{compose_file}" --project-directory "{compose_dir}" -p {project_name} {cmd}'
+
+
 class TestDockerLauncher:
+    @mock.patch("esrally.mechanic.launcher._compose_cmd", "docker-compose")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     def test_starts_container_successfully(self, run_subprocess_with_output, run_subprocess_with_logging):
@@ -373,14 +382,15 @@ class TestDockerLauncher:
         assert node.node_name == "testnode"
         assert node.telemetry is not None
 
-        run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml up -d")
+        run_subprocess_with_logging.assert_called_once_with(_docker_compose_expected("/bin", "up -d"))
         run_subprocess_with_output.assert_has_calls(
             [
-                mock.call("docker-compose -f /bin/docker-compose.yml ps -q"),
+                mock.call(_docker_compose_expected("/bin", "ps -q")),
                 mock.call('docker ps -a --filter "id=de604d0d" --filter "status=running" --filter "health=healthy" -q'),
             ]
         )
 
+    @mock.patch("esrally.mechanic.launcher._compose_cmd", "docker-compose")
     @mock.patch("esrally.time.sleep")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
@@ -407,6 +417,7 @@ class TestDockerLauncher:
         with pytest.raises(exceptions.LaunchError, match="No healthy running container after 600 seconds!"):
             docker.start([node_config])
 
+    @mock.patch("esrally.mechanic.launcher._compose_cmd", "docker-compose")
     @mock.patch("esrally.telemetry.add_metadata_for_node")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_stops_container_successfully_with_metrics_store(self, run_subprocess_with_logging, add_metadata_for_node):
@@ -422,8 +433,9 @@ class TestDockerLauncher:
 
         add_metadata_for_node.assert_called_once_with(metrics_store, "testnode", "127.0.0.1")
 
-        run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml down")
+        run_subprocess_with_logging.assert_called_once_with(_docker_compose_expected("/bin", "down"))
 
+    @mock.patch("esrally.mechanic.launcher._compose_cmd", "docker-compose")
     @mock.patch("esrally.telemetry.add_metadata_for_node")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
     def test_stops_container_when_no_metrics_store_is_provided(self, run_subprocess_with_logging, add_metadata_for_node):
@@ -437,4 +449,4 @@ class TestDockerLauncher:
 
         assert add_metadata_for_node.call_count == 0
 
-        run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml down")
+        run_subprocess_with_logging.assert_called_once_with(_docker_compose_expected("/bin", "down"))

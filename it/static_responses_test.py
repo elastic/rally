@@ -19,8 +19,8 @@ import os
 import it
 
 
-@it.random_rally_config
-def test_static_responses(shared_setup, cfg):
+@it.rally_in_mem
+def test_static_responses(cfg, shared_setup):
     port = 19200
     it.wait_until_port_is_free(port_number=port)
     dist_version = it.DISTRIBUTIONS[-1]

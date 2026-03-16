@@ -58,7 +58,18 @@ def docker(cfg: types.Config, car, ip, http_port, target_root, node_name):
 
 
 class NodeConfiguration:
-    def __init__(self, build_type, car_runtime_jdks, car_provides_bundled_jdk, ip, node_name, node_root_path, binary_path, data_paths):
+    def __init__(
+        self,
+        build_type,
+        car_runtime_jdks,
+        car_provides_bundled_jdk,
+        ip,
+        node_name,
+        node_root_path,
+        binary_path,
+        data_paths,
+        http_port=None,
+    ):
         self.build_type = build_type
         self.car_runtime_jdks = car_runtime_jdks
         self.car_provides_bundled_jdk = car_provides_bundled_jdk
@@ -67,9 +78,10 @@ class NodeConfiguration:
         self.node_root_path = node_root_path
         self.binary_path = binary_path
         self.data_paths = data_paths
+        self.http_port = http_port
 
     def as_dict(self):
-        return {
+        out = {
             "build-type": self.build_type,
             "car-runtime-jdks": self.car_runtime_jdks,
             "car-provides-bundled-jdk": self.car_provides_bundled_jdk,
@@ -79,6 +91,9 @@ class NodeConfiguration:
             "binary-path": self.binary_path,
             "data-paths": self.data_paths,
         }
+        if self.http_port is not None:
+            out["http-port"] = self.http_port
+        return out
 
     @staticmethod
     def from_dict(d):
@@ -91,6 +106,7 @@ class NodeConfiguration:
             d["node-root-path"],
             d["binary-path"],
             d["data-paths"],
+            d.get("http-port"),
         )
 
 
@@ -496,6 +512,7 @@ class DockerProvisioner:
             self.node_root_dir,
             self.binary_path,
             self.data_paths,
+            http_port=self.http_port,
         )
 
     def docker_vars(self, mounts):

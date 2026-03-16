@@ -14,16 +14,66 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import errno
+import hashlib
 import logging
 import os
 import shlex
+import socket
 import subprocess
+import time as std_time
 
 import psutil
 
 from esrally import exceptions, telemetry, time, types
 from esrally.mechanic import cluster, java_resolver
 from esrally.utils import io, opts, process
+
+# Cached compose command: "docker compose" (v2) or "docker-compose" (v1)
+_compose_cmd = None
+
+
+def wait_until_port_is_free(port_number, timeout=120):
+    """
+    Wait until nothing is listening on the given port (connection refused).
+    Avoids Docker port-binding conflicts when the port is already in use on the host.
+    """
+    logger = logging.getLogger(__name__)
+    deadline = std_time.perf_counter() + timeout
+    while std_time.perf_counter() < deadline:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                result = sock.connect_ex(("127.0.0.1", port_number))
+                if result == errno.ECONNREFUSED:
+                    logger.debug("Port [%s] is free.", port_number)
+                    return
+        except OSError:
+            pass
+        std_time.sleep(0.5)
+    raise exceptions.LaunchError(
+        "Port [%s] is still in use after [%s] seconds. "
+        "Free the port or stop the process using it to avoid Docker port-forwarding conflicts." % (port_number, timeout)
+    )
+
+
+def _compose_command():
+    """Return the docker compose command to use: 'docker compose' (v2) or 'docker-compose' (v1)."""
+    global _compose_cmd
+    if _compose_cmd is not None:
+        return _compose_cmd
+    try:
+        ret = subprocess.call(
+            shlex.split("docker compose version"),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if ret == 0:
+            _compose_cmd = "docker compose"
+            return _compose_cmd
+    except (OSError, ValueError):
+        pass
+    _compose_cmd = "docker-compose"
+    return _compose_cmd
 
 
 class DockerLauncher:
@@ -41,6 +91,10 @@ class DockerLauncher:
             node_name = node_configuration.node_name
             host_name = node_configuration.ip
             binary_path = node_configuration.binary_path
+            http_port = getattr(node_configuration, "http_port", None)
+            if http_port is not None:
+                self.logger.info("Ensuring port [%s] is free before starting Docker (avoid port conflict).", http_port)
+                wait_until_port_is_free(http_port)
             self.logger.info("Starting node [%s] in Docker.", node_name)
             self._start_process(binary_path)
             node_telemetry = [
@@ -53,22 +107,29 @@ class DockerLauncher:
         return nodes
 
     def _start_process(self, binary_path):
-        compose_cmd = self._docker_compose(binary_path, "up -d")
+        compose_file = os.path.join(binary_path, "docker-compose.yml")
+        compose_dir = binary_path
+        # Unique project name so multiple races do not collide (default name "install" is shared by all).
+        project_name = "rally-" + hashlib.sha256(compose_dir.encode()).hexdigest()[:16]
+        compose_cmd = self._docker_compose(compose_file, compose_dir, project_name, "up -d")
 
+        self.logger.info("Running: %s", compose_cmd)
         ret = process.run_subprocess_with_logging(compose_cmd)
         if ret != 0:
             msg = f"Docker daemon startup failed with exit code [{ret}]"
             logging.error(msg)
             raise exceptions.LaunchError(msg)
 
-        container_id = self._get_container_id(binary_path)
+        container_id = self._get_container_id(compose_file, compose_dir, project_name)
         self._wait_for_healthy_running_container(container_id, DockerLauncher.PROCESS_WAIT_TIMEOUT_SECONDS)
 
-    def _docker_compose(self, compose_config, cmd):
-        return "docker-compose -f {} {}".format(os.path.join(compose_config, "docker-compose.yml"), cmd)
+    def _docker_compose(self, compose_file, compose_dir, project_name, cmd):
+        compose_cmd = _compose_command()
+        # Use -f, --project-directory, and -p so the project is unambiguous and paths resolve correctly.
+        return f'{compose_cmd} -f "{compose_file}" --project-directory "{compose_dir}" -p {project_name} {cmd}'
 
-    def _get_container_id(self, compose_config):
-        compose_ps_cmd = self._docker_compose(compose_config, "ps -q")
+    def _get_container_id(self, compose_file, compose_dir, project_name):
+        compose_ps_cmd = self._docker_compose(compose_file, compose_dir, project_name, "ps -q")
         return process.run_subprocess_with_output(compose_ps_cmd)[0]
 
     def _wait_for_healthy_running_container(self, container_id, timeout):
@@ -92,7 +153,10 @@ class DockerLauncher:
                 telemetry.add_metadata_for_node(metrics_store, node.node_name, node.host_name)
                 node.telemetry.detach_from_node(node, running=True)
 
-            process.run_subprocess_with_logging(self._docker_compose(node.binary_path, "down"))
+            compose_dir = node.binary_path
+            compose_file = os.path.join(compose_dir, "docker-compose.yml")
+            project_name = "rally-" + hashlib.sha256(compose_dir.encode()).hexdigest()[:16]
+            process.run_subprocess_with_logging(self._docker_compose(compose_file, compose_dir, project_name, "down"))
             if metrics_store is not None:
                 node.telemetry.detach_from_node(node, running=False)
                 node.telemetry.store_system_metrics(node, metrics_store)

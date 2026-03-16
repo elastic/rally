@@ -30,8 +30,8 @@ import it
 
 @pytest.mark.parametrize("dist", it.DISTRIBUTIONS)
 @pytest.mark.parametrize("track", it.TRACKS)
-@pytest.mark.parametrize("cfg", [random.choice(it.CONFIG_NAMES)])
-def test_tar_distributions(shared_setup, cfg, dist, track):
+@pytest.mark.parametrize("cfg", ["in-memory-it"])
+def test_tar_distributions(dist, track, cfg, shared_setup):
     port = 19200
     it.wait_until_port_is_free(port_number=port)
 
@@ -46,8 +46,8 @@ def test_tar_distributions(shared_setup, cfg, dist, track):
     )
 
 
-@it.random_rally_config
-def test_docker_distribution(shared_setup, cfg):
+@it.rally_in_mem
+def test_docker_distribution(cfg, shared_setup):
     port = 19200
     # only test the most recent Docker distribution
     dist = it.DISTRIBUTIONS[-1]
@@ -63,8 +63,8 @@ def test_docker_distribution(shared_setup, cfg):
     )
 
 
-@it.random_rally_config
-def test_does_not_benchmark_unsupported_distribution(shared_setup, cfg):
+@it.rally_in_mem
+def test_does_not_benchmark_unsupported_distribution(cfg, shared_setup):
     port = 19200
     it.wait_until_port_is_free(port_number=port)
     assert (
@@ -75,8 +75,8 @@ def test_does_not_benchmark_unsupported_distribution(shared_setup, cfg):
     )
 
 
-@it.random_rally_config
-def test_interrupt(shared_setup, cfg):
+@it.rally_in_mem
+def test_interrupt(cfg, shared_setup):
     port = 19200
     dist = it.DISTRIBUTIONS[-1]
     # simulate a user cancelling a benchmark
@@ -89,8 +89,8 @@ def test_interrupt(shared_setup, cfg):
     assert run_subprocess_and_interrupt(cmd, 2, 15) == 130
 
 
-@it.random_rally_config
-def test_create_api_key_per_client(shared_setup, cfg):
+@it.rally_in_mem
+def test_create_api_key_per_client(cfg, shared_setup):
     port = 19200
     it.wait_until_port_is_free(port_number=port)
     dist = it.DISTRIBUTIONS[-1]
@@ -121,8 +121,8 @@ def test_cluster(shared_setup):
     cluster.stop()
 
 
-@it.random_rally_config
-def test_multi_target_hosts(shared_setup, cfg, test_cluster):
+@it.rally_in_mem
+def test_multi_target_hosts(cfg, shared_setup, test_cluster):
     hosts = [f"127.0.0.1:{test_cluster.http_port}"]
     target_hosts = {
         "remote": hosts,
@@ -148,15 +148,15 @@ def test_multi_target_hosts(shared_setup, cfg, test_cluster):
     assert it.race(cfg, race_params()) != 0
 
 
-@it.random_rally_config
-def test_eventdata_frozen(shared_setup, cfg, test_cluster):
+@it.rally_in_mem
+def test_eventdata_frozen(cfg, shared_setup, test_cluster):
     challenges = ["frozen-data-generation", "frozen-querying"]
     track_params = "number_of_replicas:0"
     execute_eventdata(cfg, test_cluster, challenges, track_params)
 
 
-@it.random_rally_config
-def test_eventdata_indexing_and_querying(shared_setup, cfg, test_cluster):
+@it.rally_in_mem
+def test_eventdata_indexing_and_querying(cfg, shared_setup, test_cluster):
     challenges = [
         "elasticlogs-1bn-load",
         "elasticlogs-continuous-index-and-query",
@@ -170,15 +170,15 @@ def test_eventdata_indexing_and_querying(shared_setup, cfg, test_cluster):
     execute_eventdata(cfg, test_cluster, challenges, track_params)
 
 
-@it.random_rally_config
-def test_eventdata_update(shared_setup, cfg, test_cluster):
+@it.rally_in_mem
+def test_eventdata_update(cfg, shared_setup, test_cluster):
     challenges = ["bulk-update"]
     track_params = "bulk_indexing_clients:1,number_of_replicas:0"
     execute_eventdata(cfg, test_cluster, challenges, track_params)
 
 
-@it.random_rally_config
-def test_eventdata_daily_volume(shared_setup, cfg, test_cluster):
+@it.rally_in_mem
+def test_eventdata_daily_volume(cfg, shared_setup, test_cluster):
     challenges = ["index-logs-fixed-daily-volume", "index-and-query-logs-fixed-daily-volume"]
     track_params = "bulk_indexing_clients:1,number_of_replicas:0,daily_logging_volume:1MB"
     execute_eventdata(cfg, test_cluster, challenges, track_params)

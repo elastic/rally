@@ -320,7 +320,10 @@ def wait_for_rest_layer(es, max_attempts=40):
         except TlsError as e:
             raise exceptions.SystemSetupError("Could not connect to cluster via HTTPS. Are you sure this is an HTTPS endpoint?", e)
         except ConnectionError as e:
-            if "ProtocolError" in str(e):
+            err_str = str(e)
+            # Only treat as permanent scheme error when the message clearly indicates HTTP/HTTPS mismatch.
+            # Connection reset / connection aborted (e.g. REST not ready yet) are transient and should be retried.
+            if "ProtocolError" in err_str and ("HTTPS" in err_str or "HTTP request to an HTTPS" in err_str):
                 raise exceptions.SystemSetupError(
                     "Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?", e
                 )
