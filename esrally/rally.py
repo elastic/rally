@@ -256,7 +256,7 @@ def create_arg_parser():
     )
     render_track_parser.add_argument(
         "--build-flavor",
-        help="Define the build flavor to render the track for. This is used to render tracks differently based on the build flavor of the Elasticsearch nodes that will be benchmarked. List possible build flavors with `{PROGRAM_NAME} list tracks`.",
+        help="Define the build flavor to render the track for.",
         choices=["default", "serverless"],
     )
     render_track_parser.add_argument(

@@ -176,7 +176,12 @@ class TestRenderTrack:
 
         loader.render_track(cfg)
 
-        mock_render.assert_called_once_with("/path/to/track/unittest/track.json", {})
+        mock_render.assert_called_once_with(
+            "/path/to/track/unittest/track.json",
+            {},
+            build_flavor=None,
+            serverless_operator=False,
+        )
         captured = capsys.readouterr()
         assert '"short-description": "test"' in captured.out
         assert '"indices"' in captured.out
