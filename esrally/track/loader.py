@@ -175,13 +175,18 @@ def list_tracks(cfg: types.Config):
     console.println(tabulate.tabulate(tabular_data=data, headers=headers))
 
 
-def render_track(cfg: types.Config, output_path=None):
+def render_track(cfg: types.Config, build_flavor=None, serverless_operator=False, output_path=None):
     repo = track_repo(cfg)
     track_name = repo.track_name
     track_spec_file = repo.track_file(track_name)
     track_params = cfg.opts("track", "params", default_value={})
 
-    rendered = render_template_from_file(track_spec_file, track_params)
+    rendered = render_template_from_file(
+        track_spec_file,
+        track_params,
+        build_flavor=build_flavor,
+        serverless_operator=serverless_operator,
+    )
     rendered_json = json.dumps(json.loads(rendered), indent=2)
 
     if output_path:

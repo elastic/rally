@@ -255,6 +255,17 @@ def create_arg_parser():
         default="",
     )
     render_track_parser.add_argument(
+        "--build-flavor",
+        help="Define the build flavor to render the track for. This is used to render tracks differently based on the build flavor of the Elasticsearch nodes that will be benchmarked. List possible build flavors with `{PROGRAM_NAME} list tracks`.",
+        choices=["default", "serverless"],
+    )
+    render_track_parser.add_argument(
+        "--serverless-operator",
+        help="Whether to render the track for a serverless operator.",
+        default=False,
+        action="store_true",
+    )
+    render_track_parser.add_argument(
         "--output-path",
         help="Path to the output file. If not specified, the rendered track is written to stdout.",
         default=None,
@@ -1283,7 +1294,9 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             if args.track:
                 cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
             cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
-            track.render_track(cfg, output_path=args.output_path)
+            track.render_track(
+                cfg, build_flavor=args.build_flavor, serverless_operator=args.serverless_operator, output_path=args.output_path
+            )
         else:
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
         return ExitStatus.SUCCESSFUL
