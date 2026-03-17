@@ -911,9 +911,9 @@ def create_arg_parser():
         )
         p.add_argument(
             "--quiet",
-            help="Suppress as much as output as possible (default: false).",
+            help=f"Suppress as much as output as possible (default: {str(p is render_track_parser).lower()}).",
             default=p is render_track_parser,  # disable output for render-track
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
         )
         p.add_argument(
             "--offline",
