@@ -101,6 +101,24 @@ class DummyIndexTemplateProvider:
         return "results-test-template"
 
 
+class DataStreamsDisabledIndexTemplateProvider:
+    def __init__(self, cfg):
+        pass
+
+    @property
+    def use_data_streams(self):
+        return False
+
+    def metrics_template(self) -> str:
+        return json.dumps({"index_patterns": ["rally-metrics-*"], "template": provided_metrics_template()})
+
+    def races_template(self):
+        return "races-test-template"
+
+    def results_template(self):
+        return "results-test-template"
+
+
 def provided_metrics_template() -> dict:
     template = rally_metric_template()
     template["settings"]["index"] = {"mapping.total_fields.limit": 2000, "number_of_shards": 1, "number_of_replicas": 1}
@@ -589,6 +607,18 @@ class TestEsMetrics:
         self.es_mock.get_template.return_value = mock.create_autospec(elastic_transport.ObjectApiResponse, body={"index_templates": []})
         self.metrics_store.logger = mock.create_autospec(logging.Logger)
 
+    def _make_metrics_store(self, use_data_streams):
+        provider_class = DummyIndexTemplateProvider if use_data_streams else DataStreamsDisabledIndexTemplateProvider
+        store = metrics.EsMetricsStore(
+            self.cfg, client_factory_class=MockClientFactory, index_template_provider_class=provider_class, clock=StaticClock
+        )
+        es_mock = store._client
+        es_mock.exists.return_value = False
+        es_mock.template_exists.return_value = False
+        es_mock.get_template.return_value = mock.create_autospec(elastic_transport.ObjectApiResponse, body={"index_templates": []})
+        store.logger = mock.create_autospec(logging.Logger)
+        return store, es_mock
+
     @dataclass
     class OpenCase:
         create: bool = True
@@ -647,12 +677,14 @@ class TestEsMetrics:
         if case.want_logger_call is not None:
             assert case.want_logger_call in self.metrics_store.logger.method_calls
             assert self.metrics_store.logger.method_calls[-1:] == [case.want_logger_call]
-
-    def test_put_value_without_meta_info(self):
+    
+    @pytest.mark.parametrize("use_data_streams", [True, False])
+    def test_put_value_without_meta_info(self, use_data_streams):
+        ms, es_mock = self._make_metrics_store(use_data_streams)
         throughput = 5000
-        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
-        self.metrics_store.put_value_cluster_level("indexing_throughput", throughput, "docs/s")
+        ms.put_value_cluster_level("indexing_throughput", throughput, "docs/s")
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": self.RACE_ID,
@@ -668,20 +700,26 @@ class TestEsMetrics:
             "value": throughput,
             "unit": "docs/s",
             "meta": {},
-            "_op_type": "create",
         }
-        self.metrics_store.close()
-        self.es_mock.exists.assert_not_called()
-        self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc]
+        ms.close()
+        if use_data_streams:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}"
+            es_mock.exists.assert_not_called()
+            es_mock.create_index.assert_not_called()
+        else:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}2016-01"
+            es_mock.create_index.assert_called_once_with(index=expected_index)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams
         )
 
-    def test_put_value_with_explicit_timestamps(self):
+    @pytest.mark.parametrize("use_data_streams", [True, False])
+    def test_put_value_with_explicit_timestamps(self, use_data_streams):
+        ms, es_mock = self._make_metrics_store(use_data_streams)
         throughput = 5000
-        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
-        self.metrics_store.put_value_cluster_level(
+        ms.put_value_cluster_level(
             name="indexing_throughput", value=throughput, unit="docs/s", absolute_time=0, relative_time=10
         )
         expected_doc = {
@@ -699,30 +737,36 @@ class TestEsMetrics:
             "value": throughput,
             "unit": "docs/s",
             "meta": {},
-            "_op_type": "create",
         }
-        self.metrics_store.close()
-        self.es_mock.exists.assert_not_called()
-        self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc]
+        ms.close()
+        if use_data_streams:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}"
+            es_mock.exists.assert_not_called()
+            es_mock.create_index.assert_not_called()
+        else:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}2016-01"
+            es_mock.create_index.assert_called_once_with(index=expected_index)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams
         )
 
-    def test_put_value_with_meta_info(self):
+    @pytest.mark.parametrize("use_data_streams", [True, False])
+    def test_put_value_with_meta_info(self, use_data_streams):
+        ms, es_mock = self._make_metrics_store(use_data_streams)
         throughput = 5000
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "race", "user.tags", opts.to_dict("intention:testing,disk_type:hdd"))
-        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
         # Ensure we also merge in cluster level meta info
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_name", "Darwin")
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_version", "15.4.0")
+        ms.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
+        ms.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_name", "Darwin")
+        ms.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_version", "15.4.0")
         # Ensure we separate node level info by node
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_name", "Linux")
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_version", "4.2.0-18-generic")
+        ms.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_name", "Linux")
+        ms.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_version", "4.2.0-18-generic")
 
-        self.metrics_store.put_value_node_level("node0", "indexing_throughput", throughput, "docs/s")
+        ms.put_value_node_level("node0", "indexing_throughput", throughput, "docs/s")
         expected_doc = {
             "@timestamp": StaticClock.NOW * 1000,
             "race-id": self.RACE_ID,
@@ -744,19 +788,25 @@ class TestEsMetrics:
                 "os_name": "Darwin",
                 "os_version": "15.4.0",
             },
-            "_op_type": "create",
         }
-        self.metrics_store.close()
-        self.es_mock.exists.assert_not_called()
-        self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc]
+        ms.close()
+        if use_data_streams:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}"
+            es_mock.exists.assert_not_called()
+            es_mock.create_index.assert_not_called()
+        else:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}2016-01"
+            es_mock.create_index.assert_called_once_with(index=expected_index)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams
         )
 
-    def test_put_doc_no_meta_data(self):
-        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+    @pytest.mark.parametrize("use_data_streams", [True, False])
+    def test_put_doc_no_meta_data(self, use_data_streams):
+        ms, es_mock = self._make_metrics_store(use_data_streams)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
-        self.metrics_store.put_doc(
+        ms.put_doc(
             doc={
                 "name": "custom_metric",
                 "total": 1234567,
@@ -778,29 +828,35 @@ class TestEsMetrics:
             "total": 1234567,
             "per-shard": [17, 18, 1289, 273, 222],
             "unit": "byte",
-            "_op_type": "create",
         }
-        self.metrics_store.close()
-        self.es_mock.exists.assert_not_called()
-        self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc]
+        ms.close()
+        if use_data_streams:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}"
+            es_mock.exists.assert_not_called()
+            es_mock.create_index.assert_not_called()
+        else:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}2016-01"
+            es_mock.create_index.assert_called_once_with(index=expected_index)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams
         )
 
-    def test_put_doc_with_metadata(self):
+    @pytest.mark.parametrize("use_data_streams", [True, False])
+    def test_put_doc_with_metadata(self, use_data_streams):
+        ms, es_mock = self._make_metrics_store(use_data_streams)
         # add a user-defined tag
         self.cfg.add(config.Scope.application, "race", "user.tags", opts.to_dict("intention:testing,disk_type:hdd"))
-        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
         # Ensure we also merge in cluster level meta info
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_name", "Darwin")
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_version", "15.4.0")
+        ms.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123")
+        ms.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_name", "Darwin")
+        ms.add_meta_info(metrics.MetaInfoScope.node, "node0", "os_version", "15.4.0")
         # Ensure we separate node level info by node
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_name", "Linux")
-        self.metrics_store.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_version", "4.2.0-18-generic")
+        ms.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_name", "Linux")
+        ms.add_meta_info(metrics.MetaInfoScope.node, "node1", "os_version", "4.2.0-18-generic")
 
-        self.metrics_store.put_doc(
+        ms.put_doc(
             doc={
                 "name": "custom_metric",
                 "total": 1234567,
@@ -835,13 +891,17 @@ class TestEsMetrics:
                 "os_version": "15.4.0",
                 "node_type": "hot",
             },
-            "_op_type": "create",
         }
-        self.metrics_store.close()
-        self.es_mock.exists.assert_not_called()
-        self.es_mock.create_index.assert_not_called()
-        self.es_mock.bulk_index.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}", items=[expected_doc]
+        ms.close()
+        if use_data_streams:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsMetricsStore.TEMPLATE_VERSION}"
+            es_mock.exists.assert_not_called()
+            es_mock.create_index.assert_not_called()
+        else:
+            expected_index = f"{metrics.EsMetricsStore.INDEX_PREFIX}2016-01"
+            es_mock.create_index.assert_called_once_with(index=expected_index)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams
         )
 
     def test_get_one(self):
@@ -1268,6 +1328,15 @@ class TestEsRaceStore:
         # get hold of the mocked client...
         self.es_mock = self.race_store.client
 
+    def _make_race_store(self, use_data_streams):
+        provider_class = DummyIndexTemplateProvider if use_data_streams else DataStreamsDisabledIndexTemplateProvider
+        store = metrics.EsRaceStore(
+            self.cfg,
+            client_factory_class=MockClientFactory,
+            index_template_provider_class=provider_class,
+        )
+        return store, store.client
+
     def test_find_existing_race_by_race_id(self):
         self.es_mock.search.return_value = {
             "hits": {
@@ -1311,7 +1380,9 @@ class TestEsRaceStore:
         with pytest.raises(exceptions.NotFound, match=r"No race with race id \[.*\]"):
             self.race_store.find_by_race_id(race_id="some invalid race id")
 
-    def test_store_race(self):
+    @pytest.mark.parametrize("use_data_streams", [True, False])
+    def test_store_race(self, use_data_streams):
+        rs, es_mock = self._make_race_store(use_data_streams)
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
 
         t = track.Track(
@@ -1354,7 +1425,7 @@ class TestEsRaceStore:
             ),
         )
 
-        self.race_store.store_race(race)
+        rs.store_race(race)
 
         expected_doc = {
             "rally-version": "0.4.4",
@@ -1394,11 +1465,15 @@ class TestEsRaceStore:
                 ],
             },
         }
-        self.es_mock.index.assert_called_with(
-            index=f"{metrics.EsRaceStore.INDEX_PREFIX}{metrics.EsRaceStore.TEMPLATE_VERSION}",
+        if use_data_streams:
+            expected_index = f"{metrics.EsRaceStore.INDEX_PREFIX}{metrics.EsRaceStore.TEMPLATE_VERSION}"
+        else:
+            expected_index = f"{metrics.EsRaceStore.INDEX_PREFIX}2016-01"
+        es_mock.index.assert_called_with(
+            index=expected_index,
             id=self.RACE_ID,
             item=expected_doc,
-            use_data_streams=True,
+            use_data_streams=use_data_streams,
         )
 
     @mock.patch("esrally.utils.console.println")
@@ -1516,7 +1591,18 @@ class TestEsResultsStore:
         # get hold of the mocked client...
         self.es_mock = self.results_store.client
 
-    def test_store_results(self):
+    def _make_results_store(self, use_data_streams):
+        provider_class = DummyIndexTemplateProvider if use_data_streams else DataStreamsDisabledIndexTemplateProvider
+        store = metrics.EsResultsStore(
+            self.cfg,
+            client_factory_class=MockClientFactory,
+            index_template_provider_class=provider_class,
+        )
+        return store, store.client
+
+    @pytest.mark.parametrize("use_data_streams", [True, False])
+    def test_store_results(self, use_data_streams):
+        rs, es_mock = self._make_results_store(use_data_streams)
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
 
         t = track.Track(
@@ -1570,7 +1656,7 @@ class TestEsResultsStore:
             ),
         )
 
-        self.results_store.store_results(race)
+        rs.store_results(race)
 
         expected_docs = [
             {
@@ -1597,7 +1683,6 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
-                "_op_type": "create",
             },
             {
                 "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
@@ -1631,7 +1716,6 @@ class TestEsResultsStore:
                     "saturation": "70% saturated",
                     "op-type": "bulk",
                 },
-                "_op_type": "create",
             },
             {
                 "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
@@ -1657,14 +1741,19 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
-                "_op_type": "create",
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(
-            index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs
+        if use_data_streams:
+            expected_index = f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}"
+        else:
+            expected_index = f"{metrics.EsResultsStore.INDEX_PREFIX}2016-01"
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=expected_docs, use_data_streams=use_data_streams
         )
 
-    def test_store_results_with_missing_version(self):
+    @pytest.mark.parametrize("use_data_streams", [True, False])
+    def test_store_results_with_missing_version(self, use_data_streams):
+        rs, es_mock = self._make_results_store(use_data_streams)
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
 
         t = track.Track(
@@ -1718,7 +1807,7 @@ class TestEsResultsStore:
             ),
         )
 
-        self.results_store.store_results(race)
+        rs.store_results(race)
 
         expected_docs = [
             {
@@ -1743,7 +1832,6 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
-                "_op_type": "create",
             },
             {
                 "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
@@ -1775,7 +1863,6 @@ class TestEsResultsStore:
                     "saturation": "70% saturated",
                     "op-type": "bulk",
                 },
-                "_op_type": "create",
             },
             {
                 "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
@@ -1799,11 +1886,14 @@ class TestEsResultsStore:
                     "track-type": "saturation-degree",
                     "saturation": "70% saturated",
                 },
-                "_op_type": "create",
             },
         ]
-        self.es_mock.bulk_index.assert_called_with(
-            index=f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}", items=expected_docs
+        if use_data_streams:
+            expected_index = f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsResultsStore.TEMPLATE_VERSION}"
+        else:
+            expected_index = f"{metrics.EsResultsStore.INDEX_PREFIX}2016-01"
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=expected_docs, use_data_streams=use_data_streams
         )
 
 
