@@ -63,6 +63,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
     register_runner(track.OperationType.Esql, Esql(), async_runner=True)
+    register_runner(track.OperationType.EsqlProfile, EsqlProfile(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -3018,6 +3019,25 @@ class FieldCaps(Runner):
 
 
 class Esql(Runner):
+    """
+    Runs an ES|QL query against Elasticsearch.
+
+    It expects at least the following keys in the `params` hash:
+
+    * `query`: The ES|QL query string to execute.
+
+    The following parameters are optional:
+
+    * `body`: Additional body parameters to include in the request.
+    * `filter`: A filter to apply to the query.
+    * `detailed-results` (default: ``False``): Records more detailed meta-data about queries. As it analyzes the
+                                               corresponding response in more detail, this might incur additional
+                                               overhead which can skew measurement results.
+
+    If the response contains ``is_partial: true``, the operation is marked as failed. This will cause the benchmark
+    to abort if ``--on-error=abort`` is specified, or record an error and continue otherwise.
+    """
+
     async def __call__(self, es, params):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
@@ -3030,13 +3050,132 @@ class Esql(Runner):
         if not bool(headers):
             # counter-intuitive, but preserves prior behavior
             headers = None
+        detailed_results = params.get("detailed-results", False)
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
-        await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
-        return {"success": True, "unit": "ops", "weight": 1}
+        r = await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
+
+        if detailed_results:
+            props = parse(
+                r,
+                [
+                    "took",
+                    "is_partial",
+                    "documents_found",
+                    "values_loaded",
+                    "completion_time_in_millis",
+                    "start_time_in_millis",
+                    "expiration_time_in_millis",
+                ],
+            )
+            is_partial = props.get("is_partial", False)
+            result = {
+                "weight": 1,
+                "unit": "ops",
+                "success": not is_partial,
+                "is_partial": is_partial,
+                "took": props.get("took"),
+                "documents_found": props.get("documents_found"),
+                "values_loaded": props.get("values_loaded"),
+                "completion_time_in_millis": props.get("completion_time_in_millis"),
+                "start_time_in_millis": props.get("start_time_in_millis"),
+                "expiration_time_in_millis": props.get("expiration_time_in_millis"),
+            }
+            if is_partial:
+                result["error-type"] = "esql"
+                result["error-description"] = "ES|QL query returned partial results"
+            return result
+        else:
+            props = parse(r, ["is_partial"])
+            is_partial = props.get("is_partial", False)
+            result = {
+                "weight": 1,
+                "unit": "ops",
+                "success": not is_partial,
+                "is_partial": is_partial,
+            }
+            if is_partial:
+                result["error-type"] = "esql"
+                result["error-description"] = "ES|QL query returned partial results"
+            return result
 
     def __repr__(self, *args, **kwargs):
         return "esql"
+
+
+class EsqlProfile(Runner):
+    """
+    Runs an ES|QL query using profile: true, and adds the profile information to the result:
+
+    - query.took_ms: Total query time
+    - planning.took_ms: Planning time (includes parsing, preanalysis, analysis)
+    - parsing.took_ms: Time to parse the ES|QL query
+    - preanalysis.took_ms: Preanalysis time (field_caps, enrich policies, lookup indices)
+    - analysis.took_ms: Analysis time before optimizations
+    - <driver>.number: Count of driver instances
+    - <driver>.took_ms: Maximum took time across all driver instances
+    - <driver>.cpu_ms: Maximum CPU time across all driver instances
+    - <driver>.took_total_ms: Sum of took times across all driver instances
+    - <driver>.cpu_total_ms: Sum of CPU times across all driver instances
+    - <driver>.<operator>.process_ms: Processing time for each operator
+    - <driver>.<operator>.processed_slices: Processed slices per operator
+    - <plan>.<optimization>.took_ms: Plan optimization timing
+    """
+
+    async def __call__(self, es, params):
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
+        query = mandatory(params, "query", self)
+        body = params.get("body", {})
+        body["query"] = query
+        body["profile"] = True
+        query_filter = params.get("filter")
+        if query_filter:
+            body["filter"] = query_filter
+        if not bool(headers):
+            headers = None
+        response = await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
+        profile = response["profile"]
+        result = {"weight": 1, "unit": "ops", "success": True}
+        if profile:
+            for phase_name in ["query", "planning", "parsing", "preanalysis", "dependency_resolution", "analysis"]:
+                if phase_name in profile:
+                    took_nanos = profile.get(phase_name, {}).get("took_nanos", 0)
+                    if took_nanos > 0:
+                        result[f"{phase_name}.took_ms"] = took_nanos / 1_000_000
+            for driver in profile.get("drivers", []):
+                driver_name = driver.get("description", "unknown")
+                took_ms = driver.get("took_nanos", 0) / 1_000_000
+                cpu_ms = driver.get("cpu_nanos", 0) / 1_000_000
+                result[f"{driver_name}.number"] = result.get(f"{driver_name}.number", 0) + 1
+                result[f"{driver_name}.took_ms"] = max(result.get(f"{driver_name}.took_ms", 0), took_ms)
+                result[f"{driver_name}.cpu_ms"] = max(result.get(f"{driver_name}.cpu_ms", 0), cpu_ms)
+                result[f"{driver_name}.took_total_ms"] = result.get(f"{driver_name}.took_total_ms", 0) + took_ms
+                result[f"{driver_name}.cpu_total_ms"] = result.get(f"{driver_name}.cpu_total_ms", 0) + cpu_ms
+                for idx, operator in enumerate(driver.get("operators", [])):
+                    operator_name = operator.get("operator", f"operator_{idx}")
+                    safe_operator_name = operator_name.split("[")[0] if "[" in operator_name else operator_name
+                    status = operator.get("status", {})
+                    process_nanos = status.get("process_nanos", 0) + status.get("receive_nanos", 0) + status.get("emit_nanos", 0)
+                    if process_nanos > 0:
+                        key = f"{driver_name}.{safe_operator_name}.process_ms"
+                        result[key] = result.get(key, 0) + process_nanos / 1_000_000
+                    processed_slices = status.get("processed_slices", 0)
+                    if processed_slices > 0:
+                        key = f"{driver_name}.{safe_operator_name}.processed_slices"
+                        result[key] = result.get(key, 0) + processed_slices
+            for plan in profile.get("plans", []):
+                plan_name = plan.get("description", "unknown")
+                for optimization in ["logical_optimization_nanos", "physical_optimization_nanos", "reduction_nanos"]:
+                    nanos = plan.get(optimization, 0)
+                    if nanos > 0:
+                        metric_name = optimization.replace("_nanos", "")
+                        key = f"{plan_name}.{metric_name}.took_ms"
+                        result[key] = result.get(key, 0) + nanos / 1_000_000
+        return result
+
+    def __repr__(self, *args, **kwargs):
+        return "esql-profile"
 
 
 class RequestTiming(Runner, Delegator):

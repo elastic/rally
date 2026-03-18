@@ -1481,6 +1481,92 @@ class TestBulkIndexParamSource:
             == "'ingest-doc-count' must be less than or equal to the total number of documents in the corpus (50000) but was 1000000"
         )
 
+    def test_ingest_doc_count_with_multiple_partitions2(self):
+        def create_unit_test_reader(*args):
+            return StaticBulkReader(
+                "idx",
+                "doc",
+                bulks=[
+                    ['{"location" : [-0.1485188, 51.5250666]}'],
+                    ['{"location" : [-0.1479949, 51.5252071]}'],
+                    ['{"location" : [-0.1458559, 51.5289059]}'],
+                    ['{"location" : [-0.1498551, 51.5282564]}'],
+                ],
+            )
+
+        corpora = [
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=3000000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    ),
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=3000000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    ),
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=3000000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    ),
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=3000000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    ),
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=3000000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    ),
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=3000000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    ),
+                ],
+            ),
+        ]
+
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 500,
+                "ingest-doc-count": 10000000,
+                "__create_reader": create_unit_test_reader,
+            },
+        )
+
+        source2 = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 500,
+                "ingest-percentage": 55.55,
+                "__create_reader": create_unit_test_reader,
+            },
+        )
+
+        partition = source.partition(0, 16)
+        partition._init_internal_params()
+
+        partition2 = source2.partition(0, 16)
+        partition2._init_internal_params()
+
+        print(partition.total_bulks)
+        print(partition2.total_bulks)
+
+        assert partition.total_bulks == partition2.total_bulks
+
     def test_ingest_doc_count_with_multiple_partitions(self):
         def create_unit_test_reader(*args):
             return StaticBulkReader(
@@ -1521,6 +1607,79 @@ class TestBulkIndexParamSource:
         partition = source.partition(0, 3)
         partition._init_internal_params()
         assert partition.total_bulks == 1  # 30000 / 3 partitions / 10000 bulk-size = 1
+
+    def test_ingest_doc_count_with_worker_serving_multiple_partitions(self):
+        """
+        Test that ingest_doc_count works correctly when a single worker serves multiple partitions.
+        This simulates the real Rally scenario where a single PartitionBulkIndexParamSource instance
+        handles multiple clients within the same worker process.
+        """
+
+        def create_unit_test_reader(*args):
+            return StaticBulkReader(
+                "idx",
+                "doc",
+                bulks=[
+                    ['{"location" : [-0.1485188, 51.5250666]}'],
+                    ['{"location" : [-0.1479949, 51.5252071]}'],
+                    ['{"location" : [-0.1458559, 51.5289059]}'],
+                    ['{"location" : [-0.1498551, 51.5282564]}'],
+                ],
+            )
+
+        corpora = [
+            track.DocumentCorpus(
+                name="default",
+                documents=[
+                    track.Documents(
+                        source_format=track.Documents.SOURCE_FORMAT_BULK,
+                        number_of_documents=160000,
+                        target_index="test-idx",
+                        target_type="test-type",
+                    )
+                ],
+            ),
+        ]
+
+        # Test with ingest_doc_count: 80000 docs across 4 partitions = 20000 per partition
+        source_doc_count = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 10000,
+                "ingest-doc-count": 80000,
+                "__create_reader": create_unit_test_reader,
+            },
+        )
+
+        # Test with ingest_percentage: 50% of 160000 = 80000 docs
+        source_percentage = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=corpora),
+            params={
+                "bulk-size": 10000,
+                "ingest-percentage": 50.0,
+                "__create_reader": create_unit_test_reader,
+            },
+        )
+
+        # Simulate a worker serving partitions 0 and 1 (2 of 4 total partitions)
+        # This is what happens in real Rally when partition() is called multiple times
+        # on the same PartitionBulkIndexParamSource for different clients in one worker
+        partition_doc_count = source_doc_count.partition(0, 4)
+        source_doc_count.partition(1, 4)  # Same source, second partition
+        partition_doc_count._init_internal_params()
+
+        partition_percentage = source_percentage.partition(0, 4)
+        source_percentage.partition(1, 4)  # Same source, second partition
+        partition_percentage._init_internal_params()
+
+        # Both should produce the same number of bulks:
+        # For 2 partitions serving 80000 docs total across 4 partitions:
+        # - Each partition gets 20000 docs
+        # - This worker serves 2 partitions = 40000 docs
+        # - 40000 / 10000 bulk-size = 4 bulks
+        assert partition_doc_count.total_bulks == 4
+        assert partition_percentage.total_bulks == 4
+        assert partition_doc_count.total_bulks == partition_percentage.total_bulks
 
     def test_ingest_doc_count_not_divisible_by_partitions_and_bulk_size(self):
         corpora = [

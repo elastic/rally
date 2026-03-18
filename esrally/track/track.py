@@ -703,6 +703,7 @@ class OperationType(Enum):
     WaitForCurrentSnapshotsCreate = (19, AdminStatus.No, serverless.Status.Internal)
     Downsample = (20, AdminStatus.No, serverless.Status.Internal)
     Esql = (21, AdminStatus.No, serverless.Status.Public)
+    EsqlProfile = (59, AdminStatus.No, serverless.Status.Public)
 
     # administrative actions
     ForceMerge = (22, AdminStatus.Yes, serverless.Status.Internal)
@@ -876,6 +877,8 @@ class OperationType(Enum):
             return OperationType.Downsample
         elif v == "esql":
             return OperationType.Esql
+        elif v == "esql-profile":
+            return OperationType.EsqlProfile
         elif v == "run-until":
             return OperationType.RunUntil
         else:
