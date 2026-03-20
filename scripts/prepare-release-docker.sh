@@ -47,8 +47,10 @@
 #                    is mounted under ${CONTAINER_HOME}/.github/...
 #   RALLY_GITCONFIG — host path to gitconfig (default ~/.gitconfig); mounted to
 #                     ${CONTAINER_HOME}/.gitconfig when the file exists
-#   DOCKER_USER    — e.g. "$(id -u):$(id -g)" on Linux to reduce root-owned files on
-#                    bind-mounted repo dirs (still set GIT_* or gitconfig as needed).
+#   DOCKER_USER    — container user as uid:gid for `docker run --user` (default:
+#                    host $(id -u):$(id -g) so bind-mounted files are not root-owned).
+#                    Release prep uses a venv under ${CONTAINER_HOME} so non-root installs
+#                    work. Set to e.g. 0:0 only if you intentionally want root in the container.
 #
 # TTY: uses docker -it only when stdout is a terminal; otherwise -i (e.g. CI).
 #
@@ -113,9 +115,9 @@ else
 	echo "warning: gitconfig not found at $GITCONFIG_HOST; git commit may fail without user.name/user.email" >&2
 fi
 
-if [[ -n "${DOCKER_USER:-}" ]]; then
-	DOCKER_ARGS+=(--user "${DOCKER_USER}")
-fi
+# Default to host UID/GID so editable installs and egg-info on the bind mount are owned by you.
+DOCKER_USER="${DOCKER_USER:-$(id -u):$(id -g)}"
+DOCKER_ARGS+=(--user "${DOCKER_USER}")
 
 if [[ -z "${RALLY_PREPARE_RELEASE_SKIP_BUILD:-}" ]]; then
 	docker build -f "${DOCKERFILE_PREPARE_RELEASE}" -t "${DOCKER_IMAGE}" "${REPO_ROOT}"
@@ -123,6 +125,13 @@ fi
 
 docker run "${DOCKER_ARGS[@]}" "${DOCKER_IMAGE}" bash -lc '
 set -eux
-uv pip install --system --no-cache github3.py
+# Pin matches project.optional-dependencies.develop (pyproject.toml).
+GITHUB3_PY_PIN="github3.py==3.2.0"
+VENV="${HOME}/.prepare-release-venv"
+rm -rf "${VENV}"
+uv venv "${VENV}"
+# shellcheck source=/dev/null
+. "${VENV}/bin/activate"
+uv pip install --no-cache "${GITHUB3_PY_PIN}"
 bash -x prepare-release.sh "${RELEASE_VERSION}"
 '

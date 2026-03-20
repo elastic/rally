@@ -2,7 +2,7 @@
 
 #### Highlights
 
-* [#1981](https://github.com/elastic/rally/pull/1981) (Breaking): It drops support for Python3.9, it add support for Python 3.13, and it drops nox dependencies in favor of uv.
+* [#1981](https://github.com/elastic/rally/pull/1981) (Breaking): Drops support for Python 3.9, adds support for Python 3.13, and drops nox dependencies in favor of uv.
 * [#2056](https://github.com/elastic/rally/pull/2056): Add ``render-track`` command to render a track's Jinja2 templates to JSON
 * [#2047](https://github.com/elastic/rally/pull/2047) / [#2058](https://github.com/elastic/rally/pull/2058): Add ``esql-profile`` operation for ES|QL queries with profiling and operator timing metrics
 * [#2037](https://github.com/elastic/rally/pull/2037): ingest-doc-count option should take the number of clients into account
@@ -25,12 +25,12 @@
 * [#2015](https://github.com/elastic/rally/pull/2015): Modify storage CLI to produce multiple objects for transference stats and mirror failures when using --filebeat option
 * [#2013](https://github.com/elastic/rally/pull/2013): It reads transfer URL from `.status` file instead of looking at its relative path.
 * [#2008](https://github.com/elastic/rally/pull/2008): It implements `esrally-storage prune` sub-command.
-* [#1959](https://github.com/elastic/rally/pull/1959): Capture statistics during data dowload so that we can profile mirrors configuration in CI.
+* [#1959](https://github.com/elastic/rally/pull/1959): Capture statistics during data download so that we can profile mirrors configuration in CI.
 * [#2005](https://github.com/elastic/rally/pull/2005): Adjust default IT folder
 * [#2004](https://github.com/elastic/rally/pull/2004): Add sampling method parameter to downsampling
 * [3d6864db](https://github.com/elastic/rally/commit/3d6864db): It adds Google Cloud Storage adapter.
 * [#2001](https://github.com/elastic/rally/pull/2001): Sort files to make deterministic
-* [#1995](https://github.com/elastic/rally/pull/1995): Initalize all loggers in rally daemon
+* [#1995](https://github.com/elastic/rally/pull/1995): Initialize all loggers in rally daemon
 * [#1996](https://github.com/elastic/rally/pull/1996): Speedup default s3 corpus downloader
 * [#1965](https://github.com/elastic/rally/pull/1965): It enables the new multipart transfer manager inside track downloader.
 * [#1986](https://github.com/elastic/rally/pull/1986): Enable a release build of an Elasticsearch revision from sources (source.build.release)
@@ -55,9 +55,9 @@
 
 * [#2053](https://github.com/elastic/rally/pull/2053): fixes for including the chunk of the partition to calculate the amount of data to handle per partition
 * [#2050](https://github.com/elastic/rally/pull/2050): Correct syntax
-* [#2038](https://github.com/elastic/rally/pull/2038): Fix Docker build revisisted
+* [#2038](https://github.com/elastic/rally/pull/2038): Fix Docker build revisited
 * [#2035](https://github.com/elastic/rally/pull/2035): Fix Docker build
-* [a9c3ab99](https://github.com/elastic/rally/commit/a9c3ab99): It fiexes `esrally-storage` put command target file names when multiple files are copied.
+* [a9c3ab99](https://github.com/elastic/rally/commit/a9c3ab99): It fixes `esrally-storage` put command target file names when multiple files are copied.
 * [#2017](https://github.com/elastic/rally/pull/2017): Pin requirement: google-crc32c==1.7.1
 * [#2014](https://github.com/elastic/rally/pull/2014): Fix optional version branch regex
 * [#2012](https://github.com/elastic/rally/pull/2012): Fix cli_test
