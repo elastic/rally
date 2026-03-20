@@ -243,6 +243,34 @@ def create_arg_parser():
         help="Defines a comma-separated list of tasks not to run. By default all tasks of a challenge are run.",
     )
 
+    render_track_parser = subparsers.add_parser("render-track", help="Render a track's Jinja2 templates into a single JSON output")
+    add_track_source(render_track_parser)
+    render_track_parser.add_argument(
+        "--track",
+        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`.",
+    )
+    render_track_parser.add_argument(
+        "--track-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
+        default="",
+    )
+    render_track_parser.add_argument(
+        "--build-flavor",
+        help="Define the build flavor to render the track for.",
+        choices=["default", "serverless"],
+    )
+    render_track_parser.add_argument(
+        "--serverless-operator",
+        help="Whether to render the track for a serverless operator.",
+        default=False,
+        action="store_true",
+    )
+    render_track_parser.add_argument(
+        "--output-path",
+        help="Path to the output file. If not specified, the rendered track is written to stdout.",
+        default=None,
+    )
+
     create_track_parser = subparsers.add_parser("create-track", help="Create a Rally track from existing data")
     create_track_parser.add_argument(
         "--track",
@@ -872,6 +900,7 @@ def create_arg_parser():
         start_parser,
         stop_parser,
         info_parser,
+        render_track_parser,
         create_track_parser,
     ]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -882,9 +911,9 @@ def create_arg_parser():
         )
         p.add_argument(
             "--quiet",
-            help="Suppress as much as output as possible (default: false).",
-            default=False,
-            action="store_true",
+            help=f"Suppress as much output as possible (default: {str(p is render_track_parser).lower()}).",
+            default=p is render_track_parser,  # disable output for render-track
+            action=argparse.BooleanOptionalAction,
         )
         p.add_argument(
             "--offline",
@@ -1064,7 +1093,7 @@ def configure_telemetry_params(args, cfg: types.Config):
     cfg.add(config.Scope.applicationOverride, "telemetry", "params", opts.to_dict(args.telemetry_params))
 
 
-def configure_track_params(arg_parser, args, cfg: types.Config, command_requires_track=True):
+def configure_track_params(arg_parser, args, cfg: types.Config, command_requires_track=True, command_requires_track_details=True):
     cfg.add(config.Scope.applicationOverride, "track", "repository.revision", args.track_revision)
     # We can assume here that if a track-path is given, the user did not specify a repository either (although argparse sets it to
     # its default value)
@@ -1084,7 +1113,7 @@ def configure_track_params(arg_parser, args, cfg: types.Config, command_requires
                 raise arg_parser.error("argument --track is required")
             cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
 
-    if command_requires_track:
+    if command_requires_track_details:
         cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
         cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
         cfg.add(config.Scope.applicationOverride, "track", "include.tasks", opts.csv_to_list(args.include_tasks))
@@ -1150,7 +1179,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
             cfg.add(config.Scope.applicationOverride, "system", "list.challenge", args.challenge)
             configure_mechanic_params(args, cfg, command_requires_car=False)
-            configure_track_params(arg_parser, args, cfg, command_requires_track=False)
+            configure_track_params(arg_parser, args, cfg, command_requires_track=False, command_requires_track_details=False)
             dispatch_list(cfg)
         elif sub_command == "delete":
             cfg.add(config.Scope.applicationOverride, "system", "delete.config.option", args.configuration)
@@ -1260,6 +1289,14 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
         elif sub_command == "info":
             configure_track_params(arg_parser, args, cfg)
             track.track_info(cfg)
+        elif sub_command == "render-track":
+            configure_track_params(arg_parser, args, cfg, command_requires_track_details=False)
+            if args.track:
+                cfg.add(config.Scope.applicationOverride, "track", "track.name", args.track)
+            cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
+            track.render_track(
+                cfg, build_flavor=args.build_flavor, serverless_operator=args.serverless_operator, output_path=args.output_path
+            )
         else:
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
         return ExitStatus.SUCCESSFUL
