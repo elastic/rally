@@ -1,14 +1,10 @@
 ### 2.13.0
 
-### 2.13.0
-
-### 2.13.0
-
-### 2.13.0
-
 #### Highlights
 
 * [#1981](https://github.com/elastic/rally/pull/1981) (Breaking): It drops support for Python3.9, it add support for Python 3.13, and it drops nox dependencies in favor of uv.
+* [#2056](https://github.com/elastic/rally/pull/2056): Add ``render-track`` command to render a track's Jinja2 templates to JSON
+* [#2047](https://github.com/elastic/rally/pull/2047) / [#2058](https://github.com/elastic/rally/pull/2058): Add ``esql-profile`` operation for ES|QL queries with profiling and operator timing metrics
 * [#2037](https://github.com/elastic/rally/pull/2037): ingest-doc-count option should take the number of clients into account
 * [#2033](https://github.com/elastic/rally/pull/2033): Add ingest-doc-count option to index an exact number of documents
 * [#1992](https://github.com/elastic/rally/pull/1992): Add run-until runner
@@ -86,6 +82,8 @@
 #### Miscellaneous Changes
 
 * [#2049](https://github.com/elastic/rally/pull/2049): Add shorter timeouts for dev docker builds
+* [#2062](https://github.com/elastic/rally/pull/2062): Apply ``persist-credentials: false`` to GitHub Actions workflows
+* Add optional Docker workflow for maintainers to run ``prepare-release.sh`` (``scripts/prepare-release-docker.sh``, ``scripts/Dockerfile.prepare-release``)
 * [#2027](https://github.com/elastic/rally/pull/2027): Bump wheel from 0.45.1 to 0.46.2
 * [#2025](https://github.com/elastic/rally/pull/2025): Bump pyasn1 from 0.6.1 to 0.6.2
 * [#2021](https://github.com/elastic/rally/pull/2021): Bump aiohttp from 3.10.11 to 3.13.3
