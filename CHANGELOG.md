@@ -55,7 +55,7 @@
 
 * [#2053](https://github.com/elastic/rally/pull/2053): fixes for including the chunk of the partition to calculate the amount of data to handle per partition
 * [#2050](https://github.com/elastic/rally/pull/2050): Correct syntax
-* [#2038](https://github.com/elastic/rally/pull/2038): Fix Docker build revisisted
+* [#2038](https://github.com/elastic/rally/pull/2038): Fix Docker build revisited
 * [#2035](https://github.com/elastic/rally/pull/2035): Fix Docker build
 * [a9c3ab99](https://github.com/elastic/rally/commit/a9c3ab99): It fiexes `esrally-storage` put command target file names when multiple files are copied.
 * [#2017](https://github.com/elastic/rally/pull/2017): Pin requirement: google-crc32c==1.7.1
