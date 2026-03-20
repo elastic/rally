@@ -2,7 +2,7 @@
 
 #### Highlights
 
-* [#1981](https://github.com/elastic/rally/pull/1981) (Breaking): It drops support for Python3.9, it add support for Python 3.13, and it drops nox dependencies in favor of uv.
+* [#1981](https://github.com/elastic/rally/pull/1981) (Breaking): Drops support for Python 3.9, adds support for Python 3.13, and drops nox dependencies in favor of uv.
 * [#2056](https://github.com/elastic/rally/pull/2056): Add ``render-track`` command to render a track's Jinja2 templates to JSON
 * [#2047](https://github.com/elastic/rally/pull/2047) / [#2058](https://github.com/elastic/rally/pull/2058): Add ``esql-profile`` operation for ES|QL queries with profiling and operator timing metrics
 * [#2037](https://github.com/elastic/rally/pull/2037): ingest-doc-count option should take the number of clients into account
