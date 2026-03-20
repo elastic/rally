@@ -1,5 +1,11 @@
 ### 2.13.0
 
+### 2.13.0
+
+### 2.13.0
+
+### 2.13.0
+
 #### Highlights
 
 * [#1981](https://github.com/elastic/rally/pull/1981) (Breaking): It drops support for Python3.9, it add support for Python 3.13, and it drops nox dependencies in favor of uv.

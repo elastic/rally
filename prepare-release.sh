@@ -47,7 +47,12 @@ printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
 
 echo "Updating release version number"
 printf '__version__ = "%s"\n' $RELEASE_VERSION > esrally/_version.py
-git commit -a -m "Bump version to $RELEASE_VERSION"
+# Non-empty PREPARE_RELEASE_NO_VERIFY adds --no-verify (e.g. scripts/prepare-release-docker.sh).
+if [[ -n "${PREPARE_RELEASE_NO_VERIFY:-}" ]]; then
+	git commit -a -m "Bump version to $RELEASE_VERSION" --no-verify
+else
+	git commit -a -m "Bump version to $RELEASE_VERSION"
+fi
 
 pip install --editable .
 
