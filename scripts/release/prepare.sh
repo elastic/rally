@@ -48,7 +48,7 @@ CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")"
 printf '%s\n\n%s' "$CHANGELOG" "$(cat CHANGELOG.md)" > CHANGELOG.md
 
 echo "Updating release version number"
-printf '__version__ = "%s"\n' $RELEASE_VERSION > esrally/_version.py
+printf '__version__ = "%s"\n' "$RELEASE_VERSION" > esrally/_version.py
 # Non-empty PREPARE_RELEASE_NO_VERIFY adds --no-verify (e.g. scripts/release/prepare-docker.sh).
 git commit -a -m "Bump version to $RELEASE_VERSION" ${PREPARE_RELEASE_NO_VERIFY:+--no-verify}
 
