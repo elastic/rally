@@ -158,6 +158,13 @@ You can then build and test the image with::
 Release preparation image (maintainers)
 ---------------------------------------
 
-The ``elastic/rally`` image above is for **running** benchmarks. It is not used to cut Rally releases.
+The ``elastic/rally`` image above is for **running** benchmarks. Rally releases use a **separate** image and script path.
 
-Maintainers who want to run ``scripts/release/prepare.sh`` in an isolated environment can use ``scripts/release/prepare-docker.sh``, which builds ``scripts/release/Dockerfile`` and bind-mounts a source checkout. That flow is documented under :ref:`dev_preparing_a_release` in :doc:`developing`.
+Maintainers run ``scripts/release/prepare-docker.sh``, which:
+
+* Builds ``scripts/release/Dockerfile`` (Python 3.13 on Debian bookworm, plus ``jq``, ``git``, ``make``, ``uv``, compilers). The image installs ``github3-py`` and performs a minimal **editable** install of Rally (``pyproject.toml``, ``README.md``, and ``esrally/`` only) so unrelated tree changes do not constantly invalidate the image layers.
+* Uses the **repository root** as the Docker build context. The root **``.dockerignore``** file excludes typical dev artifacts (virtualenvs, ``docs/_build``, tests metadata, etc.) so ``docker build`` stays fast and the context stays small.
+* Bind-mounts your full checkout to ``/workspace`` and mounts a **named volume** at ``/workspace/.venv`` (``rally-prepare-release-venv``) so the container does not use the host virtualenv.
+* Runs ``scripts/release/prepare.sh`` under your host UID/GID (via ``setpriv`` after a one-time ``chown`` on the venv volume) so ``NOTICE.txt``, ``CHANGELOG.md``, and other generated files are owned correctly on the bind mount.
+
+Changelog generation and GitHub milestone behavior (including creating or reopening a milestone) live in ``scripts/release/changelog.py``; token setup is described under :ref:`dev_preparing_a_release` in :doc:`developing`.

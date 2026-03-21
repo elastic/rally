@@ -79,6 +79,10 @@ Then sit back and wait. There will probably be discussion about the pull request
 
 Note: Contributors belonging to the "Elastic" organization on Github can merge PRs themselves after getting a "LGTM" (Looks good to me); this workflow is similar to the established one in the Elasticsearch project.
 
+## Release process (maintainers)
+
+Version bumps and changelog updates are automated with `scripts/release/prepare.sh` (often via `make release RELEASE_VERSION=X.Y.Z`, which uses Docker). See the **Preparing a release** section in the [development documentation](https://esrally.readthedocs.io/en/latest/developing.html#preparing-a-release) for milestones, GitHub tokens, the release container, and how that differs from the published `elastic/rally` benchmark image.
+
 # Contributing to the Rally codebase
 
 **Repository:** [https://github.com/elastic/rally](https://github.com/elastic/rally)

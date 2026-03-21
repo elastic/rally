@@ -110,13 +110,17 @@ Store the token as a single line in ``~/.github/rally_release_changelog.token``,
 
 A **classic** personal access token with the **public_repo** scope (public repositories only) or the **repo** scope can also work, as noted in ``scripts/release/changelog.py``; fine-grained tokens with Issues **Read and write** are preferred for least privilege.
 
-From a clean working tree (after staging intended changes), run::
+From a clean working tree (after staging intended changes), you can run ``prepare.sh`` on the host (with a suitable Python environment and ``github3-py`` available), or use Docker as below.
 
-    ./scripts/release/prepare.sh X.Y.Z
+**Makefile:** ``make release RELEASE_VERSION=X.Y.Z`` invokes ``scripts/release/prepare-docker.sh`` on **all** platforms. That script builds the image in ``scripts/release/Dockerfile``, bind-mounts your repository at ``/workspace``, and runs ``scripts/release/prepare.sh`` inside the container. This is **not** the published ``elastic/rally`` benchmark image; see :doc:`docker` for the distinction.
 
-**Makefile:** ``make release RELEASE_VERSION=X.Y.Z`` runs ``clean``, ``install``, ``docs``, ``lint``, ``test``, and ``release-checks``, then on Linux runs ``scripts/release/prepare.sh``; on non-Linux it runs ``scripts/release/prepare-docker.sh`` instead (same prerequisite steps).
+The container uses your host UID/GID (``DOCKER_USER``, default from ``id -u`` / ``id -g``) for the actual ``prepare.sh`` work so files written to the bind mount are not root-owned. It starts as root only long enough to ``chown`` a **named Docker volume** mounted at ``/workspace/.venv`` (``rally-prepare-release-venv``), so the release environment does not reuse the host ``.venv`` (avoids broken cross-OS symlinks). Remove that volume if you need a fresh in-container env: ``docker volume rm rally-prepare-release-venv``.
 
-**Docker (maintainers):** ``scripts/release/prepare-docker.sh`` builds the image defined in ``scripts/release/Dockerfile`` (Python 3.13, uv, jq, git, compilers) and runs ``make release`` inside a container with the repository bind-mounted. By default ``DOCKER_USER`` is the host UID and GID (from ``id -u`` and ``id -g``). It runs ``make pre-commit`` on the **host** first; the bump commit inside the container uses ``git commit --no-verify`` (via ``PREPARE_RELEASE_NO_VERIFY``) so hooks are not run twice. Optional environment variables and behavior are documented in the script header (e.g. ``RALLY_CHANGELOG_TOKEN``, ``RALLY_GITCONFIG``, ``DOCKER_IMAGE``, ``DOCKER_USER``, ``RALLY_PREPARE_RELEASE_SKIP_HOST_PRE_COMMIT``). This is separate from the published ``elastic/rally`` benchmark image; see :doc:`docker` for the latter.
+Docker build context is the repository root; **``.dockerignore``** keeps the context small (see comments in that file).
+
+``make release`` does **not** run ``clean``, ``install``, ``docs``, ``lint``, or ``test`` for you. Before opening a release pull request, run the validation your team expects on the host (for example ``make check-all``) and ``make release-checks RELEASE_VERSION=X.Y.Z`` when applicable. The version bump commit inside the container sets ``PREPARE_RELEASE_NO_VERIFY`` so ``git commit`` skips hooks there; run ``make pre-commit`` on the host beforehand if you want hooks to fire before you release.
+
+Optional environment variables (token path, image tag, skipping the image rebuild, etc.) are documented in the header of ``scripts/release/prepare-docker.sh``.
 
 How to contribute code
 ----------------------

@@ -17,18 +17,19 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# Runs `make pre-commit` on the host first, then `make release` in Docker (Linux).
-# The container sets PREPARE_RELEASE_NO_VERIFY so the version bump commit skips hooks
-# (hooks already ran on the host).
+# Builds scripts/release/Dockerfile and runs scripts/release/prepare.sh in a container
+# with the repo bind-mounted. The container sets PREPARE_RELEASE_NO_VERIFY so the
+# version bump commit skips git hooks there; run `make pre-commit` on the host first
+# if you want hooks before releasing.
 #
 # Image: scripts/release/Dockerfile (Python 3.13, jq, uv, make, git, …).
 #
 # Usage:
 #   ./scripts/release/prepare-docker.sh <release_version>
 #
-# Prerequisites (same as on the host):
-#   - Open GitHub milestone on elastic/rally titled exactly <release_version>
-#     (see scripts/release/changelog.py); otherwise prepare.sh fails.
+# Prerequisites:
+#   - GitHub milestone on elastic/rally titled exactly <release_version>
+#     (scripts/release/changelog.py opens, reopens, or creates one as needed; see docs).
 #   - Token file for changelog.py: default path ~/.github/rally_release_changelog.token
 #     Override with RALLY_CHANGELOG_TOKEN=/path/to/file
 #
@@ -39,7 +40,6 @@
 #   override author for the commit.
 #
 # Optional environment:
-#   RALLY_PREPARE_RELEASE_SKIP_HOST_PRE_COMMIT — if set, skip `make pre-commit` on the host
 #   DOCKER_IMAGE   — image tag to build/run (default rally-prepare-release:local)
 #   RALLY_PREPARE_RELEASE_SKIP_BUILD — if set (non-empty), skip docker build and use
 #                                      existing DOCKER_IMAGE
