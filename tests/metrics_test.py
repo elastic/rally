@@ -887,9 +887,9 @@ class TestEsMetricsStore:
 
         def _index_name(race_timestamp):
             if use_data_streams:
-                return f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsStoreType.metrics.data_stream_version}"
+                return f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}"
             ts = time.from_iso8601(race_timestamp) if isinstance(race_timestamp, str) else race_timestamp
-            return f"{metrics.EsMetricsStore.INDEX_PREFIX}{ts.year:04d}-{ts.month:02d}"
+            return f"{metrics.EsStoreType.metrics.index_prefix}{ts.year:04d}-{ts.month:02d}"
 
         index_handler.index_name.side_effect = _index_name
         return index_handler
@@ -1148,7 +1148,7 @@ class TestEsMetricsStore:
         )
 
         self.es_mock.search.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
+            index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
         )
 
         assert actual_duration == duration
@@ -1179,7 +1179,7 @@ class TestEsMetricsStore:
         )
 
         self.es_mock.search.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
+            index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
         )
 
         assert actual_duration == duration
@@ -1226,7 +1226,7 @@ class TestEsMetricsStore:
         actual_throughput = self.metrics_store.get_one("indexing_throughput")
 
         self.es_mock.search.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
+            index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
         )
 
         assert actual_throughput == throughput
@@ -1266,7 +1266,7 @@ class TestEsMetricsStore:
         actual_index_size = self.metrics_store.get_one("final_index_size_bytes", node_name="rally-node-3")
 
         self.es_mock.search.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
+            index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
         )
 
         assert actual_index_size == index_size
@@ -1314,7 +1314,7 @@ class TestEsMetricsStore:
         actual_mean_throughput = self.metrics_store.get_mean("indexing_throughput", operation_type="bulk")
 
         self.es_mock.search.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
+            index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
         )
 
         assert actual_mean_throughput == mean_throughput
@@ -1361,7 +1361,7 @@ class TestEsMetricsStore:
         actual_median_throughput = self.metrics_store.get_median("indexing_throughput", operation_type="bulk")
 
         self.es_mock.search.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
+            index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
         )
 
         assert actual_median_throughput == median_throughput
@@ -1508,7 +1508,7 @@ class TestEsMetricsStore:
 
         actual_error_rate = self.metrics_store.get_error_rate("scroll_query")
         self.es_mock.search.assert_called_with(
-            index=f"{metrics.EsMetricsStore.INDEX_PREFIX}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
+            index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
         )
         return actual_error_rate
 
@@ -1546,8 +1546,8 @@ class TestEsRaceStore:
 
         def _index_name(race_timestamp):
             if use_data_streams:
-                return f"{metrics.EsRaceStore.INDEX_PREFIX}{metrics.EsStoreType.races.data_stream_version}"
-            return f"{metrics.EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+                return f"{metrics.EsStoreType.races.index_prefix}{metrics.EsStoreType.races.data_stream_version}"
+            return f"{metrics.EsStoreType.races.index_prefix}{race_timestamp:%Y-%m}"
 
         index_handler.index_name.side_effect = _index_name
         return index_handler
@@ -1821,8 +1821,8 @@ class TestEsResultsStore:
 
         def _index_name(race_timestamp):
             if use_data_streams:
-                return f"{metrics.EsResultsStore.INDEX_PREFIX}{metrics.EsStoreType.results.data_stream_version}"
-            return f"{metrics.EsResultsStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+                return f"{metrics.EsStoreType.results.index_prefix}{metrics.EsStoreType.results.data_stream_version}"
+            return f"{metrics.EsStoreType.results.index_prefix}{race_timestamp:%Y-%m}"
 
         index_handler.index_name.side_effect = _index_name
         return index_handler

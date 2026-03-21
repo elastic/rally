@@ -1121,8 +1121,6 @@ class EsMetricsStore(MetricsStore):
     A metrics store for telemetry backed by Elasticsearch.
     """
 
-    INDEX_PREFIX = "rally-metrics-"
-
     def __init__(
         self,
         cfg: types.Config,
@@ -1995,8 +1993,6 @@ class EsRaceStore(RaceStore):
     A metric store for race information backed by Elasticsearch.
     """
 
-    INDEX_PREFIX = "rally-races-"
-
     def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory):
         """
         Creates a new metrics store.
@@ -2189,7 +2185,7 @@ class EsRaceStore(RaceStore):
             query["query"]["bool"]["filter"].append({"term": {"challenge": challenge}})
         if user_tags:
             query["query"]["bool"]["filter"].extend([{"term": {f"user-tags.{k}": v}} for k, v in user_tags.items()])
-        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
+        result = self.client.search(index="%s*" % EsStoreType.races.index_prefix, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
         if isinstance(hits, dict):
@@ -2213,7 +2209,7 @@ class EsRaceStore(RaceStore):
                 },
             },
         }
-        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
+        result = self.client.search(index="%s*" % EsStoreType.races.index_prefix, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
         if isinstance(hits, dict):
@@ -2230,8 +2226,6 @@ class EsResultsStore:
     """
     Stores the results of a race in a format that is better suited for reporting with Kibana.
     """
-
-    INDEX_PREFIX = "rally-results-"
 
     def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory):
         """
