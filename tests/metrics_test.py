@@ -843,7 +843,7 @@ class TestIndexHandler:
         self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", case.use_data_streams)
 
         if case.use_data_streams:
-            self.client.lifecycle_exists.return_value = False
+            self.client.get_lifecycle.return_value = False
             self.client.component_template_exists.return_value = False
         self.client.index_template_exists.return_value = False
 

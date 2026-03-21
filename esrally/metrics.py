@@ -581,7 +581,7 @@ class IndexHandler:
     def _ensure_lifecycle_policy(self, name, policy):
         new_policy_body = json.loads(policy).get("policy", {})
         old_policy = None
-        if self._client.lifecycle_exists(name):
+        if self._client.get_lifecycle(name):
             old_policy = self._client.get_lifecycle(name).body.get(name, {}).get("policy", {})
 
         if self._should_apply_update(f"lifecycle policy [{name}]", old_policy, new_policy_body):
