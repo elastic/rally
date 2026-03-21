@@ -73,18 +73,6 @@ class EsClient:
         ilm_policy = json.loads(policy)
         return self.guarded(self._client.ilm.put_lifecycle, name=name, **ilm_policy)
 
-    def lifecycle_exists(self, name):
-        # pylint: disable=import-outside-toplevel
-        from elastic_transport import ApiError
-
-        try:
-            self._client.ilm.get_lifecycle(name=name)
-            return True
-        except ApiError as e:
-            if getattr(e, "status_code", None) == 404:
-                return False
-            raise
-
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
 
