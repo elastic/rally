@@ -48,7 +48,7 @@
 #                     ${CONTAINER_HOME}/.gitconfig when the file exists
 #   DOCKER_USER    — uid:gid for `scripts/release/prepare.sh` inside the container (default:
 #                    host $(id -u):$(id -g) so bind-mounted files are not root-owned).
-#                    The container starts as root only long enough to chown the venv volume.
+#                    The container starts as root only long enough to create/chown the venv volume.
 #   A named Docker volume is mounted at /workspace/.venv so the host .venv is not used
 #   (avoids broken cross-OS Python symlinks). Remove it for a fresh env:
 #     docker volume rm rally-prepare-release-venv
@@ -122,4 +122,9 @@ if [[ -z "${RALLY_PREPARE_RELEASE_SKIP_BUILD:-}" ]]; then
 fi
 
 docker run "${DOCKER_ARGS[@]}" --user root "${DOCKER_IMAGE}" \
-	sh -c "mkdir -p /workspace/.venv && chown -R \"${HOST_UID}:${HOST_GID}\" /workspace/.venv && cd /workspace && exec setpriv --reuid=\"${HOST_UID}\" --regid=\"${HOST_GID}\" --clear-groups -- scripts/release/prepare.sh \"${VERSION}\""
+	sh -c "mkdir -p /workspace/.venv && \
+		if [ ! -x /workspace/.venv/bin/python ]; then python3 -m venv /workspace/.venv; fi && \
+		chown -R \"${HOST_UID}:${HOST_GID}\" /workspace/.venv && \
+		cd /workspace && \
+		exec setpriv --reuid=\"${HOST_UID}\" --regid=\"${HOST_GID}\" --clear-groups -- \
+			env VIRTUAL_ENV=/workspace/.venv PATH=/workspace/.venv/bin:\$PATH scripts/release/prepare.sh \"${VERSION}\""

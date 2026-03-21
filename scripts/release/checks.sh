@@ -36,7 +36,7 @@ if [[ ${KERNEL_NAME} != *"Linux"* ]]; then
 		echo "The release process requires a valid GitHub token."
 		exit 1
 	fi
-	CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")"
+	python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}" >/dev/null
 	exit 0
 fi
 
@@ -47,7 +47,7 @@ if [[ -f /.dockerenv ]]; then
 		echo "The release process requires a valid GitHub token."
 		exit 1
 	fi
-	CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")"
+	python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}" >/dev/null
 	exit 0
 fi
 
@@ -77,4 +77,4 @@ if [[ ${ORIGIN_URL} != *"elastic/rally"* ]]; then
 fi
 
 # Check if there will be any errors during CHANGELOG.md generation
-CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")"
+python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}" >/dev/null
