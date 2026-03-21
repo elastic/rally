@@ -575,19 +575,17 @@ class TestIndexTemplateProvider:
     def _all_templates(self, provider):
         return [
             provider.annotations_template(),
-            provider.metrics_template(),
-            provider.races_template(),
-            provider.results_template(),
+            provider.get_template(metrics.EsStoreType.metrics),
+            provider.get_template(metrics.EsStoreType.races),
+            provider.get_template(metrics.EsStoreType.results),
         ]
 
-    def _data_stream_templates(self, provider):
+    def _data_stream_templates(self, provider: metrics.ComponentTemplateProvider):
         return [
-            provider.metrics_template(),
-            provider.races_template(),
-            provider.results_template(),
+            provider.get_template(metrics.EsStoreType.metrics),
+            provider.get_template(metrics.EsStoreType.races),
+            provider.get_template(metrics.EsStoreType.results),
         ]
-
-    # -- shard setting cases --
 
     @dataclass
     class ShardSettingsCase:
@@ -642,8 +640,6 @@ class TestIndexTemplateProvider:
                 assert idx_settings["number_of_replicas"] == want_replicas
             else:
                 assert "number_of_replicas" not in idx_settings
-
-    # -- data streams cases --
 
     @dataclass
     class DataStreamsCase:
@@ -729,8 +725,8 @@ class TestComponentTemplateProvider:
     )
     def test_component_template_structure(self, case: StoreTypeCase):
         provider = self._make_provider()
-        template_fn = getattr(provider, f"{case.store_name}_template")
-        components = json.loads(template_fn())
+        template_fn = getattr(provider, "get_template")
+        components = json.loads(template_fn(metrics.EsStoreType[case.store_name]))
 
         mapping_key = f"{case.store_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_MAPPING_SUFFIX}"
         lifecycle_key = f"{case.store_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX}"
@@ -753,22 +749,24 @@ class TestComponentTemplateProvider:
 
     @dataclass
     class ShardSettingsCase:
+        store_names: list[str]
         number_of_shards: object = None
         number_of_replicas: object = None
 
     @cases.cases(
         both_specified=ShardSettingsCase(
+            store_names=["metrics", "races", "results"],
             number_of_shards=random.randint(1, 100),
             number_of_replicas=random.randint(0, 100),
         ),
-        shards_only=ShardSettingsCase(number_of_shards=random.randint(1, 100)),
-        replicas_only=ShardSettingsCase(number_of_replicas=random.randint(0, 100)),
+        shards_only=ShardSettingsCase(store_names=["metrics", "races", "results"], number_of_shards=random.randint(1, 100)),
+        replicas_only=ShardSettingsCase(store_names=["metrics", "races", "results"], number_of_replicas=random.randint(0, 100)),
     )
     def test_shard_settings_propagate_to_lifecycle_component(self, case: ShardSettingsCase):
         provider = self._make_provider(number_of_shards=case.number_of_shards, number_of_replicas=case.number_of_replicas)
 
-        for store_name in ("metrics", "races", "results"):
-            components = json.loads(getattr(provider, f"{store_name}_template")())
+        for store_name in case.store_names:
+            components = json.loads(getattr(provider, "get_template")(metrics.EsStoreType[store_name]))
             lifecycle_key = f"{store_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX}"
             idx_settings = json.loads(components[lifecycle_key])["template"]["settings"]["index"]
 
@@ -849,7 +847,7 @@ class TestIndexHandler:
 
         handler = metrics.IndexHandler(self.cfg, self.client, case.es_store_type)
         if case.use_data_streams:
-            handler._ilm_policy_resource = mock.MagicMock(return_value=json.dumps({"policy": {}}))
+            handler._ilm_default_template = mock.MagicMock(return_value=json.dumps({"policy": {}}))
 
         race_ts = self.RACE_TIMESTAMP if case.use_data_streams else time.to_iso8601(self.RACE_TIMESTAMP)
         handler.ensure_index_template(create=case.create, race_timestamp=race_ts)

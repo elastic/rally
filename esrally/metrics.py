@@ -313,6 +313,29 @@ class EsClientFactory:
         return c
 
 
+class EsStoreType(Enum):
+    metric_name: str
+    index_prefix: str
+    index_template_name: str
+    index_template_resource: str
+    ilm_default: str
+    data_stream_version: str
+
+    metrics = ("metrics", "v1")
+    results = ("results", "v1")
+    races = ("races", "v1")
+
+    def __new__(cls, metric_name, version):
+        obj = object.__new__(cls)
+        obj.metric_name = metric_name
+        obj.index_prefix = f"rally-{obj.metric_name}-"
+        obj.index_template_name = f"rally-{obj.metric_name}"
+        obj.index_template_resource = f"{obj.metric_name}-template"
+        obj.ilm_default = f"{obj.index_prefix}ilm-default"
+        obj.data_stream_version = version
+        return obj
+
+
 class IndexTemplateProvider:
     """
     Abstracts how the Rally index template is retrieved. Intended for testing.
@@ -327,14 +350,8 @@ class IndexTemplateProvider:
         )
         self.script_dir = self._config.opts("node", "rally.root")
 
-    def metrics_template(self):
-        return json.dumps(self._read("metrics-template"))
-
-    def races_template(self):
-        return json.dumps(self._read("races-template"))
-
-    def results_template(self):
-        return json.dumps(self._read("results-template"))
+    def get_template(self, es_store_type: EsStoreType):
+        return json.dumps(self._read(f"{es_store_type.index_template_resource}"))
 
     def annotations_template(self):
         return json.dumps(self._read("annotation-template", support_data_streams=False))
@@ -386,35 +403,10 @@ class ComponentTemplateProvider(IndexTemplateProvider):
             f"{name}{self.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}": json.dumps({"template": {}}),
         }
 
-    def metrics_template(self):
-        return json.dumps(self._get_component_templates("metrics", "metrics-template", "rally-metrics-ilm-default"))
-
-    def races_template(self):
-        return json.dumps(self._get_component_templates("races", "races-template", "rally-races-ilm-default"))
-
-    def results_template(self):
-        return json.dumps(self._get_component_templates("results", "results-template", "rally-results-ilm-default"))
-
-
-class EsStoreType(Enum):
-    metric_name: str
-    index_prefix: str
-    index_template_name: str
-    ilm_default: str
-    data_stream_version: str
-
-    metrics = ("metrics", "v1")
-    results = ("results", "v1")
-    races = ("races", "v1")
-
-    def __new__(cls, metric_name, version):
-        obj = object.__new__(cls)
-        obj.metric_name = metric_name
-        obj.index_prefix = f"rally-{obj.metric_name}-"
-        obj.index_template_name = f"rally-{obj.metric_name}"
-        obj.ilm_default = f"{obj.index_prefix}ilm-default"
-        obj.data_stream_version = version
-        return obj
+    def get_template(self, es_store_type: EsStoreType):
+        return json.dumps(
+            self._get_component_templates(es_store_type.metric_name, es_store_type.index_template_resource, es_store_type.ilm_default)
+        )
 
 
 class IndexHandler:
@@ -459,7 +451,7 @@ class IndexHandler:
 
     def ensure_index_template(self, create=False, race_timestamp=None):
         if self.use_data_streams:
-            self._ensure_lifecycle_policy(self._es_store_type.ilm_default, self._ilm_policy_resource(self._es_store_type.ilm_default))
+            self._ensure_lifecycle_policy(self._es_store_type.ilm_default, self._ilm_default_template(self._es_store_type.ilm_default))
             self._ensure_data_stream_template()
         else:
             self._ensure_date_based_template(create, race_timestamp)
@@ -467,19 +459,7 @@ class IndexHandler:
     def annotations_template(self):
         return self._index_template_provider.annotations_template()
 
-    def _index_template(self):
-        """
-        Returns an index template based on the index template provider class.
-        """
-        match self._es_store_type:
-            case EsStoreType.metrics:
-                return self._index_template_provider.metrics_template()
-            case EsStoreType.results:
-                return self._index_template_provider.results_template()
-            case EsStoreType.races:
-                return self._index_template_provider.races_template()
-
-    def _ilm_policy_resource(self, policy_name):
+    def _ilm_default_template(self, policy_name):
         with open("%s/resources/%s.json" % (self._index_template_provider.script_dir, policy_name), encoding="utf-8") as f:
             return json.dumps(json.load(f))
 
@@ -518,7 +498,7 @@ class IndexHandler:
             self._index_template_provider, IndexTemplateProvider
         ), "Expected IndexTemplateProvider for date-based indices but got [%s]" % type(self._index_template_provider)
 
-        _index_template = self._index_template()
+        _index_template = self._index_template_provider.get_template(self._es_store_type)
         if create:
             if self._client.index_template_exists(self._es_store_type.index_template_name):
                 old_template = None
@@ -551,7 +531,7 @@ class IndexHandler:
         # The index template is composed of multiple component templates.
         # We need to ensure that all component templates exist and are up to date
         # before we can put them together in the index template.
-        _index_template = json.loads(self._index_template())
+        _index_template = json.loads(self._index_template_provider.get_template(self._es_store_type))
 
         for name, template in _index_template.items():
             self._ensure_component_template(name, template)
