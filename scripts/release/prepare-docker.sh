@@ -50,7 +50,9 @@
 #                    host $(id -u):$(id -g) so bind-mounted files are not root-owned).
 #                    The container starts as root only long enough to create/chown the venv volume.
 #   A named Docker volume is mounted at /workspace/.venv so the host .venv is not used
-#   (avoids broken cross-OS Python symlinks). Remove it for a fresh env:
+#   (avoids broken cross-OS Python symlinks). The entrypoint installs github3.py into that
+#   venv (same pin as scripts/release/Dockerfile) before prepare.sh runs changelog.py.
+#   Remove the volume for a fresh env:
 #     docker volume rm rally-prepare-release-venv
 #
 # TTY: uses docker -it only when stdout is a terminal; otherwise -i (e.g. CI).
@@ -124,6 +126,7 @@ fi
 docker run "${DOCKER_ARGS[@]}" --user root "${DOCKER_IMAGE}" \
 	sh -c "mkdir -p /workspace/.venv && \
 		if [ ! -x /workspace/.venv/bin/python ]; then python3 -m venv /workspace/.venv; fi && \
+		/workspace/.venv/bin/pip install \"github3.py==3.2.0\" && \
 		chown -R \"${HOST_UID}:${HOST_GID}\" /workspace/.venv && \
 		cd /workspace && \
 		exec setpriv --reuid=\"${HOST_UID}\" --regid=\"${HOST_GID}\" --clear-groups -- \
