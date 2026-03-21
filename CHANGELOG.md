@@ -57,7 +57,7 @@
 * [#2050](https://github.com/elastic/rally/pull/2050): Correct syntax
 * [#2038](https://github.com/elastic/rally/pull/2038): Fix Docker build revisited
 * [#2035](https://github.com/elastic/rally/pull/2035): Fix Docker build
-* [a9c3ab99](https://github.com/elastic/rally/commit/a9c3ab99): It fixes `esrally-storage` put command target file names when multiple files are copied.
+* [#2023](https://github.com/elastic/rally/pull/2023): It fixes `esrally-storage` put command target file names when multiple files are copied.
 * [#2017](https://github.com/elastic/rally/pull/2017): Pin requirement: google-crc32c==1.7.1
 * [#2014](https://github.com/elastic/rally/pull/2014): Fix optional version branch regex
 * [#2012](https://github.com/elastic/rally/pull/2012): Fix cli_test
