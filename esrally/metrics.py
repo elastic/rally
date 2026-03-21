@@ -53,8 +53,37 @@ class EsClient:
         tmpl = json.loads(template)
         return self.guarded(self._client.indices.put_index_template, name=name, **tmpl)
 
-    def template_exists(self, name):
+    def index_template_exists(self, name):
         return self.guarded(self._client.indices.exists_index_template, name=name)
+
+    def get_component_template(self, name):
+        return self.guarded(self._client.cluster.get_component_template, name=name)
+
+    def put_component_template(self, name, template):
+        tmpl = json.loads(template)
+        return self.guarded(self._client.cluster.put_component_template, name=name, **tmpl)
+
+    def component_template_exists(self, name):
+        return self.guarded(self._client.cluster.exists_component_template, name=name)
+
+    def get_lifecycle(self, name):
+        return self.guarded(self._client.ilm.get_lifecycle, name=name)
+
+    def put_lifecycle(self, name, policy):
+        ilm_policy = json.loads(policy)
+        return self.guarded(self._client.ilm.put_lifecycle, name=name, **ilm_policy)
+
+    def lifecycle_exists(self, name):
+        # pylint: disable=import-outside-toplevel
+        from elastic_transport import ApiError
+
+        try:
+            self._client.ilm.get_lifecycle(name=name)
+            return True
+        except ApiError as e:
+            if getattr(e, "status_code", None) == 404:
+                return False
+            raise
 
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
@@ -310,21 +339,17 @@ class IndexTemplateProvider:
         )
         self.script_dir = self._config.opts("node", "rally.root")
 
-    @property
-    def use_data_streams(self):
-        return self._use_data_streams
-
     def metrics_template(self):
-        return self._read("metrics-template")
+        return json.dumps(self._read("metrics-template"))
 
     def races_template(self):
-        return self._read("races-template")
+        return json.dumps(self._read("races-template"))
 
     def results_template(self):
-        return self._read("results-template")
+        return json.dumps(self._read("results-template"))
 
     def annotations_template(self):
-        return self._read("annotation-template", support_data_streams=False)
+        return json.dumps(self._read("annotation-template", support_data_streams=False))
 
     def _read(self, template_name, support_data_streams=True):
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
@@ -339,15 +364,240 @@ class IndexTemplateProvider:
             if self._number_of_replicas is not None:
                 template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
             if self._use_data_streams and support_data_streams:
-                template["data_stream"] = {}
-
-                index_pattern = template["index_patterns"][0]
-                if index_pattern.endswith("-*"):
-                    index_pattern.replace("-*", "-v*")
-
                 if not template["template"]["mappings"]["properties"].get("@timestamp"):
                     template["template"]["mappings"]["properties"]["@timestamp"] = {"type": "date", "format": "epoch_millis"}
-            return json.dumps(template)
+            return template
+
+
+class ComponentTemplateProvider(IndexTemplateProvider):
+    """
+    Abstracts how the Rally component templates are retrieved. Intended for testing.
+    """
+
+    COMPONENT_TEMPLATE_MAPPING_SUFFIX = "-mapping"
+    COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX = "-ilm-default"
+    COMPONENT_TEMPLATE_CUSTOM_SUFFIX = "@custom"
+
+    def _get_component_templates(self, name, template_name, lifecycle_policy_name):
+        template = self._read(template_name)["template"]
+
+        return {
+            f"{name}{self.COMPONENT_TEMPLATE_MAPPING_SUFFIX}": json.dumps({"template": {"mappings": template["mappings"]}}),
+            f"{name}{self.COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX}": json.dumps(
+                {
+                    "template": {
+                        "settings": {
+                            "index": {
+                                **template.get("settings", {}).get("index", {}),
+                                "lifecycle": {"name": lifecycle_policy_name},
+                            }
+                        }
+                    }
+                }
+            ),
+            f"{name}{self.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}": json.dumps({"template": {}}),
+        }
+
+    def metrics_template(self):
+        return json.dumps(self._get_component_templates("metrics", "metrics-template", "rally-metrics-ilm-default"))
+
+    def races_template(self):
+        return json.dumps(self._get_component_templates("races", "races-template", "rally-races-ilm-default"))
+
+    def results_template(self):
+        return json.dumps(self._get_component_templates("results", "results-template", "rally-results-ilm-default"))
+
+
+class EsStoreType(Enum):
+    metric_name: str
+    index_prefix: str
+    index_template_name: str
+    ilm_default: str
+    data_stream_version: str
+
+    metrics = ("metrics", "v1")
+    results = ("results", "v1")
+    races = ("races", "v1")
+
+    def __new__(cls, metric_name, version):
+        obj = object.__new__(cls)
+        obj.metric_name = metric_name
+        obj.index_prefix = f"rally-{obj.metric_name}-"
+        obj.index_template_name = f"rally-{obj.metric_name}"
+        obj.ilm_default = f"{obj.index_prefix}ilm-default"
+        obj.data_stream_version = version
+        return obj
+
+
+class IndexHandler:
+
+    TEMPLATE_PRIORITY = 500
+
+    def __init__(
+        self,
+        cfg: types.Config,
+        client: EsClient,
+        es_store_type=EsStoreType.metrics,
+    ):
+        """
+        Index Handler abstraction. Used as a component in Metric Stores.
+
+        :param cfg: The config object. Mandatory.
+        :param clock: This parameter is optional and needed for testing.
+        :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
+        """
+        self._config = cfg
+        self._es_store_type = es_store_type
+        self.logger = logging.getLogger(f"{self._es_store_type.metric_name}{__name__}")
+        self._client = client
+        self._index_template_provider = ComponentTemplateProvider(cfg) if self.use_data_streams else IndexTemplateProvider(cfg)
+
+    @property
+    def use_data_streams(self):
+        return convert.to_bool(self._config.opts("reporting", "datastore.use_data_streams", default_value=True, mandatory=False))
+
+    @property
+    def overwrite_templates(self):
+        return convert.to_bool(
+            self._config.opts(section="reporting", key="datastore.overwrite_existing_templates", default_value=False, mandatory=False)
+        )
+
+    def index_name(self, race_timestamp=None):
+        if self.use_data_streams:
+            return f"{self._es_store_type.index_prefix}{self._es_store_type.data_stream_version}"
+        else:
+            ts = time.from_iso8601(race_timestamp)
+            return f"{self._es_store_type.index_prefix}{ts.year:04d}-{ts.month:02d}"
+
+    def ensure_index_template(self, create=False, race_timestamp=None):
+        if self.use_data_streams:
+            self._ensure_lifecycle_policy(self._es_store_type.ilm_default, self._ilm_policy_resource(self._es_store_type.ilm_default))
+            self._ensure_data_stream_template()
+        else:
+            self._ensure_date_based_template(create, race_timestamp)
+
+    def annotations_template(self):
+        return self._index_template_provider.annotations_template()
+
+    def _index_template(self):
+        """
+        Returns an index template based on the index template provider class.
+        """
+        match self._es_store_type:
+            case EsStoreType.metrics:
+                return self._index_template_provider.metrics_template()
+            case EsStoreType.results:
+                return self._index_template_provider.results_template()
+            case EsStoreType.races:
+                return self._index_template_provider.races_template()
+
+    def _ilm_policy_resource(self, policy_name):
+        with open("%s/resources/%s.json" % (self._index_template_provider.script_dir, policy_name), encoding="utf-8") as f:
+            return json.dumps(json.load(f))
+
+    def _data_stream_template(self, component_templates):
+        return json.dumps(
+            {
+                "index_patterns": [f"{self._es_store_type.index_prefix}v*"],
+                "data_stream": {},
+                "composed_of": component_templates,
+                "priority": self.TEMPLATE_PRIORITY,
+            }
+        )
+
+    def _migrated_index_name(self, original_name):
+        return f"{original_name}.new"
+
+    def _should_apply_update(self, resource_label, old_resource, new_resource):
+        """Returns True if the resource should be written, False to skip."""
+        if old_resource is None:
+            self.logger.info("Create %s:\n%s", resource_label, pretty.dump(new_resource, pretty.Flag.FLAT_DICT))
+            return True
+
+        diff = pretty.diff(old_resource, new_resource, pretty.Flag.FLAT_DICT)
+        if diff == "":
+            self.logger.debug("Keep existing %s (it is identical)", resource_label)
+            return False
+        if not self.overwrite_templates:
+            self.logger.debug("Keep existing %s (datastore.overwrite_existing_templates = false):\n%s", resource_label, diff)
+            return False
+
+        self.logger.warning("Overwrite existing %s (datastore.overwrite_existing_templates = true):\n%s", resource_label, diff)
+        return True
+
+    def _ensure_date_based_template(self, create, race_timestamp):
+        assert isinstance(
+            self._index_template_provider, IndexTemplateProvider
+        ), "Expected IndexTemplateProvider for date-based indices but got [%s]" % type(self._index_template_provider)
+
+        _index_template = self._index_template()
+        if create:
+            if self._client.index_template_exists(self._es_store_type.index_template_name):
+                old_template = None
+                for existing in self._client.get_template(self._es_store_type.index_template_name).body.get("index_templates", []):
+                    old_template = existing.get("index_template", {}).get("template", {})
+                    break
+                new_template = json.loads(_index_template)["template"]
+
+                if not self._should_apply_update("index template", old_template, new_template):
+                    return
+
+                if not self._client.exists(index=self.index_name(race_timestamp)):
+                    # We want to create the index if it does not exist.
+                    self._client.create_index(index=self.index_name(race_timestamp))
+                else:
+                    self.logger.info("[%s] already exists.", self.index_name(race_timestamp))
+        else:
+            # we still need to check for the correct index name - prefer the one with the suffix
+            new_name = self._migrated_index_name(self.index_name(race_timestamp))
+            if self._client.exists(index=new_name):
+                self._index = new_name
+
+        self._client.put_template(self._es_store_type.index_template_name, _index_template)
+
+    def _ensure_data_stream_template(self):
+        assert isinstance(
+            self._index_template_provider, ComponentTemplateProvider
+        ), "Expected ComponentTemplateProvider for data streams but got [%s]" % type(self._index_template_provider)
+
+        # The index template is composed of multiple component templates.
+        # We need to ensure that all component templates exist and are up to date
+        # before we can put them together in the index template.
+        _index_template = json.loads(self._index_template())
+
+        for name, template in _index_template.items():
+            self._ensure_component_template(name, template)
+
+        new_template = json.loads(self._data_stream_template(list(_index_template.keys())))
+        old_template = None
+        if self._client.index_template_exists(self._es_store_type.index_template_name):
+            for existing in self._client.get_template(self._es_store_type.index_template_name).body.get("index_templates", []):
+                old_template = existing.get("index_template", {})
+                break
+
+        if self._should_apply_update("index template", old_template, new_template):
+            self._client.put_template(self._es_store_type.index_template_name, _index_template)
+
+    def _ensure_lifecycle_policy(self, name, policy):
+        new_policy_body = json.loads(policy).get("policy", {})
+        old_policy = None
+        if self._client.lifecycle_exists(name):
+            old_policy = self._client.get_lifecycle(name).body.get(name, {}).get("policy", {})
+
+        if self._should_apply_update(f"lifecycle policy [{name}]", old_policy, new_policy_body):
+            self._client.put_lifecycle(name, policy)
+
+    def _ensure_component_template(self, name, template):
+        new_template_body = json.loads(template).get("template", {})
+
+        old_template_body = None
+        if self._client.component_template_exists(name):
+            for existing in self._client.get_component_template(name).body.get("component_templates", []):
+                old_template_body = existing.get("component_template", {}).get("template", {})
+                break
+
+        if self._should_apply_update(f"component template [{name}]", old_template_body, new_template_body):
+            self._client.put_component_template(name, template)
 
 
 class MetaInfoScope(Enum):
@@ -904,13 +1154,11 @@ class EsMetricsStore(MetricsStore):
     """
 
     INDEX_PREFIX = "rally-metrics-"
-    TEMPLATE_VERSION = "v1"
 
     def __init__(
         self,
         cfg: types.Config,
         client_factory_class=EsClientFactory,
-        index_template_provider_class=IndexTemplateProvider,
         clock=time.Clock,
         meta_info=None,
     ):
@@ -919,89 +1167,32 @@ class EsMetricsStore(MetricsStore):
 
         :param cfg: The config object. Mandatory.
         :param client_factory_class: This parameter is optional and needed for testing.
-        :param index_template_provider_class: This parameter is optional and needed for testing.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
         """
         MetricsStore.__init__(self, cfg=cfg, clock=clock, meta_info=meta_info)
-        self._index = None
         self._client = client_factory_class(cfg).create()
-        self._index_template_provider = index_template_provider_class(cfg)
+        self._index_handler = IndexHandler(self._config, self._client, EsStoreType.metrics)
         self._docs = None
 
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
         MetricsStore.open(self, race_id, race_timestamp, track_name, challenge_name, car_name, ctx, create)
-        self._index = self.index_name()
-        # reduce a bit of noise in the metrics cluster log
-        if create:
-            self._ensure_index_template()
-            # Data streams are created implicitly on first write
-            if not self._index_template_provider.use_data_streams:
-                # We want to create the index if it does not exist.
-                if not self._client.exists(index=self._index):
-                    self._client.create_index(index=self._index)
-                else:
-                    self.logger.info("[%s] already exists.", self._index)
-        else:
-            # we still need to check for the correct index name - prefer the one with the suffix
-            new_name = self._migrated_index_name(self._index)
-            if self._client.exists(index=new_name):
-                self._index = new_name
+        self._index_handler.ensure_index_template(create=create, race_timestamp=race_timestamp)
 
         # Skip refresh when creating with data streams - the data stream won't exist until first write
-        if not self._index_template_provider.use_data_streams:
+        if not self._index_handler.use_data_streams:
             # ensure we can search immediately after opening
-            self._client.refresh(index=self._index)
-
-    def _ensure_index_template(self):
-        new_template: str = self._get_template()
-
-        old_template: dict | None = None
-        if self._client.template_exists("rally-metrics"):
-            for t in self._client.get_template("rally-metrics").body.get("index_templates", []):
-                old_template = t.get("index_template", {}).get("template", {})
-                break
-
-        if old_template is None:
-            self.logger.info(
-                "Create index template:\n%s",
-                pretty.dump(json.loads(new_template).get("template", {}), pretty.Flag.FLAT_DICT),
-            )
-        else:
-            diff = pretty.diff(old_template, json.loads(new_template).get("template", {}), pretty.Flag.FLAT_DICT)
-            if diff == "":
-                self.logger.debug("Keep existing template (it is identical)")
-                return
-            if not convert.to_bool(
-                self._config.opts(section="reporting", key="datastore.overwrite_existing_templates", default_value=False, mandatory=False)
-            ):
-                self.logger.debug("Keep existing template (datastore.overwrite_existing_templates = false):\n%s", diff)
-                return
-            self.logger.warning("Overwrite existing index template (datastore.overwrite_existing_templates = true):\n%s", diff)
-
-        self._client.put_template("rally-metrics", new_template)
-
-    def index_name(self):
-        if self._index_template_provider.use_data_streams:
-            return f"{EsMetricsStore.INDEX_PREFIX}{EsMetricsStore.TEMPLATE_VERSION}"
-        ts = time.from_iso8601(self._race_timestamp)
-        return f"{EsMetricsStore.INDEX_PREFIX}{ts.year:04d}-{ts.month:02d}"
-
-    def _migrated_index_name(self, original_name):
-        return f"{original_name}.new"
-
-    def _get_template(self):
-        return self._index_template_provider.metrics_template()
+            self._client.refresh(index=self._index_handler.index_name(race_timestamp))
 
     def flush(self, refresh=True):
         if self._docs:
             sw = time.StopWatch()
             sw.start()
             self._client.bulk_index(
-                index=self._index,
+                index=self._index_handler.index_name(self._race_timestamp),
                 items=self._docs,
-                use_data_streams=self._index_template_provider.use_data_streams,
+                use_data_streams=self._index_handler.use_data_streams,
             )
             sw.stop()
             self.logger.info(
@@ -1016,7 +1207,7 @@ class EsMetricsStore(MetricsStore):
         self._docs = []
         # ensure we can search immediately after flushing
         if refresh:
-            self._client.refresh(index=self._index)
+            self._client.refresh(index=self._index_handler.index_name(self._race_timestamp))
 
     def _add(self, doc):
         self._docs.append(doc)
@@ -1027,8 +1218,8 @@ class EsMetricsStore(MetricsStore):
             "track_total_hits": True,
             "size": 10000,
         }
-        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index_handler.index_name(self._race_timestamp), query)
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         es_count = result["hits"]["total"]["value"]
         self.logger.debug("Metrics query found [%s] results.", es_count)
         if es_count != len(result["hits"]["hits"]):
@@ -1045,8 +1236,8 @@ class EsMetricsStore(MetricsStore):
         }
         if sort_key:
             query["sort"] = [{sort_key: {"order": order}}]
-        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index_handler.index_name(self._race_timestamp), query)
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
         if isinstance(hits, dict):
@@ -1069,8 +1260,10 @@ class EsMetricsStore(MetricsStore):
                 },
             },
         }
-        self.logger.debug("Issuing get_error_rate against index=[%s], query=[%s]", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug(
+            "Issuing get_error_rate against index=[%s], query=[%s]", self._index_handler.index_name(self._race_timestamp), query
+        )
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         buckets = result["aggregations"]["error_rate"]["buckets"]
         self.logger.debug("Query returned [%d] buckets.", len(buckets))
         count_success = 0
@@ -1111,8 +1304,8 @@ class EsMetricsStore(MetricsStore):
                 },
             },
         }
-        self.logger.debug("Issuing get_stats against index=[%s], query=[%s]", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug("Issuing get_stats against index=[%s], query=[%s]", self._index_handler.index_name(self._race_timestamp), query)
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         return result["aggregations"]["metric_stats"]
 
     def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
@@ -1130,8 +1323,10 @@ class EsMetricsStore(MetricsStore):
                 },
             },
         }
-        self.logger.debug("Issuing get_percentiles against index=[%s], query=[%s]", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug(
+            "Issuing get_percentiles against index=[%s], query=[%s]", self._index_handler.index_name(self._race_timestamp), query
+        )
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
         if isinstance(hits, dict):
@@ -1833,9 +2028,8 @@ class EsRaceStore(RaceStore):
     """
 
     INDEX_PREFIX = "rally-races-"
-    TEMPLATE_VERSION = "v1"
 
-    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory):
         """
         Creates a new metrics store.
 
@@ -1845,24 +2039,18 @@ class EsRaceStore(RaceStore):
         """
         super().__init__(cfg)
         self.client = client_factory_class(cfg).create()
-        self.index_template_provider = index_template_provider_class(cfg)
+        self._index_handler = IndexHandler(self.cfg, self.client, EsStoreType.races)
 
     def store_race(self, race):
-        doc = race.as_dict()
-        # always update the mapping to the latest version
-        self.client.put_template("rally-races", self.index_template_provider.races_template())
-        self.client.index(
-            index=self.index_name(race),
-            item=doc,
-            id=race.race_id,
-            use_data_streams=self.index_template_provider.use_data_streams,
-        )
+        assert race.race_timestamp is not None, "Attempted to store race with race_timestamp=None"
 
-    def index_name(self, race):
-        if self.index_template_provider.use_data_streams:
-            return f"{EsRaceStore.INDEX_PREFIX}{EsRaceStore.TEMPLATE_VERSION}"
-        race_timestamp = race.race_timestamp
-        return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+        self._index_handler.ensure_index_template(create=True, race_timestamp=race.race_timestamp)
+        self.client.index(
+            index=self._index_handler.index_name(race.race_timestamp),
+            item=race.as_dict(),
+            id=race.race_id,
+            use_data_streams=self._index_handler.use_data_streams,
+        )
 
     def add_annotation(self):
         def _at_midnight(race_timestamp):
@@ -1890,7 +2078,7 @@ class EsRaceStore(RaceStore):
         else:
             if not self.client.exists(index="rally-annotations"):
                 # create or overwrite template on index creation
-                self.client.put_template("rally-annotations", self.index_template_provider.annotations_template())
+                self.client.put_template("rally-annotations", self._index_handler.annotations_template())
                 self.client.create_index(index="rally-annotations")
             self.client.index(
                 index="rally-annotations",
@@ -2076,9 +2264,8 @@ class EsResultsStore:
     """
 
     INDEX_PREFIX = "rally-results-"
-    TEMPLATE_VERSION = "v1"
 
-    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory):
         """
         Creates a new results store.
 
@@ -2088,23 +2275,17 @@ class EsResultsStore:
         """
         self.cfg = cfg
         self.client = client_factory_class(cfg).create()
-        self.index_template_provider = index_template_provider_class(cfg)
+        self._index_handler = IndexHandler(self.cfg, self.client, EsStoreType.results)
 
     def store_results(self, race):
-        # always update the mapping to the latest version
-        self.client.put_template("rally-results", self.index_template_provider.results_template())
-        items = race.to_result_dicts()
-        self.client.bulk_index(
-            index=self.index_name(race),
-            items=items,
-            use_data_streams=self.index_template_provider.use_data_streams,
-        )
+        assert race.race_timestamp is not None, "Attempted to store race with race_timestamp=None"
 
-    def index_name(self, race):
-        if self.index_template_provider.use_data_streams:
-            return f"{EsResultsStore.INDEX_PREFIX}{EsResultsStore.TEMPLATE_VERSION}"
-        race_timestamp = race.race_timestamp
-        return f"{EsResultsStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+        self._index_handler.ensure_index_template(create=True, race_timestamp=race.race_timestamp)
+        self.client.bulk_index(
+            index=self._index_handler.index_name(race.race_timestamp),
+            items=race.to_result_dicts(),
+            use_data_streams=self._index_handler.use_data_streams,
+        )
 
 
 class NoopResultsStore:
