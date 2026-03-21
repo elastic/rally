@@ -19,8 +19,7 @@
 
 # Builds scripts/release/Dockerfile and runs scripts/release/prepare.sh in a container
 # with the repo bind-mounted. The container sets PREPARE_RELEASE_NO_VERIFY so the
-# version bump commit skips git hooks there; run `make pre-commit` on the host first
-# if you want hooks before releasing.
+# version bump commit skips git hooks inside the container.
 #
 # Image: scripts/release/Dockerfile (Python 3.13, jq, uv, make, git, …).
 #
@@ -47,7 +46,7 @@
 #                    is mounted under ${CONTAINER_HOME}/.github/...
 #   RALLY_GITCONFIG — host path to gitconfig (default ~/.gitconfig); mounted to
 #                     ${CONTAINER_HOME}/.gitconfig when the file exists
-#   DOCKER_USER    — uid:gid for `make release` inside the container (default:
+#   DOCKER_USER    — uid:gid for `scripts/release/prepare.sh` inside the container (default:
 #                    host $(id -u):$(id -g) so bind-mounted files are not root-owned).
 #                    The container starts as root only long enough to chown the venv volume.
 #   A named Docker volume is mounted at /workspace/.venv so the host .venv is not used
