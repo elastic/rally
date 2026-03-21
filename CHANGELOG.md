@@ -28,7 +28,7 @@
 * [#1959](https://github.com/elastic/rally/pull/1959): Capture statistics during data download so that we can profile mirrors configuration in CI.
 * [#2005](https://github.com/elastic/rally/pull/2005): Adjust default IT folder
 * [#2004](https://github.com/elastic/rally/pull/2004): Add sampling method parameter to downsampling
-* [3d6864db](https://github.com/elastic/rally/commit/3d6864db): It adds Google Cloud Storage adapter.
+* [#2000](https://github.com/elastic/rally/pull/2000): It adds Google Cloud Storage adapter.
 * [#2001](https://github.com/elastic/rally/pull/2001): Sort files to make deterministic
 * [#1995](https://github.com/elastic/rally/pull/1995): Initialize all loggers in rally daemon
 * [#1996](https://github.com/elastic/rally/pull/1996): Speedup default s3 corpus downloader
