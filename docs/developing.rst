@@ -88,7 +88,7 @@ The script ``scripts/release/prepare.sh`` automates steps before opening a relea
 You need:
 
 * A milestone on ``elastic/rally`` titled exactly like the version argument (e.g. ``2.13.0``). ``scripts/release/changelog.py`` uses an open milestone with that title if one exists; otherwise it reopens a closed milestone with the same title or creates a new open milestone. Assign merged PRs to the milestone so the generated changelog sections are populated.
-* A token file at ``~/.github/rally_release_changelog.token`` for the GitHub API (see ``scripts/release/changelog.py``). The token must allow creating or updating milestones when none is open.
+* A GitHub API token stored as a single line in ``$HOME/.github/rally_release_changelog.token`` (see ``scripts/release/changelog.py``). The token must allow creating or updating milestones when none is open. ``changelog.py`` and ``make release-checks`` always read that path under your effective ``$HOME``; they do not read the ``RALLY_CHANGELOG_TOKEN`` environment variable.
 
 Creating a fine-grained personal access token
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -106,19 +106,19 @@ Follow GitHub's `fine-grained personal access token documentation <https://docs.
 
 If the **elastic** organization enforces SAML SSO, open the token on GitHub after creation and use **Configure SSO** / **Authorize** for **elastic**. Without that step, the API can return 403 even when permissions are correct.
 
-Store the token as a single line in ``~/.github/rally_release_changelog.token``, or point ``RALLY_CHANGELOG_TOKEN`` at a file containing the token (see ``scripts/release/prepare-docker.sh``).
+Store the token as a single line in ``~/.github/rally_release_changelog.token`` for host-side runs. For ``scripts/release/prepare-docker.sh`` only, you may set ``RALLY_CHANGELOG_TOKEN`` to a **host path** to a file containing the token; the script bind-mounts that file into the container at ``$HOME/.github/rally_release_changelog.token`` (see the script header).
 
 A **classic** personal access token with the **public_repo** scope (public repositories only) or the **repo** scope can also work, as noted in ``scripts/release/changelog.py``; fine-grained tokens with Issues **Read and write** are preferred for least privilege.
 
 From a clean working tree (after staging intended changes), you can run ``prepare.sh`` on the host (with a suitable Python environment and ``github3-py`` available), or use Docker as below.
 
-**Makefile:** ``make release RELEASE_VERSION=X.Y.Z`` invokes ``scripts/release/prepare-docker.sh`` on **all** platforms. That script builds the image in ``scripts/release/Dockerfile``, bind-mounts your repository at ``/workspace``, and runs ``scripts/release/prepare.sh`` inside the container. This is **not** the published ``elastic/rally`` benchmark image; see :doc:`docker` for the distinction.
+**Makefile:** ``make release RELEASE_VERSION=X.Y.Z`` invokes ``scripts/release/prepare-docker.sh`` on **all** platforms. That script builds the image in ``scripts/release/Dockerfile``, bind-mounts your repository at ``/workspace``, and runs ``scripts/release/prepare.sh`` inside the container. The image pins ``pip`` and uses ``pip install --editable .`` for the final in-workspace install (not ``uv run``), matching ``prepare.sh``. This is **not** the published ``elastic/rally`` benchmark image; see :doc:`docker` for the distinction.
 
 The container uses your host UID/GID (``DOCKER_USER``, default from ``id -u`` / ``id -g``) for the actual ``prepare.sh`` work so files written to the bind mount are not root-owned. It starts as root only long enough to ``chown`` a **named Docker volume** mounted at ``/workspace/.venv`` (``rally-prepare-release-venv``), so the release environment does not reuse the host ``.venv`` (avoids broken cross-OS symlinks). Remove that volume if you need a fresh in-container env: ``docker volume rm rally-prepare-release-venv``.
 
 Docker build context is the repository root; **``.dockerignore``** keeps the context small (see comments in that file).
 
-``make release`` does **not** run ``clean``, ``install``, ``docs``, ``lint``, or ``test`` for you. Before opening a release pull request, run the validation your team expects on the host (for example ``make check-all``) and ``make release-checks RELEASE_VERSION=X.Y.Z`` when applicable. The version bump commit inside the container sets ``PREPARE_RELEASE_NO_VERIFY`` so ``git commit`` skips hooks there; run ``make pre-commit`` on the host beforehand if you want hooks to fire before you release.
+``make release`` does **not** run ``clean``, ``install``, ``docs``, ``lint``, or ``test`` for you. Before opening a release pull request, run the validation your team expects on the host (for example ``make check-all``) and ``make release-checks RELEASE_VERSION=X.Y.Z`` when applicable. On **Linux** hosts without ``/.dockerenv`` (see ``scripts/release/checks.sh``), ``release-checks`` also validates GPG signing setup and that ``origin`` points at ``elastic/rally``; on **macOS**, or inside a container that sets ``/.dockerenv``, it only verifies the changelog token and that ``changelog.py`` can run—run the full checks on a suitable Linux host before tagging if you rely on them. The version bump commit inside the container sets ``PREPARE_RELEASE_NO_VERIFY`` so ``git commit`` skips hooks there; run ``make pre-commit`` on the host beforehand if you want hooks to fire before you release.
 
 Optional environment variables (token path, image tag, skipping the image rebuild, etc.) are documented in the header of ``scripts/release/prepare-docker.sh``.
 

@@ -45,7 +45,7 @@ echo "Updating changelog"
 # For exit on error to work we have to separate
 #  CHANGELOG.md generation into two steps.
 CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")"
-printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
+printf '%s\n\n%s' "$CHANGELOG" "$(cat CHANGELOG.md)" > CHANGELOG.md
 
 echo "Updating release version number"
 printf '__version__ = "%s"\n' $RELEASE_VERSION > esrally/_version.py

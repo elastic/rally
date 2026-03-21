@@ -77,7 +77,7 @@ function main {
     add_license "jmespath" "https://raw.githubusercontent.com/jmespath/jmespath.py/develop/LICENSE"
     add_license "botocore" "https://raw.githubusercontent.com/boto/botocore/develop/LICENSE.txt"
     # google-resumable-media dependencies
-    add_license "google-crc32c": "https://raw.githubusercontent.com/googleapis/python-crc32c/main/LICENSE"
+    add_license "google-crc32c" "https://raw.githubusercontent.com/googleapis/python-crc32c/main/LICENSE"
 }
 
 main
