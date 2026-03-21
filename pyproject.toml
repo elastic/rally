@@ -135,9 +135,6 @@ develop = [
     "types-jsonschema==3.2.0",
     # Python dead library removed in version 3.13 and used to build Rally docs.
     "standard-imghdr==3.13.0",
-    # Used to update the changelog with the latest release information. We want to use the latest version of this
-    # library, so we don't specify a version here.
-    "github3-py>=3.2.0",
 ]
 
 [dependency-groups]

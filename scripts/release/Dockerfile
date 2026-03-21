@@ -14,4 +14,14 @@ RUN apt-get update \
 # Keep in sync with docker/Dockerfiles/dev/Dockerfile
 COPY --from=ghcr.io/astral-sh/uv:0.8.22 /uv /uvx /bin/
 
+# Required by scripts/release/prepare.sh
+RUN pip install --upgrade pip
+RUN pip install github3-py>=3.2.0
+
+# Editable install: copy only what the build needs so unrelated changes (tests,
+# docs, scripts, …) do not invalidate the pip layer. Build context is repo root
+# (see prepare-docker.sh).
 WORKDIR /workspace
+COPY pyproject.toml README.md ./
+COPY esrally ./esrally/
+RUN pip install --editable .

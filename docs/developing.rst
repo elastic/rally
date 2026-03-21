@@ -83,12 +83,32 @@ There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_tr
 Preparing a release
 -------------------
 
-The script ``scripts/release/prepare.sh`` automates steps before opening a release pull request: it rebuilds ``NOTICE.txt``, refreshes ``AUTHORS``, prepends ``CHANGELOG.md`` from an open GitHub milestone (via ``scripts/release/changelog.py``), writes ``esrally/_version.py``, creates a git commit, and runs ``pip install --editable .`` to assert the reported ``esrally`` version.
+The script ``scripts/release/prepare.sh`` automates steps before opening a release pull request: it rebuilds ``NOTICE.txt``, refreshes ``AUTHORS``, prepends ``CHANGELOG.md`` from a GitHub milestone (via ``scripts/release/changelog.py``), writes ``esrally/_version.py``, creates a git commit, and runs ``pip install --editable .`` to assert the reported ``esrally`` version.
 
 You need:
 
-* An **open** milestone on ``elastic/rally`` titled exactly like the version argument (e.g. ``2.13.0``), as required by ``scripts/release/changelog.py``.
-* A token file at ``~/.github/rally_release_changelog.token`` for the GitHub API (see ``scripts/release/changelog.py``).
+* A milestone on ``elastic/rally`` titled exactly like the version argument (e.g. ``2.13.0``). ``scripts/release/changelog.py`` uses an open milestone with that title if one exists; otherwise it reopens a closed milestone with the same title or creates a new open milestone. Assign merged PRs to the milestone so the generated changelog sections are populated.
+* A token file at ``~/.github/rally_release_changelog.token`` for the GitHub API (see ``scripts/release/changelog.py``). The token must allow creating or updating milestones when none is open.
+
+Creating a fine-grained personal access token
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``scripts/release/changelog.py`` uses the GitHub API to list closed issues and pull requests on a milestone and to **create or reopen** milestones when needed (milestones are part of the Issues API).
+
+Follow GitHub's `fine-grained personal access token documentation <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token>`_ for the latest UI; the outline below matches the typical flow:
+
+#. In GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
+#. Set a name and expiration (recommend a short lifetime such as 7 days for release-only tokens).
+#. **Resource owner:** your GitHub user (the usual case).
+#. **Repository access:** **Only select repositories** → choose **elastic/rally**. Your account must have a role on that repository that can manage milestones.
+#. **Repository permissions:** under **Issues**, set **Read and write**. GitHub maps milestone create/update and milestone-scoped issue queries to the Issues permission on fine-grained tokens.
+#. Generate the token and copy it when shown; it is displayed only once.
+
+If the **elastic** organization enforces SAML SSO, open the token on GitHub after creation and use **Configure SSO** / **Authorize** for **elastic**. Without that step, the API can return 403 even when permissions are correct.
+
+Store the token as a single line in ``~/.github/rally_release_changelog.token``, or point ``RALLY_CHANGELOG_TOKEN`` at a file containing the token (see ``scripts/release/prepare-docker.sh``).
+
+A **classic** personal access token with the **public_repo** scope (public repositories only) or the **repo** scope can also work, as noted in ``scripts/release/changelog.py``; fine-grained tokens with Issues **Read and write** are preferred for least privilege.
 
 From a clean working tree (after staging intended changes), run::
 

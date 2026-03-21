@@ -223,13 +223,8 @@ release-checks: venv
 # usage: e.g. make release RELEASE_VERSION=2.13.0
 release:
 	@if [ -z "$(RELEASE_VERSION)" ]; then echo "error: set RELEASE_VERSION (e.g. make release RELEASE_VERSION=2.13.0)" >&2; exit 1; fi
-	@KERNEL=$$(uname -s); \
-	if [ "$$KERNEL" = "Linux" ]; then \
-		$(MAKE) clean install docs lint test release-checks RELEASE_VERSION=$(RELEASE_VERSION); \
-		. $(VENV_ACTIVATE_FILE) && ./scripts/release/prepare.sh $(RELEASE_VERSION); \
-	else \
-		./scripts/release/prepare-docker.sh $(RELEASE_VERSION); \
-	fi
+	./scripts/release/prepare-docker.sh $(RELEASE_VERSION); \
+
 # --- Other goals ---
 
 # This is a shortcut for creating a shell running inside the project virtual environment.

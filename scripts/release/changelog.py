@@ -26,11 +26,33 @@ ORG = "elastic"
 REPO = "rally"
 
 
-def find_milestone(repo, title):
-    for m in repo.milestones(state="open", sort="due_date"):
+def find_milestone(repo, title, state):
+    for m in repo.milestones(state=state, sort="due_date"):
         if m.title == title:
             return m
     return None
+
+
+def ensure_open_milestone(repo, title):
+    """Return an open milestone for *title*, reopening a closed one or creating one if needed."""
+    m = find_milestone(repo, title, state="open")
+    if m:
+        return m
+
+    closed = find_milestone(repo, title, state="closed")
+    if closed:
+        if not closed.update(state="open"):
+            print("Failed to reopen closed milestone [%s]." % title, file=sys.stderr)
+            sys.exit(2)
+        print("Reopened closed milestone [%s]." % title, file=sys.stderr)
+        return closed
+
+    m = repo.create_milestone(title, state="open")
+    if not m:
+        print("Failed to create open milestone [%s]." % title, file=sys.stderr)
+        sys.exit(2)
+    print("Created open milestone [%s]." % title, file=sys.stderr)
+    return m
 
 
 def print_category(heading, issue_list):
@@ -92,10 +114,7 @@ def main():
 
     rally_repo = gh.repository(ORG, REPO)
 
-    milestone = find_milestone(rally_repo, title=milestone_name)
-    if not milestone:
-        print("No open milestone named [%s] found." % milestone_name, file=sys.stderr)
-        exit(2)
+    milestone = ensure_open_milestone(rally_repo, milestone_name)
     if milestone.open_issues > 0:
         print("There are [%d] open issues on milestone [%s]. Aborting..." % (milestone.open_issues, milestone_name), file=sys.stderr)
         exit(2)

@@ -47,9 +47,12 @@
 #                    is mounted under ${CONTAINER_HOME}/.github/...
 #   RALLY_GITCONFIG — host path to gitconfig (default ~/.gitconfig); mounted to
 #                     ${CONTAINER_HOME}/.gitconfig when the file exists
-#   DOCKER_USER    — container user as uid:gid for `docker run --user` (default:
+#   DOCKER_USER    — uid:gid for `make release` inside the container (default:
 #                    host $(id -u):$(id -g) so bind-mounted files are not root-owned).
-#                    Set to e.g. 0:0 only if you intentionally want root in the container.
+#                    The container starts as root only long enough to chown the venv volume.
+#   A named Docker volume is mounted at /workspace/.venv so the host .venv is not used
+#   (avoids broken cross-OS Python symlinks). Remove it for a fresh env:
+#     docker volume rm rally-prepare-release-venv
 #
 # TTY: uses docker -it only when stdout is a terminal; otherwise -i (e.g. CI).
 #
@@ -84,9 +87,9 @@ if [[ ! -f "$TOKEN_FILE" ]]; then
 	exit 1
 fi
 
-if [[ -z "${RALLY_PREPARE_RELEASE_SKIP_HOST_PRE_COMMIT:-}" ]]; then
-	(cd "${REPO_ROOT}" && make pre-commit)
-fi
+DOCKER_USER="${DOCKER_USER:-$(id -u):$(id -g)}"
+HOST_UID="${DOCKER_USER%%:*}"
+HOST_GID="${DOCKER_USER#*:}"
 
 DOCKER_ARGS=(--rm)
 # -t requires a real TTY; omit in CI / piped environments
@@ -104,6 +107,7 @@ DOCKER_ARGS+=(
 	-e GIT_COMMITTER_NAME
 	-e GIT_COMMITTER_EMAIL
 	-v "${REPO_ROOT}:/workspace"
+	-v rally-prepare-release-venv:/workspace/.venv
 	-v "${TOKEN_FILE}:${CONTAINER_HOME}/.github/rally_release_changelog.token:ro"
 	-w /workspace
 )
@@ -114,12 +118,9 @@ else
 	echo "warning: gitconfig not found at $GITCONFIG_HOST; git commit may fail without user.name/user.email" >&2
 fi
 
-# Default to host UID/GID so editable installs and egg-info on the bind mount are owned by you.
-DOCKER_USER="${DOCKER_USER:-$(id -u):$(id -g)}"
-DOCKER_ARGS+=(--user "${DOCKER_USER}")
-
 if [[ -z "${RALLY_PREPARE_RELEASE_SKIP_BUILD:-}" ]]; then
 	docker build -f "${DOCKERFILE_PREPARE_RELEASE}" -t "${DOCKER_IMAGE}" "${REPO_ROOT}"
 fi
 
-docker run "${DOCKER_ARGS[@]}" "${DOCKER_IMAGE}" make release RELEASE_VERSION="${VERSION}"
+docker run "${DOCKER_ARGS[@]}" --user root "${DOCKER_IMAGE}" \
+	sh -c "mkdir -p /workspace/.venv && chown -R \"${HOST_UID}:${HOST_GID}\" /workspace/.venv && cd /workspace && exec setpriv --reuid=\"${HOST_UID}\" --regid=\"${HOST_GID}\" --clear-groups -- scripts/release/prepare.sh \"${VERSION}\""

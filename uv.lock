@@ -689,7 +689,6 @@ requires-dist = [
     { name = "elasticsearch", extras = ["async"], specifier = "==8.6.1" },
     { name = "furo", marker = "extra == 'develop'", specifier = "==2022.6.21" },
     { name = "github3-py", marker = "extra == 'develop'", specifier = "==3.2.0" },
-    { name = "github3-py", marker = "extra == 'develop'", specifier = ">=3.2.0" },
     { name = "gitpython", marker = "extra == 'develop'", specifier = "==3.1.30" },
     { name = "google-auth", specifier = "==2.38.0" },
     { name = "google-crc32c", specifier = "==1.7.1" },
