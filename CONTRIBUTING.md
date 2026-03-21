@@ -38,6 +38,12 @@ If you want to get started in the project, a good idea is to check issues labele
 You will need to fork the Rally repository and clone it to your local machine. See 
 the [Github help page](https://help.github.com/articles/fork-a-repo) for help.
 
+Optional: to strip `Co-authored-by` and `Made-with: Cursor` trailers added by Cursor from each new commit, point Git at this repo’s hooks (the `post-commit` hook amends the message when needed):
+
+```bash
+git config core.hooksPath scripts/githooks
+```
+
 ### Importing the project into IntelliJ IDEA
 
 Rally builds using virtualenv. When importing into IntelliJ you will need to define an appropriate Python SDK, which is provided by virtualenv.
