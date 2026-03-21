@@ -853,11 +853,19 @@ class TestIndexHandler:
         handler.ensure_index_template(create=case.create, race_timestamp=race_ts)
 
         if case.expect_lifecycle:
-            self.client.put_lifecycle.assert_called_once()
+            self.client.get_lifecycle.assert_called_with(case.es_store_type.ilm_default)
+            self.client.put_lifecycle.assert_called_once_with(case.es_store_type.ilm_default, mock.ANY)
         if case.expect_component_templates:
+            assert self.client.component_template_exists.call_count == case.expect_component_templates
             assert self.client.put_component_template.call_count == case.expect_component_templates
+        self.client.index_template_exists.assert_called_once_with(case.es_store_type.index_template_name)
         if case.expect_put_template:
             self.client.put_template.assert_called_once_with(case.es_store_type.index_template_name, mock.ANY)
+        if not case.use_data_streams:
+            # date-based: template didn't exist so no get_template, exists, or create_index
+            self.client.get_template.assert_not_called()
+            self.client.exists.assert_not_called()
+            self.client.create_index.assert_not_called()
 
     def test_ensure_index_template_read_only_prefers_new_index_suffix(self):
         self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", False)
@@ -867,6 +875,8 @@ class TestIndexHandler:
         handler.ensure_index_template(create=False, race_timestamp=time.to_iso8601(self.RACE_TIMESTAMP))
 
         self.client.exists.assert_called_once_with(index="rally-metrics-2016-01.new")
+        self.client.put_template.assert_called_once_with(metrics.EsStoreType.metrics.index_template_name, mock.ANY)
+        self.client.index_template_exists.assert_not_called()
 
 
 class TestEsMetricsStore:
@@ -926,9 +936,11 @@ class TestEsMetricsStore:
         )
         expected_index = self.metrics_store._index_handler.index_name(self.RACE_TIMESTAMP)
         if case.want_refresh:
-            self.es_mock.refresh.assert_any_call(index=expected_index)
+            self.es_mock.refresh.assert_called_once_with(index=expected_index)
         else:
             self.es_mock.refresh.assert_not_called()
+        self.es_mock.bulk_index.assert_not_called()
+        self.es_mock.search.assert_not_called()
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_put_value_without_meta_info(self, use_data_streams):
@@ -956,6 +968,7 @@ class TestEsMetricsStore:
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
         es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams)
+        es_mock.refresh.assert_called_with(index=expected_index)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_put_value_with_explicit_timestamps(self, use_data_streams):
@@ -983,6 +996,7 @@ class TestEsMetricsStore:
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
         es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams)
+        es_mock.refresh.assert_called_with(index=expected_index)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_put_value_with_meta_info(self, use_data_streams):
@@ -1026,6 +1040,7 @@ class TestEsMetricsStore:
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
         es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams)
+        es_mock.refresh.assert_called_with(index=expected_index)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_put_doc_no_meta_data(self, use_data_streams):
@@ -1058,6 +1073,7 @@ class TestEsMetricsStore:
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
         es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams)
+        es_mock.refresh.assert_called_with(index=expected_index)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_put_doc_with_metadata(self, use_data_streams):
@@ -1113,6 +1129,7 @@ class TestEsMetricsStore:
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
         es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams)
+        es_mock.refresh.assert_called_with(index=expected_index)
 
     def test_get_one(self):
         duration = StaticClock.NOW * 1000
@@ -1590,6 +1607,17 @@ class TestEsRaceStore:
         race = self.race_store.find_by_race_id(race_id=self.RACE_ID)
         assert race.race_id == self.RACE_ID
 
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"race-id": self.RACE_ID}},
+                    ],
+                },
+            },
+        }
+        self.es_mock.search.assert_called_once_with(index="rally-races-*", body=expected_query)
+
     def test_does_not_find_missing_race_by_race_id(self):
         self.es_mock.search.return_value = {
             "hits": {
@@ -1603,6 +1631,17 @@ class TestEsRaceStore:
 
         with pytest.raises(exceptions.NotFound, match=r"No race with race id \[.*\]"):
             self.race_store.find_by_race_id(race_id="some invalid race id")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"race-id": "some invalid race id"}},
+                    ],
+                },
+            },
+        }
+        self.es_mock.search.assert_called_once_with(index="rally-races-*", body=expected_query)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_store_race(self, use_data_streams):
@@ -1704,7 +1743,10 @@ class TestEsRaceStore:
         self.cfg.add(config.Scope.application, "system", "delete.id", "0101")
         self.race_store.delete_race()
         expected_query = {"query": {"bool": {"filter": [{"term": {"environment": "unittest-env"}}, {"term": {"race-id": "0101"}}]}}}
-        self.es_mock.delete_by_query.assert_called_with(index="rally-results-*", body=expected_query)
+        assert self.es_mock.delete_by_query.call_count == 3
+        self.es_mock.delete_by_query.assert_any_call(index="rally-races-*", body=expected_query)
+        self.es_mock.delete_by_query.assert_any_call(index="rally-metrics-*", body=expected_query)
+        self.es_mock.delete_by_query.assert_any_call(index="rally-results-*", body=expected_query)
         console.assert_called_with("Did not find [0101] in environment [unittest-env].")
 
     @mock.patch("esrally.utils.console.println")
@@ -1735,7 +1777,14 @@ class TestEsRaceStore:
             "message": "Test Annotation",
         }
         self.race_store.add_annotation()
-        self.es_mock.index(index="rally-annotations", id=7, item=item)
+
+        self.es_mock.exists.assert_called_once_with(index="rally-annotations")
+        self.es_mock.index.assert_called_once_with(
+            index="rally-annotations",
+            id="7",
+            item=item,
+            use_data_streams=False,
+        )
         console.assert_called_with("Successfully added annotation [7].")
 
     @mock.patch("esrally.utils.console.println")
@@ -1982,6 +2031,8 @@ class TestEsResultsStore:
         expected_index = rs._index_handler.index_name(self.RACE_TIMESTAMP)
         es_mock.bulk_index.assert_called_with(index=expected_index, items=expected_docs, use_data_streams=use_data_streams)
         rs._index_handler.ensure_index_template.assert_called_once_with(create=True, race_timestamp=self.RACE_TIMESTAMP)
+        es_mock.index.assert_not_called()
+        es_mock.refresh.assert_not_called()
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_store_results_with_missing_version(self, use_data_streams):
@@ -2123,6 +2174,8 @@ class TestEsResultsStore:
         expected_index = rs._index_handler.index_name(self.RACE_TIMESTAMP)
         es_mock.bulk_index.assert_called_with(index=expected_index, items=expected_docs, use_data_streams=use_data_streams)
         rs._index_handler.ensure_index_template.assert_called_once_with(create=True, race_timestamp=self.RACE_TIMESTAMP)
+        es_mock.index.assert_not_called()
+        es_mock.refresh.assert_not_called()
 
 
 class TestInMemoryMetricsStore:
