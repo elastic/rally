@@ -223,7 +223,7 @@ release-checks: venv
 # usage: e.g. make release RELEASE_VERSION=2.13.0
 release:
 	@if [ -z "$(RELEASE_VERSION)" ]; then echo "error: set RELEASE_VERSION (e.g. make release RELEASE_VERSION=2.13.0)" >&2; exit 1; fi
-	./scripts/release/prepare-docker.sh $(RELEASE_VERSION); \
+	./scripts/release/prepare-docker.sh $(RELEASE_VERSION)
 
 # --- Other goals ---
 
