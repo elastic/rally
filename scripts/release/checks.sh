@@ -23,7 +23,7 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ $# != 1 ]]; then
-	echo "Usage: make release RELEASE_VERSION=x.z.y"
+	echo "Usage: make release-checks RELEASE_VERSION=x.z.y"
 	exit 1
 fi
 
