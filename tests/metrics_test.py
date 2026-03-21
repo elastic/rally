@@ -589,10 +589,10 @@ class TestIndexTemplateProvider:
 
     @dataclass
     class ShardSettingsCase:
-        number_of_shards: object = None
-        number_of_replicas: object = None
-        expected_shards: object = None
-        expected_replicas: object = None
+        number_of_shards: int | str | None = None
+        number_of_replicas: int | str | None = None
+        expected_shards: int | None = None
+        expected_replicas: int | None = None
         expect_error: bool = False
 
     @cases.cases(
@@ -643,9 +643,9 @@ class TestIndexTemplateProvider:
 
     @dataclass
     class DataStreamsCase:
-        use_data_streams: object = None
-        number_of_shards: object = None
-        number_of_replicas: object = None
+        use_data_streams: bool | None = None
+        number_of_shards: int | None = None
+        number_of_replicas: int | None = None
         want_timestamp_on_non_annotation: bool = False
 
     @cases.cases(
@@ -750,8 +750,8 @@ class TestComponentTemplateProvider:
     @dataclass
     class ShardSettingsCase:
         store_names: list[str]
-        number_of_shards: object = None
-        number_of_replicas: object = None
+        number_of_shards: int | None = None
+        number_of_replicas: int | None = None
 
     @cases.cases(
         both_specified=ShardSettingsCase(
