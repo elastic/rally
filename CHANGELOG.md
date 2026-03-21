@@ -1,5 +1,9 @@
 ### 2.13.0
 
+### 2.13.0
+
+### 2.13.0
+
 #### Highlights
 
 * [#1981](https://github.com/elastic/rally/pull/1981) (Breaking): Drops support for Python 3.9, adds support for Python 3.13, and drops nox dependencies in favor of uv.
@@ -83,7 +87,7 @@
 
 * [#2049](https://github.com/elastic/rally/pull/2049): Add shorter timeouts for dev docker builds
 * [#2062](https://github.com/elastic/rally/pull/2062): Apply ``persist-credentials: false`` to GitHub Actions workflows
-* Add optional Docker workflow for maintainers to run ``prepare-release.sh`` (``scripts/prepare-release-docker.sh``, ``scripts/Dockerfile.prepare-release``)
+* Add optional Docker workflow for maintainers to run ``scripts/release/prepare.sh`` (``scripts/release/prepare-docker.sh``, ``scripts/release/Dockerfile``)
 * [#2027](https://github.com/elastic/rally/pull/2027): Bump wheel from 0.45.1 to 0.46.2
 * [#2025](https://github.com/elastic/rally/pull/2025): Bump pyasn1 from 0.6.1 to 0.6.2
 * [#2021](https://github.com/elastic/rally/pull/2021): Bump aiohttp from 3.10.11 to 3.13.3

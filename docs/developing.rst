@@ -83,20 +83,20 @@ There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_tr
 Preparing a release
 -------------------
 
-The root script ``prepare-release.sh`` automates steps before opening a release pull request: it rebuilds ``NOTICE.txt``, refreshes ``AUTHORS``, prepends ``CHANGELOG.md`` from an open GitHub milestone (via ``changelog.py``), writes ``esrally/_version.py``, creates a git commit, and runs ``pip install --editable .`` to assert the reported ``esrally`` version.
+The script ``scripts/release/prepare.sh`` automates steps before opening a release pull request: it rebuilds ``NOTICE.txt``, refreshes ``AUTHORS``, prepends ``CHANGELOG.md`` from an open GitHub milestone (via ``scripts/release/changelog.py``), writes ``esrally/_version.py``, creates a git commit, and runs ``pip install --editable .`` to assert the reported ``esrally`` version.
 
 You need:
 
-* An **open** milestone on ``elastic/rally`` titled exactly like the version argument (e.g. ``2.13.0``), as required by ``changelog.py``.
-* A token file at ``~/.github/rally_release_changelog.token`` for the GitHub API (see ``changelog.py``).
+* An **open** milestone on ``elastic/rally`` titled exactly like the version argument (e.g. ``2.13.0``), as required by ``scripts/release/changelog.py``.
+* A token file at ``~/.github/rally_release_changelog.token`` for the GitHub API (see ``scripts/release/changelog.py``).
 
 From a clean working tree (after staging intended changes), run::
 
-    ./prepare-release.sh X.Y.Z
+    ./scripts/release/prepare.sh X.Y.Z
 
-**Docker (maintainers):** ``scripts/prepare-release-docker.sh`` builds the image defined in ``scripts/Dockerfile.prepare-release`` (Python 3.13, uv, jq, git, compilers) and runs ``prepare-release.sh`` inside a container with the repository bind-mounted. By default ``DOCKER_USER`` is the host UID and GID (from ``id -u`` and ``id -g``), and dependencies are installed into a short-lived virtualenv so the bind-mounted working tree is not left root-owned. It runs ``make pre-commit`` on the **host** first; the bump commit inside the container uses ``git commit --no-verify`` (via ``PREPARE_RELEASE_NO_VERIFY``) so hooks are not run twice. Optional environment variables and behavior are documented in the script header (e.g. ``RALLY_CHANGELOG_TOKEN``, ``RALLY_GITCONFIG``, ``DOCKER_IMAGE``, ``DOCKER_USER``, ``RALLY_PREPARE_RELEASE_SKIP_HOST_PRE_COMMIT``). This is separate from the published ``elastic/rally`` benchmark image; see :doc:`docker` for the latter.
+**Makefile:** ``make release RELEASE_VERSION=X.Y.Z`` runs ``clean``, ``install``, ``docs``, ``lint``, ``test``, and ``release-checks``, then on Linux runs ``scripts/release/prepare.sh``; on non-Linux it runs ``scripts/release/prepare-docker.sh`` instead (same prerequisite steps).
 
-The Makefile ``release`` target runs broader checks (docs, tests, ``release-checks``) before ``release.sh``; use that for the full maintainer workflow when applicable.
+**Docker (maintainers):** ``scripts/release/prepare-docker.sh`` builds the image defined in ``scripts/release/Dockerfile`` (Python 3.13, uv, jq, git, compilers) and runs ``make release`` inside a container with the repository bind-mounted. By default ``DOCKER_USER`` is the host UID and GID (from ``id -u`` and ``id -g``). It runs ``make pre-commit`` on the **host** first; the bump commit inside the container uses ``git commit --no-verify`` (via ``PREPARE_RELEASE_NO_VERIFY``) so hooks are not run twice. Optional environment variables and behavior are documented in the script header (e.g. ``RALLY_CHANGELOG_TOKEN``, ``RALLY_GITCONFIG``, ``DOCKER_IMAGE``, ``DOCKER_USER``, ``RALLY_PREPARE_RELEASE_SKIP_HOST_PRE_COMMIT``). This is separate from the published ``elastic/rally`` benchmark image; see :doc:`docker` for the latter.
 
 How to contribute code
 ----------------------

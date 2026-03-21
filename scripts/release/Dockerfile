@@ -1,5 +1,5 @@
-# Image for scripts/prepare-release-docker.sh: Python plus jq, uv, and tooling
-# required by prepare-release.sh and the repo pre-commit hook (make pre-commit).
+# Image for scripts/release/prepare-docker.sh: Python plus jq, uv, and tooling
+# required by scripts/release/prepare.sh and the repo pre-commit hook (make pre-commit).
 FROM python:3.13-bookworm
 
 RUN apt-get update \

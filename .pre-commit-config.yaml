@@ -49,5 +49,5 @@ repos:
             "-j0",
             "--rcfile=.pylintrc",
           ]
-        exclude: ^(docs/|changelog.py)
+        exclude: ^(docs/|scripts/release/changelog\.py)
         require_serial: true

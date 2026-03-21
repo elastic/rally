@@ -17,18 +17,18 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# Runs `make pre-commit` on the host first, then prepare-release.sh in Docker.
+# Runs `make pre-commit` on the host first, then `make release` in Docker (Linux).
 # The container sets PREPARE_RELEASE_NO_VERIFY so the version bump commit skips hooks
 # (hooks already ran on the host).
 #
-# Image: scripts/Dockerfile.prepare-release (Python 3.13, jq, uv, make, git, …).
+# Image: scripts/release/Dockerfile (Python 3.13, jq, uv, make, git, …).
 #
 # Usage:
-#   ./scripts/prepare-release-docker.sh <release_version>
+#   ./scripts/release/prepare-docker.sh <release_version>
 #
 # Prerequisites (same as on the host):
 #   - Open GitHub milestone on elastic/rally titled exactly <release_version>
-#     (see changelog.py); otherwise prepare-release.sh fails.
+#     (see scripts/release/changelog.py); otherwise prepare.sh fails.
 #   - Token file for changelog.py: default path ~/.github/rally_release_changelog.token
 #     Override with RALLY_CHANGELOG_TOKEN=/path/to/file
 #
@@ -49,8 +49,7 @@
 #                     ${CONTAINER_HOME}/.gitconfig when the file exists
 #   DOCKER_USER    — container user as uid:gid for `docker run --user` (default:
 #                    host $(id -u):$(id -g) so bind-mounted files are not root-owned).
-#                    Release prep uses a venv under ${CONTAINER_HOME} so non-root installs
-#                    work. Set to e.g. 0:0 only if you intentionally want root in the container.
+#                    Set to e.g. 0:0 only if you intentionally want root in the container.
 #
 # TTY: uses docker -it only when stdout is a terminal; otherwise -i (e.g. CI).
 #
@@ -73,12 +72,12 @@ if [[ $# -ne 1 ]]; then
 fi
 
 VERSION="$1"
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TOKEN_FILE="${RALLY_CHANGELOG_TOKEN:-$HOME/.github/rally_release_changelog.token}"
 GITCONFIG_HOST="${RALLY_GITCONFIG:-$HOME/.gitconfig}"
 DOCKER_IMAGE="${DOCKER_IMAGE:-rally-prepare-release:local}"
 CONTAINER_HOME="${CONTAINER_HOME:-/tmp}"
-DOCKERFILE_PREPARE_RELEASE="${REPO_ROOT}/scripts/Dockerfile.prepare-release"
+DOCKERFILE_PREPARE_RELEASE="${REPO_ROOT}/scripts/release/Dockerfile"
 
 if [[ ! -f "$TOKEN_FILE" ]]; then
 	echo "error: token file not found: $TOKEN_FILE" >&2
@@ -123,15 +122,4 @@ if [[ -z "${RALLY_PREPARE_RELEASE_SKIP_BUILD:-}" ]]; then
 	docker build -f "${DOCKERFILE_PREPARE_RELEASE}" -t "${DOCKER_IMAGE}" "${REPO_ROOT}"
 fi
 
-docker run "${DOCKER_ARGS[@]}" "${DOCKER_IMAGE}" bash -lc '
-set -eux
-# Pin matches project.optional-dependencies.develop (pyproject.toml).
-GITHUB3_PY_PIN="github3.py==3.2.0"
-VENV="${HOME}/.prepare-release-venv"
-rm -rf "${VENV}"
-uv venv "${VENV}"
-# shellcheck source=/dev/null
-. "${VENV}/bin/activate"
-uv pip install --no-cache "${GITHUB3_PY_PIN}"
-bash -x prepare-release.sh "${RELEASE_VERSION}"
-'
+docker run "${DOCKER_ARGS[@]}" "${DOCKER_IMAGE}" make release RELEASE_VERSION="${VERSION}"

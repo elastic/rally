@@ -217,11 +217,20 @@ benchmark: venv
 # --- Release goals ---
 
 release-checks: venv
-	$(VENV_ACTIVATE); ./release-checks.sh $(release_version) $(next_version)
+	@if [ -z "$(RELEASE_VERSION)" ]; then echo "error: set RELEASE_VERSION (e.g. make release-checks RELEASE_VERSION=2.13.0)" >&2; exit 1; fi
+	$(VENV_ACTIVATE); ./scripts/release/checks.sh $(RELEASE_VERSION)
 
-# usage: e.g. make release release_version=0.9.2 next_version=0.9.3
-release: venv release-checks clean docs lint test it
-	$(VENV_ACTIVATE); ./release.sh $(release_version) $(next_version)
+# usage: e.g. make release RELEASE_VERSION=2.13.0
+release:
+	@if [ -z "$(RELEASE_VERSION)" ]; then echo "error: set RELEASE_VERSION (e.g. make release RELEASE_VERSION=2.13.0)" >&2; exit 1; fi
+	@KERNEL=$$(uname -s); \
+	if [ "$$KERNEL" = "Linux" ]; then \
+		$(MAKE) clean install docs lint test release-checks RELEASE_VERSION=$(RELEASE_VERSION); \
+		. $(VENV_ACTIVATE_FILE) && ./scripts/release/prepare.sh $(RELEASE_VERSION); \
+	else \
+		./scripts/release/prepare-docker.sh $(RELEASE_VERSION); \
+	fi
+# --- Other goals ---
 
 # This is a shortcut for creating a shell running inside the project virtual environment.
 sh:

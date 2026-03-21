@@ -160,4 +160,4 @@ Release preparation image (maintainers)
 
 The ``elastic/rally`` image above is for **running** benchmarks. It is not used to cut Rally releases.
 
-Maintainers who want to run ``prepare-release.sh`` in an isolated environment can use ``scripts/prepare-release-docker.sh``, which builds ``scripts/Dockerfile.prepare-release`` and bind-mounts a source checkout. That flow is documented under :ref:`dev_preparing_a_release` in :doc:`developing`.
+Maintainers who want to run ``scripts/release/prepare.sh`` in an isolated environment can use ``scripts/release/prepare-docker.sh``, which builds ``scripts/release/Dockerfile`` and bind-mounts a source checkout. That flow is documented under :ref:`dev_preparing_a_release` in :doc:`developing`.

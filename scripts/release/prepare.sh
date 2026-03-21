@@ -20,16 +20,18 @@
 # fail this script immediately if any command fails with a non-zero exit code
 set -eu
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 RELEASE_VERSION=$1
 __NOTICE_OUTPUT_FILE="NOTICE.txt"
-
 
 echo "============================="
 echo "Preparing Rally release $RELEASE_VERSION"
 echo "============================="
 
 echo "Preparing ${__NOTICE_OUTPUT_FILE}"
-source create-notice.sh
+# shellcheck source=scripts/release/create-notice.sh
+source "${SCRIPT_DIR}/create-notice.sh"
 
 echo "Updating author information"
 git log --format='%aN' | sort -fu > AUTHORS
@@ -42,25 +44,20 @@ set -e
 echo "Updating changelog"
 # For exit on error to work we have to separate
 #  CHANGELOG.md generation into two steps.
-CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
+CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")"
 printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
 
 echo "Updating release version number"
 printf '__version__ = "%s"\n' $RELEASE_VERSION > esrally/_version.py
-# Non-empty PREPARE_RELEASE_NO_VERIFY adds --no-verify (e.g. scripts/prepare-release-docker.sh).
-if [[ -n "${PREPARE_RELEASE_NO_VERIFY:-}" ]]; then
-	git commit -a -m "Bump version to $RELEASE_VERSION" --no-verify
-else
-	git commit -a -m "Bump version to $RELEASE_VERSION"
-fi
+# Non-empty PREPARE_RELEASE_NO_VERIFY adds --no-verify (e.g. scripts/release/prepare-docker.sh).
+git commit -a -m "Bump version to $RELEASE_VERSION" ${PREPARE_RELEASE_NO_VERIFY:+--no-verify}
 
 pip install --editable .
 
 # Check version
-if ! [[ $(esrally --version) =~ "esrally ${RELEASE_VERSION} (git revision" ]]
-then
-    echo "ERROR: Rally version string [$(esrally --version)] does not start with expected version string [esrally $RELEASE_VERSION]"
-    exit 2
+if ! [[ $(esrally --version) =~ "esrally ${RELEASE_VERSION} (git revision" ]]; then
+	echo "ERROR: Rally version string [$(esrally --version)] does not start with expected version string [esrally $RELEASE_VERSION]"
+	exit 2
 fi
 
 echo ""
