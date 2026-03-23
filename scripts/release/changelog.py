@@ -26,7 +26,7 @@ ORG = "elastic"
 REPO = "rally"
 
 # Path to the GitHub API token file.
-CHANGELOG_TOKEN_PATH = os.path.expanduser(os.environ.get("RALLY_CHANGELOG_TOKEN", "~/.github/rally_release_changelog.token"))
+CHANGELOG_TOKEN_PATH = os.path.expanduser(os.environ.get("RALLY_CHANGELOG_TOKEN_FILE", "~/.github/rally_release_changelog.token"))
 
 
 def find_milestone(repo, title, state):

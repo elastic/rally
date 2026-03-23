@@ -43,15 +43,15 @@ fi
 RELEASE_VERSION=$1
 
 # Same path as scripts/release/changelog.py: optional override for host or release-checks.
-: "${RALLY_CHANGELOG_TOKEN:=$HOME/.github/rally_release_changelog.token}"
-export RALLY_CHANGELOG_TOKEN
+: "${RALLY_CHANGELOG_TOKEN_FILE:=$HOME/.github/rally_release_changelog.token}"
+export RALLY_CHANGELOG_TOKEN_FILE
 
 KERNEL_NAME=$(uname -s)
 if [[ ${KERNEL_NAME} != *"Linux"* ]]; then
 	warn_skipped_release_checks
-	if [[ ! -f "$RALLY_CHANGELOG_TOKEN" ]]; then
-		echo "Error: didn't find a valid GitHub token at ${RALLY_CHANGELOG_TOKEN}."
-		echo "The release process requires a valid GitHub token (set RALLY_CHANGELOG_TOKEN or use the default under ~/.github/)."
+	if [[ ! -f "$RALLY_CHANGELOG_TOKEN_FILE" ]]; then
+		echo "Error: didn't find a token file at ${RALLY_CHANGELOG_TOKEN_FILE}."
+		echo "The release process requires a token file (set RALLY_CHANGELOG_TOKEN_FILE to its path, or use the default under ~/.github/)."
 		exit 1
 	fi
 	python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}" >/dev/null
@@ -61,9 +61,9 @@ fi
 # Linux in Docker (e.g. prepare-docker.sh): token + changelog only; no GPG on host.
 if [[ -f /.dockerenv ]]; then
 	warn_skipped_release_checks
-	if [[ ! -f "$RALLY_CHANGELOG_TOKEN" ]]; then
-		echo "Error: didn't find a valid GitHub token at ${RALLY_CHANGELOG_TOKEN}."
-		echo "The release process requires a valid GitHub token (set RALLY_CHANGELOG_TOKEN or use the default under ~/.github/)."
+	if [[ ! -f "$RALLY_CHANGELOG_TOKEN_FILE" ]]; then
+		echo "Error: didn't find a token file at ${RALLY_CHANGELOG_TOKEN_FILE}."
+		echo "The release process requires a token file (set RALLY_CHANGELOG_TOKEN_FILE to its path, or use the default under ~/.github/)."
 		exit 1
 	fi
 	python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}" >/dev/null
@@ -78,9 +78,9 @@ if ! git config user.signingkey >/dev/null; then
 	exit 1
 fi
 
-if [[ ! -f "$RALLY_CHANGELOG_TOKEN" ]]; then
-	echo "Error: didn't find a valid GitHub token at ${RALLY_CHANGELOG_TOKEN}."
-	echo "The release process requires a valid GitHub token (set RALLY_CHANGELOG_TOKEN or use the default under ~/.github/)."
+if [[ ! -f "$RALLY_CHANGELOG_TOKEN_FILE" ]]; then
+	echo "Error: didn't find a token file at ${RALLY_CHANGELOG_TOKEN_FILE}."
+	echo "The release process requires a token file (set RALLY_CHANGELOG_TOKEN_FILE to its path, or use the default under ~/.github/)."
 	exit 1
 fi
 

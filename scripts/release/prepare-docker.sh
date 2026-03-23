@@ -32,7 +32,7 @@
 #   - GitHub milestone on elastic/rally titled exactly <release_version>
 #     (scripts/release/changelog.py opens, reopens, or creates one as needed; see Codex runbook).
 #   - Token file for changelog.py: default path ~/.github/rally_release_changelog.token
-#     Override with RALLY_CHANGELOG_TOKEN=/path/to/file (same env var as changelog.py / checks.sh on the host)
+#     Override with RALLY_CHANGELOG_TOKEN_FILE=/path/to/file (same env var as changelog.py / checks.sh on the host)
 #
 # Git identity for the commit step:
 #   Host ~/.gitconfig is bind-mounted read-only to ${CONTAINER_HOME}/.gitconfig when
@@ -69,7 +69,7 @@ set -o pipefail
 usage() {
 	echo "Usage: $0 <release_version>" >&2
 	echo "Example: $0 2.13.0" >&2
-	echo "Requires changelog token at ~/.github/rally_release_changelog.token (or RALLY_CHANGELOG_TOKEN)." >&2
+	echo "Requires changelog token file at ~/.github/rally_release_changelog.token (or set RALLY_CHANGELOG_TOKEN_FILE to a path)." >&2
 	exit 1
 }
 
@@ -79,7 +79,7 @@ fi
 
 VERSION="$1"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-TOKEN_FILE="${RALLY_CHANGELOG_TOKEN:-$HOME/.github/rally_release_changelog.token}"
+TOKEN_FILE="${RALLY_CHANGELOG_TOKEN_FILE:-$HOME/.github/rally_release_changelog.token}"
 GITCONFIG_HOST="${RALLY_GITCONFIG:-$HOME/.gitconfig}"
 DOCKER_IMAGE="${DOCKER_IMAGE:-rally-prepare-release:local}"
 CONTAINER_HOME="${CONTAINER_HOME:-/tmp}"
