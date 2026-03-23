@@ -104,8 +104,6 @@ Follow GitHub's `fine-grained personal access token documentation <https://docs.
 #. **Repository permissions:** under **Issues**, set **Read and write**. GitHub maps milestone create/update and milestone-scoped issue queries to the Issues permission on fine-grained tokens.
 #. Generate the token and copy it when shown; it is displayed only once.
 
-If the **elastic** organization enforces SAML SSO, open the token on GitHub after creation and use **Configure SSO** / **Authorize** for **elastic**. Without that step, the API can return 403 even when permissions are correct.
-
 Store the token as a single line in ``~/.github/rally_release_changelog.token`` for host-side runs, or set ``RALLY_CHANGELOG_TOKEN`` to that file's path so ``changelog.py``, ``release-checks``, and ``prepare-docker.sh`` agree without copying the file. For Docker release prep, ``prepare-docker.sh`` bind-mounts the host file chosen by ``RALLY_CHANGELOG_TOKEN`` (default: the path above) into the container at ``$HOME/.github/rally_release_changelog.token`` (see the script header); inside the container the default path is used.
 
 A **classic** personal access token with the **public_repo** scope (public repositories only) or the **repo** scope can also work, as noted in ``scripts/release/changelog.py``; fine-grained tokens with Issues **Read and write** are preferred for least privilege.
