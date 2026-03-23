@@ -35,11 +35,6 @@ source "${SCRIPT_DIR}/create-notice.sh"
 
 echo "Updating author information"
 git log --format='%aN' | sort -fu > AUTHORS
-# This will produce a non-zero exit code iff there are changes.
-# Obviously we should disable exiting on error temporarily.
-set +e
-git diff --exit-code
-set -e
 
 echo "Updating changelog"
 # For exit on error to work we have to separate
