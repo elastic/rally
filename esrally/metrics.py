@@ -414,6 +414,14 @@ class ComponentTemplateProvider(IndexTemplateProvider):
             self._get_component_templates(es_store_type.metric_name, es_store_type.index_template_resource, es_store_type.ilm_default_name)
         )
 
+    # This is needed for testing to verify that the expected component templates are created.
+    def component_names(self, es_store_type: EsStoreType):
+        return list(
+            self._get_component_templates(
+                es_store_type.metric_name, es_store_type.index_template_resource, es_store_type.ilm_default_name
+            ).keys()
+        )
+
 
 class IndexHandler:
 

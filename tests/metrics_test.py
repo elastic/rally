@@ -676,12 +676,24 @@ class TestIndexTemplateProvider:
         # annotations never gain data_stream regardless of config
         annotations = json.loads(provider.annotations_template())
         assert "data_stream" not in annotations
+        assert "@timestamp" not in annotations["template"]["mappings"]["properties"]
+        assert annotations["index_patterns"] == ["rally-annotations"]
 
-        for template in self._data_stream_templates(provider):
-            t = json.loads(template)
+        for es_store_type in [metrics.EsStoreType.metrics, metrics.EsStoreType.races, metrics.EsStoreType.results]:
+            t = json.loads(provider.get_template(es_store_type))
             assert "data_stream" not in t
             if case.want_timestamp_on_non_annotation:
+                # index_patterns should be rewritten from rally-<name>-* to rally-<name>-v*
+                assert t["index_patterns"] == [f"{es_store_type.index_prefix}v*"]
                 assert t["template"]["mappings"]["properties"]["@timestamp"] == {"type": "date", "format": "epoch_millis"}
+            else:
+                # index_patterns should remain unchanged
+                assert t["index_patterns"] == [f"{es_store_type.index_prefix}*"]
+                # only metrics natively has @timestamp in the resource file
+                if es_store_type == metrics.EsStoreType.metrics:
+                    assert "@timestamp" in t["template"]["mappings"]["properties"]
+                else:
+                    assert "@timestamp" not in t["template"]["mappings"]["properties"]
 
         # verify shard settings propagated when specified
         if case.number_of_shards is not None or case.number_of_replicas is not None:
@@ -738,6 +750,8 @@ class TestComponentTemplateProvider:
         mapping_tmpl = json.loads(components[mapping_key])
         assert "mappings" in mapping_tmpl["template"]
         assert "settings" not in mapping_tmpl["template"]
+        # data_streams is enabled, so @timestamp should always be present in mappings
+        assert mapping_tmpl["template"]["mappings"]["properties"]["@timestamp"] == {"type": "date", "format": "epoch_millis"}
 
         # lifecycle component has settings with lifecycle name
         lifecycle_tmpl = json.loads(components[lifecycle_key])
@@ -784,6 +798,18 @@ class TestComponentTemplateProvider:
         annotations = json.loads(provider.annotations_template())
         assert "data_stream" not in annotations
         assert "template" in annotations
+        assert annotations["index_patterns"] == ["rally-annotations"]
+        assert "@timestamp" not in annotations["template"]["mappings"]["properties"]
+
+    def test_component_names(self):
+        provider = self._make_provider()
+        for es_store_type in [metrics.EsStoreType.metrics, metrics.EsStoreType.races, metrics.EsStoreType.results]:
+            names = provider.component_names(es_store_type)
+            assert names == [
+                f"{es_store_type.metric_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_MAPPING_SUFFIX}",
+                f"{es_store_type.metric_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX}",
+                f"{es_store_type.metric_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}",
+            ]
 
 
 class TestIndexHandler:
@@ -793,6 +819,18 @@ class TestIndexHandler:
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
         self.client = mock.create_autospec(metrics.EsClient)
+
+    def test_data_stream_template(self):
+        self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", True)
+        for es_store_type in [metrics.EsStoreType.metrics, metrics.EsStoreType.races, metrics.EsStoreType.results]:
+            handler = metrics.IndexHandler(self.cfg, self.client, es_store_type)
+            component_names = handler._index_template_provider.component_names(es_store_type)
+            index_template = json.loads(handler._data_stream_template(component_names))
+
+            assert index_template["index_patterns"] == [f"{es_store_type.index_prefix}v*"]
+            assert index_template["data_stream"] == {}
+            assert index_template["composed_of"] == component_names
+            assert index_template["priority"] == metrics.IndexHandler.TEMPLATE_PRIORITY
 
     @dataclass
     class IndexNameCase:
