@@ -49,8 +49,24 @@ printf '%s\n\n%s' "$CHANGELOG" "$(cat CHANGELOG.md)" > CHANGELOG.md
 
 echo "Updating release version number"
 printf '__version__ = "%s"\n' "$RELEASE_VERSION" > esrally/_version.py
+
+# Stage only files this script generates. Avoids `git commit -a`, which would include any
+# other dirty tracked files if the tree was not clean.
+git add NOTICE.txt AUTHORS CHANGELOG.md esrally/_version.py
+while IFS= read -r staged; do
+	[[ -z "$staged" ]] && continue
+	case "$staged" in
+	NOTICE.txt|AUTHORS|CHANGELOG.md|esrally/_version.py) ;;
+	*)
+		echo "error: staged file outside release allowlist: $staged" >&2
+		echo "Unstage unrelated changes (e.g. git restore --staged <file>) or start from a clean tree." >&2
+		exit 1
+		;;
+	esac
+done < <(git diff --cached --name-only)
+
 # Non-empty PREPARE_RELEASE_NO_VERIFY adds --no-verify (e.g. scripts/release/prepare-docker.sh).
-git commit -a -m "Bump version to $RELEASE_VERSION" ${PREPARE_RELEASE_NO_VERIFY:+--no-verify}
+git commit -m "Bump version to $RELEASE_VERSION" ${PREPARE_RELEASE_NO_VERIFY:+--no-verify}
 
 pip install --editable .
 
