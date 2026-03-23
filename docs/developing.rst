@@ -8,7 +8,7 @@ Install the following software packages:
 
 * `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ 
 * JDK version required to build Elasticsearch. Please refer to the `build setup requirements <https://github.com/elastic/elasticsearch/blob/main/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase>`_.
-  For running Rally's integration tests (e.g. ``make it`` or ``make it_tracks_compat``), ensure your environment uses **Java 17 or 21** (recent Rally versions use Java 21 in CI). Set ``JAVA_HOME`` or ``JAVA21_HOME`` accordingly.
+  For running Rally's integration tests (e.g. ``make it`` or ``make it_tracks_compat``), ensure your environment uses **Java 21** (recent Rally versions use Java 21 in CI). Set ``JAVA_HOME`` or ``JAVA21_HOME`` accordingly.
 * `Docker <https://docs.docker.com/install/>`_ and on Linux additionally `docker-compose <https://docs.docker.com/compose/install/>`_.
 * `jq <https://stedolan.github.io/jq/download/>`_
 * git
