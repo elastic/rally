@@ -318,7 +318,8 @@ class EsStoreType(Enum):
     index_prefix: str
     index_template_name: str
     index_template_resource: str
-    ilm_default: str
+    ilm_default_name: str
+    ilm_default_resource: str
     data_stream_version: str
 
     metrics = ("metrics", "v1")
@@ -331,7 +332,8 @@ class EsStoreType(Enum):
         obj.index_prefix = f"rally-{obj.metric_name}-"
         obj.index_template_name = f"rally-{obj.metric_name}"
         obj.index_template_resource = f"{obj.metric_name}-template"
-        obj.ilm_default = f"{obj.index_prefix}ilm-default"
+        obj.ilm_default_name = f"{obj.index_prefix}ilm-default"
+        obj.ilm_default_resource = "ilm-default"
         obj.data_stream_version = version
         return obj
 
@@ -405,7 +407,7 @@ class ComponentTemplateProvider(IndexTemplateProvider):
 
     def get_template(self, es_store_type: EsStoreType):
         return json.dumps(
-            self._get_component_templates(es_store_type.metric_name, es_store_type.index_template_resource, es_store_type.ilm_default)
+            self._get_component_templates(es_store_type.metric_name, es_store_type.index_template_resource, es_store_type.ilm_default_name)
         )
 
 
@@ -451,7 +453,9 @@ class IndexHandler:
 
     def ensure_index_template(self, create=False, race_timestamp=None):
         if self.use_data_streams:
-            self._ensure_lifecycle_policy(self._es_store_type.ilm_default, self._ilm_default_template(self._es_store_type.ilm_default))
+            self._ensure_lifecycle_policy(
+                self._es_store_type.ilm_default_name, self._ilm_default_template(self._es_store_type.ilm_default_resource)
+            )
             self._ensure_data_stream_template()
         else:
             self._ensure_date_based_template(create, race_timestamp)

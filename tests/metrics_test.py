@@ -572,16 +572,16 @@ class TestIndexTemplateProvider:
             self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.use_data_streams", use_data_streams)
         return metrics.IndexTemplateProvider(self.cfg)
 
-    def _all_templates(self, provider):
+    def _data_stream_templates(self, provider: metrics.ComponentTemplateProvider):
         return [
-            provider.annotations_template(),
             provider.get_template(metrics.EsStoreType.metrics),
             provider.get_template(metrics.EsStoreType.races),
             provider.get_template(metrics.EsStoreType.results),
         ]
 
-    def _data_stream_templates(self, provider: metrics.ComponentTemplateProvider):
+    def _all_templates(self, provider):
         return [
+            provider.annotations_template(),
             provider.get_template(metrics.EsStoreType.metrics),
             provider.get_template(metrics.EsStoreType.races),
             provider.get_template(metrics.EsStoreType.results),
@@ -853,8 +853,8 @@ class TestIndexHandler:
         handler.ensure_index_template(create=case.create, race_timestamp=race_ts)
 
         if case.expect_lifecycle:
-            self.client.get_lifecycle.assert_called_with(case.es_store_type.ilm_default)
-            self.client.put_lifecycle.assert_called_once_with(case.es_store_type.ilm_default, mock.ANY)
+            self.client.get_lifecycle.assert_called_with(case.es_store_type.ilm_default_name)
+            self.client.put_lifecycle.assert_called_once_with(case.es_store_type.ilm_default_name, mock.ANY)
         if case.expect_component_templates:
             assert self.client.component_template_exists.call_count == case.expect_component_templates
             assert self.client.put_component_template.call_count == case.expect_component_templates
