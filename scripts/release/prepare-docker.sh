@@ -122,6 +122,7 @@ if [[ -z "${RALLY_PREPARE_RELEASE_SKIP_BUILD:-}" ]]; then
 	docker build -f "${DOCKERFILE_PREPARE_RELEASE}" -t "${DOCKER_IMAGE}" "${REPO_ROOT}"
 fi
 
+# github3.py version must match pyproject.toml develop extra and scripts/release/Dockerfile.
 docker run "${DOCKER_ARGS[@]}" --user root "${DOCKER_IMAGE}" \
 	sh -c "mkdir -p /workspace/.venv && \
 		if [ ! -x /workspace/.venv/bin/python ]; then python3 -m venv /workspace/.venv; fi && \

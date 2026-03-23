@@ -14,7 +14,9 @@ RUN apt-get update \
 # Keep in sync with docker/Dockerfiles/dev/Dockerfile
 COPY --from=ghcr.io/astral-sh/uv:0.8.22 /uv /uvx /bin/
 
-# Required by scripts/release/prepare.sh
+# pip / github3.py: canonical versions live in pyproject.toml ([project].dependencies pip,
+# [project.optional-dependencies].develop github3.py). uv.lock follows pyproject; bump all
+# together when changing. prepare-docker.sh pins github3.py again for the bind-mounted .venv.
 RUN pip install "pip==26.0.1"
 RUN pip install "github3.py==3.2.0"
 
