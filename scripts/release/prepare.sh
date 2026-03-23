@@ -47,7 +47,9 @@ printf '__version__ = "%s"\n' "$RELEASE_VERSION" > esrally/_version.py
 
 # Stage only files this script generates. Avoids `git commit -a`, which would include any
 # other dirty tracked files if the tree was not clean.
-git add NOTICE.txt AUTHORS CHANGELOG.md esrally/_version.py
+# NOTICE.txt is gitignored for local runs but must be committed for releases.
+git add -f NOTICE.txt
+git add AUTHORS CHANGELOG.md esrally/_version.py
 while IFS= read -r staged; do
 	[[ -z "$staged" ]] && continue
 	case "$staged" in
