@@ -860,7 +860,7 @@ class TestIndexHandler:
         create: bool
         es_store_type: metrics.EsStoreType = metrics.EsStoreType.metrics
         # Pre-existing state flags
-        lifecycle_exists: bool = False
+        lifecycle_exists: bool = False  # If True, get_lifecycle succeeds; if False, it throws
         component_templates_exist: bool = False
         index_template_exists: bool = False
         index_exists: bool = False
@@ -987,8 +987,7 @@ class TestIndexHandler:
             # Read the real component template output to use as "old" when simulating pre-existing state
             real_component_templates = json.loads(handler._index_template_provider.get_template(case.es_store_type))
 
-            # lifecycle
-            self.client.lifecycle_exists.return_value = case.lifecycle_exists
+            # lifecycle — no lifecycle_exists API; get_lifecycle throws when policy is missing
             if case.lifecycle_exists:
                 if case.identical:
                     ilm_body = json.loads(handler._ilm_default_template(case.es_store_type.ilm_default_resource))
@@ -996,6 +995,8 @@ class TestIndexHandler:
                     # Empty policy body → diff will show additions in the new template
                     ilm_body = {"policy": {}}
                 self.client.get_lifecycle.return_value = mock.MagicMock(body={case.es_store_type.ilm_default_name: ilm_body})
+            else:
+                self.client.get_lifecycle.side_effect = Exception("lifecycle not found")
 
             # component templates
             self.client.component_template_exists.return_value = case.component_templates_exist
@@ -1044,7 +1045,7 @@ class TestIndexHandler:
 
         # --- Verify lifecycle ---
         if case.use_data_streams:
-            self.client.lifecycle_exists.assert_called_with(case.es_store_type.ilm_default_name)
+            self.client.get_lifecycle.assert_called_with(case.es_store_type.ilm_default_name)
             if case.expect_put_lifecycle:
                 self.client.put_lifecycle.assert_called_once_with(case.es_store_type.ilm_default_name, mock.ANY)
             else:

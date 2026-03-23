@@ -73,9 +73,6 @@ class EsClient:
         ilm_policy = json.loads(policy)
         return self.guarded(self._client.ilm.put_lifecycle, name=name, **ilm_policy)
 
-    def lifecycle_exists(self, name):
-        return self.guarded(self._client.ilm.exists_lifecycle, name=name)
-
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
 
@@ -555,9 +552,11 @@ class IndexHandler:
 
     def _ensure_lifecycle_policy(self, name, policy):
         new_policy_body = json.loads(policy).get("policy", {})
-        old_policy = None
-        if self._client.lifecycle_exists(name):
+        try:
             old_policy = self._client.get_lifecycle(name).body.get(name, {}).get("policy", {})
+        # "Lifecycle exists" is not supported by the Elasticsearch API and get_lifecycle throws an exception.
+        except BaseException:
+            old_policy = None
 
         if self._should_apply_update(f"lifecycle policy [{name}]", old_policy, new_policy_body):
             self._client.put_lifecycle(name, policy)
