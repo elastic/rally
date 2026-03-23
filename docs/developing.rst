@@ -80,18 +80,3 @@ There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_tr
 
 .. _dev_preparing_a_release:
 
-Preparing a release
--------------------
-
-Elastic maintainers should follow the **Rally Release Process** runbook on Codex:
-`Rally Release Process <https://codex.elastic.dev/r/elasticsearch-team/teams/performance/runbooks/rally-release-process>`_.
-It covers GitHub tokens, milestones, ``make release`` / ``scripts/release/prepare.sh``, tagging, PyPI, and post-release tasks.
-
-The ``make release`` target does **not** run ``clean``, ``install``, ``docs``, ``lint``, or ``test``. Before opening the release pull request, run the validation your team expects (for example ``make check-all`` and ``make release-checks RELEASE_VERSION=X.Y.Z``). Platform differences for ``release-checks`` (GPG, ``origin``, skipped checks on macOS / in Docker) live in ``scripts/release/checks.sh``. Run ``make pre-commit`` on the host before releasing if you want hooks to run before the version bump; the bump commit inside the container skips hooks by design (see the header comment in ``scripts/release/prepare-docker.sh``).
-
-Docker bind mounts, optional environment variables, the Python base image for the release prep container, and ``.dockerignore`` are documented in the header comment of ``scripts/release/prepare-docker.sh``, in ``scripts/release/Dockerfile``, and under **Release preparation image (maintainers)** in :doc:`docker`. Changelog and milestone logic live in ``scripts/release/changelog.py``.
-
-How to contribute code
-----------------------
-
-See the `contributors guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_. We strive to be PEP-8 compliant but don't follow it to the letter.
