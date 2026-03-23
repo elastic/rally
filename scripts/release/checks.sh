@@ -22,6 +22,19 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+warn_skipped_release_checks() {
+	# macOS / Linux-in-Docker: only changelog + token are validated here.
+	echo "" >&2
+	if command -v tput >/dev/null 2>&1 && [[ -t 2 ]]; then
+		printf '%srelease-checks:%s skipping GPG signing, GPG_TTY, and git origin checks on this platform.\n' "$(tput bold)" "$(tput sgr0)" >&2
+	else
+		echo "release-checks: skipping GPG signing, GPG_TTY, and git origin checks on this platform." >&2
+	fi
+	echo "Run 'make release-checks RELEASE_VERSION=...' on Linux outside Docker before tagging if you rely on those checks." >&2
+	echo "See docs/developing.rst (Preparing a release)." >&2
+	echo "" >&2
+}
+
 if [[ $# != 1 ]]; then
 	echo "Usage: make release-checks RELEASE_VERSION=x.z.y"
 	exit 1
@@ -30,10 +43,12 @@ fi
 RELEASE_VERSION=$1
 
 # Same path as scripts/release/changelog.py: optional override for host or release-checks.
-export RALLY_CHANGELOG_TOKEN=${RALLY_CHANGELOG_TOKEN:-~/.github/rally_release_changelog.token}
+: "${RALLY_CHANGELOG_TOKEN:=$HOME/.github/rally_release_changelog.token}"
+export RALLY_CHANGELOG_TOKEN
 
 KERNEL_NAME=$(uname -s)
 if [[ ${KERNEL_NAME} != *"Linux"* ]]; then
+	warn_skipped_release_checks
 	if [[ ! -f "$RALLY_CHANGELOG_TOKEN" ]]; then
 		echo "Error: didn't find a valid GitHub token at ${RALLY_CHANGELOG_TOKEN}."
 		echo "The release process requires a valid GitHub token (set RALLY_CHANGELOG_TOKEN or use the default under ~/.github/)."
@@ -45,6 +60,7 @@ fi
 
 # Linux in Docker (e.g. prepare-docker.sh): token + changelog only; no GPG on host.
 if [[ -f /.dockerenv ]]; then
+	warn_skipped_release_checks
 	if [[ ! -f "$RALLY_CHANGELOG_TOKEN" ]]; then
 		echo "Error: didn't find a valid GitHub token at ${RALLY_CHANGELOG_TOKEN}."
 		echo "The release process requires a valid GitHub token (set RALLY_CHANGELOG_TOKEN or use the default under ~/.github/)."
@@ -62,9 +78,9 @@ if ! git config user.signingkey >/dev/null; then
 	exit 1
 fi
 
-if [[ ! -f ~/.github/rally_release_changelog.token ]]; then
-	echo "Error: didn't find a valid GitHub token in ~/.github/rally_release_changelog.token."
-	echo "The release process requires a valid GitHub token."
+if [[ ! -f "$RALLY_CHANGELOG_TOKEN" ]]; then
+	echo "Error: didn't find a valid GitHub token at ${RALLY_CHANGELOG_TOKEN}."
+	echo "The release process requires a valid GitHub token (set RALLY_CHANGELOG_TOKEN or use the default under ~/.github/)."
 	exit 1
 fi
 
