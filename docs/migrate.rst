@@ -14,6 +14,11 @@ The metrics store keeps existing index templates
 
 Existing Rally index templates are replaced only when option ``datastore.overwrite_existing_templates`` in section ``reporting`` is ``true``.
 
+Migrate rally indices to data streams
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 2.12.0 introduces support for data streams in the metrics store. We recommend reindexing existing indices to data streams to benefit from the advantages of data streams ( stay aware of the mandatory `@timestamp` field and "op_type": "create" when reindexing ) . In order to start writing on data streams, ``datastore.use_data_streams`` must be set to ``true`` in section ``reporting`` ( it is already set to ``true`` by default ). This will cause Rally to create new composable index templates for data streams, along with a @custom index template, which can be configured to set custom index settings.
+
 
 Migrating to Rally 2.10.1
 -------------------------
