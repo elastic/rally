@@ -8,6 +8,7 @@ Install the following software packages:
 
 * `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ 
 * JDK version required to build Elasticsearch. Please refer to the `build setup requirements <https://github.com/elastic/elasticsearch/blob/main/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase>`_.
+  For running Rally's integration tests (e.g. ``make it`` or ``make it_tracks_compat``), ensure your environment uses **Java 17 or 21** (recent Rally versions use Java 21 in CI). Set ``JAVA_HOME`` or ``JAVA21_HOME`` accordingly.
 * `Docker <https://docs.docker.com/install/>`_ and on Linux additionally `docker-compose <https://docs.docker.com/compose/install/>`_.
 * `jq <https://stedolan.github.io/jq/download/>`_
 * git
@@ -76,6 +77,44 @@ To get a rough understanding of Rally, it makes sense to get to know its key com
 * `Reporter`: A reporter tells us how the race went (currently only after the fact).
 
 There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_tracks>`.
+
+.. _dev_preparing_a_release:
+
+Preparing a release
+-------------------
+
+The script ``scripts/release/prepare.sh`` automates steps before opening a release pull request: it rebuilds ``NOTICE.txt``, refreshes ``AUTHORS``, prepends ``CHANGELOG.md`` from a GitHub milestone (via ``scripts/release/changelog.py``), writes ``esrally/_version.py``, creates a git commit, and runs ``pip install --editable .`` to assert the reported ``esrally`` version.
+
+You need:
+
+* A milestone on ``elastic/rally`` titled exactly like the version argument (e.g. ``2.13.0``). ``scripts/release/changelog.py`` uses an open milestone with that title if one exists; otherwise it reopens a closed milestone with the same title or creates a new open milestone. Assign merged PRs to the milestone so the generated changelog sections are populated.
+* A GitHub API token stored as a single line in a file. By default ``scripts/release/changelog.py`` and ``make release-checks`` (via ``scripts/release/checks.sh``) use ``$HOME/.github/rally_release_changelog.token``. If ``RALLY_CHANGELOG_TOKEN`` is set to a **filesystem path** to that file, they use it instead (same variable as ``prepare-docker.sh`` on the host). The token must allow creating or updating milestones when none is open.
+
+Creating a fine-grained personal access token
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``scripts/release/changelog.py`` uses the GitHub API to list closed issues and pull requests on a milestone and to **create or reopen** milestones when needed (milestones are part of the Issues API).
+
+Follow GitHub's `fine-grained personal access token documentation <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token>`_ for the latest UI; the outline below matches the typical flow:
+
+#. In GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
+#. Set a name and expiration (recommend a short lifetime such as 7 days for release-only tokens).
+#. **Resource owner:** your GitHub user (the usual case).
+#. **Repository access:** **Only select repositories** → choose **elastic/rally**. Your account must have a role on that repository that can manage milestones.
+#. **Repository permissions:** under **Issues**, set **Read and write**. GitHub maps milestone create/update and milestone-scoped issue queries to the Issues permission on fine-grained tokens.
+#. Generate the token and copy it when shown; it is displayed only once.
+
+If the **elastic** organization enforces SAML SSO, open the token on GitHub after creation and use **Configure SSO** / **Authorize** for **elastic**. Without that step, the API can return 403 even when permissions are correct.
+
+Store the token as a single line in ``~/.github/rally_release_changelog.token`` for host-side runs, or set ``RALLY_CHANGELOG_TOKEN`` to that file's path so ``changelog.py``, ``release-checks``, and ``prepare-docker.sh`` agree without copying the file. For Docker release prep, ``prepare-docker.sh`` bind-mounts the host file chosen by ``RALLY_CHANGELOG_TOKEN`` (default: the path above) into the container at ``$HOME/.github/rally_release_changelog.token`` (see the script header); inside the container the default path is used.
+
+A **classic** personal access token with the **public_repo** scope (public repositories only) or the **repo** scope can also work, as noted in ``scripts/release/changelog.py``; fine-grained tokens with Issues **Read and write** are preferred for least privilege.
+
+From a clean working tree (after staging intended changes), you can run ``prepare.sh`` on the host (with a suitable Python environment and ``github3-py`` available), or use Docker via ``make release RELEASE_VERSION=X.Y.Z``. That target runs ``scripts/release/prepare-docker.sh``, which builds ``scripts/release/Dockerfile``, bind-mounts the repository at ``/workspace``, and runs ``scripts/release/prepare.sh`` in the container. This maintainer flow is **not** the published ``elastic/rally`` benchmark image; see :doc:`docker`.
+
+**Canonical details** that change when scripts do—bind mounts, optional environment variables (token path, image tag, skipping rebuild, ``DOCKER_USER``, named ``.venv`` volume and how to reset it), TTY behavior, and ``PREPARE_RELEASE_NO_VERIFY`` for the in-container commit—are documented in the **header comment** of ``scripts/release/prepare-docker.sh``. **Python base image** (``3.13``), **dependency pins**, and **why** the image differs from CI’s ``3.10``–``3.13`` matrix are in ``scripts/release/Dockerfile`` comments. Build context is the repository root; **``.dockerignore``** shrinks the context (see that file).
+
+``make release`` does **not** run ``clean``, ``install``, ``docs``, ``lint``, or ``test``. Before opening the release pull request, run the validation your team expects (for example ``make check-all`` and ``make release-checks RELEASE_VERSION=X.Y.Z``). Platform differences for ``release-checks`` (GPG, ``origin``, skipped checks on macOS / in Docker) live in ``scripts/release/checks.sh``. Run ``make pre-commit`` on the host before releasing if you want hooks to run before the version bump; the bump commit inside the container skips hooks by design (see ``prepare-docker.sh`` header).
 
 How to contribute code
 ----------------------

@@ -38,6 +38,17 @@ If you want to get started in the project, a good idea is to check issues labele
 You will need to fork the Rally repository and clone it to your local machine. See 
 the [Github help page](https://help.github.com/articles/fork-a-repo) for help.
 
+Optional: use this repository’s hooks under `scripts/githooks` (instead of `.git/hooks`):
+
+```bash
+git config core.hooksPath scripts/githooks
+```
+
+* **`pre-commit`** — runs `uv run -- pre-commit run` (same as `make pre-commit`) on staged files before the commit is created. Requires [uv](https://docs.astral.sh/uv/) and a dev environment (`make install` or `make venv`). You do not need `make install-pre-commit` when using this path.
+* **`post-commit`** — strips `Co-authored-by` / `Made-with: Cursor` trailers Cursor may add; it runs `git commit --amend` when the message changes, so the latest commit’s hash can change.
+
+To stop using these hooks in this clone, run `git config --unset core.hooksPath`. The post-commit hook sets `GIT_CURSOR_HOOK_AMENDING` internally to avoid re-running while amending; you normally do not need to set that variable yourself.
+
 ### Importing the project into IntelliJ IDEA
 
 Rally builds using virtualenv. When importing into IntelliJ you will need to define an appropriate Python SDK, which is provided by virtualenv.
@@ -60,7 +71,7 @@ Once your changes and tests are ready to submit for review:
 
     Ensure that all tests pass by running `make check-all`. This runs sequentially lint checks, unit tests and integration tests. These can be executed in isolation using `make lint`, `make test` and `make it` respectively, in case you need to iterate over a subset of tests.
 
-    Note: Integration tests are much slower than unit tests and require `docker-compose`.
+    Note: Integration tests are much slower than unit tests and require `docker-compose`. They also require **Java 17 or 21**; set `JAVA_HOME` (or `JAVA21_HOME`) to match.
 
 3. Sign the Contributor License Agreement
 
@@ -78,6 +89,10 @@ Once your changes and tests are ready to submit for review:
 Then sit back and wait. There will probably be discussion about the pull request and, if any changes are needed, we would love to work with you to get your pull request merged into Rally.
 
 Note: Contributors belonging to the "Elastic" organization on Github can merge PRs themselves after getting a "LGTM" (Looks good to me); this workflow is similar to the established one in the Elasticsearch project.
+
+## Release process (maintainers)
+
+Version bumps and changelog updates are automated with `scripts/release/prepare.sh` (often via `make release RELEASE_VERSION=X.Y.Z`, which uses Docker). Put the GitHub token at `~/.github/rally_release_changelog.token`, or set `RALLY_CHANGELOG_TOKEN` to that file's path so `changelog.py`, `make release-checks`, and `prepare-docker.sh` use the same location on the host. See the **Preparing a release** section in the [development documentation](https://esrally.readthedocs.io/en/latest/developing.html#preparing-a-release) for milestones, tokens, the release container, and how that differs from the published `elastic/rally` benchmark image.
 
 # Contributing to the Rally codebase
 
