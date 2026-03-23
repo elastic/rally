@@ -1,5 +1,6 @@
 # Image for scripts/release/prepare-docker.sh: Python plus jq, uv, and tooling
 # required by scripts/release/prepare.sh and the repo pre-commit hook (make pre-commit).
+# Pinned to 3.13; CI still tests 3.10–3.13 (docs/developing.rst, Preparing a release).
 FROM python:3.13-bookworm
 
 RUN apt-get update \

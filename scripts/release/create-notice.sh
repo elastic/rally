@@ -31,7 +31,7 @@ function add_license {
     local dep_name=$1
     local download_url=$2
 
-    printf "\n======================================\n${dep_name} LICENSE\n======================================\n" >> "${OUTPUT_FILE}"
+    printf '\n======================================\n%s LICENSE\n======================================\n' "${dep_name}" >> "${OUTPUT_FILE}"
     curl --fail --show-error --silent "${download_url}" >> "${OUTPUT_FILE}"
 }
 

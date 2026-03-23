@@ -114,6 +114,8 @@ From a clean working tree (after staging intended changes), you can run ``prepar
 
 **Makefile:** ``make release RELEASE_VERSION=X.Y.Z`` invokes ``scripts/release/prepare-docker.sh`` on **all** platforms. That script builds the image in ``scripts/release/Dockerfile``, bind-mounts your repository at ``/workspace``, and runs ``scripts/release/prepare.sh`` inside the container. The image pins ``pip`` and ``github3.py`` (for changelog generation); those versions are duplicated in ``prepare-docker.sh`` for the named ``.venv`` volume—keep them aligned with ``pyproject.toml`` (runtime ``pip``, ``develop`` extra ``github3.py``) when upgrading. The image uses ``pip install --editable .`` for the final in-workspace install (not ``uv run``), matching ``prepare.sh``. This is **not** the published ``elastic/rally`` benchmark image; see :doc:`docker` for the distinction.
 
+The release image is based on ``Python 3.13``; Rally is still tested on ``3.10`` through ``3.13`` in CI, so merges are validated across that range before you cut a release with this container.
+
 The container uses your host UID/GID (``DOCKER_USER``, default from ``id -u`` / ``id -g``) for the actual ``prepare.sh`` work so files written to the bind mount are not root-owned. It starts as root only long enough to ``chown`` a **named Docker volume** mounted at ``/workspace/.venv`` (``rally-prepare-release-venv``), so the release environment does not reuse the host ``.venv`` (avoids broken cross-OS symlinks). Remove that volume if you need a fresh in-container env: ``docker volume rm rally-prepare-release-venv``.
 
 Docker build context is the repository root; **``.dockerignore``** keeps the context small (see comments in that file).

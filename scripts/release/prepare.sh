@@ -66,10 +66,15 @@ git commit -m "Bump version to $RELEASE_VERSION" ${PREPARE_RELEASE_NO_VERIFY:+--
 pip install --editable .
 
 # Check version
-if ! [[ $(esrally --version) =~ "esrally ${RELEASE_VERSION} (git revision" ]]; then
-	echo "ERROR: Rally version string [$(esrally --version)] does not start with expected version string [esrally $RELEASE_VERSION]"
+_version_out=$(esrally --version)
+_version_needle="esrally ${RELEASE_VERSION} (git revision"
+case "$_version_out" in
+*"${_version_needle}"*) ;;
+*)
+	echo "ERROR: Rally version string [${_version_out}] does not start with expected version string [esrally ${RELEASE_VERSION}]"
 	exit 2
-fi
+	;;
+esac
 
 echo ""
 echo "===================="
