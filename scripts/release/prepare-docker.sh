@@ -20,8 +20,7 @@
 # Builds scripts/release/Dockerfile and runs scripts/release/prepare.sh in a container
 # with the repo bind-mounted. The container sets PREPARE_RELEASE_NO_VERIFY so the
 # version bump commit skips git hooks inside the container.
-# Release workflow (tokens, milestones, PyPI): https://codex.elastic.dev/r/elasticsearch-team/teams/performance/runbooks/rally-release-process
-# What make release skips / suggested checks: docs/developing.rst (Preparing a release).
+# Release workflow (tokens, milestones, PyPI, release-checks expectations): https://codex.elastic.dev/r/elasticsearch-team/teams/performance/runbooks/rally-release-process
 #
 # Image: scripts/release/Dockerfile (Python 3.13, jq, uv, make, git, …).
 #

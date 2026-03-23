@@ -77,6 +77,3 @@ To get a rough understanding of Rally, it makes sense to get to know its key com
 * `Reporter`: A reporter tells us how the race went (currently only after the fact).
 
 There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_tracks>`.
-
-.. _dev_preparing_a_release:
-

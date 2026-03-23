@@ -31,7 +31,7 @@ warn_skipped_release_checks() {
 		echo "release-checks: skipping GPG signing, GPG_TTY, and git origin checks on this platform." >&2
 	fi
 	echo "Run 'make release-checks RELEASE_VERSION=...' on Linux outside Docker before tagging if you rely on those checks." >&2
-	echo "See https://codex.elastic.dev/r/elasticsearch-team/teams/performance/runbooks/rally-release-process and docs/developing.rst (Preparing a release)." >&2
+	echo "See https://codex.elastic.dev/r/elasticsearch-team/teams/performance/runbooks/rally-release-process" >&2
 	echo "" >&2
 }
 
