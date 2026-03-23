@@ -8122,10 +8122,11 @@ class TestEsqlRunner:
     @pytest.mark.asyncio
     async def test_esql_without_query_filter(self, es):
         es.options.return_value = es
-        es.perform_request = mock.AsyncMock()
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
         esql = runner.Esql()
         result = await esql(es, params={"query": "from logs-* | stats c = count(*)"})
-        assert result == {"weight": 1, "unit": "ops", "success": True}
+        assert result == {"weight": 1, "unit": "ops", "success": True, "is_partial": False}
         expected_body = {"query": "from logs-* | stats c = count(*)"}
         es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
 
@@ -8133,11 +8134,12 @@ class TestEsqlRunner:
     @pytest.mark.asyncio
     async def test_esql_with_query_filter(self, es):
         es.options.return_value = es
-        es.perform_request = mock.AsyncMock()
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
         esql = runner.Esql()
         query_filter = {"range": {"@timestamp": {"gte": "2023"}}}
         result = await esql(es, params={"query": "from * | limit 1", "filter": query_filter})
-        assert result == {"weight": 1, "unit": "ops", "success": True}
+        assert result == {"weight": 1, "unit": "ops", "success": True, "is_partial": False}
         expected_body = {"query": "from * | limit 1", "filter": query_filter}
         es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
 
@@ -8145,11 +8147,241 @@ class TestEsqlRunner:
     @pytest.mark.asyncio
     async def test_esql_with_body(self, es):
         es.options.return_value = es
-        es.perform_request = mock.AsyncMock()
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
         esql = runner.Esql()
         pragma = {"data_partitioning": "doc"}
         result = await esql(es, params={"query": "from * | limit 1", "body": {"pragma": pragma}})
-        assert result == {"weight": 1, "unit": "ops", "success": True}
+        assert result == {"weight": 1, "unit": "ops", "success": True, "is_partial": False}
 
         expected_body = {"pragma": pragma, "query": "from * | limit 1"}
         es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_is_partial_false(self, es):
+        es.options.return_value = es
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1"})
+        assert result["success"] is True
+        assert result["is_partial"] is False
+        assert "error-type" not in result
+        assert "error-description" not in result
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_is_partial_true(self, es):
+        es.options.return_value = es
+        response = {"is_partial": True, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1"})
+        assert result["success"] is False
+        assert result["is_partial"] is True
+        assert result["error-type"] == "esql"
+        assert result["error-description"] == "ES|QL query returned partial results"
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_detailed_results(self, es):
+        es.options.return_value = es
+        response = {
+            "took": 14,
+            "is_partial": False,
+            "completion_time_in_millis": 1772217296434,
+            "documents_found": 1,
+            "values_loaded": 4,
+            "start_time_in_millis": 1772217296420,
+            "expiration_time_in_millis": 1772649296247,
+            "columns": [{"name": "@timestamp", "type": "date"}],
+            "values": [["2026-02-13T11:49:58.810Z"]],
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1", "detailed-results": True})
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "is_partial": False,
+            "took": 14,
+            "documents_found": 1,
+            "values_loaded": 4,
+            "completion_time_in_millis": 1772217296434,
+            "start_time_in_millis": 1772217296420,
+            "expiration_time_in_millis": 1772649296247,
+        }
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_detailed_results_with_partial(self, es):
+        es.options.return_value = es
+        response = {
+            "took": 14,
+            "is_partial": True,
+            "completion_time_in_millis": 1772217296434,
+            "documents_found": 1,
+            "values_loaded": 4,
+            "start_time_in_millis": 1772217296420,
+            "expiration_time_in_millis": 1772649296247,
+            "columns": [{"name": "@timestamp", "type": "date"}],
+            "values": [["2026-02-13T11:49:58.810Z"]],
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1", "detailed-results": True})
+        assert result["success"] is False
+        assert result["is_partial"] is True
+        assert result["took"] == 14
+        assert result["documents_found"] == 1
+        assert result["values_loaded"] == 4
+        assert result["completion_time_in_millis"] == 1772217296434
+        assert result["start_time_in_millis"] == 1772217296420
+        assert result["expiration_time_in_millis"] == 1772649296247
+        assert result["error-type"] == "esql"
+        assert result["error-description"] == "ES|QL query returned partial results"
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_detailed_results_missing_optional_fields(self, es):
+        es.options.return_value = es
+        response = {
+            "is_partial": False,
+            "columns": [],
+            "values": [],
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1", "detailed-results": True})
+        assert result["success"] is True
+        assert result["is_partial"] is False
+        assert result["took"] is None
+        assert result["documents_found"] is None
+        assert result["values_loaded"] is None
+        assert result["completion_time_in_millis"] is None
+        assert result["start_time_in_millis"] is None
+        assert result["expiration_time_in_millis"] is None
+
+
+class TestEsqlProfileRunner:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_without_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value={"profile": {}})
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | stats c = count(*)"})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from logs-* | stats c = count(*)", "profile": True}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_with_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value={"profile": {}})
+        esql_profile = runner.EsqlProfile()
+        query_filter = {"range": {"@timestamp": {"gte": "2023"}}}
+        result = await esql_profile(es, params={"query": "from * | limit 1", "filter": query_filter})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from * | limit 1", "profile": True, "filter": query_filter}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_with_body(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value={"profile": {}})
+        esql_profile = runner.EsqlProfile()
+        pragma = {"data_partitioning": "doc"}
+        result = await esql_profile(es, params={"query": "from * | limit 1", "body": {"pragma": pragma}})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"pragma": pragma, "query": "from * | limit 1", "profile": True}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_phase_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "query": {"took_nanos": 5_000_000},
+                "planning": {"took_nanos": 2_000_000},
+                "parsing": {"took_nanos": 500_000},
+                "drivers": [],
+                "plans": [],
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["success"] is True
+        assert result["query.took_ms"] == 5.0
+        assert result["planning.took_ms"] == 2.0
+        assert result["parsing.took_ms"] == 0.5
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_driver_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "drivers": [
+                    {
+                        "description": "data",
+                        "took_nanos": 10_000_000,
+                        "cpu_nanos": 8_000_000,
+                        "operators": [
+                            {"operator": "LuceneSourceOperator[...]", "status": {"process_nanos": 3_000_000, "processed_slices": 5}},
+                            {"operator": "TopNOperator[...]", "status": {"emit_nanos": 1_000_000, "receive_nanos": 1_500_000}},
+                        ],
+                    },
+                    {
+                        "description": "data",
+                        "took_nanos": 12_000_000,
+                        "cpu_nanos": 6_000_000,
+                        "operators": [],
+                    },
+                ],
+                "plans": [],
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result["data.number"] == 2
+        assert result["data.took_ms"] == 12.0  # max
+        assert result["data.cpu_ms"] == 8.0  # max
+        assert result["data.took_total_ms"] == 22.0  # sum
+        assert result["data.cpu_total_ms"] == 14.0  # sum
+        assert result["data.LuceneSourceOperator.process_ms"] == 3.0
+        assert result["data.LuceneSourceOperator.processed_slices"] == 5
+        assert result["data.TopNOperator.process_ms"] == 2.5
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_plan_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "drivers": [],
+                "plans": [
+                    {
+                        "description": "node_reduction",
+                        "logical_optimization_nanos": 1_000_000,
+                        "physical_optimization_nanos": 2_000_000,
+                        "reduction_nanos": 500_000,
+                    }
+                ],
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result["node_reduction.logical_optimization.took_ms"] == 1.0
+        assert result["node_reduction.physical_optimization.took_ms"] == 2.0
+        assert result["node_reduction.reduction.took_ms"] == 0.5
