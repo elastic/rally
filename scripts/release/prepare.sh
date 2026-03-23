@@ -20,6 +20,12 @@
 # fail this script immediately if any command fails with a non-zero exit code
 set -eu
 
+if [[ $# -ne 1 ]]; then
+	echo "usage: $0 <release_version>" >&2
+	echo "example: $0 2.13.0" >&2
+	exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 RELEASE_VERSION=$1

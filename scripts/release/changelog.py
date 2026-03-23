@@ -112,7 +112,7 @@ def main():
 
     milestone_name = sys.argv[1]
 
-    # requires a personal Github access token with permission `public_repo` (see https://github.com/settings/tokens)
+    # requires a personal GitHub access token with permission `public_repo` (see https://github.com/settings/tokens)
     with open(CHANGELOG_TOKEN_PATH, encoding="utf-8") as token_file:
         token = token_file.readline().strip()
     gh = github3.login(token=token)
