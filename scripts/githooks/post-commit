@@ -12,8 +12,8 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
 	exit 0
 fi
 
-msg=$(mktemp)
-clean=$(mktemp)
+msg=$(mktemp "${TMPDIR:-/tmp}/rally-msg.XXXXXX")
+clean=$(mktemp "${TMPDIR:-/tmp}/rally-clean.XXXXXX")
 trap 'rm -f "$msg" "$clean"' EXIT
 
 git log -1 --format=%B >"$msg"
