@@ -25,6 +25,9 @@ import github3
 ORG = "elastic"
 REPO = "rally"
 
+# Path to the GitHub API token file.
+CHANGELOG_TOKEN_PATH = os.path.expanduser(os.environ.get("RALLY_CHANGELOG_TOKEN", "~/.github/rally_release_changelog.token"))
+
 
 def find_milestone(repo, title, state):
     for m in repo.milestones(state=state, sort="due_date"):
@@ -110,7 +113,9 @@ def main():
     milestone_name = sys.argv[1]
 
     # requires a personal Github access token with permission `public_repo` (see https://github.com/settings/tokens)
-    gh = github3.login(token=open("%s/.github/rally_release_changelog.token" % os.getenv("HOME")).readline().strip())
+    with open(CHANGELOG_TOKEN_PATH, encoding="utf-8") as token_file:
+        token = token_file.readline().strip()
+    gh = github3.login(token=token)
 
     rally_repo = gh.repository(ORG, REPO)
 

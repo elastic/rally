@@ -88,7 +88,7 @@ The script ``scripts/release/prepare.sh`` automates steps before opening a relea
 You need:
 
 * A milestone on ``elastic/rally`` titled exactly like the version argument (e.g. ``2.13.0``). ``scripts/release/changelog.py`` uses an open milestone with that title if one exists; otherwise it reopens a closed milestone with the same title or creates a new open milestone. Assign merged PRs to the milestone so the generated changelog sections are populated.
-* A GitHub API token stored as a single line in ``$HOME/.github/rally_release_changelog.token`` (see ``scripts/release/changelog.py``). The token must allow creating or updating milestones when none is open. ``changelog.py`` and ``make release-checks`` always read that path under your effective ``$HOME``; they do not read the ``RALLY_CHANGELOG_TOKEN`` environment variable.
+* A GitHub API token stored as a single line in a file. By default ``scripts/release/changelog.py`` and ``make release-checks`` (via ``scripts/release/checks.sh``) use ``$HOME/.github/rally_release_changelog.token``. If ``RALLY_CHANGELOG_TOKEN`` is set to a **filesystem path** to that file, they use it instead (same variable as ``prepare-docker.sh`` on the host). The token must allow creating or updating milestones when none is open.
 
 Creating a fine-grained personal access token
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -106,7 +106,7 @@ Follow GitHub's `fine-grained personal access token documentation <https://docs.
 
 If the **elastic** organization enforces SAML SSO, open the token on GitHub after creation and use **Configure SSO** / **Authorize** for **elastic**. Without that step, the API can return 403 even when permissions are correct.
 
-Store the token as a single line in ``~/.github/rally_release_changelog.token`` for host-side runs. For ``scripts/release/prepare-docker.sh`` only, you may set ``RALLY_CHANGELOG_TOKEN`` to a **host path** to a file containing the token; the script bind-mounts that file into the container at ``$HOME/.github/rally_release_changelog.token`` (see the script header).
+Store the token as a single line in ``~/.github/rally_release_changelog.token`` for host-side runs, or set ``RALLY_CHANGELOG_TOKEN`` to that file's path so ``changelog.py``, ``release-checks``, and ``prepare-docker.sh`` agree without copying the file. For Docker release prep, ``prepare-docker.sh`` bind-mounts the host file chosen by ``RALLY_CHANGELOG_TOKEN`` (default: the path above) into the container at ``$HOME/.github/rally_release_changelog.token`` (see the script header); inside the container the default path is used.
 
 A **classic** personal access token with the **public_repo** scope (public repositories only) or the **repo** scope can also work, as noted in ``scripts/release/changelog.py``; fine-grained tokens with Issues **Read and write** are preferred for least privilege.
 

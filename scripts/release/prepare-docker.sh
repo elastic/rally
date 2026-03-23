@@ -30,7 +30,7 @@
 #   - GitHub milestone on elastic/rally titled exactly <release_version>
 #     (scripts/release/changelog.py opens, reopens, or creates one as needed; see docs).
 #   - Token file for changelog.py: default path ~/.github/rally_release_changelog.token
-#     Override with RALLY_CHANGELOG_TOKEN=/path/to/file
+#     Override with RALLY_CHANGELOG_TOKEN=/path/to/file (same env var as changelog.py / checks.sh on the host)
 #
 # Git identity for the commit step:
 #   Host ~/.gitconfig is bind-mounted read-only to ${CONTAINER_HOME}/.gitconfig when

@@ -29,11 +29,14 @@ fi
 
 RELEASE_VERSION=$1
 
+# Same path as scripts/release/changelog.py: optional override for host or release-checks.
+export RALLY_CHANGELOG_TOKEN=${RALLY_CHANGELOG_TOKEN:-~/.github/rally_release_changelog.token}
+
 KERNEL_NAME=$(uname -s)
 if [[ ${KERNEL_NAME} != *"Linux"* ]]; then
-	if [[ ! -f ~/.github/rally_release_changelog.token ]]; then
-		echo "Error: didn't find a valid GitHub token in ~/.github/rally_release_changelog.token."
-		echo "The release process requires a valid GitHub token."
+	if [[ ! -f "$RALLY_CHANGELOG_TOKEN" ]]; then
+		echo "Error: didn't find a valid GitHub token at ${RALLY_CHANGELOG_TOKEN}."
+		echo "The release process requires a valid GitHub token (set RALLY_CHANGELOG_TOKEN or use the default under ~/.github/)."
 		exit 1
 	fi
 	python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}" >/dev/null
@@ -42,9 +45,9 @@ fi
 
 # Linux in Docker (e.g. prepare-docker.sh): token + changelog only; no GPG on host.
 if [[ -f /.dockerenv ]]; then
-	if [[ ! -f ~/.github/rally_release_changelog.token ]]; then
-		echo "Error: didn't find a valid GitHub token in ~/.github/rally_release_changelog.token."
-		echo "The release process requires a valid GitHub token."
+	if [[ ! -f "$RALLY_CHANGELOG_TOKEN" ]]; then
+		echo "Error: didn't find a valid GitHub token at ${RALLY_CHANGELOG_TOKEN}."
+		echo "The release process requires a valid GitHub token (set RALLY_CHANGELOG_TOKEN or use the default under ~/.github/)."
 		exit 1
 	fi
 	python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}" >/dev/null
