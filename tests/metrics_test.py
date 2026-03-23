@@ -987,7 +987,7 @@ class TestIndexHandler:
             # Read the real component template output to use as "old" when simulating pre-existing state
             real_component_templates = json.loads(handler._index_template_provider.get_template(case.es_store_type))
 
-            # lifecycle — no lifecycle_exists API; get_lifecycle throws when policy is missing
+            # lifecycle — no lifecycle_exists API; get_lifecycle throws exception when policy is missing
             if case.lifecycle_exists:
                 if case.identical:
                     ilm_body = json.loads(handler._ilm_default_template(case.es_store_type.ilm_default_resource))
@@ -1060,11 +1060,14 @@ class TestIndexHandler:
                 self.client.put_component_template.assert_not_called()
 
         # --- Verify index template ---
-        self.client.index_template_exists.assert_called_once_with(case.es_store_type.index_template_name)
+        index_template_name = (
+            f"{case.es_store_type.index_template_name}-ds" if case.use_data_streams else f"{case.es_store_type.index_template_name}"
+        )
+        self.client.index_template_exists.assert_called_once_with(index_template_name)
         if case.expect_get_template:
-            self.client.get_template.assert_called_with(case.es_store_type.index_template_name)
+            self.client.get_template.assert_called_with(index_template_name)
         if case.expect_put_template:
-            self.client.put_template.assert_called_once_with(case.es_store_type.index_template_name, mock.ANY)
+            self.client.put_template.assert_called_once_with(index_template_name, mock.ANY)
         else:
             self.client.put_template.assert_not_called()
 

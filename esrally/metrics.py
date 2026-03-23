@@ -542,13 +542,13 @@ class IndexHandler:
 
         new_template = json.loads(self._data_stream_template(list(_index_template.keys())))
         old_template = None
-        if self._client.index_template_exists(self._es_store_type.index_template_name):
-            for existing in self._client.get_template(self._es_store_type.index_template_name).body.get("index_templates", []):
+        if self._client.index_template_exists(f"{self._es_store_type.index_template_name}-ds"):
+            for existing in self._client.get_template(f"{self._es_store_type.index_template_name}-ds").body.get("index_templates", []):
                 old_template = existing.get("index_template", {})
                 break
 
         if self._should_apply_update("index template", old_template, new_template):
-            self._client.put_template(self._es_store_type.index_template_name, _index_template)
+            self._client.put_template(f"{self._es_store_type.index_template_name}-ds", _index_template)
 
     def _ensure_lifecycle_policy(self, name, policy):
         new_policy_body = json.loads(policy).get("policy", {})
