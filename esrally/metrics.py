@@ -371,6 +371,10 @@ class IndexTemplateProvider:
             if self._number_of_replicas is not None:
                 template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
             if self._use_data_streams and support_data_streams:
+                index_pattern = template["index_patterns"][0]
+                if index_pattern.endswith("-*"):
+                    index_pattern = index_pattern.replace("-*", "-v*")
+                    template["index_patterns"][0] = index_pattern
                 if not template["template"]["mappings"]["properties"].get("@timestamp"):
                     template["template"]["mappings"]["properties"]["@timestamp"] = {"type": "date", "format": "epoch_millis"}
             return template
