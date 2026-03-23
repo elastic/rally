@@ -162,7 +162,7 @@ The ``elastic/rally`` image above is for **running** benchmarks. Rally releases 
 
 Maintainers run ``scripts/release/prepare-docker.sh``, which:
 
-* Builds ``scripts/release/Dockerfile`` (Python 3.13 on Debian bookworm, plus ``jq``, ``git``, ``make``, ``uv``, compilers). The image installs ``github3-py`` and performs a minimal **editable** install of Rally (``pyproject.toml``, ``README.md``, and ``esrally/`` only) so unrelated tree changes do not constantly invalidate the image layers.
+* Builds ``scripts/release/Dockerfile`` (Python 3.13 on Debian bookworm, plus ``jq``, ``git``, ``make``, ``uv``, compilers). The image installs ``github3.py`` and performs a minimal **editable** install of Rally (``pyproject.toml``, ``README.md``, and ``esrally/`` only) so unrelated tree changes do not constantly invalidate the image layers.
 * Uses the **repository root** as the Docker build context. The root **``.dockerignore``** file excludes typical dev artifacts (virtualenvs, ``docs/_build``, tests metadata, etc.) so ``docker build`` stays fast and the context stays small.
 * Bind-mounts your full checkout to ``/workspace`` and mounts a **named volume** at ``/workspace/.venv`` (``rally-prepare-release-venv``) so the container does not use the host virtualenv.
 * Runs ``scripts/release/prepare.sh`` under your host UID/GID (via ``setpriv`` after a one-time ``chown`` on the venv volume) so ``NOTICE.txt``, ``CHANGELOG.md``, and other generated files are owned correctly on the bind mount.
