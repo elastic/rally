@@ -1,8 +1,8 @@
 #!/bin/sh
-# Run project linters/formatters before each commit (same as `make pre-commit`: uv + pre-commit).
+# Delegate to `make pre-commit` (venv + uv + pre-commit) from the repo root.
 # Enable with: git config core.hooksPath scripts/githooks
 #
-# Requires uv (https://docs.astral.sh/uv/) and a synced dev env (`make install` or `make venv`).
+# Requires `make` on PATH and a synced dev env (`make install` or `make venv`); see Makefile pre-commit target.
 
 set -eu
 
@@ -13,4 +13,4 @@ fi
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-exec uv run -- pre-commit run
+exec make pre-commit
