@@ -1,3 +1,101 @@
+### 2.13.0
+
+#### Highlights
+
+* [#1981](https://github.com/elastic/rally/pull/1981) (Breaking): Drop Python 3.9 support; add Python 3.13 support; replace nox with uv.
+* [#2056](https://github.com/elastic/rally/pull/2056): Add ``render-track`` command to render a track's Jinja2 templates to JSON
+* [#2047](https://github.com/elastic/rally/pull/2047) / [#2058](https://github.com/elastic/rally/pull/2058): Add ``esql-profile`` operation for ES|QL queries with profiling and operator timing metrics
+* [#2037](https://github.com/elastic/rally/pull/2037): Account for the number of clients in the ingest-doc-count option
+* [#2033](https://github.com/elastic/rally/pull/2033): Add ingest-doc-count option to index an exact number of documents
+* [#1992](https://github.com/elastic/rally/pull/1992): Add run-until runner
+* [#1991](https://github.com/elastic/rally/pull/1991): Create CLI for Rally storage manager.
+* [#1971](https://github.com/elastic/rally/pull/1971): Support API key authentication for reporting
+
+#### Enhancements
+
+* [#2046](https://github.com/elastic/rally/pull/2046): Add detailed results support for ES|QL queries
+* [#2039](https://github.com/elastic/rally/pull/2039): Log warning on BadRequestError
+* [#1868](https://github.com/elastic/rally/pull/1868): Bulk http status & 429 retries
+* [#2041](https://github.com/elastic/rally/pull/2041): Track certain headers if present in error responses
+* [#2034](https://github.com/elastic/rally/pull/2034): Disk usage stats timeout
+* [#2028](https://github.com/elastic/rally/pull/2028): Set the pbzip2 -m flag to the highest supported limit of 2000MB
+* [#2020](https://github.com/elastic/rally/pull/2020): Parse sampling value in DownsampleParamSource
+* [#2016](https://github.com/elastic/rally/pull/2016): Use wait_for_completion:False instead of relying on timeouts in ForceMerge
+* [#2019](https://github.com/elastic/rally/pull/2019): Always show mirror failures when present.
+* [#2015](https://github.com/elastic/rally/pull/2015): Modify storage CLI to produce multiple objects for transference stats and mirror failures when using --filebeat option
+* [#2013](https://github.com/elastic/rally/pull/2013): Read transfer URL from `.status` file instead of its relative path.
+* [#2008](https://github.com/elastic/rally/pull/2008): Add `esrally-storage prune` subcommand.
+* [#1959](https://github.com/elastic/rally/pull/1959): Capture statistics during data download so that we can profile mirrors configuration in CI.
+* [#2005](https://github.com/elastic/rally/pull/2005): Adjust default IT folder
+* [#2004](https://github.com/elastic/rally/pull/2004): Add sampling method parameter to downsampling
+* [#2000](https://github.com/elastic/rally/pull/2000): Add Google Cloud Storage adapter.
+* [#2001](https://github.com/elastic/rally/pull/2001): Sort files to make deterministic
+* [#1995](https://github.com/elastic/rally/pull/1995): Initialize all loggers in rally daemon
+* [#1996](https://github.com/elastic/rally/pull/1996): Speedup default s3 corpus downloader
+* [#1965](https://github.com/elastic/rally/pull/1965): Enable new multipart transfer manager in track downloader.
+* [#1986](https://github.com/elastic/rally/pull/1986): Enable a release build of an Elasticsearch revision from sources (source.build.release)
+* [#1984](https://github.com/elastic/rally/pull/1984): Add ability to continue on network issues
+* [#1975](https://github.com/elastic/rally/pull/1975): Allow configuring the process startup method to be used for creating thespian actors.
+* [#1964](https://github.com/elastic/rally/pull/1964): Add `TransferManager` and `S3Adapter` classes.
+* [#1972](https://github.com/elastic/rally/pull/1972): Add --user-tags to list races
+* [#1962](https://github.com/elastic/rally/pull/1962): feat: Enable uv for venv management.
+* [#1960](https://github.com/elastic/rally/pull/1960): Update storage tools with last changes from `storage` branch.
+* [#1967](https://github.com/elastic/rally/pull/1967): Remove negative duration constraint (may be needed when comparing race results)
+* [#1957](https://github.com/elastic/rally/pull/1957): Add skip-telemetry parameter
+* [#1952](https://github.com/elastic/rally/pull/1952): Create module to implement multipart downloading using threads and previously submitted client.
+* [#1955](https://github.com/elastic/rally/pull/1955): Update `esrally.utils` package:  convert, pretty and threads.
+* [#1953](https://github.com/elastic/rally/pull/1953): Reapply "Add a variable in the provisioner for the seed node count (#1647)" (#1680)
+* [#1951](https://github.com/elastic/rally/pull/1951): Add missing JSON logs
+* [#1949](https://github.com/elastic/rally/pull/1949): Create storage client that redirects downloads to mirror servers
+* [#1945](https://github.com/elastic/rally/pull/1945): Add HTTP adapter for the storage client.
+* [#1943](https://github.com/elastic/rally/pull/1943): Add some threading synchronization tools.
+* [#1942](https://github.com/elastic/rally/pull/1942): Add tool to handle file parts.
+
+#### Bug Fixes
+
+* [#2053](https://github.com/elastic/rally/pull/2053): Fix including the chunk of the partition to calculate the amount of data to handle per partition
+* [#2050](https://github.com/elastic/rally/pull/2050): Fix syntax
+* [#2038](https://github.com/elastic/rally/pull/2038): Fix Docker build revisited
+* [#2035](https://github.com/elastic/rally/pull/2035): Fix Docker build
+* [#2023](https://github.com/elastic/rally/pull/2023): Fix `esrally-storage` put command target file names when multiple files are copied.
+* [#2017](https://github.com/elastic/rally/pull/2017): Pin requirement: google-crc32c==1.7.1
+* [#2014](https://github.com/elastic/rally/pull/2014): Fix optional version branch regex
+* [#2012](https://github.com/elastic/rally/pull/2012): Fix cli_test
+* [#2009](https://github.com/elastic/rally/pull/2009): Fix best_match versions algorithm in case of no major version
+* [#2006](https://github.com/elastic/rally/pull/2006): Fix serverless ITs
+* [#1999](https://github.com/elastic/rally/pull/1999): Fix parallel corpora files download.
+* [#1997](https://github.com/elastic/rally/pull/1997): Address pytest deprecations
+* [#1998](https://github.com/elastic/rally/pull/1998): Fix transfer finished condition when worker is stuck downloading.
+* [#1994](https://github.com/elastic/rally/pull/1994): Fix: Respect --offline flag for all track operations
+* [#1988](https://github.com/elastic/rally/pull/1988): Recover all loggers left orphan after thespian logging setup on actors startup.
+* [#1989](https://github.com/elastic/rally/pull/1989): Fix Makefile
+* [#1987](https://github.com/elastic/rally/pull/1987): Recover old silenced loggers instantiated before actor start is complete.
+* [#1977](https://github.com/elastic/rally/pull/1977): Fix ITs after pytest-rally plugin modification
+* [#1973](https://github.com/elastic/rally/pull/1973): Increase Docker image creation resilience
+* [#1966](https://github.com/elastic/rally/pull/1966): Esrally/stop params/fix #1957
+* [#1956](https://github.com/elastic/rally/pull/1956): Pin aiosignal
+* [#1946](https://github.com/elastic/rally/pull/1946): Fix two typos.
+* [#1869](https://github.com/elastic/rally/pull/1869): Use url_prefix from host dictionary in Elastic client
+* [#1937](https://github.com/elastic/rally/pull/1937): Fix snapshot restore
+* [#1938](https://github.com/elastic/rally/pull/1938): Stop opening for writes in MmapSource
+
+#### Miscellaneous Changes
+
+* [#2049](https://github.com/elastic/rally/pull/2049): Add shorter timeouts for dev docker builds
+* [#2062](https://github.com/elastic/rally/pull/2062): Apply ``persist-credentials: false`` to GitHub Actions workflows
+* Add optional Docker workflow for maintainers to run ``scripts/release/prepare.sh`` (``scripts/release/prepare-docker.sh``, ``scripts/release/Dockerfile``)
+* [#2027](https://github.com/elastic/rally/pull/2027): Bump wheel from 0.45.1 to 0.46.2
+* [#2025](https://github.com/elastic/rally/pull/2025): Bump pyasn1 from 0.6.1 to 0.6.2
+* [#2021](https://github.com/elastic/rally/pull/2021): Bump aiohttp from 3.10.11 to 3.13.3
+* [#1985](https://github.com/elastic/rally/pull/1985): Update GH macOS hosted runner image
+* [#1983](https://github.com/elastic/rally/pull/1983): Remove pip caching from GH workflow
+* [#1979](https://github.com/elastic/rally/pull/1979): Remove duplicate venv-destroy target in Makefile
+* [#1970](https://github.com/elastic/rally/pull/1970): Remove pytest-rally dependency
+* [#1961](https://github.com/elastic/rally/pull/1961): Update yappi to latest
+* [#1963](https://github.com/elastic/rally/pull/1963): Clarify supported Python versions
+* [#1947](https://github.com/elastic/rally/pull/1947): style: sort output in list tracks
+* [#1926](https://github.com/elastic/rally/pull/1926): Bump jinja2 from 3.1.5 to 3.1.6
+
 ### 2.12.0
 
 #### Highlights
