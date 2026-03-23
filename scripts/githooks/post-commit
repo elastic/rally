@@ -1,6 +1,6 @@
 #!/bin/sh
 # Strip Cursor-injected commit trailers (Co-authored-by, Made-with) from the last message.
-# Enable: git config core.hooksPath scripts/githooks
+# Enable: git config core.hooksPath scripts/githooks (see also pre-commit in this directory).
 #
 # Skips work when GIT_CURSOR_HOOK_AMENDING is set to avoid re-entrancy.
 
