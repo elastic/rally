@@ -32,7 +32,10 @@ function add_license {
     local download_url=$2
 
     printf '\n======================================\n%s LICENSE\n======================================\n' "${dep_name}" >> "${OUTPUT_FILE}"
-    curl --fail --show-error --silent "${download_url}" >> "${OUTPUT_FILE}"
+    # Transient 5xx / timeouts: retry a few times (still fail-fast on 4xx or exhausted retries).
+    curl --fail --show-error --silent \
+        --retry 3 --retry-delay 2 --retry-connrefused \
+        "${download_url}" >> "${OUTPUT_FILE}"
 }
 
 function main {
