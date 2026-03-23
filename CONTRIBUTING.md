@@ -41,10 +41,12 @@ the [Github help page](https://help.github.com/articles/fork-a-repo) for help.
 Optional: use this repository’s hooks under `scripts/githooks` (instead of `.git/hooks`):
 
 ```bash
-git config core.hooksPath scripts/githooks
+make install-git-hooks
 ```
 
-* **`pre-commit`** — runs `uv run -- pre-commit run` (same as `make pre-commit`) on staged files before the commit is created. Requires [uv](https://docs.astral.sh/uv/) and a dev environment (`make install` or `make venv`). You do not need `make install-pre-commit` when using this path.
+This sets `git config core.hooksPath scripts/githooks` in your local clone. You can run the same `git config` command by hand if you prefer.
+
+* **`pre-commit`** — runs `uv run -- pre-commit run` (same as `make pre-commit`) on staged files before the commit is created. Requires [uv](https://docs.astral.sh/uv/) and a dev environment (`make install` or `make venv`).
 * **`post-commit`** — strips `Co-authored-by` / `Made-with: Cursor` trailers Cursor may add; it runs `git commit --amend` when the message changes, so the latest commit’s hash can change.
 
 To stop using these hooks in this clone, run `git config --unset core.hooksPath`. The post-commit hook sets `GIT_CURSOR_HOOK_AMENDING` internally to avoid re-running while amending; you normally do not need to set that variable yourself.

@@ -37,7 +37,7 @@ Rally uses automatic code formatters. You can apply them by running ``make forma
 
 However, consider using editor integrations to do it automatically: you'll need to configure `black <https://black.readthedocs.io/en/stable/integrations/editors.html>`_ and `isort <https://github.com/PyCQA/isort/wiki/isort-Plugins>`_.
 
-Also consider running `pre-commit install` to run lint as part of your git commits.
+Also consider running ``make install-git-hooks`` to point git at ``scripts/githooks`` so lint runs on each commit (same as ``make pre-commit`` via the hook there).
 
 Automatic Updates
 ~~~~~~~~~~~~~~~~~
