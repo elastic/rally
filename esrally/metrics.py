@@ -560,7 +560,7 @@ class IndexHandler:
                 break
 
         if self._should_apply_update("index template", old_template, new_template):
-            self._client.put_template(f"{self._es_store_type.index_template_name}-ds", _index_template)
+            self._client.put_template(f"{self._es_store_type.index_template_name}-ds", json.dumps(_index_template))
 
     def _ensure_lifecycle_policy(self, name, policy):
         new_policy_body = json.loads(policy).get("policy", {})
