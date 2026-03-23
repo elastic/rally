@@ -552,7 +552,8 @@ class IndexHandler:
         for name, template in _index_template.items():
             self._ensure_component_template(name, template)
 
-        new_template = json.loads(self._data_stream_template(list(_index_template.keys())))
+        component_names = list(_index_template.keys())
+        new_template = json.loads(self._data_stream_template(component_names))
         old_template = None
         if self._client.index_template_exists(f"{self._es_store_type.index_template_name}-ds"):
             for existing in self._client.get_template(f"{self._es_store_type.index_template_name}-ds").body.get("index_templates", []):
@@ -560,7 +561,7 @@ class IndexHandler:
                 break
 
         if self._should_apply_update("index template", old_template, new_template):
-            self._client.put_template(f"{self._es_store_type.index_template_name}-ds", json.dumps(_index_template))
+            self._client.put_template(f"{self._es_store_type.index_template_name}-ds", self._data_stream_template(component_names))
 
     def _ensure_lifecycle_policy(self, name, policy):
         new_policy_body = json.loads(policy).get("policy", {})
