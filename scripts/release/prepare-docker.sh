@@ -20,7 +20,8 @@
 # Builds scripts/release/Dockerfile and runs scripts/release/prepare.sh in a container
 # with the repo bind-mounted. The container sets PREPARE_RELEASE_NO_VERIFY so the
 # version bump commit skips git hooks inside the container.
-# Milestone/token setup and contributor-oriented overview: docs/developing.rst (Preparing a release).
+# Release workflow (tokens, milestones, PyPI): https://codex.elastic.dev/r/elasticsearch-team/teams/performance/runbooks/rally-release-process
+# What make release skips / suggested checks: docs/developing.rst (Preparing a release).
 #
 # Image: scripts/release/Dockerfile (Python 3.13, jq, uv, make, git, …).
 #
@@ -29,7 +30,7 @@
 #
 # Prerequisites:
 #   - GitHub milestone on elastic/rally titled exactly <release_version>
-#     (scripts/release/changelog.py opens, reopens, or creates one as needed; see docs).
+#     (scripts/release/changelog.py opens, reopens, or creates one as needed; see Codex runbook).
 #   - Token file for changelog.py: default path ~/.github/rally_release_changelog.token
 #     Override with RALLY_CHANGELOG_TOKEN=/path/to/file (same env var as changelog.py / checks.sh on the host)
 #

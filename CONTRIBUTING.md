@@ -94,7 +94,7 @@ Note: Contributors belonging to the "Elastic" organization on Github can merge P
 
 ## Release process (maintainers)
 
-Version bumps and changelog updates are automated with `scripts/release/prepare.sh` (often via `make release RELEASE_VERSION=X.Y.Z`, which uses Docker). Put the GitHub token at `~/.github/rally_release_changelog.token`, or set `RALLY_CHANGELOG_TOKEN` to that file's path so `changelog.py`, `make release-checks`, and `prepare-docker.sh` use the same location on the host. See the **Preparing a release** section in the [development documentation](https://esrally.readthedocs.io/en/latest/developing.html#preparing-a-release) for milestones, tokens, the release container, and how that differs from the published `elastic/rally` benchmark image.
+Follow the internal **Rally Release Process** runbook: https://codex.elastic.dev/r/elasticsearch-team/teams/performance/runbooks/rally-release-process
 
 # Contributing to the Rally codebase
 
