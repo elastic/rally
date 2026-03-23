@@ -555,7 +555,7 @@ class IndexHandler:
         try:
             old_policy = self._client.get_lifecycle(name).body.get(name, {}).get("policy", {})
         # "Lifecycle exists" is not supported by the Elasticsearch API and get_lifecycle throws an exception.
-        except BaseException:
+        except Exception:
             old_policy = None
 
         if self._should_apply_update(f"lifecycle policy [{name}]", old_policy, new_policy_body):

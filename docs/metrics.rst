@@ -6,8 +6,7 @@ Metrics Records
 
 At the end of a race, Rally stores all metrics records in its metrics store. Metrics can be kept in memory or written to a dedicated Elasticsearch cluster (not the cluster where Rally ran its benchmarks). This can be configured in the `[reporting] section <https://esrally.readthedocs.io/en/stable/configuration.html#reporting>`_.
 
-Rally stores the metrics in the indices ``rally-metrics-*``. It will create a new index for each month. Here is a typical metrics record::
-
+By default, Rally stores metrics in the ``rally-metrics-v1`` data stream. When ``datastore.use_data_streams`` is set to false, Rally falls back to monthly indices named ``rally-metrics-YYYY-MM``.
 
     {
           "environment": "nightly",
