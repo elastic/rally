@@ -142,7 +142,7 @@ Prepare only (no benchmark)
 
 If you want Rally to provision Elasticsearch when your :doc:`pipeline </pipelines>` does so, download and prepare track data under your Rally root, and then exit successfully **without** running the challenge schedule or printing a benchmark summary, pass ``--prepare-only``::
 
-    esrally race --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts --prepare-only
+    esrally race --track=geopoint --challenge=append-fast-with-conflicts --prepare-only
 
 With ``--pipeline=benchmark-only``, Rally only prepares track data against your existing cluster (no Elasticsearch provisioning)::
 
