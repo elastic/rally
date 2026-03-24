@@ -77,3 +77,8 @@ To get a rough understanding of Rally, it makes sense to get to know its key com
 * `Reporter`: A reporter tells us how the race went (currently only after the fact).
 
 There is a dedicated :doc:`tutorial on how to add new tracks to Rally</adding_tracks>`.
+
+How to contribute code
+----------------------
+
+See the `contributors guide <https://github.com/elastic/rally/blob/master/CONTRIBUTING.md>`_. We strive to be PEP-8 compliant but don't follow it to the letter.

@@ -94,7 +94,7 @@ Note: Contributors belonging to the "Elastic" organization on Github can merge P
 
 ## Release process (maintainers)
 
-Follow the internal **Rally Release Process** runbook: https://codex.elastic.dev/r/elasticsearch-team/teams/performance/runbooks/rally-release-process
+Release preparation is automated via `make release` and scripts under `scripts/release/`; see the Makefile and script headers for details.
 
 # Contributing to the Rally codebase
 
