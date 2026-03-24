@@ -357,7 +357,7 @@ class TestEsClient:
                     )
                 logging_statements.append(
                     "An error [unit-test] occurred while running the operation [raise_error] against your Elasticsearch "
-                    "metrics store on host [127.0.0.1] at port [9200]."
+                    "metrics store on host [127.0.0.1] at port [9200]. args: (), kwargs: {}"
                 )
                 return logging_statements
 
@@ -494,7 +494,7 @@ class TestEsClient:
             client.guarded(raise_unknown_error)
         assert ctx.value.args[0] == (
             "Transport error(s) [unit-test] occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
-            "store on host [127.0.0.1] at port [9243]."
+            "store on host [127.0.0.1] at port [9243]. args: (), kwargs: {}"
         )
 
     def test_raises_rally_error_on_unretryable_bulk_indexing_errors(self):
@@ -836,51 +836,28 @@ class TestIndexHandler:
     class IndexNameCase:
         es_store_type: metrics.EsStoreType
         use_data_streams: bool
-        race_timestamp: datetime.datetime | str | None = None
 
     @cases.cases(
-        metrics_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.metrics, use_data_streams=True, race_timestamp=RACE_TIMESTAMP),
-        races_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.races, use_data_streams=True, race_timestamp=RACE_TIMESTAMP),
-        results_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.results, use_data_streams=True, race_timestamp=RACE_TIMESTAMP),
-        metrics_date_based_from_string=IndexNameCase(
-            es_store_type=metrics.EsStoreType.metrics,
-            use_data_streams=False,
-            race_timestamp=time.to_iso8601(RACE_TIMESTAMP),
-        ),
-        metrics_date_based_from_datetime=IndexNameCase(
-            es_store_type=metrics.EsStoreType.metrics,
-            use_data_streams=False,
-            race_timestamp=RACE_TIMESTAMP,
-        ),
-        races_date_based_from_string=IndexNameCase(
-            es_store_type=metrics.EsStoreType.races,
-            use_data_streams=False,
-            race_timestamp=time.to_iso8601(RACE_TIMESTAMP),
-        ),
-        races_date_based_from_datetime=IndexNameCase(
-            es_store_type=metrics.EsStoreType.races,
-            use_data_streams=False,
-            race_timestamp=RACE_TIMESTAMP,
-        ),
-        results_date_based_from_string=IndexNameCase(
-            es_store_type=metrics.EsStoreType.results,
-            use_data_streams=False,
-            race_timestamp=time.to_iso8601(RACE_TIMESTAMP),
-        ),
-        results_date_based_from_datetime=IndexNameCase(
-            es_store_type=metrics.EsStoreType.results,
-            use_data_streams=False,
-            race_timestamp=RACE_TIMESTAMP,
-        ),
+        metrics_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.metrics, use_data_streams=True),
+        races_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.races, use_data_streams=True),
+        results_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.results, use_data_streams=True),
+        metrics_date_based=IndexNameCase(es_store_type=metrics.EsStoreType.metrics, use_data_streams=False),
+        races_date_based=IndexNameCase(es_store_type=metrics.EsStoreType.races, use_data_streams=False),
+        results_date_based=IndexNameCase(es_store_type=metrics.EsStoreType.results, use_data_streams=False),
     )
     def test_index_name(self, case: IndexNameCase):
         self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", case.use_data_streams)
         handler = metrics.IndexHandler(self.cfg, self.client, case.es_store_type)
 
         if case.use_data_streams:
-            assert handler.index_name(case.race_timestamp) == f"{case.es_store_type.index_prefix}{case.es_store_type.data_stream_version}"
+            assert handler.index_name(self.RACE_TIMESTAMP) == f"{case.es_store_type.index_prefix}{case.es_store_type.data_stream_version}"
+            assert (
+                handler.index_name(time.to_iso8601(self.RACE_TIMESTAMP))
+                == f"{case.es_store_type.index_prefix}{case.es_store_type.data_stream_version}"
+            )
         else:
-            assert handler.index_name(case.race_timestamp) == f"{case.es_store_type.index_prefix}2016-01"
+            assert handler.index_name(self.RACE_TIMESTAMP) == f"{case.es_store_type.index_prefix}2016-01"
+            assert handler.index_name(time.to_iso8601(self.RACE_TIMESTAMP)) == f"{case.es_store_type.index_prefix}2016-01"
 
     @dataclass
     class ShouldApplyUpdateCase:
@@ -921,240 +898,183 @@ class TestIndexHandler:
         assert result == case.expected
 
     @dataclass
-    class EnsureTemplateCase:
-        use_data_streams: bool
-        create: bool
+    class DataStreamEnsureTemplateCase:
+        create: bool = True
         es_store_type: metrics.EsStoreType = metrics.EsStoreType.metrics
-        # Pre-existing state flags
-        lifecycle_exists: bool = False  # If True, get_lifecycle succeeds; if False, it throws
+        lifecycle_exists: bool = False
         component_templates_exist: bool = False
         index_template_exists: bool = False
-        index_exists: bool = False
-        # When pre-existing, whether the old resource is identical to the new one
         identical: bool = False
         overwrite_templates: bool = False
-        # Expectations
         expect_put_lifecycle: bool = False
         expect_put_component_templates: int = 0
         expect_put_template: bool = True
         expect_get_template: bool = False
-        expect_create_index: bool = False
 
-    @cases.cases(
-        # --- data streams: nothing pre-exists ---
-        data_streams_fresh=EnsureTemplateCase(
-            use_data_streams=True,
-            create=True,
-            expect_put_lifecycle=True,
-            expect_put_component_templates=3,
-        ),
-        # --- data streams: everything pre-exists and is identical ---
-        data_streams_all_identical=EnsureTemplateCase(
-            use_data_streams=True,
-            create=True,
-            lifecycle_exists=True,
-            component_templates_exist=True,
-            index_template_exists=True,
-            identical=True,
-            expect_put_lifecycle=False,
-            expect_put_component_templates=0,
-            expect_put_template=False,
-            expect_get_template=True,
-        ),
-        # --- data streams: everything pre-exists, differs, overwrite=false ---
-        data_streams_all_differ_no_overwrite=EnsureTemplateCase(
-            use_data_streams=True,
-            create=True,
-            lifecycle_exists=True,
-            component_templates_exist=True,
-            index_template_exists=True,
-            identical=False,
-            overwrite_templates=False,
-            expect_put_lifecycle=False,
-            expect_put_component_templates=0,
-            expect_put_template=False,
-            expect_get_template=True,
-        ),
-        # --- data streams: everything pre-exists, differs, overwrite=true ---
-        data_streams_all_differ_overwrite=EnsureTemplateCase(
-            use_data_streams=True,
-            create=True,
-            lifecycle_exists=True,
-            component_templates_exist=True,
-            index_template_exists=True,
-            identical=False,
-            overwrite_templates=True,
-            expect_put_lifecycle=True,
-            # @custom component has empty template body, so old={} == new={} → no put for it
-            expect_put_component_templates=2,
-            expect_put_template=True,
-            expect_get_template=True,
-        ),
-        # --- date-based: nothing pre-exists, create=True ---
-        date_based_fresh_create=EnsureTemplateCase(
-            use_data_streams=False,
-            create=True,
-        ),
-        # --- date-based: template exists, identical, create=True → early return ---
-        date_based_identical_create=EnsureTemplateCase(
-            use_data_streams=False,
-            create=True,
-            index_template_exists=True,
-            identical=True,
-            expect_put_template=False,
-            expect_get_template=True,
-        ),
-        # --- date-based: template exists, differs, overwrite=false, create=True → early return ---
-        date_based_differ_no_overwrite_create=EnsureTemplateCase(
-            use_data_streams=False,
-            create=True,
-            index_template_exists=True,
-            identical=False,
-            overwrite_templates=False,
-            expect_put_template=False,
-            expect_get_template=True,
-        ),
-        # --- date-based: template exists, differs, overwrite=true, index doesn't exist → create_index ---
-        date_based_differ_overwrite_new_index=EnsureTemplateCase(
-            use_data_streams=False,
-            create=True,
-            index_template_exists=True,
-            identical=False,
-            overwrite_templates=True,
-            index_exists=False,
-            expect_put_template=True,
-            expect_get_template=True,
-            expect_create_index=True,
-        ),
-        # --- date-based: template exists, differs, overwrite=true, index already exists ---
-        date_based_differ_overwrite_index_exists=EnsureTemplateCase(
-            use_data_streams=False,
-            create=True,
-            index_template_exists=True,
-            identical=False,
-            overwrite_templates=True,
-            index_exists=True,
-            expect_put_template=True,
-            expect_get_template=True,
-            expect_create_index=False,
-        ),
-    )
-    def test_ensure_index_template(self, case: EnsureTemplateCase):
-        self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", case.use_data_streams)
-        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.overwrite_existing_templates", case.overwrite_templates)
+    @dataclass
+    class DateBasedEnsureTemplateCase:
+        create: bool = True
+        es_store_type: metrics.EsStoreType = metrics.EsStoreType.metrics
+        index_template_exists: bool = False
+        identical: bool = False
+        overwrite_templates: bool = False
+        expect_put_template: bool = True
+        expect_get_template: bool = False
 
-        handler = metrics.IndexHandler(self.cfg, self.client, case.es_store_type)
-
-        if case.use_data_streams:
-            # For the "fresh" case, mock to avoid file I/O; for pre-existing cases, use real templates
-            if not case.lifecycle_exists:
-                handler._ilm_default_template = mock.MagicMock(return_value=json.dumps({"policy": {}}))
-
-            # Read the real component template output to use as "old" when simulating pre-existing state
-            real_component_templates = json.loads(handler._index_template_provider.get_template(case.es_store_type))
-
-            # lifecycle — no lifecycle_exists API; get_lifecycle throws exception when policy is missing
-            if case.lifecycle_exists:
-                if case.identical:
-                    ilm_body = json.loads(handler._ilm_default_template(case.es_store_type.ilm_default_resource))
-                else:
-                    # Empty policy body → diff will show additions in the new template
-                    ilm_body = {"policy": {}}
-                self.client.get_lifecycle.return_value = mock.MagicMock(body={case.es_store_type.ilm_default_name: ilm_body})
-            else:
-                self.client.get_lifecycle.side_effect = Exception("lifecycle not found")
-
-            # component templates
-            self.client.component_template_exists.return_value = case.component_templates_exist
-            if case.component_templates_exist:
-
-                def _get_component_template(name):
-                    if case.identical:
-                        real_body = json.loads(real_component_templates[name])
-                    else:
-                        # Empty template body → diff will show additions in the new template
-                        real_body = {"template": {}}
-                    return mock.MagicMock(body={"component_templates": [{"component_template": real_body}]})
-
-                self.client.get_component_template.side_effect = _get_component_template
-
-            # index template
-            self.client.index_template_exists.return_value = case.index_template_exists
-            if case.index_template_exists:
-                if case.identical:
-                    real_ds_template = {
-                        "index_patterns": [f"{case.es_store_type.index_prefix}v*"],
-                        "data_stream": {},
-                        "composed_of": list(real_component_templates.keys()),
-                        "priority": metrics.IndexHandler.TEMPLATE_PRIORITY,
-                    }
-                else:
-                    # Empty index template → diff will show additions
-                    real_ds_template = {}
-                self.client.get_template.return_value = mock.MagicMock(body={"index_templates": [{"index_template": real_ds_template}]})
-        else:
-            # date-based path
-            self.client.index_template_exists.return_value = case.index_template_exists
-            if case.index_template_exists:
-                if case.identical:
-                    real_template = json.loads(handler._index_template_provider.get_template(case.es_store_type))["template"]
-                else:
-                    # Empty template body → diff will show additions in the new template
-                    real_template = {}
-                self.client.get_template.return_value = mock.MagicMock(
-                    body={"index_templates": [{"index_template": {"template": real_template}}]}
-                )
-            self.client.exists.return_value = case.index_exists
-
-        race_ts = self.RACE_TIMESTAMP if case.use_data_streams else time.to_iso8601(self.RACE_TIMESTAMP)
-        handler.ensure_index_template(create=case.create, race_timestamp=race_ts)
-
-        # --- Verify lifecycle ---
-        if case.use_data_streams:
-            self.client.get_lifecycle.assert_called_with(case.es_store_type.ilm_default_name)
-            if case.expect_put_lifecycle:
-                self.client.put_lifecycle.assert_called_once_with(case.es_store_type.ilm_default_name, mock.ANY)
-            else:
-                self.client.put_lifecycle.assert_not_called()
-
-        # --- Verify component templates ---
-        if case.use_data_streams:
-            assert self.client.component_template_exists.call_count == 3
-            if case.expect_put_component_templates:
-                assert self.client.put_component_template.call_count == case.expect_put_component_templates
-            else:
-                self.client.put_component_template.assert_not_called()
-
-        # --- Verify index template ---
-        index_template_name = (
-            f"{case.es_store_type.index_template_name}-ds" if case.use_data_streams else f"{case.es_store_type.index_template_name}"
-        )
+    def _assert_index_template_calls(self, es_store_type, use_data_streams, expect_get_template, expect_put_template):
+        index_template_name = f"{es_store_type.index_template_name}-ds" if use_data_streams else es_store_type.index_template_name
         self.client.index_template_exists.assert_called_once_with(index_template_name)
-        if case.expect_get_template:
+        if expect_get_template:
             self.client.get_template.assert_called_with(index_template_name)
-        if case.expect_put_template:
+        if expect_put_template:
             self.client.put_template.assert_called_once_with(index_template_name, mock.ANY)
         else:
             self.client.put_template.assert_not_called()
 
-        # --- Verify date-based index creation ---
-        if not case.use_data_streams:
-            if case.expect_create_index:
-                expected_index_name = f"{case.es_store_type.index_prefix}2016-01"
-                self.client.create_index.assert_called_once_with(index=expected_index_name)
+    @cases.cases(
+        fresh=DataStreamEnsureTemplateCase(
+            expect_put_lifecycle=True,
+            expect_put_component_templates=3,
+        ),
+        all_identical=DataStreamEnsureTemplateCase(
+            lifecycle_exists=True,
+            component_templates_exist=True,
+            index_template_exists=True,
+            identical=True,
+            expect_put_template=False,
+            expect_get_template=True,
+        ),
+        all_differ_no_overwrite=DataStreamEnsureTemplateCase(
+            lifecycle_exists=True,
+            component_templates_exist=True,
+            index_template_exists=True,
+            expect_put_template=False,
+            expect_get_template=True,
+        ),
+        all_differ_overwrite=DataStreamEnsureTemplateCase(
+            lifecycle_exists=True,
+            component_templates_exist=True,
+            index_template_exists=True,
+            overwrite_templates=True,
+            expect_put_lifecycle=True,
+            expect_put_component_templates=2,
+            expect_get_template=True,
+        ),
+    )
+    def test_ensure_index_template_data_stream(self, case: DataStreamEnsureTemplateCase):
+        self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", True)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.overwrite_existing_templates", case.overwrite_templates)
+
+        handler = metrics.IndexHandler(self.cfg, self.client, case.es_store_type)
+
+        if not case.lifecycle_exists:
+            handler._ilm_default_template = mock.MagicMock(return_value=json.dumps({"policy": {}}))
+
+        real_component_templates = json.loads(handler._index_template_provider.get_template(case.es_store_type))
+
+        if case.lifecycle_exists:
+            if case.identical:
+                ilm_body = json.loads(handler._ilm_default_template(case.es_store_type.ilm_default_resource))
             else:
-                self.client.create_index.assert_not_called()
+                ilm_body = {"policy": {}}
+            self.client.get_lifecycle.return_value = mock.MagicMock(body={case.es_store_type.ilm_default_name: ilm_body})
+        else:
+            self.client.get_lifecycle.side_effect = Exception("lifecycle not found")
 
-    def test_ensure_index_template_read_only_prefers_new_index_suffix(self):
+        self.client.component_template_exists.return_value = case.component_templates_exist
+        if case.component_templates_exist:
+
+            def _get_component_template(name):
+                if case.identical:
+                    real_body = json.loads(real_component_templates[name])
+                else:
+                    real_body = {"template": {}}
+                return mock.MagicMock(body={"component_templates": [{"component_template": real_body}]})
+
+            self.client.get_component_template.side_effect = _get_component_template
+
+        self.client.index_template_exists.return_value = case.index_template_exists
+        if case.index_template_exists:
+            if case.identical:
+                real_ds_template = {
+                    "index_patterns": [f"{case.es_store_type.index_prefix}v*"],
+                    "data_stream": {},
+                    "composed_of": list(real_component_templates.keys()),
+                    "priority": metrics.IndexHandler.TEMPLATE_PRIORITY,
+                }
+            else:
+                real_ds_template = {}
+            self.client.get_template.return_value = mock.MagicMock(body={"index_templates": [{"index_template": real_ds_template}]})
+
+        handler.ensure_index_template(create=case.create, race_timestamp=self.RACE_TIMESTAMP)
+
+        self.client.get_lifecycle.assert_called_with(case.es_store_type.ilm_default_name)
+        if case.expect_put_lifecycle:
+            self.client.put_lifecycle.assert_called_once_with(case.es_store_type.ilm_default_name, mock.ANY)
+        else:
+            self.client.put_lifecycle.assert_not_called()
+
+        assert self.client.component_template_exists.call_count == 3
+        if case.expect_put_component_templates:
+            assert self.client.put_component_template.call_count == case.expect_put_component_templates
+        else:
+            self.client.put_component_template.assert_not_called()
+
+        self._assert_index_template_calls(
+            case.es_store_type,
+            use_data_streams=True,
+            expect_get_template=case.expect_get_template,
+            expect_put_template=case.expect_put_template,
+        )
+
+    @cases.cases(
+        fresh_create=DateBasedEnsureTemplateCase(),
+        identical_create=DateBasedEnsureTemplateCase(
+            index_template_exists=True,
+            identical=True,
+            expect_put_template=False,
+            expect_get_template=True,
+        ),
+        differ_no_overwrite_create=DateBasedEnsureTemplateCase(
+            index_template_exists=True,
+            expect_put_template=False,
+            expect_get_template=True,
+        ),
+        differ_overwrite_new_index=DateBasedEnsureTemplateCase(
+            index_template_exists=True,
+            overwrite_templates=True,
+            expect_get_template=True,
+        ),
+        differ_overwrite_index_exists=DateBasedEnsureTemplateCase(
+            index_template_exists=True,
+            overwrite_templates=True,
+            expect_get_template=True,
+        ),
+    )
+    def test_ensure_index_template_date_based(self, case: DateBasedEnsureTemplateCase):
         self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", False)
-        self.client.exists.return_value = True
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.overwrite_existing_templates", case.overwrite_templates)
 
-        handler = metrics.IndexHandler(self.cfg, self.client, metrics.EsStoreType.metrics)
-        handler.ensure_index_template(create=False, race_timestamp=time.to_iso8601(self.RACE_TIMESTAMP))
+        handler = metrics.IndexHandler(self.cfg, self.client, case.es_store_type)
 
-        self.client.exists.assert_called_once_with(index="rally-metrics-2016-01.new")
-        self.client.put_template.assert_called_once_with(metrics.EsStoreType.metrics.index_template_name, mock.ANY)
-        self.client.index_template_exists.assert_not_called()
+        self.client.index_template_exists.return_value = case.index_template_exists
+        if case.index_template_exists:
+            if case.identical:
+                real_template = json.loads(handler._index_template_provider.get_template(case.es_store_type))["template"]
+            else:
+                real_template = {}
+            self.client.get_template.return_value = mock.MagicMock(
+                body={"index_templates": [{"index_template": {"template": real_template}}]}
+            )
+
+        handler.ensure_index_template(create=case.create, race_timestamp=time.to_iso8601(self.RACE_TIMESTAMP))
+
+        self._assert_index_template_calls(
+            case.es_store_type,
+            use_data_streams=False,
+            expect_get_template=case.expect_get_template,
+            expect_put_template=case.expect_put_template,
+        )
 
 
 class TestEsMetricsStore:
@@ -1180,6 +1100,7 @@ class TestEsMetricsStore:
             return f"{metrics.EsStoreType.metrics.index_prefix}{ts.year:04d}-{ts.month:02d}"
 
         index_handler.index_name.side_effect = _index_name
+        index_handler.migrated_index_name.side_effect = lambda index_name: f"{index_name}.new"
         return index_handler
 
     def _make_metrics_store(self, use_data_streams):
@@ -1199,10 +1120,11 @@ class TestEsMetricsStore:
         create: bool = True
         use_data_streams: bool = True
         want_refresh: bool = False
+        prefer_new_index_suffix: bool = False
 
     @cases.cases(
         create_false=OpenCase(create=False),
-        create_false_date_based=OpenCase(create=False, use_data_streams=False, want_refresh=True),
+        create_false_date_based=OpenCase(create=False, use_data_streams=False, want_refresh=True, prefer_new_index_suffix=True),
         data_streams_create=OpenCase(create=True, use_data_streams=True, want_refresh=False),
         date_based_create=OpenCase(create=True, use_data_streams=False, want_refresh=True),
     )
@@ -1213,12 +1135,25 @@ class TestEsMetricsStore:
             create=case.create, race_timestamp=self.RACE_TIMESTAMP
         )
         expected_index = self.metrics_store._index_handler.index_name(self.RACE_TIMESTAMP)
+        if case.prefer_new_index_suffix:
+            expected_index = self.metrics_store._index_handler.migrated_index_name(expected_index)
         if case.want_refresh:
             self.es_mock.refresh.assert_called_once_with(index=expected_index)
         else:
             self.es_mock.refresh.assert_not_called()
         self.es_mock.bulk_index.assert_not_called()
         self.es_mock.search.assert_not_called()
+
+    def test_open_read_only_prefers_new_index_suffix(self):
+        self.metrics_store, self.es_mock = self._make_metrics_store(use_data_streams=False)
+        self.metrics_store._index_handler.migrated_index_name.return_value = "rally-metrics-2016-01.new"
+        self.es_mock.exists.return_value = True
+
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=False)
+
+        self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(create=False, race_timestamp=self.RACE_TIMESTAMP)
+        self.es_mock.exists.assert_called_once_with(index="rally-metrics-2016-01.new")
+        self.es_mock.refresh.assert_called_once_with(index="rally-metrics-2016-01.new")
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_put_value_without_meta_info(self, use_data_streams):

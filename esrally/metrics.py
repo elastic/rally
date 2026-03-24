@@ -489,7 +489,7 @@ class IndexHandler:
             }
         )
 
-    def _migrated_index_name(self, original_name):
+    def migrated_index_name(self, original_name):
         return f"{original_name}.new"
 
     def _should_apply_update(self, resource_label, old_resource, new_resource):
@@ -515,27 +515,15 @@ class IndexHandler:
         ), "Expected IndexTemplateProvider for date-based indices but got [%s]" % type(self._index_template_provider)
 
         _index_template = self._index_template_provider.get_template(self._es_store_type)
-        if create:
-            if self._client.index_template_exists(self._es_store_type.index_template_name):
-                old_template = None
-                for existing in self._client.get_template(self._es_store_type.index_template_name).body.get("index_templates", []):
-                    old_template = existing.get("index_template", {}).get("template", {})
-                    break
-                new_template = json.loads(_index_template)["template"]
+        if create and self._client.index_template_exists(self._es_store_type.index_template_name):
+            old_template = None
+            for existing in self._client.get_template(self._es_store_type.index_template_name).body.get("index_templates", []):
+                old_template = existing.get("index_template", {}).get("template", {})
+                break
+            new_template = json.loads(_index_template)["template"]
 
-                if not self._should_apply_update("index template", old_template, new_template):
-                    return
-
-                if not self._client.exists(index=self.index_name(race_timestamp)):
-                    # We want to create the index if it does not exist.
-                    self._client.create_index(index=self.index_name(race_timestamp))
-                else:
-                    self.logger.info("[%s] already exists.", self.index_name(race_timestamp))
-        else:
-            # we still need to check for the correct index name - prefer the one with the suffix
-            new_name = self._migrated_index_name(self.index_name(race_timestamp))
-            if self._client.exists(index=new_name):
-                self._index = new_name
+            if not self._should_apply_update("index template", old_template, new_template):
+                return
 
         self._client.put_template(self._es_store_type.index_template_name, _index_template)
 
@@ -544,15 +532,16 @@ class IndexHandler:
             self._index_template_provider, ComponentTemplateProvider
         ), "Expected ComponentTemplateProvider for data streams but got [%s]" % type(self._index_template_provider)
 
+        _index_template = json.loads(self._index_template_provider.get_template(self._es_store_type))
+
         # The index template is composed of multiple component templates.
         # We need to ensure that all component templates exist and are up to date
         # before we can put them together in the index template.
-        _index_template = json.loads(self._index_template_provider.get_template(self._es_store_type))
-
         for name, template in _index_template.items():
             self._ensure_component_template(name, template)
 
         component_names = list(_index_template.keys())
+
         new_template = json.loads(self._data_stream_template(component_names))
         old_template = None
         if self._client.index_template_exists(f"{self._es_store_type.index_template_name}-ds"):
@@ -1169,8 +1158,21 @@ class EsMetricsStore(MetricsStore):
 
         # Skip refresh when creating with data streams - the data stream won't exist until first write
         if not self._index_handler.use_data_streams:
+            index_name = self._index_handler.index_name(race_timestamp)
+            if create:
+                if not self._client.exists(index=index_name):
+                    # Create the concrete index when writing to a date-based store, even if the template already existed.
+                    self._client.create_index(index=index_name)
+                else:
+                    self.logger.info("[%s] already exists.", index_name)
+            else:
+                # we still need to check for the correct index name - prefer the one with the suffix
+                new_name = self._index_handler.migrated_index_name(index_name)
+                if self._client.exists(index=new_name):
+                    index_name = new_name
+
             # ensure we can search immediately after opening
-            self._client.refresh(index=self._index_handler.index_name(race_timestamp))
+            self._client.refresh(index=index_name)
 
     def flush(self, refresh=True):
         if self._docs:
