@@ -39,7 +39,7 @@ from esrally import (
     types,
     version,
 )
-from esrally.utils import console, opts, versions
+from esrally.utils import console, convert, opts, versions
 
 pipelines = collections.OrderedDict()
 
@@ -138,8 +138,26 @@ class BenchmarkActor(actor.RallyActor):
     @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PreparationComplete(self, msg, sender):
         self.coordinator.on_preparation_complete(msg.distribution_flavor, msg.distribution_version, msg.revision)
+        # esrally race --prepare-only (race.prepare.only): exit after track prep instead of StartBenchmark.
+        prepare_only = convert.to_bool(self.cfg.opts("race", "prepare.only", mandatory=False, default_value=False))
+        if prepare_only:
+            self.logger.info("Prepare-only mode: skipping benchmark; shutting down driver and engine.")
+            self._finish_prepare_only()
+            return
         self.logger.info("Telling driver to start benchmark.")
         self.send(self.main_driver, driver.StartBenchmark())
+
+    def _finish_prepare_only(self):
+        # Same teardown order as receiveMsg_BenchmarkComplete (exit driver, StopEngine -> EngineStopped -> Success),
+        # but without running the challenge or on_benchmark_complete (no results, no summary).
+        assert self.coordinator is not None
+        assert self.main_driver is not None
+        assert self.mechanic is not None
+        self.coordinator.on_prepare_only_complete()
+        self.send(self.main_driver, thespian.actors.ActorExitRequest())
+        self.main_driver = None
+        self.logger.info("Asking mechanic to stop the engine.")
+        self.send(self.mechanic, mechanic.StopEngine())
 
     @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
     def receiveMsg_TaskFinished(self, msg, sender):
@@ -250,9 +268,27 @@ class BenchmarkCoordinator:
         self.race.distribution_flavor = distribution_flavor
         self.race.distribution_version = distribution_version
         self.race.revision = revision
-        # store race initially (without any results) so other components can retrieve full metadata
-        self.race_store.store_race(self.race)
-        if self.race.challenge.auto_generated:
+        prepare_only = convert.to_bool(self.cfg.opts("race", "prepare.only", mandatory=False, default_value=False))
+        if not prepare_only:
+            # store race initially (without any results) so other components can retrieve full metadata
+            self.race_store.store_race(self.race)
+        # Prepare-only: skip store_race here so no partial race.json is written when we never run the benchmark.
+        if prepare_only:
+            if self.race.challenge.auto_generated:
+                console.info(
+                    "Prepared track [{}] and car {} with version [{}]; "
+                    "prepare-only mode - not running the benchmark or persisting a race record.\n".format(
+                        self.race.track_name, self.race.car, self.race.distribution_version
+                    )
+                )
+            else:
+                console.info(
+                    "Prepared track [{}], challenge [{}] and car {} with version [{}]; "
+                    "prepare-only mode - not running the benchmark or persisting a race record.\n".format(
+                        self.race.track_name, self.race.challenge_name, self.race.car, self.race.distribution_version
+                    )
+                )
+        elif self.race.challenge.auto_generated:
             console.info(
                 "Racing on track [{}] and car {} with version [{}].\n".format(
                     self.race.track_name, self.race.car, self.race.distribution_version
@@ -268,6 +304,11 @@ class BenchmarkCoordinator:
     def on_task_finished(self, new_metrics):
         self.logger.info("Bulk adding request metrics to metrics store.")
         self.metrics_store.bulk_add(new_metrics)
+
+    def on_prepare_only_complete(self):
+        # Close coordinator metrics store without flush/calculate_results/reporter.summarize (see on_benchmark_complete).
+        self.logger.info("Prepare-only run finished; closing metrics store without benchmark results.")
+        self.metrics_store.close()
 
     def on_benchmark_complete(self, new_metrics):
         self.logger.info("Benchmark is complete.")

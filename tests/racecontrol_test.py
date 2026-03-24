@@ -107,3 +107,49 @@ def test_runs_a_known_pipeline(unittest_pipeline):
     racecontrol.run(cfg)
 
     unittest_pipeline.target.assert_called_once_with(cfg)
+
+
+def test_on_preparation_complete_stores_race_by_default():
+    cfg = config.Config()
+    cfg.add(config.Scope.benchmark, "race", "prepare.only", False)
+    coord = racecontrol.BenchmarkCoordinator(cfg)
+    coord.race = mock.Mock()
+    coord.race.challenge = mock.Mock(auto_generated=False)
+    coord.race.track_name = "t"
+    coord.race.challenge_name = "c"
+    coord.race.car = "defaults"
+    coord.race.distribution_version = "8.0.0"
+    coord.race_store = mock.Mock()
+
+    with mock.patch("esrally.racecontrol.console"):
+        coord.on_preparation_complete("oss", "8.0.0", "abc123")
+
+    coord.race_store.store_race.assert_called_once_with(coord.race)
+
+
+def test_on_preparation_complete_skips_race_store_when_prepare_only():
+    cfg = config.Config()
+    cfg.add(config.Scope.benchmark, "race", "prepare.only", True)
+    coord = racecontrol.BenchmarkCoordinator(cfg)
+    coord.race = mock.Mock()
+    coord.race.challenge = mock.Mock(auto_generated=False)
+    coord.race.track_name = "t"
+    coord.race.challenge_name = "c"
+    coord.race.car = "defaults"
+    coord.race.distribution_version = "8.0.0"
+    coord.race_store = mock.Mock()
+
+    with mock.patch("esrally.racecontrol.console"):
+        coord.on_preparation_complete("oss", "8.0.0", "abc123")
+
+    coord.race_store.store_race.assert_not_called()
+
+
+def test_on_prepare_only_complete_closes_metrics_store():
+    cfg = config.Config()
+    coord = racecontrol.BenchmarkCoordinator(cfg)
+    coord.metrics_store = mock.Mock()
+
+    coord.on_prepare_only_complete()
+
+    coord.metrics_store.close.assert_called_once()

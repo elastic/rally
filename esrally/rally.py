@@ -809,6 +809,13 @@ def create_arg_parser():
         action="store_true",
     )
     race_parser.add_argument(
+        "--prepare-only",
+        help="After provisioning (if applicable) and preparing the track on disk, exit successfully without running the challenge "
+        "schedule or writing benchmark results (default: false).",
+        default=False,
+        action="store_true",
+    )
+    race_parser.add_argument(
         "--enable-driver-profiling",
         help="Enables a profiler for analyzing the performance of calls in Rally's driver (default: false).",
         default=False,
@@ -1255,6 +1262,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
             cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
             cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
+            cfg.add(config.Scope.applicationOverride, "race", "prepare.only", args.prepare_only)
             configure_track_params(arg_parser, args, cfg)
             configure_connection_params(arg_parser, args, cfg)
             configure_telemetry_params(args, cfg)
