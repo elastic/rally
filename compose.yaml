@@ -1,7 +1,7 @@
 services:
 
   es01:
-    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-latest}
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-9.3.1}
     container_name: es01
     networks:
       - elastic-net
