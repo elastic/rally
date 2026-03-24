@@ -836,23 +836,51 @@ class TestIndexHandler:
     class IndexNameCase:
         es_store_type: metrics.EsStoreType
         use_data_streams: bool
+        race_timestamp: datetime.datetime | str | None = None
 
     @cases.cases(
-        metrics_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.metrics, use_data_streams=True),
-        races_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.races, use_data_streams=True),
-        results_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.results, use_data_streams=True),
-        metrics_date_based=IndexNameCase(es_store_type=metrics.EsStoreType.metrics, use_data_streams=False),
-        races_date_based=IndexNameCase(es_store_type=metrics.EsStoreType.races, use_data_streams=False),
-        results_date_based=IndexNameCase(es_store_type=metrics.EsStoreType.results, use_data_streams=False),
+        metrics_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.metrics, use_data_streams=True, race_timestamp=RACE_TIMESTAMP),
+        races_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.races, use_data_streams=True, race_timestamp=RACE_TIMESTAMP),
+        results_data_streams=IndexNameCase(es_store_type=metrics.EsStoreType.results, use_data_streams=True, race_timestamp=RACE_TIMESTAMP),
+        metrics_date_based_from_string=IndexNameCase(
+            es_store_type=metrics.EsStoreType.metrics,
+            use_data_streams=False,
+            race_timestamp=time.to_iso8601(RACE_TIMESTAMP),
+        ),
+        metrics_date_based_from_datetime=IndexNameCase(
+            es_store_type=metrics.EsStoreType.metrics,
+            use_data_streams=False,
+            race_timestamp=RACE_TIMESTAMP,
+        ),
+        races_date_based_from_string=IndexNameCase(
+            es_store_type=metrics.EsStoreType.races,
+            use_data_streams=False,
+            race_timestamp=time.to_iso8601(RACE_TIMESTAMP),
+        ),
+        races_date_based_from_datetime=IndexNameCase(
+            es_store_type=metrics.EsStoreType.races,
+            use_data_streams=False,
+            race_timestamp=RACE_TIMESTAMP,
+        ),
+        results_date_based_from_string=IndexNameCase(
+            es_store_type=metrics.EsStoreType.results,
+            use_data_streams=False,
+            race_timestamp=time.to_iso8601(RACE_TIMESTAMP),
+        ),
+        results_date_based_from_datetime=IndexNameCase(
+            es_store_type=metrics.EsStoreType.results,
+            use_data_streams=False,
+            race_timestamp=RACE_TIMESTAMP,
+        ),
     )
     def test_index_name(self, case: IndexNameCase):
         self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", case.use_data_streams)
         handler = metrics.IndexHandler(self.cfg, self.client, case.es_store_type)
 
         if case.use_data_streams:
-            assert handler.index_name(self.RACE_TIMESTAMP) == f"{case.es_store_type.index_prefix}{case.es_store_type.data_stream_version}"
+            assert handler.index_name(case.race_timestamp) == f"{case.es_store_type.index_prefix}{case.es_store_type.data_stream_version}"
         else:
-            assert handler.index_name(time.to_iso8601(self.RACE_TIMESTAMP)) == f"{case.es_store_type.index_prefix}2016-01"
+            assert handler.index_name(case.race_timestamp) == f"{case.es_store_type.index_prefix}2016-01"
 
     @dataclass
     class ShouldApplyUpdateCase:

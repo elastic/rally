@@ -219,7 +219,7 @@ class EsClient:
                     node = self._client.transport.node_pool.get()
                     msg = (
                         "An error [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] "
-                        "at port [%s]." % (e.error, target.__name__, node.host, node.port)
+                        "at port [%s]. args: %s, kwargs: %s" % (e.error, target.__name__, node.host, node.port, args, kwargs)
                     )
                     self.logger.exception(msg)
                     # this does not necessarily mean it's a system setup problem...
@@ -233,7 +233,7 @@ class EsClient:
                     err = e
                 msg = (
                     "Transport error(s) [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on "
-                    "host [%s] at port [%s]." % (err, target.__name__, node.host, node.port)
+                    "host [%s] at port [%s]. args: %s, kwargs: %s" % (err, target.__name__, node.host, node.port, args, kwargs)
                 )
                 self.logger.exception(msg)
                 # this does not necessarily mean it's a system setup problem...
@@ -460,7 +460,7 @@ class IndexHandler:
         if self.use_data_streams:
             return f"{self._es_store_type.index_prefix}{self._es_store_type.data_stream_version}"
         else:
-            ts = time.from_iso8601(race_timestamp)
+            ts = time.from_iso8601(race_timestamp) if isinstance(race_timestamp, str) else race_timestamp
             return f"{self._es_store_type.index_prefix}{ts.year:04d}-{ts.month:02d}"
 
     def ensure_index_template(self, create=False, race_timestamp=None):
@@ -560,8 +560,10 @@ class IndexHandler:
                 old_template = existing.get("index_template", {})
                 break
 
-        if self._should_apply_update("index template", old_template, new_template):
-            self._client.put_template(f"{self._es_store_type.index_template_name}-ds", self._data_stream_template(component_names))
+        if not self._should_apply_update("index template", old_template, new_template):
+            return
+
+        self._client.put_template(f"{self._es_store_type.index_template_name}-ds", self._data_stream_template(component_names))
 
     def _ensure_lifecycle_policy(self, name, policy):
         new_policy_body = json.loads(policy).get("policy", {})
