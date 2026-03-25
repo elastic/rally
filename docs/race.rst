@@ -140,13 +140,13 @@ If you are curious about the operations that Rally has run, inspect the `geopoin
 Prepare only (no benchmark)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you want Rally to provision Elasticsearch when your :doc:`pipeline </pipelines>` does so, download and prepare track data under your Rally root, and then exit successfully **without** running the challenge schedule or printing a benchmark summary, pass ``--prepare-only``::
+If you want Rally to download and prepare track data under your Rally root (corpora, generated documents, and other on-disk work defined by the track) and then exit successfully **without** running the challenge schedule or printing a benchmark summary, pass ``--prepare-only``. In this mode Rally does **not** start Elasticsearch and does **not** open connections to ``--target-hosts``::
 
     esrally race --track=geopoint --challenge=append-fast-with-conflicts --prepare-only
 
-With ``--pipeline=benchmark-only``, Rally only prepares track data against your existing cluster (no Elasticsearch provisioning)::
+With ``--pipeline=benchmark-only``, Rally performs the same local track preparation only; it does not contact a cluster. Pass ``--distribution-version`` (or pin the track repository revision) if you need a specific Elasticsearch version for track branch selection, because Rally will not probe a running cluster::
 
-    esrally race --pipeline=benchmark-only --target-hosts=127.0.0.1:9200 --track=geonames --prepare-only
+    esrally race --pipeline=benchmark-only --track=geonames --distribution-version=8.11.0 --prepare-only
 
-In this mode Rally prints a message that the track was prepared in prepare-only mode; it does **not** persist a race record or benchmark results. Elasticsearch is stopped the same way as after a normal race (see :doc:`cluster management </cluster_management>` and ``--preserve-install``).
+In this mode Rally prints a message that the track was prepared in prepare-only mode; it does **not** persist a race record or benchmark results. Rally does not stop Elasticsearch after prepare-only, because it does not start a benchmark candidate in this mode (see :doc:`cluster management </cluster_management>` if you manage a cluster yourself).
 
