@@ -22,7 +22,6 @@ import shutil
 import subprocess
 import sys
 import time
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -116,8 +115,10 @@ class PrepareOnlyRaceCase:
     # If set, passed to Rally as ``--distribution-version``; if ``None``, that flag is omitted.
     distribution_version: str | None = None
 
-    # It will assert that the target Elasticsearch cluster is prepared in the first subprocess and executed in the second one.
-    want_cluster_prepared: bool = False
+    # If True, the second subprocess must have Rally provision/start Elasticsearch (after track prep in subprocess 1). If False, the
+    # second subprocess must use an externally provisioned cluster only (benchmark-only). Subprocess 1 is always ``--prepare-only``:
+    # it prepares track data on disk under RALLY_HOME and never starts or provisions Elasticsearch (see racecontrol BenchmarkActor).
+    want_cluster_prepared: bool = True
 
     def run_rally_subprocess(
         self,
@@ -222,6 +223,11 @@ _TRACK_CORPUS_TRANSFER_STDOUT_MARKERS: Final[tuple[str, ...]] = (
     "[INFO] Downloading track data",
     "Downloaded data from",
 )
+# MechanicActor.receiveMsg_StartEngine (esrally/mechanic/mechanic.py): provisioning vs benchmark-only external cluster.
+_MECHANIC_PROVISIONS_CLUSTER: Final[str] = "will be provisioned by Rally."
+_MECHANIC_EXTERNAL_CLUSTER: Final[str] = "Cluster will not be provisioned by Rally."
+# racecontrol.BenchmarkActor.receiveMsg_Setup when race.prepare.only is true
+_PREPARE_ONLY_SKIPS_ENGINE_LOG: Final[str] = "Prepare-only mode: skipping engine; preparing track data only."
 
 
 def _corpus_transfer_events_in_log(log: str) -> int:
@@ -237,12 +243,30 @@ def _subprocess_output_mentions_prepare_only(combined_stdout_stderr: str) -> boo
     return any(needle in line.casefold() for line in combined_stdout_stderr.splitlines())
 
 
+def _assert_track_materialized_under_rally_home(rally_home: Path) -> None:
+    """
+    After ``--prepare-only``, the geonames track repo and dataset cache must exist under ``RALLY_HOME`` (see
+    ``it/resources/rally-prepare-only-it.ini``: ``node.root.dir``, ``benchmarks.local.dataset.cache``).
+    """
+    root = rally_home / ".rally" / "benchmarks"
+    track_repo = root / "tracks" / "default"
+    data_cache = root / "data"
+    assert track_repo.is_dir(), f"expected track repository checkout at {track_repo}"
+    assert any(track_repo.iterdir()), f"expected non-empty track repo at {track_repo}"
+    assert data_cache.is_dir(), f"expected dataset cache directory at {data_cache}"
+    assert any(data_cache.iterdir()), f"expected non-empty dataset cache at {data_cache} after track prepare"
+
+
 @cases(
-    default=PrepareOnlyRaceCase(),
-    benchmark_only=PrepareOnlyRaceCase(pipeline="benchmark-only"),
-    from_distribution_=PrepareOnlyRaceCase(pipeline="from-distribution", distribution_version=it.DISTRIBUTIONS[-1], want_cluster_prepared=True),
+    default=PrepareOnlyRaceCase(want_cluster_prepared=True),
+    benchmark_only=PrepareOnlyRaceCase(pipeline="benchmark-only", want_cluster_prepared=False),
+    from_distribution_=PrepareOnlyRaceCase(
+        pipeline="from-distribution", distribution_version=it.DISTRIBUTIONS[-1], want_cluster_prepared=True
+    ),
     with_distribution_version=PrepareOnlyRaceCase(distribution_version=it.DISTRIBUTIONS[-1], want_cluster_prepared=True),
-    from_distribution_with_distribution_version=PrepareOnlyRaceCase("from-distribution", it.DISTRIBUTIONS[-1], want_cluster_prepared=True),
+    from_distribution_with_distribution_version=PrepareOnlyRaceCase(
+        "from-distribution", it.DISTRIBUTIONS[-1], want_cluster_prepared=True
+    ),
     from_sources=PrepareOnlyRaceCase(pipeline="from-sources", want_cluster_prepared=True),
 )
 def test_prepare_only(case: PrepareOnlyRaceCase, tmp_path: Path) -> None:
@@ -253,6 +277,8 @@ def test_prepare_only(case: PrepareOnlyRaceCase, tmp_path: Path) -> None:
        Elasticsearch (``INACCESSIBLE_METRICS_PORT``). That port must never appear in ``rally.log`` after this step.
        Rally also forces in-memory reporting in-process for prepare-only, but the on-disk config stays a decoy.
        ``--target-hosts`` uses another closed port so an accidental probe would fail or stall.
+       This step never starts or provisions Elasticsearch; it must leave the geonames track checkout and dataset cache
+       on disk under ``RALLY_HOME/.rally/benchmarks/`` (see ``_assert_track_materialized_under_rally_home``).
 
     2. Full ``race`` with ``--configuration-name=es-it``: reporting uses the live session metrics Elasticsearch
        (``rally-es-it.ini``). Reuses the same track cache: no repeated corpus-transfer lines on stdout/stderr and the
@@ -260,6 +286,8 @@ def test_prepare_only(case: PrepareOnlyRaceCase, tmp_path: Path) -> None:
        the session cluster from ``it/conftest.py`` and waits for cluster health yellow/green before starting. Other
        pipelines omit ``--target-hosts`` so Rally uses pipeline defaults. ``INACCESSIBLE_METRICS_PORT`` must never appear
        in the log (no contact to the decoy endpoint); logging may reference the real metrics port (e.g. 10200).
+       ``want_cluster_prepared``: when True, Rally must provision/start Elasticsearch in this step; when False
+       (``benchmark-only``), Rally must connect to an existing cluster only (mechanic log: not provisioned by Rally).
 
     New lines appended to ``rally.log`` after each subprocess are emitted as DEBUG on stderr (logger
     ``it.prepare_only_test.rally_log_mirror``) so CI or local runs show file-equivalent tracing without polluting
@@ -285,6 +313,16 @@ def test_prepare_only(case: PrepareOnlyRaceCase, tmp_path: Path) -> None:
         "expected at least one corpus download/prepare log event after prepare-only; "
         f"log excerpt:\n{log_after_prepare[-8000:]}"
     )
+    _assert_track_materialized_under_rally_home(tmp_path)
+    assert _PREPARE_ONLY_SKIPS_ENGINE_LOG in log_after_prepare, (
+        "prepare-only subprocess must skip the engine and only prepare track data (no Elasticsearch start/provision)"
+    )
+    assert _MECHANIC_PROVISIONS_CLUSTER not in log_after_prepare, (
+        "prepare-only must not provision Elasticsearch; first subprocess only prepares track on disk"
+    )
+    assert _MECHANIC_EXTERNAL_CLUSTER not in log_after_prepare, (
+        "prepare-only must not run benchmark-only external-cluster mechanic path in the first subprocess"
+    )
 
     if case.pipeline == "benchmark-only":
         from it.conftest import ES_METRICS_STORE
@@ -305,6 +343,8 @@ def test_prepare_only(case: PrepareOnlyRaceCase, tmp_path: Path) -> None:
         )
 
     log_after_full = _read_rally_log(tmp_path)
+    # Mechanic provisioning vs external-cluster lines come from subprocess 2 only; slice avoids coupling to prepare-only text.
+    log_after_full_race_only = log_after_full[len(log_after_prepare) :]
 
     assert rc2 == 0, f"full race failed ({rc2})\n{out2}\n--- log ---\n{log_after_full}"
     assert INACCESSIBLE_METRICS_PORT not in log_after_full, (
@@ -318,3 +358,18 @@ def test_prepare_only(case: PrepareOnlyRaceCase, tmp_path: Path) -> None:
         "second run must not add corpus download/prepare log lines; "
         f"before={transfers_after_prepare} after={_corpus_transfer_events_in_log(log_after_full)}"
     )
+
+    if case.want_cluster_prepared:
+        assert _MECHANIC_PROVISIONS_CLUSTER in log_after_full_race_only, (
+            f"expected Rally to provision Elasticsearch ({_MECHANIC_PROVISIONS_CLUSTER!r}) in full-race rally.log tail"
+        )
+        assert _MECHANIC_EXTERNAL_CLUSTER not in log_after_full_race_only, (
+            f"did not expect external-only cluster log ({_MECHANIC_EXTERNAL_CLUSTER!r}) when want_cluster_prepared is True"
+        )
+    else:
+        assert _MECHANIC_EXTERNAL_CLUSTER in log_after_full_race_only, (
+            f"expected benchmark-only external cluster log ({_MECHANIC_EXTERNAL_CLUSTER!r}) in full-race rally.log tail"
+        )
+        assert _MECHANIC_PROVISIONS_CLUSTER not in log_after_full_race_only, (
+            f"did not expect Rally provisioning ({_MECHANIC_PROVISIONS_CLUSTER!r}) when want_cluster_prepared is False"
+        )
