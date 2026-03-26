@@ -119,7 +119,6 @@ develop = [
     "pytest-httpserver==1.1.3",
     "sphinx==5.1.1",
     "furo==2022.06.21",
-    # Release image + prepare-docker venv pin the same version (scripts/release/Dockerfile, prepare-docker.sh).
     "github3.py==3.2.0",
     "pre-commit==2.20.0",
     "pylint==3.3.8",
@@ -137,8 +136,6 @@ develop = [
     "types-jsonschema==3.2.0",
     # Python dead library removed in version 3.13 and used to build Rally docs.
     "standard-imghdr==3.13.0",
-    # Required to prepare new releases
-    "github3.py==3.2.0"
 ]
 
 [dependency-groups]

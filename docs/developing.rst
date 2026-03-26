@@ -37,7 +37,7 @@ Rally uses automatic code formatters. You can apply them by running ``make forma
 
 However, consider using editor integrations to do it automatically: you'll need to configure `black <https://black.readthedocs.io/en/stable/integrations/editors.html>`_ and `isort <https://github.com/PyCQA/isort/wiki/isort-Plugins>`_.
 
-Also consider running ``make install-pre-commit`` to ensure quick verifications are being preformed just before new Git commits are created.
+Also consider running ``make install-pre-commit`` to ensure quick verifications are being performed just before new Git commits are created.
 
 Automatic Updates
 ~~~~~~~~~~~~~~~~~

@@ -143,7 +143,7 @@ lint: venv
 precommit pre-commit: venv
 	uv run -- pre-commit run
 
-# It install a pre-commit hook in the project .git dir so modified files are checked before creating every commit.
+# It installs a pre-commit hook in the project .git dir so modified files are checked before creating every commit.
 install-pre-commit: $(PRE_COMMIT_HOOK_PATH)
 
 $(PRE_COMMIT_HOOK_PATH):
