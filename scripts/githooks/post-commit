@@ -1,0 +1,33 @@
+#!/bin/sh
+# Strip Cursor-injected commit trailers (Co-authored-by, Made-with) from the last message.
+# Enable: git config core.hooksPath scripts/githooks (see also pre-commit in this directory).
+#
+# Skips work when GIT_CURSOR_HOOK_AMENDING is set to avoid re-entrancy.
+
+if [ -n "${GIT_CURSOR_HOOK_AMENDING:-}" ]; then
+	exit 0
+fi
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+	exit 0
+fi
+
+msg=$(mktemp)
+clean=$(mktemp)
+trap 'rm -f "$msg" "$clean"' EXIT
+
+git log -1 --format=%B >"$msg"
+
+# Co-authored-by: match Cursor without false positives (e.g. "precursor" in an email).
+# Made-with: strip Cursor branding (avoid matching e.g. "Cursorly").
+grep -v -i -E '^co-authored-by:.*cursoragent' "$msg" \
+	| grep -v -i -E '^co-authored-by:.*@cursor\.' \
+	| grep -v -i -E '^co-authored-by:[[:space:]]*cursor([[:space:]]|<)' \
+	| grep -v -i -E '^made-with:[[:space:]]*cursor([[:space:]]|$)' >"$clean"
+
+if cmp -s "$msg" "$clean"; then
+	exit 0
+fi
+
+export GIT_CURSOR_HOOK_AMENDING=1
+git commit --amend -F "$clean" --no-verify
