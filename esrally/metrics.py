@@ -93,7 +93,7 @@ class EsClient:
     def refresh(self, index):
         return self.guarded(self._client.indices.refresh, index=index)
 
-    def bulk_index(self, index, items, use_data_streams=True):
+    def bulk_index(self, *, index, items, use_data_streams):
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
 
@@ -102,11 +102,11 @@ class EsClient:
                 item["_op_type"] = "create"
         self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
 
-    def index(self, index, item, id=None, use_data_streams=True):
+    def index(self, *, index, item, id=None, use_data_streams):
         doc = {"_source": item}
         if not use_data_streams and id:
             doc["_id"] = id
-        self.bulk_index(index, [doc], use_data_streams=use_data_streams)
+        self.bulk_index(index=index, items=[doc], use_data_streams=use_data_streams)
 
     def search(self, index, body):
         return self.guarded(self._client.search, index=index, body=body)
@@ -219,7 +219,7 @@ class EsClient:
                     node = self._client.transport.node_pool.get()
                     msg = (
                         "An error [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] "
-                        "at port [%s]. args: %s, kwargs: %s" % (e.error, target.__name__, node.host, node.port, args, kwargs)
+                        "at port [%s]. args: [%s], kwargs: [%s]" % (e.error, target.__name__, node.host, node.port, args, kwargs)
                     )
                     self.logger.exception(msg)
                     # this does not necessarily mean it's a system setup problem...
@@ -233,7 +233,7 @@ class EsClient:
                     err = e
                 msg = (
                     "Transport error(s) [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on "
-                    "host [%s] at port [%s]. args: %s, kwargs: %s" % (err, target.__name__, node.host, node.port, args, kwargs)
+                    "host [%s] at port [%s]. args: [%s], kwargs: [%s]" % (err, target.__name__, node.host, node.port, args, kwargs)
                 )
                 self.logger.exception(msg)
                 # this does not necessarily mean it's a system setup problem...
@@ -347,18 +347,15 @@ class IndexTemplateProvider:
         self._config = cfg
         self._number_of_shards = self._config.opts("reporting", "datastore.number_of_shards", default_value=None, mandatory=False)
         self._number_of_replicas = self._config.opts("reporting", "datastore.number_of_replicas", default_value=None, mandatory=False)
-        self._use_data_streams = convert.to_bool(
-            self._config.opts("reporting", "datastore.use_data_streams", default_value=True, mandatory=False)
-        )
         self.script_dir = self._config.opts("node", "rally.root")
 
     def get_template(self, es_store_type: EsStoreType):
         return json.dumps(self._read(f"{es_store_type.index_template_resource}"))
 
     def annotations_template(self):
-        return json.dumps(self._read("annotation-template", support_data_streams=False))
+        return json.dumps(self._read("annotation-template"))
 
-    def _read(self, template_name, support_data_streams=True):
+    def _read(self, template_name):
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
             template = json.load(f)
             if self._number_of_shards is not None:
@@ -370,13 +367,6 @@ class IndexTemplateProvider:
                 template["template"]["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
             if self._number_of_replicas is not None:
                 template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
-            if self._use_data_streams and support_data_streams:
-                index_pattern = template["index_patterns"][0]
-                if index_pattern.endswith("-*"):
-                    index_pattern = index_pattern.replace("-*", "-v*")
-                    template["index_patterns"][0] = index_pattern
-                if not template["template"]["mappings"]["properties"].get("@timestamp"):
-                    template["template"]["mappings"]["properties"]["@timestamp"] = {"type": "date", "format": "epoch_millis"}
             return template
 
 
@@ -385,24 +375,22 @@ class ComponentTemplateProvider(IndexTemplateProvider):
     Abstracts how the Rally component templates are retrieved. Intended for testing.
     """
 
-    COMPONENT_TEMPLATE_MAPPING_SUFFIX = "-mapping"
-    COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX = "-ilm-default"
     COMPONENT_TEMPLATE_CUSTOM_SUFFIX = "@custom"
 
     def _get_component_templates(self, name, template_name, lifecycle_policy_name):
         template = self._read(template_name)["template"]
 
         return {
-            f"{name}{self.COMPONENT_TEMPLATE_MAPPING_SUFFIX}": json.dumps({"template": {"mappings": template["mappings"]}}),
-            f"{name}{self.COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX}": json.dumps(
+            name: json.dumps(
                 {
                     "template": {
+                        "mappings": template["mappings"],
                         "settings": {
                             "index": {
                                 **template.get("settings", {}).get("index", {}),
                                 "lifecycle": {"name": lifecycle_policy_name},
                             }
-                        }
+                        },
                     }
                 }
             ),
@@ -411,14 +399,14 @@ class ComponentTemplateProvider(IndexTemplateProvider):
 
     def get_template(self, es_store_type: EsStoreType):
         return json.dumps(
-            self._get_component_templates(es_store_type.metric_name, es_store_type.index_template_resource, es_store_type.ilm_default_name)
+            self._get_component_templates(f"{es_store_type.index_prefix}{es_store_type.data_stream_version}", es_store_type.index_template_resource, es_store_type.ilm_default_name)
         )
 
     # This is needed for testing to verify that the expected component templates are created.
     def component_names(self, es_store_type: EsStoreType):
         return list(
             self._get_component_templates(
-                es_store_type.metric_name, es_store_type.index_template_resource, es_store_type.ilm_default_name
+                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}", es_store_type.index_template_resource, es_store_type.ilm_default_name
             ).keys()
         )
 
@@ -482,7 +470,7 @@ class IndexHandler:
     def _data_stream_template(self, component_templates):
         return json.dumps(
             {
-                "index_patterns": [f"{self._es_store_type.index_prefix}v*"],
+                "index_patterns": [f"{self._es_store_type.index_prefix}{self._es_store_type.data_stream_version}"],
                 "data_stream": {},
                 "composed_of": component_templates,
                 "priority": self.TEMPLATE_PRIORITY,

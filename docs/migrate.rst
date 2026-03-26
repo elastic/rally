@@ -17,8 +17,16 @@ Existing Rally index templates are replaced only when option ``datastore.overwri
 Migrate rally indices to data streams
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Rally 2.12.0 introduces support for data streams in the metrics store. We recommend reindexing existing indices to data streams to benefit from the advantages of data streams ( stay aware of the mandatory `@timestamp` field and "op_type": "create" when reindexing ) . In order to start writing on data streams, ``datastore.use_data_streams`` must be set to ``true`` in section ``reporting`` ( it is already set to ``true`` by default ). This will cause Rally to create new composable index templates for data streams, along with a @custom index template, which can be configured to set custom index settings.
+* Rally 2.12.0 introduces data streams for metric storage by introducing the ``datastore.use_data_streams`` parameter in section ``reporting``, which is ``true`` by default.
+* Rally default behavior is to write metrics, races and results on data streams by first creating index templates, each composed of 3 component templates: 
+ a. Mappings template, which contains the same mappings as the former date-based indices with the addition of the mandatory ``@timestamp`` field for data streams.
+ b. ILM template, which contains a default policy: rollover after 50GB primary shard size. This enhances search performance and storage efficiency. 
+ c. `@custom`` template, which is empty by default but can be configured to set custom index settings. This template is applied on top of the previous two templates and can be used to set index settings of preference.
+* Data streams are versioned ``rally-metrics-v1``, ``rally-races-v1`` and ``rally-results-v1``.
+* Old date-based patterned indices (e.g. ``rally-metrics-YYYY-MM``) are not removed and will continue to work as before, by setting ``datastore.use_data_streams`` value to ``false``.
 
+Reindex of existing indices is recommended in order to benefit from the advantages of data streams. When migrating old Rally documents to new Rally data streams every document must have a `@timestamp` field and the reindex destination must use `op_type: "create"`. 
+See the :ref: `metrics store documentation <metrics>` for more details about how to customize data streams.
 
 Migrating to Rally 2.10.1
 -------------------------

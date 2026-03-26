@@ -357,7 +357,7 @@ class TestEsClient:
                     )
                 logging_statements.append(
                     "An error [unit-test] occurred while running the operation [raise_error] against your Elasticsearch "
-                    "metrics store on host [127.0.0.1] at port [9200]. args: (), kwargs: {}"
+                    "metrics store on host [127.0.0.1] at port [9200]. args: [()], kwargs: [{}]"
                 )
                 return logging_statements
 
@@ -494,7 +494,7 @@ class TestEsClient:
             client.guarded(raise_unknown_error)
         assert ctx.value.args[0] == (
             "Transport error(s) [unit-test] occurred while running the operation [raise_unknown_error] against your Elasticsearch metrics "
-            "store on host [127.0.0.1] at port [9243]. args: (), kwargs: {}"
+            "store on host [127.0.0.1] at port [9243]. args: [()], kwargs: [{}]"
         )
 
     def test_raises_rally_error_on_unretryable_bulk_indexing_errors(self):
@@ -562,22 +562,13 @@ class TestIndexTemplateProvider:
         self.cfg.add(config.Scope.application, "system", "time.start", TestFileRaceStore.RACE_TIMESTAMP)
         self.cfg.add(config.Scope.application, "system", "race.id", TestFileRaceStore.RACE_ID)
 
-    def _make_provider(self, number_of_shards=None, number_of_replicas=None, use_data_streams=None):
+    def _make_provider(self, number_of_shards=None, number_of_replicas=None):
         self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.type", "elasticsearch")
         if number_of_shards is not None:
             self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_shards", number_of_shards)
         if number_of_replicas is not None:
             self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.number_of_replicas", number_of_replicas)
-        if use_data_streams is not None:
-            self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.use_data_streams", use_data_streams)
         return metrics.IndexTemplateProvider(self.cfg)
-
-    def _data_stream_templates(self, provider: metrics.ComponentTemplateProvider):
-        return [
-            provider.get_template(metrics.EsStoreType.metrics),
-            provider.get_template(metrics.EsStoreType.races),
-            provider.get_template(metrics.EsStoreType.results),
-        ]
 
     def _all_templates(self, provider):
         return [
@@ -641,69 +632,19 @@ class TestIndexTemplateProvider:
             else:
                 assert "number_of_replicas" not in idx_settings
 
-    @dataclass
-    class DataStreamsCase:
-        use_data_streams: bool | None = None
-        number_of_shards: int | None = None
-        number_of_replicas: int | None = None
-        want_timestamp_on_non_annotation: bool = False
+    def test_templates_have_timestamp(self):
+        provider = self._make_provider()
 
-    @cases.cases(
-        enabled_by_default=DataStreamsCase(
-            want_timestamp_on_non_annotation=True,
-        ),
-        explicitly_enabled=DataStreamsCase(
-            use_data_streams=True,
-            want_timestamp_on_non_annotation=True,
-        ),
-        disabled=DataStreamsCase(
-            use_data_streams=False,
-        ),
-        enabled_with_shards=DataStreamsCase(
-            use_data_streams=True,
-            number_of_shards=random.randint(1, 100),
-            number_of_replicas=random.randint(0, 100),
-            want_timestamp_on_non_annotation=True,
-        ),
-    )
-    def test_data_streams(self, case: DataStreamsCase):
-        provider = self._make_provider(
-            number_of_shards=case.number_of_shards,
-            number_of_replicas=case.number_of_replicas,
-            use_data_streams=case.use_data_streams,
-        )
-
-        # annotations never gain data_stream regardless of config
+        # annotations don't have @timestamp
         annotations = json.loads(provider.annotations_template())
-        assert "data_stream" not in annotations
         assert "@timestamp" not in annotations["template"]["mappings"]["properties"]
         assert annotations["index_patterns"] == ["rally-annotations"]
 
+        # all other templates have @timestamp from the resource files
         for es_store_type in [metrics.EsStoreType.metrics, metrics.EsStoreType.races, metrics.EsStoreType.results]:
             t = json.loads(provider.get_template(es_store_type))
-            assert "data_stream" not in t
-            if case.want_timestamp_on_non_annotation:
-                # index_patterns should be rewritten from rally-<name>-* to rally-<name>-v*
-                assert t["index_patterns"] == [f"{es_store_type.index_prefix}v*"]
-                assert t["template"]["mappings"]["properties"]["@timestamp"] == {"type": "date", "format": "epoch_millis"}
-            else:
-                # index_patterns should remain unchanged
-                assert t["index_patterns"] == [f"{es_store_type.index_prefix}*"]
-                # only metrics natively has @timestamp in the resource file
-                if es_store_type == metrics.EsStoreType.metrics:
-                    assert "@timestamp" in t["template"]["mappings"]["properties"]
-                else:
-                    assert "@timestamp" not in t["template"]["mappings"]["properties"]
-
-        # verify shard settings propagated when specified
-        if case.number_of_shards is not None or case.number_of_replicas is not None:
-            for template in self._all_templates(provider):
-                t = json.loads(template)
-                idx_settings = t["template"]["settings"]["index"]
-                if case.number_of_shards is not None:
-                    assert idx_settings["number_of_shards"] == case.number_of_shards
-                if case.number_of_replicas is not None:
-                    assert idx_settings["number_of_replicas"] == case.number_of_replicas
+            assert t["index_patterns"] == [f"{es_store_type.index_prefix}*"]
+            assert t["template"]["mappings"]["properties"]["@timestamp"] == {"type": "date", "format": "epoch_millis"}
 
 
 class TestComponentTemplateProvider:
@@ -738,24 +679,19 @@ class TestComponentTemplateProvider:
     def test_component_template_structure(self, case: StoreTypeCase):
         provider = self._make_provider()
         template_fn = getattr(provider, "get_template")
-        components = json.loads(template_fn(metrics.EsStoreType[case.store_name]))
+        es_store_type = metrics.EsStoreType[case.store_name]
+        components = json.loads(template_fn(es_store_type))
 
-        mapping_key = f"{case.store_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_MAPPING_SUFFIX}"
-        lifecycle_key = f"{case.store_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX}"
-        custom_key = f"{case.store_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}"
+        versioned_name = f"{es_store_type.index_prefix}{es_store_type.data_stream_version}"
+        custom_key = f"{versioned_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}"
 
-        assert set(components.keys()) == {mapping_key, lifecycle_key, custom_key}
+        assert set(components.keys()) == {versioned_name, custom_key}
 
-        # mapping component has mappings only
-        mapping_tmpl = json.loads(components[mapping_key])
-        assert "mappings" in mapping_tmpl["template"]
-        assert "settings" not in mapping_tmpl["template"]
-        # data_streams is enabled, so @timestamp should always be present in mappings
-        assert mapping_tmpl["template"]["mappings"]["properties"]["@timestamp"] == {"type": "date", "format": "epoch_millis"}
-
-        # lifecycle component has settings with lifecycle name
-        lifecycle_tmpl = json.loads(components[lifecycle_key])
-        assert lifecycle_tmpl["template"]["settings"]["index"]["lifecycle"]["name"] == case.lifecycle_policy
+        # main component has both mappings and settings with lifecycle
+        main_tmpl = json.loads(components[versioned_name])
+        assert "mappings" in main_tmpl["template"]
+        assert main_tmpl["template"]["mappings"]["properties"]["@timestamp"] == {"type": "date", "format": "epoch_millis"}
+        assert main_tmpl["template"]["settings"]["index"]["lifecycle"]["name"] == case.lifecycle_policy
 
         # custom component is an empty placeholder
         custom_tmpl = json.loads(components[custom_key])
@@ -776,13 +712,14 @@ class TestComponentTemplateProvider:
         shards_only=ShardSettingsCase(store_names=["metrics", "races", "results"], number_of_shards=random.randint(1, 100)),
         replicas_only=ShardSettingsCase(store_names=["metrics", "races", "results"], number_of_replicas=random.randint(0, 100)),
     )
-    def test_shard_settings_propagate_to_lifecycle_component(self, case: ShardSettingsCase):
+    def test_shard_settings_propagate_to_component(self, case: ShardSettingsCase):
         provider = self._make_provider(number_of_shards=case.number_of_shards, number_of_replicas=case.number_of_replicas)
 
         for store_name in case.store_names:
-            components = json.loads(getattr(provider, "get_template")(metrics.EsStoreType[store_name]))
-            lifecycle_key = f"{store_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX}"
-            idx_settings = json.loads(components[lifecycle_key])["template"]["settings"]["index"]
+            es_store_type = metrics.EsStoreType[store_name]
+            components = json.loads(getattr(provider, "get_template")(es_store_type))
+            versioned_name = f"{es_store_type.index_prefix}{es_store_type.data_stream_version}"
+            idx_settings = json.loads(components[versioned_name])["template"]["settings"]["index"]
 
             if case.number_of_shards is not None:
                 assert idx_settings["number_of_shards"] == case.number_of_shards
@@ -806,9 +743,8 @@ class TestComponentTemplateProvider:
         for es_store_type in [metrics.EsStoreType.metrics, metrics.EsStoreType.races, metrics.EsStoreType.results]:
             names = provider.component_names(es_store_type)
             assert names == [
-                f"{es_store_type.metric_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_MAPPING_SUFFIX}",
-                f"{es_store_type.metric_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_LIFECYCLE_DEFAULT_SUFFIX}",
-                f"{es_store_type.metric_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}",
+                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}",
+                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}",
             ]
 
 
@@ -827,7 +763,7 @@ class TestIndexHandler:
             component_names = handler._index_template_provider.component_names(es_store_type)
             index_template = json.loads(handler._data_stream_template(component_names))
 
-            assert index_template["index_patterns"] == [f"{es_store_type.index_prefix}v*"]
+            assert index_template["index_patterns"] == [f"{es_store_type.index_prefix}{es_store_type.data_stream_version}"]
             assert index_template["data_stream"] == {}
             assert index_template["composed_of"] == component_names
             assert index_template["priority"] == metrics.IndexHandler.TEMPLATE_PRIORITY
@@ -934,7 +870,7 @@ class TestIndexHandler:
     @cases.cases(
         fresh=DataStreamEnsureTemplateCase(
             expect_put_lifecycle=True,
-            expect_put_component_templates=3,
+            expect_put_component_templates=2,
         ),
         all_identical=DataStreamEnsureTemplateCase(
             lifecycle_exists=True,
@@ -957,7 +893,7 @@ class TestIndexHandler:
             index_template_exists=True,
             overwrite_templates=True,
             expect_put_lifecycle=True,
-            expect_put_component_templates=2,
+            expect_put_component_templates=1,
             expect_get_template=True,
         ),
     )
@@ -997,7 +933,7 @@ class TestIndexHandler:
         if case.index_template_exists:
             if case.identical:
                 real_ds_template = {
-                    "index_patterns": [f"{case.es_store_type.index_prefix}v*"],
+                    "index_patterns": [f"{case.es_store_type.index_prefix}{case.es_store_type.data_stream_version}"],
                     "data_stream": {},
                     "composed_of": list(real_component_templates.keys()),
                     "priority": metrics.IndexHandler.TEMPLATE_PRIORITY,
@@ -1014,7 +950,7 @@ class TestIndexHandler:
         else:
             self.client.put_lifecycle.assert_not_called()
 
-        assert self.client.component_template_exists.call_count == 3
+        assert self.client.component_template_exists.call_count == 2
         if case.expect_put_component_templates:
             assert self.client.put_component_template.call_count == case.expect_put_component_templates
         else:
