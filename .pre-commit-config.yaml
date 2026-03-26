@@ -60,4 +60,4 @@ repos:
       - id: shellcheck
         name: shellcheck
         args: [-x]
-        files: (^scripts/release/.*\.sh$)|(^scripts/githooks/(pre-commit|post-commit)$)
+        files: (^scripts/release/.*\.sh$)

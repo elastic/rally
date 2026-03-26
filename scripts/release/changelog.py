@@ -44,17 +44,15 @@ def ensure_open_milestone(repo, title):
 
     closed = find_milestone(repo, title, state="closed")
     if closed:
-        if not closed.update(state="open"):
-            print("Failed to reopen closed milestone [%s]." % title, file=sys.stderr)
-            sys.exit(2)
-        print("Reopened closed milestone [%s]." % title, file=sys.stderr)
-        return closed
+        print("Milestone already closed: [%s]." % title, file=sys.stderr)
+        sys.exit(2)
 
     m = repo.create_milestone(title, state="open")
     if not m:
-        print("Failed to create open milestone [%s]." % title, file=sys.stderr)
+        print("Failed to create a new milestone [%s]." % title, file=sys.stderr)
         sys.exit(2)
-    print("Created open milestone [%s]." % title, file=sys.stderr)
+
+    print("Created a new milestone [%s]." % title, file=sys.stderr)
     return m
 
 

@@ -38,19 +38,6 @@ If you want to get started in the project, a good idea is to check issues labele
 You will need to fork the Rally repository and clone it to your local machine. See 
 the [Github help page](https://help.github.com/articles/fork-a-repo) for help.
 
-Optional: use this repository’s hooks under `scripts/githooks` (instead of `.git/hooks`):
-
-```bash
-make install-git-hooks
-```
-
-This sets `git config core.hooksPath scripts/githooks` in your local clone. You can run the same `git config` command by hand if you prefer.
-
-* **`pre-commit`** — runs `uv run -- pre-commit run` (same as `make pre-commit`) on staged files before the commit is created. Requires [uv](https://docs.astral.sh/uv/) and a dev environment (`make install` or `make venv`).
-* **`post-commit`** — strips `Co-authored-by` / `Made-with: Cursor` trailers Cursor may add; it runs `git commit --amend` when the message changes, so the latest commit’s hash can change.
-
-To stop using these hooks in this clone, run `git config --unset core.hooksPath`. The post-commit hook sets `GIT_CURSOR_HOOK_AMENDING` internally to avoid re-running while amending; you normally do not need to set that variable yourself.
-
 ### Importing the project into IntelliJ IDEA
 
 Rally builds using virtualenv. When importing into IntelliJ you will need to define an appropriate Python SDK, which is provided by virtualenv.

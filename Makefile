@@ -26,6 +26,8 @@ PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json
 export UV_PYTHON := $(PY_VERSION)
 export UV_PROJECT_ENVIRONMENT := $(VIRTUAL_ENV)
 
+PRE_COMMIT_HOOK_PATH := .git/hooks/pre-commit
+
 LOG_CI_LEVEL := INFO
 
 # --- Global goals ---
@@ -55,7 +57,7 @@ check-all: all
 	format \
 	pre-commit \
 	precommit \
-	install-git-hooks \
+	install-pre-commit \
 	docs \
 	serve-docs \
 	clean-docs \
@@ -141,9 +143,14 @@ lint: venv
 precommit pre-commit: venv
 	uv run -- pre-commit run
 
-# It points git at scripts/githooks (pre-commit + post-commit). Run from the repo root.
-install-git-hooks:
-	git config core.hooksPath scripts/githooks
+# It install a pre-commit hook in the project .git dir so modified files are checked before creating every commit.
+install-pre-commit: $(PRE_COMMIT_HOOK_PATH)
+
+$(PRE_COMMIT_HOOK_PATH):
+	mkdir -p $(dir $@)
+	echo '#!/usr/bin/env $(SHELL)' > '$@'
+	echo 'make pre-commit' >> '$@'
+	chmod ugo+x '$@'
 
 # pre-commit run also formats files, but let's keep `make format` for convenience.
 format: lint

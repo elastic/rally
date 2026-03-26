@@ -154,4 +154,3 @@ You can then build and test the image with::
 
     docker build --tag=custom-rally .
     docker run -ti custom-rally list tracks
-
