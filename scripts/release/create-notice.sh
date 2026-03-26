@@ -32,9 +32,10 @@ function add_license {
     local download_url=$2
 
     printf '\n======================================\n%s LICENSE\n======================================\n' "${dep_name}" >> "${OUTPUT_FILE}"
-    # Transient 5xx / timeouts: retry a few times (still fail-fast on 4xx or exhausted retries).
+    # Transient 5xx, timeouts, and TLS blips (e.g. SSL_ERROR_SYSCALL): retry; still fail after exhaustion.
     curl --fail --show-error --silent \
-        --retry 3 --retry-delay 2 --retry-connrefused \
+        --connect-timeout 30 --max-time 120 \
+        --retry 5 --retry-delay 2 --retry-connrefused --retry-all-errors \
         "${download_url}" >> "${OUTPUT_FILE}"
 }
 
