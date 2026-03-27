@@ -3,7 +3,7 @@ name: Release to PyPI
 on:
   push:
     branches:
-      - "main"
+      - "master"
     tags:
       - "*"
 
