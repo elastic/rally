@@ -402,14 +402,20 @@ class ComponentTemplateProvider(IndexTemplateProvider):
 
     def get_template(self, es_store_type: EsStoreType):
         return json.dumps(
-            self._get_component_templates(f"{es_store_type.index_prefix}{es_store_type.data_stream_version}", es_store_type.index_template_resource, es_store_type.ilm_default_name)
+            self._get_component_templates(
+                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}",
+                es_store_type.index_template_resource,
+                es_store_type.ilm_default_name,
+            )
         )
 
     # This is needed for testing to verify that the expected component templates are created.
     def component_names(self, es_store_type: EsStoreType):
         return list(
             self._get_component_templates(
-                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}", es_store_type.index_template_resource, es_store_type.ilm_default_name
+                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}",
+                es_store_type.index_template_resource,
+                es_store_type.ilm_default_name,
             ).keys()
         )
 
