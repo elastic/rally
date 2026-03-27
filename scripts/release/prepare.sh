@@ -20,46 +20,84 @@
 # fail this script immediately if any command fails with a non-zero exit code
 set -eu
 
+DRY_RUN=0
+if [[ "${1:-}" == "--dry" ]]; then
+	DRY_RUN=1
+	shift
+fi
+
 if [[ $# -ne 1 ]]; then
-	echo "usage: $0 <release_version>" >&2
+	echo "usage: $0 [--dry] <release_version>" >&2
 	echo "example: $0 2.13.0" >&2
+	echo "example: $0 --dry 2.13.0" >&2
 	exit 1
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 RELEASE_VERSION=$1
-__NOTICE_OUTPUT_FILE="NOTICE.txt"
 
 echo "============================="
-echo "Preparing Rally release $RELEASE_VERSION"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	echo "Dry run: preparing Rally release $RELEASE_VERSION"
+else
+	echo "Preparing Rally release $RELEASE_VERSION"
+fi
 echo "============================="
 
-echo "Preparing ${__NOTICE_OUTPUT_FILE}"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	_tmp_notice=$(mktemp)
+	trap 'rm -f "${_tmp_notice:-}"' EXIT
+	__NOTICE_OUTPUT_FILE="$_tmp_notice"
+	echo "Preparing notice (dry run → temporary file, not NOTICE.txt)" >&2
+else
+	__NOTICE_OUTPUT_FILE="NOTICE.txt"
+	echo "Preparing ${__NOTICE_OUTPUT_FILE}"
+fi
 # shellcheck source=scripts/release/create-notice.sh
 source "${SCRIPT_DIR}/create-notice.sh"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	trap - EXIT
+	rm -f "$_tmp_notice"
+fi
 
-echo "Updating author information"
-git log --format='%aN' | sort -fu > AUTHORS
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	echo "dry-run: skipping AUTHORS (requires git)." >&2
+else
+	echo "Updating author information"
+	git log --format='%aN' | sort -fu > AUTHORS
+fi
 
 echo "Updating changelog"
-# For exit on error to work we have to separate
-#  CHANGELOG.md generation into two steps.
-CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")"
-printf '%s\n\n%s' "$CHANGELOG" "$(cat CHANGELOG.md)" > CHANGELOG.md
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	python3 "${SCRIPT_DIR}/changelog.py" --dry "${RELEASE_VERSION}" >/dev/null
+else
+	# For exit on error to work we have to separate
+	#  CHANGELOG.md generation into two steps.
+	CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")"
+	printf '%s\n\n%s' "$CHANGELOG" "$(cat CHANGELOG.md)" > CHANGELOG.md
+fi
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	echo "dry-run: would write esrally/_version.py: __version__ = \"$RELEASE_VERSION\"" >&2
+	echo "dry-run: skipping git add/commit, pip install, and esrally --version check." >&2
+	echo ""
+	echo "===================="
+	echo "Dry run finished for ${RELEASE_VERSION}"
+	echo "===================="
+	exit 0
+fi
 
 echo "Updating release version number"
 printf '__version__ = "%s"\n' "$RELEASE_VERSION" > esrally/_version.py
 
 # Stage only files this script generates. Avoids `git commit -a`, which would include any
 # other dirty tracked files if the tree was not clean.
-# NOTICE.txt is gitignored for local runs but must be committed for releases.
-git add -f NOTICE.txt
 git add AUTHORS CHANGELOG.md esrally/_version.py
 while IFS= read -r staged; do
 	[[ -z "$staged" ]] && continue
 	case "$staged" in
-	NOTICE.txt|AUTHORS|CHANGELOG.md|esrally/_version.py) ;;
+	AUTHORS|CHANGELOG.md|esrally/_version.py) ;;
 	*)
 		echo "error: staged file outside release allowlist: $staged" >&2
 		echo "Unstage unrelated changes (e.g. git restore --staged <file>) or start from a clean tree." >&2

@@ -218,10 +218,10 @@ benchmark: venv
 # --- Release goals ---
 
 # usage: e.g. make release-checks RELEASE_VERSION=X.Y.Z
-release-checks test-release: clean lint test-all docs
-	# TODO: use ./scripts/release/prepare.sh --dry when it's implemented to ensure verification and preparation are always in sync.
+release-checks test-release: venv
 	@if [ -z "$(RELEASE_VERSION)" ]; then echo "error: set RELEASE_VERSION (e.g. make release-checks RELEASE_VERSION=X.Y.Z)" >&2; exit 1; fi
-	uv run -- ./scripts/release/checks.sh "$(RELEASE_VERSION)"
+	$(MAKE) clean lint test-all docs
+	uv run -- ./scripts/release/prepare.sh --dry "$(RELEASE_VERSION)"
 
 # usage: e.g. make release RELEASE_VERSION=X.Y.Z
 release:

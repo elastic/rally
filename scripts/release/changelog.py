@@ -17,6 +17,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import argparse
 import os
 import sys
 
@@ -36,8 +37,8 @@ def find_milestone(repo, title, state):
     return None
 
 
-def ensure_open_milestone(repo, title):
-    """Return an open milestone for *title*, reopening a closed one or creating one if needed."""
+def ensure_open_milestone(repo, title, dry_run=False):
+    """Return an open milestone for *title*, creating one if missing (unless *dry_run*)."""
     m = find_milestone(repo, title, state="open")
     if m:
         return m
@@ -45,6 +46,10 @@ def ensure_open_milestone(repo, title):
     closed = find_milestone(repo, title, state="closed")
     if closed:
         print("Milestone already closed: [%s]." % title, file=sys.stderr)
+        sys.exit(2)
+
+    if dry_run:
+        print("dry-run: no open milestone [%s]; would create on GitHub in non-dry mode." % title, file=sys.stderr)
         sys.exit(2)
 
     m = repo.create_milestone(title, state="open")
@@ -104,11 +109,16 @@ def prs(gh, milestone, with_labels, without_labels=None):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("usage: %s milestone" % sys.argv[0], file=sys.stderr)
-        exit(1)
-
-    milestone_name = sys.argv[1]
+    parser = argparse.ArgumentParser(description="Generate Rally release changelog text from GitHub milestones.")
+    parser.add_argument(
+        "--dry",
+        action="store_true",
+        help="Do not create milestones on GitHub; fail if the milestone is missing.",
+    )
+    parser.add_argument("milestone", help="Milestone title (release version), e.g. 2.13.0")
+    args = parser.parse_args()
+    milestone_name = args.milestone
+    dry_run = args.dry
 
     # requires a personal GitHub access token with permission `public_repo` (see https://github.com/settings/tokens)
     with open(CHANGELOG_TOKEN_PATH, encoding="utf-8") as token_file:
@@ -117,10 +127,10 @@ def main():
 
     rally_repo = gh.repository(ORG, REPO)
 
-    milestone = ensure_open_milestone(rally_repo, milestone_name)
+    milestone = ensure_open_milestone(rally_repo, milestone_name, dry_run=dry_run)
     if milestone.open_issues > 0:
         print("There are [%d] open issues on milestone [%s]. Aborting..." % (milestone.open_issues, milestone_name), file=sys.stderr)
-        exit(2)
+        sys.exit(2)
 
     print("### %s\n" % milestone_name)
 

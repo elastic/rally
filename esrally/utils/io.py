@@ -24,6 +24,7 @@ import mmap
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import zipfile
 from collections.abc import Collection, Mapping, Sequence
@@ -397,7 +398,10 @@ def _do_decompress_manually_with_lib(target_directory: str, filename: str, compr
 
 def _do_tar_decompress(target_directory: str, compressed_file: tarfile.TarFile) -> None:
     try:
-        compressed_file.extractall(path=target_directory, filter="tar")
+        if sys.version_info >= (3, 12):
+            compressed_file.extractall(path=target_directory, filter="tar")
+        else:
+            compressed_file.extractall(path=target_directory)
     except Exception:
         raise RuntimeError(f"Could not decompress provided archive [{compressed_file.name!r}]. Please check if it is a valid tar file.")
     finally:
