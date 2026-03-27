@@ -5,7 +5,7 @@ Migrating to Rally 2.13.0
 -------------------------
 
 Python 3.9 is unsupported; use Python 3.10 through 3.13
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Rally 2.13.0 drops support for Python 3.9. Supported interpreters are 3.10.x through 3.13.x. Check the :ref:`updated installation instructions <install_python>` for more details.
 
