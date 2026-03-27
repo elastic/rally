@@ -20,6 +20,7 @@
 import argparse
 import os
 import sys
+import traceback
 
 import github3
 
@@ -63,15 +64,15 @@ def ensure_open_milestone(repo, title, dry_run=False):
 
 def print_category(heading, issue_list):
     if issue_list:
-        print("#### %s\n" % heading)
+        print("#### %s\n" % heading, file=sys.stdout)
         for issue in issue_list:
             print_issue(issue)
-        print("")
+        print("", file=sys.stdout)
 
 
 def print_issue(issue):
     breaking_hint = " (Breaking)" if labelled(issue, label_name="breaking") else ""
-    print("* [#%s](%s)%s: %s" % (str(issue.number), issue.html_url, breaking_hint, issue.title))
+    print("* [#%s](%s)%s: %s" % (str(issue.number), issue.html_url, breaking_hint, issue.title), file=sys.stdout)
 
 
 def labelled(issue, label_name):
@@ -121,9 +122,17 @@ def main():
     dry_run = args.dry
 
     # requires a personal GitHub access token with permission `public_repo` (see https://github.com/settings/tokens)
-    with open(CHANGELOG_TOKEN_PATH, encoding="utf-8") as token_file:
-        token = token_file.readline().strip()
+    try:
+        with open(CHANGELOG_TOKEN_PATH, encoding="utf-8") as token_file:
+            token = token_file.readline().strip()
+    except OSError as e:
+        print("changelog.py: cannot read token file [%s]: %s" % (CHANGELOG_TOKEN_PATH, e), file=sys.stderr)
+        sys.exit(1)
+
     gh = github3.login(token=token)
+    if gh is None:
+        print("changelog.py: GitHub login failed (invalid token or API error).", file=sys.stderr)
+        sys.exit(1)
 
     rally_repo = gh.repository(ORG, REPO)
 
@@ -132,7 +141,8 @@ def main():
         print("There are [%d] open issues on milestone [%s]. Aborting..." % (milestone.open_issues, milestone_name), file=sys.stderr)
         sys.exit(2)
 
-    print("### %s\n" % milestone_name)
+    print("changelog.py: generating changelog for milestone [%s] (markdown on stdout)" % milestone_name, file=sys.stderr)
+    print("### %s\n" % milestone_name, file=sys.stdout)
 
     print_category("Highlights", prs(gh, milestone, with_labels="highlight"))
     print_category(
@@ -144,4 +154,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as e:
+        print("changelog.py: error: %s" % e, file=sys.stderr)
+        sys.exit(1)

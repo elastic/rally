@@ -70,11 +70,18 @@ fi
 
 echo "Updating changelog"
 if [[ "$DRY_RUN" -eq 1 ]]; then
-	python3 "${SCRIPT_DIR}/changelog.py" --dry "${RELEASE_VERSION}" >/dev/null
+	python3 "${SCRIPT_DIR}/changelog.py" --dry "${RELEASE_VERSION}" >/dev/null || {
+		_changelog_ec=$?
+		echo "error: changelog.py failed for milestone ${RELEASE_VERSION} (dry run); see messages above." >&2
+		exit "$_changelog_ec"
+	}
 else
-	# For exit on error to work we have to separate
-	#  CHANGELOG.md generation into two steps.
-	CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")"
+	# For exit on error we check the substitution explicitly (set -e is unreliable here).
+	CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")" || {
+		_changelog_ec=$?
+		echo "error: changelog.py failed for milestone ${RELEASE_VERSION}; see messages above." >&2
+		exit "$_changelog_ec"
+	}
 	printf '%s\n\n%s' "$CHANGELOG" "$(cat CHANGELOG.md)" > CHANGELOG.md
 fi
 
