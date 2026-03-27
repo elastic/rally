@@ -41,7 +41,7 @@ function add_license {
 
 function main {
     cat NOTICE > "${OUTPUT_FILE}"
-    # direct dependencies (keep in sync with pyproject.toml [project.dependencies])
+    # Direct dependencies (keep in sync with pyproject.toml [project.dependencies])
     printf "\n======================================\ncertifi\n======================================\n\n" >> "${OUTPUT_FILE}"
     # link to a URL providing the MPL-covered source code
     printf "The source code can be obtained at https://github.com/certifi/python-certifi\n" >> "${OUTPUT_FILE}"
