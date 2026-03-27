@@ -23,15 +23,16 @@ Rally creates three versioned data streams:
 
 **Index templates and component templates**
 
-Each data stream is backed by an index template (e.g. ``rally-metrics-ds``) that is composed of two `component templates <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-component-template.html>`_:
+Each data stream (e.g. ``rally-metrics-ds``) is backed by an index template that is composed of two `component templates <https://www.elastic.co/docs/manage-data/data-store/templates#component-templates>`_:
 
-1. **Main component** (e.g. ``rally-metrics-``): Contains field mappings, index settings, and an `Index Lifecycle Management (ILM) <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-lifecycle-management.html>`_ policy reference. The default ILM policy triggers a rollover when any primary shard exceeds 50 GB, which helps keep individual shards at a manageable size for search and storage efficiency.
+1. **Main component** (e.g. ``rally-metrics-v1``): Contains field mappings, index settings, and an `Index Lifecycle Management (ILM) <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-lifecycle-management.html>`_ policy reference. The default ILM policy triggers a rollover when any primary shard exceeds 50 GB, which helps keep individual shards at a manageable size for search and storage efficiency.
 
-2. **Custom component** (e.g. ``rally-metrics-@custom``): An empty placeholder template that is applied *on top of* the main component. You can populate it with your own settings to override defaults — for example, changing the number of replicas or adding a custom ILM policy — without modifying Rally's managed templates. Rally never overwrites this template.
+2. **Custom component** (e.g. ``rally-metrics-v1@custom``): An empty placeholder template that is applied *on top of* the main component. You can populate it with your own settings to override defaults — for example, changing the number of replicas or adding a custom ILM policy — without modifying Rally's managed templates. Rally never overwrites this template.
 
 **Customisation example**
 
-To add a custom retention policy, first create the policy
+To add a custom retention policy, first create the policy::
+
   PUT _ilm/policy/my-custom-ilm-policy
   {
     "policy": {

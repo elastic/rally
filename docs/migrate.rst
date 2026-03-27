@@ -2,7 +2,7 @@ Migration Guide
 ===============
 
 Migrating to Rally 2.14.0 (unreleased)
--------------------------------------
+--------------------------------------
 
 Migrate rally indices to data streams
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
