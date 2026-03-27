@@ -9,6 +9,8 @@ At the end of a race, Rally stores all metrics records in its metrics store. Met
 By default, Rally stores metrics in the ``rally-metrics-v1`` data stream. When ``datastore.use_data_streams`` is set to false, Rally falls back to monthly indices named ``rally-metrics-YYYY-MM``.
 
 
+.. _metrics_data_streams:
+
 Data Stream Storage
 ~~~~~~~~~~~~~~~~~~~
 
