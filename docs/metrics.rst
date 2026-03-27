@@ -34,37 +34,37 @@ Each data stream is backed by an index template (e.g. ``rally-metrics-ds``) that
 To add a custom retention policy, first create the policy
   PUT _ilm/policy/my-custom-ilm-policy
   {
-      "policy": {
-          "phases": {
-              "hot": {
-                "actions": {
-                  "set_priority": {
-                    "priority": 600
-                  },
-                  "rollover": {
-                    "max_age": "90d",
-                    "max_primary_shard_size": "30gb"
-                  }
-                }
-              },
+    "policy": {
+      "phases": {
+        "hot": {
+          "actions": {
+            "set_priority": {
+              "priority": 600
+            },
+            "rollover": {
+              "max_age": "90d",
+              "max_primary_shard_size": "30gb"
+            }
           }
+        },
       }
+    }
   }
 
 and then modify the ``@custom`` component template::
 
-    PUT _component_template/rally-races-v1@custom
-    {
-      "template": {
-        "settings": {
-          "index": {
-            "lifecycle": {
-              "name": "my-custom-ilm-policy"
-            }
+  PUT _component_template/rally-races-v1@custom
+  {
+    "template": {
+      "settings": {
+        "index": {
+          "lifecycle": {
+            "name": "my-custom-ilm-policy"
           }
         }
       }
     }
+  }
 
 Because the ``@custom`` component is listed last in the ``composed_of`` order, its settings take precedence over the main component.
 

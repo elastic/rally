@@ -1,16 +1,16 @@
 Migration Guide
 ===============
 
-Migrating to Rally 2.14.0
--------------------------
+Migrating to Rally 2.14.0 (unreleased)
+-------------------------------------
 
 Migrate rally indices to data streams
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * Rally 2.14.0 introduces data streams for metric storage by introducing the ``datastore.use_data_streams`` parameter in section ``reporting``, which is ``true`` by default.
 * Rally default behavior is to write metrics, races and results on data streams by first creating index templates, each composed of 2 component templates:
- a. Main template, which contains the field mappings and an ILM policy reference. The default ILM policy triggers a rollover when any primary shard exceeds 50 GB.
- b. ``@custom`` template, which is empty by default but can be populated with custom index settings. This template is applied on top of the main template and can be used to override defaults (e.g. changing the ILM policy or replica count). Rally never overwrites this template.
+  a. Main template, which contains the field mappings and an ILM policy reference. The default ILM policy triggers a rollover when any primary shard exceeds 50 GB.
+  b. ``@custom`` template, which is empty by default but can be populated with custom index settings. This template is applied on top of the main template and can be used to override defaults (e.g. changing the ILM policy or replica count). Rally never overwrites this template.
 * Data streams are versioned ``rally-metrics-v1``, ``rally-races-v1`` and ``rally-results-v1``.
 * Old date-based patterned indices (e.g. ``rally-metrics-YYYY-MM``) are not removed and will continue to work as before, by setting ``datastore.use_data_streams`` value to ``false``.
 
