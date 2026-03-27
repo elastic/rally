@@ -67,6 +67,7 @@ check-all: all
 	test-3.11 \
 	test-3.12 \
 	test-3.13 \
+	test-release \
 	it \
 	it_serverless \
 	it_tracks_compat \
@@ -216,14 +217,16 @@ benchmark: venv
 
 # --- Release goals ---
 
-release-checks: venv
+# usage: e.g. make release-checks RELEASE_VERSION=X.Y.Z
+release-checks test-release: clean lint test-all docs
+	# TODO: use ./scripts/release/prepare.sh --dry when it's implemented to ensure verification and preparation are always in sync.
 	@if [ -z "$(RELEASE_VERSION)" ]; then echo "error: set RELEASE_VERSION (e.g. make release-checks RELEASE_VERSION=X.Y.Z)" >&2; exit 1; fi
-	$(VENV_ACTIVATE); ./scripts/release/checks.sh $(RELEASE_VERSION)
+	uv run -- ./scripts/release/checks.sh "$(RELEASE_VERSION)"
 
-# usage: e.g. make release RELEASE_VERSION=2.13.0
+# usage: e.g. make release RELEASE_VERSION=X.Y.Z
 release:
 	@if [ -z "$(RELEASE_VERSION)" ]; then echo "error: set RELEASE_VERSION (e.g. make release RELEASE_VERSION=X.Y.Z)" >&2; exit 1; fi
-	./scripts/release/prepare.sh $(RELEASE_VERSION)
+	uv run -- ./scripts/release/prepare.sh "$(RELEASE_VERSION)"
 
 # --- Other goals ---
 
