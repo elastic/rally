@@ -96,6 +96,18 @@ Once you are satisfied the data has been migrated, you can delete the old date-b
 
    Deleting old indices is irreversible. Ensure you have verified the reindex results and have backups before proceeding.
 
+
+Migrating to Rally 2.13.0
+-------------------------
+
+Python 3.9 is unsupported; use Python 3.10 through 3.13
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 2.13.0 drops support for Python 3.9. Supported interpreters are 3.10.x through 3.13.x. Check the :ref:`updated installation instructions <install_python>` for more details.
+
+Development uses uv instead of nox
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 Migrating to Rally 2.12.0
 -------------------------
 
