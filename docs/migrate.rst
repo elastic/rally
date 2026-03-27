@@ -12,7 +12,6 @@ Rally 2.13.0 drops support for Python 3.9. Supported interpreters are 3.10.x thr
 Development uses uv instead of nox
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you work from a source checkout, Rally uses `uv <https://github.com/astral-sh/uv>`_ for virtual environments and locked dependencies; ``nox`` is no longer used. Install uv from the `Astral installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_, then run ``make venv`` to create ``.venv`` and sync dependencies (``uv venv`` and ``uv sync``).
 
 
 Migrating to Rally 2.12.0
