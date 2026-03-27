@@ -76,6 +76,9 @@ class EsClient:
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
 
+    def update_by_query(self, index, body):
+        return self.guarded(self._client.update_by_query, index=index, body=body)
+
     def delete(self, index, id):
         # ignore 404 status code (NotFoundError) when index does not exist
         return self.guarded(self._client.delete, index=index, id=id, ignore=404)
@@ -2015,17 +2018,41 @@ class EsRaceStore(RaceStore):
         super().__init__(cfg)
         self.client = client_factory_class(cfg).create()
         self._index_handler = IndexHandler(self.cfg, self.client, EsStoreType.races)
+        self._race_stored = False
 
     def store_race(self, race):
         assert race.race_timestamp is not None, "Attempted to store race with race_timestamp=None"
 
         self._index_handler.ensure_index_template(create=True, race_timestamp=race.race_timestamp)
-        self.client.index(
-            index=self._index_handler.index_name(race.race_timestamp),
-            item=race.as_dict(),
-            id=race.race_id,
-            use_data_streams=self._index_handler.use_data_streams,
-        )
+        index = self._index_handler.index_name(race.race_timestamp)
+
+        if self._index_handler.use_data_streams and self._race_stored:
+            self.client.refresh(index)
+            self.client.update_by_query(
+                index=index,
+                body={
+                    "query": {"term": {"race-id": race.race_id}},
+                    "script": {
+                        "source": "ctx._source.putAll(params)",
+                        "lang": "painless",
+                        "params": race.as_dict(),
+                    },
+                },
+            )
+        elif self._index_handler.use_data_streams:
+            self.client.index(
+                index=index,
+                item=race.as_dict(),
+                use_data_streams=True,
+            )
+            self._race_stored = True
+        else:
+            self.client.index(
+                index=index,
+                item=race.as_dict(),
+                id=race.race_id,
+                use_data_streams=False,
+            )
 
     def add_annotation(self):
         def _at_midnight(race_timestamp):

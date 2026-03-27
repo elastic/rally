@@ -742,9 +742,10 @@ class TestComponentTemplateProvider:
         provider = self._make_provider()
         for es_store_type in [metrics.EsStoreType.metrics, metrics.EsStoreType.races, metrics.EsStoreType.results]:
             names = provider.component_names(es_store_type)
+            versioned_name = f"{es_store_type.index_prefix}{es_store_type.data_stream_version}"
             assert names == [
-                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}",
-                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}",
+                versioned_name,
+                f"{versioned_name}{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}",
             ]
 
 
@@ -1878,13 +1879,90 @@ class TestEsRaceStore:
             },
         }
         expected_index = rs._index_handler.index_name(self.RACE_TIMESTAMP)
-        es_mock.index.assert_called_with(
-            index=expected_index,
-            id=self.RACE_ID,
-            item=expected_doc,
-            use_data_streams=use_data_streams,
-        )
+        if use_data_streams:
+            es_mock.index.assert_called_with(
+                index=expected_index,
+                item=expected_doc,
+                use_data_streams=True,
+            )
+        else:
+            es_mock.index.assert_called_with(
+                index=expected_index,
+                id=self.RACE_ID,
+                item=expected_doc,
+                use_data_streams=False,
+            )
         rs._index_handler.ensure_index_template.assert_called_once_with(create=True, race_timestamp=self.RACE_TIMESTAMP)
+
+    def test_store_race_update_with_data_streams(self):
+        rs, es_mock = self._make_race_store(use_data_streams=True)
+        schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
+
+        t = track.Track(
+            name="unittest",
+            indices=[track.Index(name="tests", types=["_doc"])],
+            challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
+        )
+
+        race = metrics.Race(
+            rally_version="0.4.4",
+            rally_revision="123abc",
+            environment_name="unittest",
+            race_id=self.RACE_ID,
+            race_timestamp=self.RACE_TIMESTAMP,
+            pipeline="from-sources",
+            user_tags={"os": "Linux"},
+            track=t,
+            track_params={"shard-count": 3},
+            challenge=t.default_challenge,
+            car="defaults",
+            car_params={"heap_size": "512mb"},
+            plugin_params=None,
+            track_revision="abc1",
+            team_revision="abc12333",
+            distribution_version="5.0.0",
+            distribution_flavor="default",
+            revision="aaaeeef",
+        )
+
+        # First call creates the race document
+        rs.store_race(race)
+        es_mock.index.assert_called_once()
+        assert rs._race_stored is True
+
+        # Second call (e.g. after benchmark completes) updates via update_by_query
+        race.add_results(
+            self.DictHolder(
+                {
+                    "young_gc_time": 100,
+                    "old_gc_time": 5,
+                    "op_metrics": [
+                        {
+                            "task": "index #1",
+                            "operation": "index",
+                            "throughput": {"min": 1000, "median": 1250, "max": 1500, "unit": "docs/s"},
+                        }
+                    ],
+                }
+            )
+        )
+        rs.store_race(race)
+
+        expected_index = rs._index_handler.index_name(self.RACE_TIMESTAMP)
+        es_mock.refresh.assert_called_once_with(expected_index)
+        es_mock.update_by_query.assert_called_once_with(
+            index=expected_index,
+            body={
+                "query": {"term": {"race-id": self.RACE_ID}},
+                "script": {
+                    "source": "ctx._source.putAll(params)",
+                    "lang": "painless",
+                    "params": race.as_dict(),
+                },
+            },
+        )
+        # index should still have been called only once (from the first store_race)
+        es_mock.index.assert_called_once()
 
     @mock.patch("esrally.utils.console.println")
     def test_delete_race(self, console):
