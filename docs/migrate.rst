@@ -17,10 +17,10 @@ Development uses uv instead of nox
 Migrating to Rally 2.12.0
 -------------------------
 
-Minimum Python version is 3.10.0
+Minimum Python version is 3.9.0
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Rally 2.12.0 requires Python 3.10.0 or above. Check the :ref:`updated installation instructions <install_python>` for more details.
+Rally 2.12.0 requires Python 3.9.0 or above. Check the :ref:`updated installation instructions <install_python>` for more details.
 
 The metrics store keeps existing index templates
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
