@@ -21,15 +21,10 @@
 set -eu
 
 RELEASE_VERSION=$1
-__NOTICE_OUTPUT_FILE="NOTICE.txt"
-
 
 echo "============================="
 echo "Preparing Rally release $RELEASE_VERSION"
 echo "============================="
-
-echo "Preparing ${__NOTICE_OUTPUT_FILE}"
-source create-notice.sh
 
 echo "Updating author information"
 git log --format='%aN' | sort -fu > AUTHORS
