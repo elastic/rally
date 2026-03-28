@@ -60,7 +60,7 @@ Once your changes and tests are ready to submit for review:
 
     Ensure that all tests pass by running `make check-all`. This runs sequentially lint checks, unit tests and integration tests. These can be executed in isolation using `make lint`, `make test` and `make it` respectively, in case you need to iterate over a subset of tests.
 
-    Note: Integration tests are much slower than unit tests and require `docker-compose`.
+    Note: Integration tests are much slower than unit tests and require `docker compose`. They also require **Java 21**; set `JAVA_HOME` (or `JAVA21_HOME`) to match.
 
 3. Sign the Contributor License Agreement
 
@@ -78,6 +78,10 @@ Once your changes and tests are ready to submit for review:
 Then sit back and wait. There will probably be discussion about the pull request and, if any changes are needed, we would love to work with you to get your pull request merged into Rally.
 
 Note: Contributors belonging to the "Elastic" organization on Github can merge PRs themselves after getting a "LGTM" (Looks good to me); this workflow is similar to the established one in the Elasticsearch project.
+
+## Release process (maintainers)
+
+Release preparation is automated via `make release` and scripts under `scripts/release/`; see the Makefile and script headers for details.
 
 # Contributing to the Rally codebase
 

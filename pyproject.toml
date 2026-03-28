@@ -35,7 +35,7 @@ classifiers = [
 ]
 ################################################################################################
 #
-# Adapt `create-notice.sh` whenever changing dependencies here.
+# Adapt `scripts/release/create-notice.sh` whenever changing dependencies here.
 #
 # That script grabs all license files so we include them in the notice file.
 #
@@ -93,7 +93,7 @@ dependencies = [
     "hatchling==1.6.0",
     "wheel==0.46.2",
     # License: MIT — Rally runs `python -m pip install` to install track dependencies (see esrally.track.loader).
-    "pip>=24.0",
+    "pip==26.0.1",
 ]
 
 [project.optional-dependencies]
