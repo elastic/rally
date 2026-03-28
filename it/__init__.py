@@ -32,7 +32,7 @@ from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["8.4.0"]
-# There are no ARM distribution artefacts for 6.8.0, which can't be tested on Apple Silicon
+# There are no ARM distribution artifacts for 6.8.0, which can't be tested on Apple Silicon
 if platform.machine() != "arm64":
     DISTRIBUTIONS.insert(0, "6.8.0")
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]

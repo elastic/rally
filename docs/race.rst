@@ -135,3 +135,18 @@ What did Rally just do?
 If you are curious about the operations that Rally has run, inspect the `geopoint track specification <https://github.com/elastic/rally-tracks/blob/5/geopoint/track.json>`_ or start to :doc:`write your own tracks </adding_tracks>`. You can also configure Rally to :doc:`store all data samples in Elasticsearch </configuration>` so you can analyze the results with Kibana. Finally, you may want to :doc:`change the Elasticsearch configuration </car>`.
 
 
+.. _race_prepare_only:
+
+Prepare only (no benchmark)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you want Rally to download and prepare track data under your Rally root (corpora, generated documents, and other on-disk work defined by the track) and then exit successfully **without** running the challenge schedule or printing a benchmark summary, pass ``--prepare-only``. In this mode Rally does **not** start Elasticsearch and does **not** open connections to ``--target-hosts``::
+
+    esrally race --track=geopoint --challenge=append-fast-with-conflicts --prepare-only
+
+With ``--pipeline=benchmark-only``, Rally performs the same local track preparation only; it does not contact a cluster. Pass ``--distribution-version`` (or pin the track repository revision) if you need a specific Elasticsearch version for track branch selection, because Rally will not probe a running cluster::
+
+    esrally race --pipeline=benchmark-only --track=geonames --distribution-version=8.11.0 --prepare-only
+
+In this mode Rally prints a message that the track was prepared in prepare-only mode; it does **not** persist a race record or benchmark results. Rally does not stop Elasticsearch after prepare-only, because it does not start a benchmark candidate in this mode (see :doc:`cluster management </cluster_management>` if you manage a cluster yourself).
+

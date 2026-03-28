@@ -28,7 +28,10 @@ export UV_PROJECT_ENVIRONMENT := $(VIRTUAL_ENV)
 
 PRE_COMMIT_HOOK_PATH := .git/hooks/pre-commit
 
-LOG_CI_LEVEL := INFO
+DEBUG =
+LOG_CI_LEVEL = $(if $(DEBUG),DEBUG)
+PYTEST_FLAGS =
+PYTEST = pytest $(if $(DEBUG),-s -x --lf) $(if $(LOG_CI_LEVEL),-o log_cli=true --log-cli-level=$(LOG_CI_LEVEL)) $(PYTEST_FLAGS)
 
 # --- Global goals ---
 
@@ -174,7 +177,7 @@ clean-docs: venv
 
 # It runs unit tests using the default python interpreter version.
 test: venv
-	uv run -- pytest -s $(or $(ARGS), tests/)
+	uv run -- $(PYTEST) -- $(or $(ARGS), tests/)
 
 # It runs unit tests using all supported python versions.
 test-all: test-3.10 test-3.11 test-3.12 test-3.13
@@ -204,11 +207,11 @@ it: venv
 
 # It runs serverless integration tests.
 it_serverless: install_pytest_rally_plugin
-	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_tracks_serverless it/track_repo_compatibility $(ARGS)
+	$(MAKE) test PYTEST_FLAGS+=--track-repository-test-directory=it_tracks_serverless ARGS=it/track_repo_compatibility
 
 # It runs rally_tracks_compat integration tests.
 it_tracks_compat: install_pytest_rally_plugin
-	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
+	$(MAKE) test ARGS=it/track_repo_compatibility
 
 # It runs benchmark tests.
 benchmark: venv
