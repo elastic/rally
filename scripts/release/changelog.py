@@ -20,7 +20,6 @@
 import argparse
 import os
 import sys
-import traceback
 
 import github3
 
@@ -156,8 +155,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except SystemExit:
-        raise
     except Exception as e:
         print("changelog.py: error: %s" % e, file=sys.stderr)
         sys.exit(1)

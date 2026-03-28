@@ -49,7 +49,7 @@ repos:
             "-j0",
             "--rcfile=.pylintrc",
           ]
-        exclude: ^(docs/|scripts/release/changelog\.py)
+        exclude: ^(docs/)
         require_serial: true
 
   # Shell scripts: release tooling and repo githooks. Widen to all *.sh once legacy
