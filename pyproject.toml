@@ -94,7 +94,7 @@ dependencies = [
     "hatchling==1.6.0",
     # License: MIT
     "wheel==0.46.3",
-    # MIT License
+    # License: MIT — Rally runs `python -m pip install` to install track dependencies (see esrally.track.loader).
     "pip==26.0.1",
     # License: Apache 2.0
     "docker>=7.1.0",
@@ -129,7 +129,7 @@ develop = [
     "trustme==0.9.0",
     "GitPython==3.1.30",
     # formatting
-    "black==24.10.0",
+    "black==26.3.1",
     # mypy
     "boto3-stubs==1.26.125",
     "mypy==1.15.0",

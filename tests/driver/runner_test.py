@@ -8340,6 +8340,7 @@ class TestEsqlProfileRunner:
                         "cpu_nanos": 8_000_000,
                         "operators": [
                             {"operator": "LuceneSourceOperator[...]", "status": {"process_nanos": 3_000_000, "processed_slices": 5}},
+                            {"operator": "TopNOperator[...]", "status": {"emit_nanos": 1_000_000, "receive_nanos": 1_500_000}},
                         ],
                     },
                     {
@@ -8362,6 +8363,7 @@ class TestEsqlProfileRunner:
         assert result["data.cpu_total_ms"] == 14.0  # sum
         assert result["data.LuceneSourceOperator.process_ms"] == 3.0
         assert result["data.LuceneSourceOperator.processed_slices"] == 5
+        assert result["data.TopNOperator.process_ms"] == 2.5
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
