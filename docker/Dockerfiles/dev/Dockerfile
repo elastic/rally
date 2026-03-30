@@ -52,6 +52,7 @@ ENV UV_PROJECT_ENVIRONMENT=/rally/venv
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${RALLY_VERSION}
 RUN make install
 
 LABEL org.label-schema.schema-version="1.0" \
