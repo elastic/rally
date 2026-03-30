@@ -24,7 +24,7 @@ def ensure_mimetype_headers(
     *,
     headers: Mapping[str, str] | None = None,
     path: str | None = None,
-    body: str | None = None,
+    body: Any | None = None,
     version: str | int | None = None,
 ) -> elastic_transport.HttpHeaders:
     # Ensure will use a case-insensitive copy of input headers.
