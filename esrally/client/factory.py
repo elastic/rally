@@ -44,7 +44,7 @@ class EsClientFactory:
         self.ssl_context = None
         # This attribute is necessary for the backwards-compatibility logic contained in
         # RallySyncElasticsearch.perform_request() and RallyAsyncElasticsearch.perform_request(), and also for
-        # identification of whenever target server is 'serverless'.
+        # identification of whether target server is 'serverless'.
         self.distribution_version = distribution_version
         self.distribution_flavor = distribution_flavor
         self.logger = logging.getLogger(__name__)
