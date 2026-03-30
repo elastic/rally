@@ -74,17 +74,23 @@ def remove_integration_test_config():
 
 class EsMetricsStore:
     VERSION = "8.5.1"
+    HTTP_PORT = 10200
 
     def __init__(self):
         self.cluster = TestCluster("in-memory-it")
 
     def start(self):
+        if self.cluster.is_cluster_running_on_port(self.HTTP_PORT):
+            print("Elasticsearch metrics store already running; waiting for cluster health (yellow)...")
+            self.cluster.http_port = self.HTTP_PORT
+            self.cluster.wait_for_cluster_health(wait_for_status="yellow", timeout="120s")
+            return
         print("Starting Elasticsearch metrics store...")
         self.cluster.install(
             distribution_version=EsMetricsStore.VERSION,
             node_name="metrics-store",
             car="defaults,basic-license",
-            http_port=10200,
+            http_port=self.HTTP_PORT,
         )
         self.cluster.start(race_id="metrics-store")
         print("Waiting for metrics store cluster health (yellow)...")

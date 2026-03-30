@@ -140,6 +140,13 @@ class TestCluster:
         self.installation_id = None
         self.http_port = None
 
+    def is_cluster_running_on_port(self, http_port):
+        try:
+            es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": http_port}], client_options={}).create()
+            return es.info()["cluster_name"] == self.cfg
+        except BaseException:
+            return False
+
     def install(self, distribution_version, node_name, car, http_port):
         self.http_port = http_port
         transport_port = http_port + 100
@@ -171,10 +178,11 @@ class TestCluster:
     def wait_for_cluster_health(self, *, wait_for_status="yellow", timeout="120s"):
         """
         Block until the cluster reaches at least the given health (server-side wait).
-        Green satisfies wait_for_status=yellow. Requires install() and start() first.
+        Green satisfies wait_for_status=yellow. Requires http_port to be set (e.g. after
+        install/start or when reusing an already running cluster).
         """
         if self.http_port is None:
-            raise AssertionError("Cluster must be installed before waiting for health.")
+            raise AssertionError("Cluster http_port must be set before waiting for health.")
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         # HTTP client timeout must exceed Elasticsearch's server-side wait (timeout query param).
         request_timeout_sec = 150.0
