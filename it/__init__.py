@@ -168,6 +168,26 @@ class TestCluster:
         client.wait_for_rest_layer(es)
         assert es.info()["cluster_name"] == self.cfg
 
+    def wait_for_cluster_health(self, *, wait_for_status="yellow", timeout="120s"):
+        """
+        Block until the cluster reaches at least the given health (server-side wait).
+        Green satisfies wait_for_status=yellow. Requires install() and start() first.
+        """
+        if self.http_port is None:
+            raise AssertionError("Cluster must be installed before waiting for health.")
+        es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
+        # HTTP client timeout must exceed Elasticsearch's server-side wait (timeout query param).
+        request_timeout_sec = 150.0
+        try:
+            es.options(request_timeout=request_timeout_sec).cluster.health(
+                wait_for_status=wait_for_status,
+                timeout=timeout,
+            )
+        except Exception as e:
+            raise AssertionError(
+                f"Timed out or failed waiting for cluster health [{wait_for_status}] on 127.0.0.1:{self.http_port}: {e}"
+            ) from e
+
     def stop(self):
         if self.installation_id:
             if esrally(self.cfg, f"stop --installation-id={self.installation_id}") != 0:

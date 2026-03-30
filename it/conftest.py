@@ -87,6 +87,8 @@ class EsMetricsStore:
             http_port=10200,
         )
         self.cluster.start(race_id="metrics-store")
+        print("Waiting for metrics store cluster health (yellow)...")
+        self.cluster.wait_for_cluster_health(wait_for_status="yellow", timeout="120s")
 
     def stop(self):
         print("Stopping Elasticsearch metrics store...")

@@ -320,14 +320,20 @@ def wait_for_rest_layer(es, max_attempts=40):
         except TlsError as e:
             raise exceptions.SystemSetupError("Could not connect to cluster via HTTPS. Are you sure this is an HTTPS endpoint?", e)
         except ConnectionError as e:
-            if "ProtocolError" in str(e):
+            is_protocol = "ProtocolError" in str(e)
+            if attempt <= max_attempts:
+                if is_protocol:
+                    logger.debug(
+                        "Got protocol error on attempt [%s] (often transient while Elasticsearch starts). Sleeping...",
+                        attempt,
+                    )
+                else:
+                    logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
+                time.sleep(3)
+            elif is_protocol:
                 raise exceptions.SystemSetupError(
                     "Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?", e
                 )
-
-            if attempt <= max_attempts:
-                logger.debug("Got connection error on attempt [%s]. Sleeping...", attempt)
-                time.sleep(3)
             else:
                 raise
         except TransportError as e:

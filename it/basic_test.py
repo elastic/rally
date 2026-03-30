@@ -46,6 +46,11 @@ def test_run_without_http_connection(cfg):
         env["https_proxy"] = "http://invalid"
         # make sure we don't have any saved state
         env["RALLY_HOME"] = tmpdir
+        # Isolate from user ~/.gitconfig: per-URL proxy="" or similar would let `git clone` ignore env proxies and break this test.
+        _git_global = os.path.join(tmpdir, "gitconfig-empty")
+        with open(_git_global, "w", encoding="utf-8"):
+            pass
+        env["GIT_CONFIG_GLOBAL"] = _git_global
         output = process.run_subprocess_with_output(cmd, env=env)
         expected = "[ERROR] Cannot list"
         assert expected in "\n".join(output)

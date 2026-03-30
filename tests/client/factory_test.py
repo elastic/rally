@@ -540,8 +540,9 @@ class TestRestLayer:
         ):
             client.wait_for_rest_layer(es, max_attempts=3)
 
+    @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_connection_protocol_error(self, es):
+    def test_connection_protocol_error(self, es, sleep):
         es.cluster.health.side_effect = elasticsearch.ConnectionError(
             message="N/A",
             errors=[urllib3.exceptions.ProtocolError("Connection aborted.")],  # type: ignore[arg-type]
@@ -550,7 +551,8 @@ class TestRestLayer:
             exceptions.SystemSetupError,
             match="Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?",
         ):
-            client.wait_for_rest_layer(es, max_attempts=3)
+            client.wait_for_rest_layer(es, max_attempts=1)
+        assert es.cluster.health.call_count == 2
 
 
 class TestApiKeys:
