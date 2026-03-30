@@ -38,12 +38,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.8.22 /uv /uvx /bin/
 
 USER 1000
 
-COPY Makefile /rally/
-COPY README.md /rally/
-COPY .ci/variables.json /rally/.ci/
-COPY esrally/ /rally/esrally/
-COPY pyproject.toml /rally/
-COPY uv.lock /rally/
+COPY --chown=1000:0 Makefile /rally/
+COPY --chown=1000:0 README.md /rally/
+COPY --chown=1000:0 .ci/variables.json /rally/.ci/
+COPY --chown=1000:0 esrally/ /rally/esrally/
+COPY --chown=1000:0 pyproject.toml /rally/
+COPY --chown=1000:0 uv.lock /rally/
 
 ENV VIRTUAL_ENV=/rally/venv
 ENV PATH=/rally/venv/bin:$PATH
