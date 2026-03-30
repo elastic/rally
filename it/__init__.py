@@ -138,9 +138,9 @@ class TestCluster:
     def __init__(self, cfg):
         self.cfg = cfg
         self.installation_id = None
-        self.http_port = None
+        self.http_port: int | None = None
 
-    def install(self, distribution_version, node_name, car, http_port):
+    def install(self, distribution_version, node_name, car, http_port: int):
         self.http_port = http_port
         transport_port = http_port + 100
         try:
