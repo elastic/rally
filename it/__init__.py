@@ -144,7 +144,7 @@ class TestCluster:
         try:
             es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": http_port}], client_options={}).create()
             return es.info()["cluster_name"] == self.cfg
-        except BaseException:
+        except Exception:
             return False
 
     def install(self, distribution_version, node_name, car, http_port):
