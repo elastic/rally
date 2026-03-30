@@ -25,6 +25,9 @@ from esrally import config, version
 from esrally.utils import process
 from it import CONFIG_NAMES, ROOT_DIR, TestCluster
 
+_IT_DIR = os.path.dirname(__file__)
+_GIT_CONFIG_EMPTY = os.path.join(_IT_DIR, "resources", "gitconfig-empty")
+
 
 def check_prerequisites():
     print("Checking prerequisites...")
@@ -105,7 +108,22 @@ ES_METRICS_STORE = EsMetricsStore()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def shared_setup():
+def isolate_git_global_config():
+    """
+    Point GIT_CONFIG_GLOBAL at it/resources/gitconfig-empty so integration tests are not
+    affected by the developer's ~/.gitconfig (e.g. per-URL proxy="" can let git ignore env proxies).
+    """
+    previous = os.environ.get("GIT_CONFIG_GLOBAL")
+    os.environ["GIT_CONFIG_GLOBAL"] = _GIT_CONFIG_EMPTY
+    yield
+    if previous is None:
+        os.environ.pop("GIT_CONFIG_GLOBAL", None)
+    else:
+        os.environ["GIT_CONFIG_GLOBAL"] = previous
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shared_setup(isolate_git_global_config):
     print("\nStarting shared setup...")
     check_prerequisites()
     install_integration_test_config()
