@@ -170,7 +170,7 @@ profile = 'black'
 # set to true for more verbose output of tests
 log_cli = false
 log_level = "INFO"
-addopts = "--verbose --color=yes"
+addopts = "--verbose --color=yes --import-mode=importlib"
 testpaths = "tests"
 junit_family = "xunit2"
 junit_logging = "all"
