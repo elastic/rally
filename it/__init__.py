@@ -207,7 +207,7 @@ class TestCluster:
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         # HTTP client timeout must exceed Elasticsearch's server-side wait (timeout query param).
         try:
-            es.options(request_timeout=timeout + 30.0).cluster.health(
+            resp = es.options(request_timeout=timeout + 30.0).cluster.health(
                 wait_for_status=wait_for_status,
                 timeout=f"{timeout}s",
             )
@@ -215,6 +215,12 @@ class TestCluster:
             raise AssertionError(
                 f"Timed out or failed waiting for cluster health [{wait_for_status}] on 127.0.0.1:{self.http_port}: {e}"
             ) from e
+        if resp.get("timed_out"):
+            raise AssertionError(
+                f"Cluster health wait timed out after {timeout}s (wanted at least [{wait_for_status}]) on "
+                f"127.0.0.1:{self.http_port}: status={resp.get('status')!r}, "
+                f"nodes={resp.get('number_of_nodes')!r}, relocating_shards={resp.get('relocating_shards')!r}"
+            )
 
     def stop(self):
         if self.installation_id:
