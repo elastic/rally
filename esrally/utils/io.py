@@ -397,6 +397,12 @@ def _do_decompress_manually_with_lib(target_directory: str, filename: str, compr
 
 
 def _do_tar_decompress(target_directory: str, compressed_file: tarfile.TarFile) -> None:
+    """
+    Extract a tar archive into ``target_directory`` and close the handle.
+
+    On Python 3.12+, use :meth:`tarfile.TarFile.extractall` ``filter="tar"`` (PEP 706) so extraction
+    follows the documented tar safety profile; older interpreters use the legacy default.
+    """
     try:
         if sys.version_info >= (3, 12):
             compressed_file.extractall(path=target_directory, filter="tar")

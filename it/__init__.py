@@ -146,8 +146,17 @@ class TestCluster:
         self.installation_id = None
         self.http_port = None
 
-    def is_cluster_running_on_port(self, http_port):
-        last_error = None
+    def is_cluster_running_on_port(self, http_port: int) -> bool:
+        """
+        Probe ``127.0.0.1:http_port`` and check whether the cluster name matches this harness config.
+
+        Used to reuse an Elasticsearch instance left running from a previous run (e.g. metrics store)
+        without failing on transient connection errors during startup.
+
+        :param http_port: HTTP port of the candidate cluster.
+        :return: True if ``cluster.info`` succeeds and ``cluster_name`` equals :attr:`cfg`.
+        """
+        last_error: BaseException | None = None
         for attempt in range(_CLUSTER_PROBE_ATTEMPTS):
             try:
                 es = client.EsClientFactory(
@@ -196,16 +205,25 @@ class TestCluster:
         client.wait_for_rest_layer(es)
         assert es.info()["cluster_name"] == self.cfg
 
-    def wait_for_cluster_health(self, *, wait_for_status="yellow", timeout: float = 120):
+    def wait_for_cluster_health(self, *, wait_for_status: str = "yellow", timeout: float = 120) -> None:
         """
         Block until the cluster reaches at least the given health (server-side wait).
-        Green satisfies wait_for_status=yellow. Requires http_port to be set (e.g. after
-        install/start or when reusing an already running cluster).
+
+        Calls ``cluster.health`` with ``wait_for_status`` and Elasticsearch's ``timeout`` query
+        parameter. The HTTP client's ``request_timeout`` is set longer than ``timeout`` so the
+        transport does not give up before the server finishes waiting.
+
+        Green satisfies ``wait_for_status="yellow"``. Requires :attr:`http_port` (after
+        :meth:`install` / :meth:`start`, or when reusing a running cluster).
+
+        :param wait_for_status: Minimum cluster health to wait for (Elasticsearch API value).
+        :param timeout: Server-side wait budget in seconds.
+        :raises AssertionError: If ``http_port`` is unset, the request fails, or ``timed_out`` is true.
         """
         if self.http_port is None:
             raise AssertionError("Cluster http_port must be set before waiting for health.")
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
-        # HTTP client timeout must exceed Elasticsearch's server-side wait (timeout query param).
+        # Keep client alive longer than the cluster.health server-side wait (timeout query param).
         try:
             resp = es.options(request_timeout=timeout + 30.0).cluster.health(
                 wait_for_status=wait_for_status,

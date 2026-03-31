@@ -18,6 +18,7 @@
 import contextlib
 import logging
 import time
+from typing import Any
 
 import certifi
 from urllib3.connection import is_ipaddress
@@ -280,8 +281,16 @@ class EsClientFactory:
 _MAX_CONSECUTIVE_PROTOCOL_CONNECTION_ERRORS = 8
 
 
-def _connection_error_is_protocol_like(e):
-    """True if this ConnectionError looks like urllib3 ProtocolError (startup transient or scheme mismatch)."""
+def _connection_error_is_protocol_like(e: Exception) -> bool:
+    """
+    Return whether ``e`` represents a urllib3-style protocol failure.
+
+    Protocol errors are retried a limited number of times (startup transients) but abort early
+    if they persist, so HTTP/HTTPS mismatches do not consume the full ``max_attempts`` budget.
+
+    :param e: A ``ConnectionError`` from the Elasticsearch client transport layer.
+    :return: True if the error message or nested ``errors`` include ``ProtocolError``.
+    """
     if "ProtocolError" in str(e):
         return True
     for err in getattr(e, "errors", None) or []:
@@ -295,9 +304,14 @@ def _connection_error_is_protocol_like(e):
     return False
 
 
-def wait_for_rest_layer(es, max_attempts=40):
+def wait_for_rest_layer(es: Any, max_attempts: int = 40) -> bool:
     """
     Waits for ``max_attempts`` until Elasticsearch's REST API is available.
+
+    Repeated urllib3 protocol errors (common while nodes start, or when the URL scheme is wrong)
+    are retried up to :data:`_MAX_CONSECUTIVE_PROTOCOL_CONNECTION_ERRORS` times in a row before
+    raising :class:`~esrally.exceptions.SystemSetupError`, instead of sleeping through all
+    ``max_attempts``.
 
     :param es: Elasticsearch client to use for connecting.
     :param max_attempts: The maximum number of attempts to check whether the REST API is available.

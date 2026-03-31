@@ -18,6 +18,7 @@
 import os
 import shutil
 import tempfile
+from collections.abc import Generator
 
 import pytest
 
@@ -76,13 +77,16 @@ def remove_integration_test_config():
 
 
 class EsMetricsStore:
+    """Session-scoped Elasticsearch used as the integration-test metrics store."""
+
     VERSION = "8.5.1"
     HTTP_PORT = 10200
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.cluster = TestCluster("in-memory-it")
 
-    def start(self):
+    def start(self) -> None:
+        """Ensure metrics Elasticsearch is up on :attr:`HTTP_PORT`, installing it if needed."""
         if self.cluster.is_cluster_running_on_port(self.HTTP_PORT):
             print("Elasticsearch metrics store already running; waiting for cluster health (yellow)...")
             self.cluster.http_port = self.HTTP_PORT
@@ -99,7 +103,7 @@ class EsMetricsStore:
         print("Waiting for metrics store cluster health (yellow)...")
         self.cluster.wait_for_cluster_health()
 
-    def stop(self):
+    def stop(self) -> None:
         print("Stopping Elasticsearch metrics store...")
         self.cluster.stop()
 
@@ -108,10 +112,12 @@ ES_METRICS_STORE = EsMetricsStore()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def isolate_git_global_config():
+def isolate_git_global_config() -> Generator[None]:
     """
-    Point GIT_CONFIG_GLOBAL at it/resources/gitconfig-empty so integration tests are not
-    affected by the developer's ~/.gitconfig (e.g. per-URL proxy="" can let git ignore env proxies).
+    Point ``GIT_CONFIG_GLOBAL`` at ``it/resources/gitconfig-empty`` so integration tests are not
+    affected by the developer's ``~/.gitconfig`` (e.g. per-URL ``proxy=""`` can let git ignore env proxies).
+
+    Restores the previous ``GIT_CONFIG_GLOBAL`` value (or unsets it) after the session.
     """
     previous = os.environ.get("GIT_CONFIG_GLOBAL")
     os.environ["GIT_CONFIG_GLOBAL"] = _GIT_CONFIG_EMPTY
@@ -123,7 +129,12 @@ def isolate_git_global_config():
 
 
 @pytest.fixture(scope="session", autouse=True)
-def shared_setup(isolate_git_global_config):
+def shared_setup(isolate_git_global_config: None) -> Generator[None]:
+    """
+    Session autouse hook: prerequisites, Rally IT config, metrics store, and docker image.
+
+    Depends on :func:`isolate_git_global_config` so git runs with a neutral global config first.
+    """
     print("\nStarting shared setup...")
     check_prerequisites()
     install_integration_test_config()
