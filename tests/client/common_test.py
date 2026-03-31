@@ -37,7 +37,7 @@ class CompatibilityModeCase:
     version_int_7_raises=CompatibilityModeCase(version=7, want_error=ValueError),
     version_int_8=CompatibilityModeCase(version=8, want=8),
     version_int_9=CompatibilityModeCase(version=9, want=9),
-    version_int_10=CompatibilityModeCase(version=10, want=10, want_error=ValueError),
+    version_int_10=CompatibilityModeCase(version=10, want_error=ValueError),
     no_version=CompatibilityModeCase(version=None, want=8),
     empty_version_raises=CompatibilityModeCase(version="", want_error=ValueError),
     invalid_version_raises=CompatibilityModeCase(version="invalid", want_error=ValueError),
