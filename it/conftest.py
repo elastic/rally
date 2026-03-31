@@ -86,7 +86,7 @@ class EsMetricsStore:
         if self.cluster.is_cluster_running_on_port(self.HTTP_PORT):
             print("Elasticsearch metrics store already running; waiting for cluster health (yellow)...")
             self.cluster.http_port = self.HTTP_PORT
-            self.cluster.wait_for_cluster_health(wait_for_status="yellow", timeout="120s")
+            self.cluster.wait_for_cluster_health()
             return
         print("Starting Elasticsearch metrics store...")
         self.cluster.install(
@@ -97,7 +97,7 @@ class EsMetricsStore:
         )
         self.cluster.start(race_id="metrics-store")
         print("Waiting for metrics store cluster health (yellow)...")
-        self.cluster.wait_for_cluster_health(wait_for_status="yellow", timeout="120s")
+        self.cluster.wait_for_cluster_health()
 
     def stop(self):
         print("Stopping Elasticsearch metrics store...")

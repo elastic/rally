@@ -175,7 +175,7 @@ class TestCluster:
         client.wait_for_rest_layer(es)
         assert es.info()["cluster_name"] == self.cfg
 
-    def wait_for_cluster_health(self, *, wait_for_status="yellow", timeout="120s"):
+    def wait_for_cluster_health(self, *, wait_for_status="yellow", timeout: float = 120):
         """
         Block until the cluster reaches at least the given health (server-side wait).
         Green satisfies wait_for_status=yellow. Requires http_port to be set (e.g. after
@@ -185,11 +185,10 @@ class TestCluster:
             raise AssertionError("Cluster http_port must be set before waiting for health.")
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         # HTTP client timeout must exceed Elasticsearch's server-side wait (timeout query param).
-        request_timeout_sec = 150.0
         try:
-            es.options(request_timeout=request_timeout_sec).cluster.health(
+            es.options(request_timeout=timeout + 30.0).cluster.health(
                 wait_for_status=wait_for_status,
-                timeout=timeout,
+                timeout=f"{timeout}s",
             )
         except Exception as e:
             raise AssertionError(
