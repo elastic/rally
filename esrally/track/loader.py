@@ -1895,8 +1895,8 @@ class ListTracksJson(TypedDict):
 def load_tracks_file(file_path: str = TRACKS_FILE) -> ListTracksJson:
     """Loads the tracks from the given file path."""
     with open(file_path) as fd:
-        document = json.load(fd)
-    return ListTracksJson(rally_version=version.version(), **document)
+        tracks = json.load(fd)["tracks"]
+    return ListTracksJson(rally_version=version.version(), tracks=tracks)
 
 
 def tracks_list_to_json(tack_list: Iterable[track.Track]) -> ListTracksJson:
