@@ -398,10 +398,10 @@ def _do_decompress_manually_with_lib(target_directory: str, filename: str, compr
 
 def _do_tar_decompress(target_directory: str, compressed_file: tarfile.TarFile) -> None:
     try:
-        params = {}
         if sys.version_info >= (3, 12):
-            params["filter"] = "tar"
-        compressed_file.extractall(path=target_directory, **params)
+            compressed_file.extractall(path=target_directory, filter="tar")
+        else:
+            compressed_file.extractall(path=target_directory)
     except Exception:
         raise RuntimeError(f"Could not decompress provided archive [{compressed_file.name!r}]. Please check if it is a valid tar file.")
     finally:
