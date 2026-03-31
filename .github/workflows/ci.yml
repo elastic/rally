@@ -20,6 +20,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v4
         with:
           python-version: "3.13"
@@ -35,6 +37,7 @@ jobs:
           slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
           slack_channel: ${{ secrets.SLACK_CHANNEL }}
           status: FAILED
+          persist-credentials: false
 
   test:
     strategy:
@@ -49,6 +52,8 @@ jobs:
     name: unit ${{ fromJson('{"macos-latest":"macOS","ubuntu-latest":"Ubuntu"}')[matrix.os] }} ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
@@ -64,6 +69,7 @@ jobs:
           slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
           slack_channel: ${{ secrets.SLACK_CHANNEL }}
           status: FAILED
+          persist-credentials: false
 
   rally-tracks-compat:
     runs-on: ubuntu-22.04
@@ -73,6 +79,8 @@ jobs:
         run: curl -4s ifconfig.me
         continue-on-error: true
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v4
         with:
           python-version: "3.13"
@@ -114,6 +122,7 @@ jobs:
           slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
           slack_channel: ${{ secrets.SLACK_CHANNEL }}
           status: FAILED
+          persist-credentials: false
       # Artifact will show up under "Artifacts" in the "Summary" page of runs
       - uses: actions/upload-artifact@v4
         if: always()
@@ -144,6 +153,8 @@ jobs:
           slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
           slack_channel: ${{ secrets.SLACK_CHANNEL }}
           status: FAILED
+          persist-credentials: false
+
 
   test-tracks:
     runs-on: ubuntu-22.04
@@ -197,3 +208,4 @@ jobs:
             /home/runner/.rally/logs/
             /home/runner/.rally/benchmarks/races/**/*.log
           if-no-files-found: error
+          persist-credentials: false
