@@ -146,6 +146,36 @@ class TestCluster:
         self.installation_id = None
         self.http_port = None
 
+    def probe_cluster_on_port(self, http_port: int) -> str | None:
+        """
+        Call ``cluster.info`` on ``127.0.0.1:http_port`` and return ``cluster_name`` on success.
+
+        Retries only on exceptions (transient connection/protocol errors). A successful response
+        with any cluster name is returned immediately without further attempts.
+
+        :param http_port: HTTP port of the candidate cluster.
+        :return: The reported cluster name, or ``None`` if all probe attempts failed.
+        """
+        last_error: BaseException | None = None
+        for attempt in range(_CLUSTER_PROBE_ATTEMPTS):
+            try:
+                es = client.EsClientFactory(
+                    hosts=[{"host": "127.0.0.1", "port": http_port}],
+                    client_options={},
+                ).create()
+                info = es.options(request_timeout=_CLUSTER_PROBE_REQUEST_TIMEOUT_SEC).info()
+                return info["cluster_name"]
+            except Exception as e:
+                last_error = e
+                if attempt < _CLUSTER_PROBE_ATTEMPTS - 1:
+                    time.sleep(_CLUSTER_PROBE_DELAY_SEC)
+        _LOG.debug(
+            "Cluster probe on 127.0.0.1:%s did not get cluster info: %s",
+            http_port,
+            last_error,
+        )
+        return None
+
     def is_cluster_running_on_port(self, http_port: int) -> bool:
         """
         Probe ``127.0.0.1:http_port`` and check whether the cluster name matches this harness config.
@@ -156,26 +186,7 @@ class TestCluster:
         :param http_port: HTTP port of the candidate cluster.
         :return: True if ``cluster.info`` succeeds and ``cluster_name`` equals :attr:`cfg`.
         """
-        last_error: BaseException | None = None
-        for attempt in range(_CLUSTER_PROBE_ATTEMPTS):
-            try:
-                es = client.EsClientFactory(
-                    hosts=[{"host": "127.0.0.1", "port": http_port}],
-                    client_options={},
-                ).create()
-                info = es.options(request_timeout=_CLUSTER_PROBE_REQUEST_TIMEOUT_SEC).info()
-                return info["cluster_name"] == self.cfg
-            except Exception as e:
-                last_error = e
-                if attempt < _CLUSTER_PROBE_ATTEMPTS - 1:
-                    time.sleep(_CLUSTER_PROBE_DELAY_SEC)
-        _LOG.debug(
-            "Cluster probe on 127.0.0.1:%s did not confirm cluster name %r: %s",
-            http_port,
-            self.cfg,
-            last_error,
-        )
-        return False
+        return self.probe_cluster_on_port(http_port) == self.cfg
 
     def install(self, distribution_version, node_name, car, http_port):
         self.http_port = http_port

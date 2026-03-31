@@ -17,6 +17,7 @@
 
 import os
 import shutil
+import socket
 import tempfile
 from collections.abc import Generator
 
@@ -26,7 +27,7 @@ from esrally import config, version
 from esrally.utils import process
 from it import CONFIG_NAMES, ROOT_DIR, TestCluster
 
-_IT_DIR = os.path.dirname(__file__)
+_IT_DIR = os.path.abspath(os.path.dirname(__file__))
 _GIT_CONFIG_EMPTY = os.path.join(_IT_DIR, "resources", "gitconfig-empty")
 
 
@@ -87,11 +88,30 @@ class EsMetricsStore:
 
     def start(self) -> None:
         """Ensure metrics Elasticsearch is up on :attr:`HTTP_PORT`, installing it if needed."""
-        if self.cluster.is_cluster_running_on_port(self.HTTP_PORT):
+        port = self.HTTP_PORT
+        cluster = self.cluster
+        name = cluster.probe_cluster_on_port(port)
+        if name == cluster.cfg:
             print("Elasticsearch metrics store already running; waiting for cluster health (yellow)...")
-            self.cluster.http_port = self.HTTP_PORT
-            self.cluster.wait_for_cluster_health()
+            cluster.http_port = port
+            cluster.wait_for_cluster_health()
             return
+        if name is not None:
+            raise AssertionError(
+                f"Port {port} answers Elasticsearch but reports cluster name {name!r}; "
+                f"integration tests expect {cluster.cfg!r} for the metrics store. "
+                f"Stop the other cluster or change EsMetricsStore.HTTP_PORT."
+            )
+        probe_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            if probe_sock.connect_ex(("127.0.0.1", port)) == 0:
+                raise AssertionError(
+                    f"Something is listening on 127.0.0.1:{port} but the Elasticsearch REST probe did not succeed "
+                    f"(expected cluster name {cluster.cfg!r} when reusing the metrics store). "
+                    f"Free the port or check firewall/proxy. If Elasticsearch is still starting, wait and retry."
+                )
+        finally:
+            probe_sock.close()
         print("Starting Elasticsearch metrics store...")
         self.cluster.install(
             distribution_version=EsMetricsStore.VERSION,
