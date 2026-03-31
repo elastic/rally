@@ -275,6 +275,26 @@ class EsClientFactory:
         return async_client
 
 
+# Fail fast on persistent protocol-style connection errors (e.g. HTTP/HTTPS mismatch) instead of
+# burning the full max_attempts budget (~minutes with 3s sleeps).
+_MAX_CONSECUTIVE_PROTOCOL_CONNECTION_ERRORS = 8
+
+
+def _connection_error_is_protocol_like(e):
+    """True if this ConnectionError looks like urllib3 ProtocolError (startup transient or scheme mismatch)."""
+    if "ProtocolError" in str(e):
+        return True
+    for err in getattr(e, "errors", None) or []:
+        if err is None:
+            continue
+        # pylint: disable=import-outside-toplevel
+        import urllib3.exceptions
+
+        if isinstance(err, urllib3.exceptions.ProtocolError):
+            return True
+    return False
+
+
 def wait_for_rest_layer(es, max_attempts=40):
     """
     Waits for ``max_attempts`` until Elasticsearch's REST API is available.
@@ -289,6 +309,7 @@ def wait_for_rest_layer(es, max_attempts=40):
     expected_node_count = len(es.transport.node_pool)
     logger = logging.getLogger(__name__)
     attempt = 0
+    consecutive_protocol_connection_errors = 0
     while attempt <= max_attempts:
         attempt += 1
         # pylint: disable=import-outside-toplevel
@@ -313,6 +334,7 @@ def wait_for_rest_layer(es, max_attempts=40):
                 )
 
             if attempt <= max_attempts:
+                consecutive_protocol_connection_errors = 0
                 logger.debug("Got serialization error [%s] on attempt [%s]. Sleeping...", e, attempt)
                 time.sleep(3)
             else:
@@ -320,7 +342,15 @@ def wait_for_rest_layer(es, max_attempts=40):
         except TlsError as e:
             raise exceptions.SystemSetupError("Could not connect to cluster via HTTPS. Are you sure this is an HTTPS endpoint?", e)
         except ConnectionError as e:
-            is_protocol = "ProtocolError" in str(e)
+            is_protocol = _connection_error_is_protocol_like(e)
+            if is_protocol:
+                consecutive_protocol_connection_errors += 1
+                if consecutive_protocol_connection_errors > _MAX_CONSECUTIVE_PROTOCOL_CONNECTION_ERRORS:
+                    raise exceptions.SystemSetupError(
+                        "Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?", e
+                    )
+            else:
+                consecutive_protocol_connection_errors = 0
             if attempt <= max_attempts:
                 if is_protocol:
                     logger.debug(
@@ -338,6 +368,7 @@ def wait_for_rest_layer(es, max_attempts=40):
                 raise
         except TransportError as e:
             if attempt <= max_attempts:
+                consecutive_protocol_connection_errors = 0
                 logger.debug("Got transport error on attempt [%s]. Sleeping...", attempt)
                 time.sleep(3)
             else:
@@ -345,6 +376,7 @@ def wait_for_rest_layer(es, max_attempts=40):
         except ApiError as e:
             # cluster block, x-pack not initialized yet, our wait condition is not reached
             if e.status_code in (503, 401, 408) and attempt <= max_attempts:
+                consecutive_protocol_connection_errors = 0
                 logger.debug("Got status code [%s] on attempt [%s]. Sleeping...", e.message, attempt)
                 time.sleep(3)
             else:

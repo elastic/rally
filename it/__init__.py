@@ -18,6 +18,7 @@
 import errno
 import functools
 import json
+import logging
 import os
 import platform
 import random
@@ -37,6 +38,11 @@ if platform.machine() != "arm64":
     DISTRIBUTIONS.insert(0, "6.8.0")
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+_LOG = logging.getLogger(__name__)
+_CLUSTER_PROBE_ATTEMPTS = 5
+_CLUSTER_PROBE_DELAY_SEC = 0.5
+_CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
 
 
 def all_rally_configs(t):
@@ -141,11 +147,26 @@ class TestCluster:
         self.http_port = None
 
     def is_cluster_running_on_port(self, http_port):
-        try:
-            es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": http_port}], client_options={}).create()
-            return es.info()["cluster_name"] == self.cfg
-        except Exception:
-            return False
+        last_error = None
+        for attempt in range(_CLUSTER_PROBE_ATTEMPTS):
+            try:
+                es = client.EsClientFactory(
+                    hosts=[{"host": "127.0.0.1", "port": http_port}],
+                    client_options={},
+                ).create()
+                info = es.options(request_timeout=_CLUSTER_PROBE_REQUEST_TIMEOUT_SEC).info()
+                return info["cluster_name"] == self.cfg
+            except Exception as e:
+                last_error = e
+                if attempt < _CLUSTER_PROBE_ATTEMPTS - 1:
+                    time.sleep(_CLUSTER_PROBE_DELAY_SEC)
+        _LOG.debug(
+            "Cluster probe on 127.0.0.1:%s did not confirm cluster name %r: %s",
+            http_port,
+            self.cfg,
+            last_error,
+        )
+        return False
 
     def install(self, distribution_version, node_name, car, http_port):
         self.http_port = http_port
