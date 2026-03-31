@@ -29,8 +29,7 @@ from esrally.utils import cases
     arg_name="command",
     help="--help",
     race_geonames=(
-        "race --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only "
-        "--target-hosts=es01:9200"
+        "race --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
     ),
     override_cmd_race_geonames=(
         "esrally race --pipeline=benchmark-only --test-mode --track=geonames "
