@@ -106,7 +106,9 @@ def test_cluster(free_benchmark_http_port_module: int):
     # test with a recent distribution as eventdata is not available for all versions
     dist = it.DISTRIBUTIONS[-1]
     race_id = str(uuid.uuid4())
-    cluster.install(distribution_version=dist, node_name="rally-node", car="4gheap,basic-license", http_port=free_benchmark_http_port_module)
+    cluster.install(
+        distribution_version=dist, node_name="rally-node", car="4gheap,basic-license", http_port=free_benchmark_http_port_module
+    )
     cluster.start(race_id=race_id)
     yield cluster
     cluster.stop()
