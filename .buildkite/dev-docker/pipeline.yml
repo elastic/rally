@@ -1,6 +1,6 @@
 agents:
   provider: "gcp"
-  machineType: "n4-standard-2"
+  machineType: "n4-standard-4"
   diskType: hyperdisk-balanced
   image: family/core-ubuntu-2204
 
@@ -49,7 +49,7 @@ steps:
         - limit: 1
     timeout_in_minutes: 20
     agents:
-      machineType: "n4a-standard-2"
+      machineType: "n4a-standard-4"
       image: family/core-ubuntu-2204-aarch64
       # reduced list of zones
       zones: us-east1-b,us-east1-c,us-central1-a,us-central1-b,us-central1-c,us-west1-c
