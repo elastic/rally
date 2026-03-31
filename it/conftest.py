@@ -25,7 +25,7 @@ import pytest
 
 from esrally import config, version
 from esrally.utils import process
-from it import CONFIG_NAMES, ROOT_DIR, TestCluster
+from it import CONFIG_NAMES, ROOT_DIR, TestCluster, ensure_benchmark_http_port_free
 
 _IT_DIR = os.path.abspath(os.path.dirname(__file__))
 _GIT_CONFIG_EMPTY = os.path.join(_IT_DIR, "resources", "gitconfig-empty")
@@ -176,6 +176,25 @@ class ConfigFile:
             self.config_file_name = "rally.ini"
         self.source_path = os.path.join(os.path.dirname(__file__), "resources", self.config_file_name)
         self.target_path = os.path.join(self.rally_home, self.config_file_name)
+
+
+@pytest.fixture
+def free_benchmark_http_port() -> Generator[int]:
+    """
+    Before and after the test, clear Rally IT benchmark HTTP port (19200): stop orphaned
+    ``rally-benchmark`` / ``in-memory-it`` Elasticsearch (Docker or host JVM) and wait until the port is free.
+    """
+    port = ensure_benchmark_http_port_free()
+    yield port
+    ensure_benchmark_http_port_free(port)
+
+
+@pytest.fixture(scope="module")
+def free_benchmark_http_port_module() -> Generator[int]:
+    """Module-scoped variant of :func:`free_benchmark_http_port` for module fixtures (e.g. ``test_cluster``)."""
+    port = ensure_benchmark_http_port_free()
+    yield port
+    ensure_benchmark_http_port_free(port)
 
 
 # ensures that a fresh log file is available

@@ -22,10 +22,12 @@ import logging
 import os
 import platform
 import random
+import signal
 import socket
 import subprocess
 import time
 
+import psutil
 import pytest
 
 from esrally import client
@@ -43,6 +45,15 @@ _LOG = logging.getLogger(__name__)
 _CLUSTER_PROBE_ATTEMPTS = 5
 _CLUSTER_PROBE_DELAY_SEC = 0.5
 _CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
+
+# Host HTTP port integration tests use for Rally-provisioned benchmark Elasticsearch (see it/* tests, docker pipeline).
+BENCHMARK_IT_HTTP_PORT = 19200
+# Default ``--cluster-name`` for ``esrally race`` / install; keep aligned with ``esrally/rally.py``.
+RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME = "rally-benchmark"
+# Only these cluster names may be torn down on :data:`BENCHMARK_IT_HTTP_PORT` (metrics store uses 10200).
+_BENCHMARK_CLUSTER_NAMES_ON_IT_PORT = frozenset({RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME, "in-memory-it"})
+_DOCKER_PUBLISH_STOP_ROUNDS = 3
+_LISTENER_SIGTERM_WAIT_SEC = 8.0
 
 
 def all_rally_configs(t):
@@ -140,6 +151,156 @@ def wait_until_port_is_free(port_number=39200, timeout=120):
     raise TimeoutError(f"Port [{port_number}] is occupied after [{timeout}] seconds")
 
 
+def cluster_name_on_port(http_port: int) -> str | None:
+    """
+    Return ``cluster_name`` from ``GET /`` on ``127.0.0.1:http_port``, or ``None`` if unreachable / not Elasticsearch.
+    """
+    last_error: BaseException | None = None
+    for attempt in range(_CLUSTER_PROBE_ATTEMPTS):
+        try:
+            es = client.EsClientFactory(
+                hosts=[{"host": "127.0.0.1", "port": http_port}],
+                client_options={},
+            ).create()
+            info = es.options(request_timeout=_CLUSTER_PROBE_REQUEST_TIMEOUT_SEC).info()
+            return info["cluster_name"]
+        except Exception as e:
+            last_error = e
+            if attempt < _CLUSTER_PROBE_ATTEMPTS - 1:
+                time.sleep(_CLUSTER_PROBE_DELAY_SEC)
+    _LOG.debug(
+        "cluster_name_on_port: 127.0.0.1:%s did not return cluster info: %s",
+        http_port,
+        last_error,
+    )
+    return None
+
+
+def _tcp_port_has_listener(port: int, host: str = "127.0.0.1") -> bool:
+    sock = socket.socket()
+    try:
+        return sock.connect_ex((host, port)) != errno.ECONNREFUSED
+    finally:
+        sock.close()
+
+
+def _stop_docker_publishers(http_port: int) -> None:
+    try:
+        lines = process.run_subprocess_with_output(f"docker ps -q -f publish={http_port}")
+    except BaseException as e:
+        _LOG.debug("docker ps for publish=%s failed: %s", http_port, e)
+        return
+    seen: set[str] = set()
+    for line in lines:
+        cid = line.strip()
+        if not cid or cid in seen:
+            continue
+        seen.add(cid)
+        if process.run_subprocess_with_logging(f"docker stop -t 30 {cid}") != 0:
+            _LOG.warning("docker stop failed for container %s", cid)
+
+
+def _listener_pids_on_port(http_port: int) -> set[int]:
+    pids: set[int] = set()
+    mypid = os.getpid()
+    try:
+        for conn in psutil.net_connections(kind="inet"):
+            if conn.status != psutil.CONN_LISTEN:
+                continue
+            if conn.laddr is None or conn.laddr.port != http_port:
+                continue
+            lip = conn.laddr.ip
+            if lip not in ("127.0.0.1", "0.0.0.0", "::", "::1", ""):
+                continue
+            if conn.pid is not None and conn.pid != mypid:
+                pids.add(conn.pid)
+    except (psutil.AccessDenied, PermissionError):
+        pass
+    if pids:
+        return pids
+    try:
+        lines = process.run_subprocess_with_output(f"lsof -nP -iTCP:{http_port} -sTCP:LISTEN -t")
+    except BaseException as e:
+        _LOG.debug("lsof for port %s failed: %s", http_port, e)
+        return pids
+    for line in lines:
+        s = line.strip()
+        if s.isdigit():
+            pid = int(s)
+            if pid != mypid:
+                pids.add(pid)
+    return pids
+
+
+def _terminate_listeners_on_port(http_port: int) -> None:
+    pids = _listener_pids_on_port(http_port)
+    if not pids:
+        return
+    mypid = os.getpid()
+    for pid in pids:
+        if pid == mypid:
+            continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+    deadline = time.perf_counter() + _LISTENER_SIGTERM_WAIT_SEC
+    while time.perf_counter() < deadline:
+        remaining = _listener_pids_on_port(http_port) - {mypid}
+        if not remaining:
+            return
+        time.sleep(0.3)
+    for pid in _listener_pids_on_port(http_port):
+        if pid == mypid:
+            continue
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def stop_rally_provisioned_es_on_port(http_port: int = BENCHMARK_IT_HTTP_PORT) -> None:
+    """
+    If a Rally benchmark or IT ``TestCluster`` Elasticsearch is listening on ``http_port``, stop it.
+
+    Docker-provisioned nodes are stopped via ``docker stop``; tar / host-JVM nodes via terminating the
+    listener PIDs (after ``SIGTERM``, ``SIGKILL`` as last resort). Only clusters named
+    ``rally-benchmark`` or ``in-memory-it`` are touched; anything else raises ``AssertionError``.
+    """
+    assert http_port is not None
+    if not _tcp_port_has_listener(http_port):
+        return
+    name = cluster_name_on_port(http_port)
+    if name is None:
+        _LOG.debug(
+            "Port 127.0.0.1:%s has a listener but no Elasticsearch cluster name; skip teardown.",
+            http_port,
+        )
+        return
+    if name not in _BENCHMARK_CLUSTER_NAMES_ON_IT_PORT:
+        raise AssertionError(
+            f"127.0.0.1:{http_port} serves Elasticsearch cluster {name!r}; "
+            f"integration tests only auto-clear {_BENCHMARK_CLUSTER_NAMES_ON_IT_PORT!r}. "
+            "Free the port manually or change BENCHMARK_IT_HTTP_PORT."
+        )
+    for _ in range(_DOCKER_PUBLISH_STOP_ROUNDS):
+        _stop_docker_publishers(http_port)
+        time.sleep(0.5)
+    if _tcp_port_has_listener(http_port):
+        name2 = cluster_name_on_port(http_port)
+        if name2 in _BENCHMARK_CLUSTER_NAMES_ON_IT_PORT:
+            _terminate_listeners_on_port(http_port)
+    return
+
+
+def ensure_benchmark_http_port_free(http_port: int = BENCHMARK_IT_HTTP_PORT, wait_timeout: int = 120) -> int:
+    """Stop any Rally IT benchmark cluster on ``http_port`` and wait until the port is free."""
+    assert http_port is not None
+    stop_rally_provisioned_es_on_port(http_port)
+    wait_until_port_is_free(port_number=http_port, timeout=wait_timeout)
+    return http_port
+
+
 class TestCluster:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -156,25 +317,7 @@ class TestCluster:
         :param http_port: HTTP port of the candidate cluster.
         :return: The reported cluster name, or ``None`` if all probe attempts failed.
         """
-        last_error: BaseException | None = None
-        for attempt in range(_CLUSTER_PROBE_ATTEMPTS):
-            try:
-                es = client.EsClientFactory(
-                    hosts=[{"host": "127.0.0.1", "port": http_port}],
-                    client_options={},
-                ).create()
-                info = es.options(request_timeout=_CLUSTER_PROBE_REQUEST_TIMEOUT_SEC).info()
-                return info["cluster_name"]
-            except Exception as e:
-                last_error = e
-                if attempt < _CLUSTER_PROBE_ATTEMPTS - 1:
-                    time.sleep(_CLUSTER_PROBE_DELAY_SEC)
-        _LOG.debug(
-            "Cluster probe on 127.0.0.1:%s did not get cluster info: %s",
-            http_port,
-            last_error,
-        )
-        return None
+        return cluster_name_on_port(http_port)
 
     def is_cluster_running_on_port(self, http_port: int) -> bool:
         """
