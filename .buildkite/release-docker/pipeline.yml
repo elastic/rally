@@ -27,11 +27,17 @@ steps:
     command: bash .buildkite/release-docker/run.sh build amd64
     # Run on GCP to use `docker`
     key: "amd64"
+    retry:
+      automatic:
+        - limit: 1
     timeout_in_minutes: 20
   - label: "Release Docker Artifacts for Rally"
     command: bash .buildkite/release-docker/run.sh build arm64
     # Run on GCP to use `docker`
     key: "arm64"
+    retry:
+      automatic:
+        - limit: 1
     timeout_in_minutes: 20
     agents:
       machineType: "n4a-standard-2"

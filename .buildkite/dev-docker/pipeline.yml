@@ -37,10 +37,16 @@ steps:
   - label: ":docker: Build Docker Artifacts for Rally amd64"
     command: bash .buildkite/dev-docker/run.sh build amd64
     key: "amd64"
+    retry:
+      automatic:
+        - limit: 1
     timeout_in_minutes: 20
   - label: ":docker: Build Docker Artifacts for Rally arm64"
     command: bash .buildkite/dev-docker/run.sh build arm64
     key: "arm64"
+    retry:
+      automatic:
+        - limit: 1
     timeout_in_minutes: 20
     agents:
       machineType: "n4a-standard-2"
