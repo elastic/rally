@@ -29,7 +29,6 @@ from esrally.utils import cases
 LOG = logging.getLogger(__name__)
 
 COMPOSE_FILE = os.path.join(it.ROOT_DIR, "docker", "docker-compose-tests.yml")
-RALLY_DOCKER_IMAGE = os.path.join(it.ROOT_DIR, "docker", "dev", "Dockerfile")
 
 
 def tear_down_stack(compose_env: Mapping[str, str]) -> None:
@@ -48,16 +47,16 @@ def tear_down_stack(compose_env: Mapping[str, str]) -> None:
             shell=True,
         )
     except subprocess.CalledProcessError as err:
-        pytest.fail()
-        LOG.error(
-            "Docker compose down failed:\n  - command: '%s'\n  - args: %s\n  - return code: %s\n  - output:\n%s\n",
-            err.cmd,
-            err.args,
-            err.returncode,
-            err.stdout,
+        msg = (
+            "Docker compose down failed:\n"
+            f"  - command: '{err.cmd}'\n"
+            f"  - args: {err.args}\n"
+            f"  - return code: {err.returncode}\n"
+            f"  - output:\n{err.stdout}\n"
         )
+        LOG.error(msg)
     else:
-        LOG.debug("Compose stack is down (env=%s).", compose_env)
+        LOG.debug("Compose stack is down (compose_env=%s).", compose_env)
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +64,7 @@ def compose_env() -> Generator[Mapping[str, str]]:
     env = {
         "RALLY_VERSION": version.__version__,
         "RALLY_VERSION_TAG": version.__version__,
-        "RALLY_DOCKER_IMAGE": RALLY_DOCKER_IMAGE,
+        "RALLY_DOCKER_IMAGE": os.environ.get("RALLY_DOCKER_IMAGE", "elastic/rally"),
         "COMPOSE_PROJECT_NAME": __name__.replace(".", "_"),
     }
     tear_down_stack(env)
@@ -73,7 +72,13 @@ def compose_env() -> Generator[Mapping[str, str]]:
         yield env
     finally:
         if LOG.isEnabledFor(logging.DEBUG):
-            logs = subprocess.run("docker compose logs -t", capture_output=True, shell=True, check=False, env=env)
+            logs = subprocess.run(
+                f"docker compose -f '{COMPOSE_FILE}' logs -t",
+                capture_output=True,
+                shell=True,
+                check=False,
+                env=env,
+            )
             LOG.debug("Containers logs:\n%s", logs.stdout.decode("utf-8"))
         tear_down_stack(env)
 

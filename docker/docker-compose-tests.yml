@@ -1,7 +1,7 @@
 services:
 
   rally:
-    image: "elastic/rally:${RALLY_VERSION_TAG:-dev}"
+    image: "${RALLY_DOCKER_IMAGE:-elastic/rally}:${RALLY_VERSION_TAG:-dev}"
     build:
       context: ../
       dockerfile: docker/Dockerfiles/dev/Dockerfile
