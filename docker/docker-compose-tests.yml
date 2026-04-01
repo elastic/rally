@@ -1,8 +1,12 @@
 services:
+
   rally:
-    image: ${RALLY_DOCKER_IMAGE:-elastic/rally}:${RALLY_VERSION_TAG:-latest}
+    image: "elastic/rally:${RALLY_VERSION_TAG:-dev}"
+    build:
+      context: ../
+      dockerfile: docker/Dockerfiles/dev/Dockerfile
     container_name: rally
-    command: ${TEST_COMMAND:---help}
+    command: "${TEST_COMMAND:---help}"
     volumes:
       - rally:/rally/.rally
     networks:
@@ -10,23 +14,26 @@ services:
     depends_on:
       es01:
         condition: service_healthy
+
   es01:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.13
     container_name: es01
     environment:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
     volumes:
       - esdata1:/usr/share/elasticsearch/data
-    ports:
-      - 19200:9200
+    # ports:
+    #   - 19200:9200
     networks:
       - esnet
     healthcheck:
-          test: curl -f http://localhost:9200
+          test: curl -f http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s
           interval: 5s
           timeout: 2s
-          retries: 10
+          retries: 30
 
 networks:
   esnet:
