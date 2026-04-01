@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
+import logging
 import os
 import subprocess
 
@@ -23,6 +23,8 @@ import pytest
 import it
 from esrally import version
 from esrally.utils import cases
+
+LOG = logging.getLogger(__name__)
 
 
 @cases.cases(
@@ -38,24 +40,69 @@ from esrally.utils import cases
     list_tracks="list tracks",
 )
 def test_docker_compose(command: str):
-    env = os.environ.copy()
-    env["TEST_COMMAND"] = command
-    env["RALLY_DOCKER_IMAGE"] = "elastic/rally"
-    env["RALLY_VERSION"] = version.__version__
-    env["RALLY_VERSION_TAG"] = version.__version__
+    run_compose(command)
 
+
+def run_compose(
+    command: str,
+    compose_file: str = os.path.join(it.ROOT_DIR, "docker", "docker-compose-tests.yml"),
+    logging_level: int = logging.INFO,
+    check: bool = True,
+    fail: bool = True,
+    tear_down: bool = True,
+) -> subprocess.CompletedProcess:
+    env = {
+        "TEST_COMMAND": command,
+        "RALLY_VERSION": version.__version__,
+        "RALLY_VERSION_TAG": version.__version__,
+    }
+    LOG.log(logging_level, "Running rally with 'docker compose', command='%s', env=%r", command, env)
     try:
-        return subprocess.run(
-            f"docker compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml up --abort-on-container-exit",
+        result = subprocess.run(
+            f"docker compose -f '{compose_file}' up --abort-on-container-exit",
             env=env,
-            capture_output=False,  # We'll define streams manually
+            capture_output=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            check=True,
+            check=check,
             shell=True,
         )
     except subprocess.CalledProcessError as err:
-        pytest.fail(f"Docker compose test failed:\n{err.stdout}")
+        msg = (
+            "Docker compose up failed:\n"
+            f"  - command: {err.cmd}\n"
+            f"  - args: {err.args}\n"
+            f"  - return code: {err.returncode}\n"
+            f"  - stderr:\n{err.stderr}"
+        )
+        if fail:
+            pytest.fail(msg)
+        else:
+            LOG.log(logging_level, msg)
+        raise
+    else:
+        LOG.log(logging_level, "Docker compose up succeeded. STDOUT:\n%s", result.stdout)
+        return result
     finally:
-        subprocess.run(f"docker compose -f {it.ROOT_DIR}/docker/docker-compose-tests.yml down -v", shell=True, check=False)
+        if tear_down:
+            try:
+                subprocess.run(
+                    f"docker compose -f '{compose_file}' down -v",
+                    env=env,
+                    capture_output=False,  # It defines streams manually
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    check=True,
+                    shell=True,
+                )
+            except subprocess.CalledProcessError as err:
+                LOG.log(
+                    logging_level,
+                    "Docker compose down failed:\n  - command: '%s'\n  - args: %s\n  - return code: %s\n  - stderr:\n%s",
+                    err.cmd,
+                    err.args,
+                    err.returncode,
+                    err.stderr,
+                )
