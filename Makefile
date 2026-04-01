@@ -67,6 +67,7 @@ check-all: all
 	test-3.11 \
 	test-3.12 \
 	test-3.13 \
+	test-release \
 	it \
 	it_serverless \
 	it_tracks_compat \
@@ -143,7 +144,7 @@ lint: venv
 precommit pre-commit: venv
 	uv run -- pre-commit run
 
-# It install a pre-commit hook in the project .git dir so modified files are checked before creating every commit.
+# It installs a pre-commit hook in the project .git dir so modified files are checked before creating every commit.
 install-pre-commit: $(PRE_COMMIT_HOOK_PATH)
 
 $(PRE_COMMIT_HOOK_PATH):
@@ -216,12 +217,18 @@ benchmark: venv
 
 # --- Release goals ---
 
-release-checks: venv
-	$(VENV_ACTIVATE); ./release-checks.sh $(release_version) $(next_version)
+# usage: e.g. make release-checks RELEASE_VERSION=X.Y.Z
+release-checks test-release: venv
+	@if [ -z "$(RELEASE_VERSION)" ]; then echo "error: set RELEASE_VERSION (e.g. make release-checks RELEASE_VERSION=X.Y.Z)" >&2; exit 1; fi
+	$(MAKE) clean lint test-all docs
+	uv run -- ./scripts/release/prepare.sh --dry "$(RELEASE_VERSION)"
 
-# usage: e.g. make release release_version=0.9.2 next_version=0.9.3
-release: venv release-checks clean docs lint test it
-	$(VENV_ACTIVATE); ./release.sh $(release_version) $(next_version)
+# usage: e.g. make release RELEASE_VERSION=X.Y.Z
+release:
+	@if [ -z "$(RELEASE_VERSION)" ]; then echo "error: set RELEASE_VERSION (e.g. make release RELEASE_VERSION=X.Y.Z)" >&2; exit 1; fi
+	uv run -- ./scripts/release/prepare.sh "$(RELEASE_VERSION)"
+
+# --- Other goals ---
 
 # This is a shortcut for creating a shell running inside the project virtual environment.
 sh:

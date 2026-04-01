@@ -8,6 +8,7 @@ Install the following software packages:
 
 * `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ 
 * JDK version required to build Elasticsearch. Please refer to the `build setup requirements <https://github.com/elastic/elasticsearch/blob/main/CONTRIBUTING.md#contributing-to-the-elasticsearch-codebase>`_.
+  For running Rally's integration tests (e.g. ``make it`` or ``make it_tracks_compat``), ensure your environment uses **Java 21** (recent Rally versions use Java 21 in CI). Set ``JAVA_HOME`` or ``JAVA21_HOME`` accordingly.
 * `Docker <https://docs.docker.com/install/>`_ and on Linux additionally `docker-compose <https://docs.docker.com/compose/install/>`_.
 * `jq <https://stedolan.github.io/jq/download/>`_
 * git
@@ -36,7 +37,7 @@ Rally uses automatic code formatters. You can apply them by running ``make forma
 
 However, consider using editor integrations to do it automatically: you'll need to configure `black <https://black.readthedocs.io/en/stable/integrations/editors.html>`_ and `isort <https://github.com/PyCQA/isort/wiki/isort-Plugins>`_.
 
-Also consider running `pre-commit install` to run lint as part of your git commits.
+Also consider running ``make install-pre-commit`` to ensure quick verifications are being performed just before new Git commits are created.
 
 Automatic Updates
 ~~~~~~~~~~~~~~~~~

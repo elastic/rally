@@ -49,5 +49,15 @@ repos:
             "-j0",
             "--rcfile=.pylintrc",
           ]
-        exclude: ^(docs/|changelog.py)
+        exclude: ^(docs/)
         require_serial: true
+
+  # Shell scripts: release tooling and repo githooks. Widen to all *.sh once legacy
+  # scripts under .buildkite/, recipes/, repo root, etc. pass shellcheck.
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        args: [-x]
+        files: (^scripts/release/.*\.sh$)

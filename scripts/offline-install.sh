@@ -70,7 +70,7 @@ function main {
 
     echo "Preparing NOTICE file"
     __NOTICE_OUTPUT_FILE="${ABSOLUTE_DOWNLOAD_BIN_DIR}/NOTICE.txt"
-    source "${SCRIPT_SRC_HOME}/../create-notice.sh"
+    source "${SCRIPT_SRC_HOME}/release/create-notice.sh"
 
     # create an offline install script
     cat >"${install_script}" <<EOL

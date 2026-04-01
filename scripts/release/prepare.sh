@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+# Licensed to Elasticsearch B.V. under one or more contributor
+# license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright
+# ownership. Elasticsearch B.V. licenses this file to you under
+# the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# fail this script immediately if any command fails with a non-zero exit code
+set -eu
+
+DRY_RUN=0
+if [[ "${1:-}" == "--dry" ]]; then
+	DRY_RUN=1
+	shift
+fi
+
+if [[ $# -ne 1 ]]; then
+	echo "usage: $0 [--dry] <release_version>" >&2
+	echo "example: $0 2.13.0" >&2
+	echo "example: $0 --dry 2.13.0" >&2
+	exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+RELEASE_VERSION=$1
+
+echo "============================="
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	echo "Dry run: preparing Rally release $RELEASE_VERSION"
+else
+	echo "Preparing Rally release $RELEASE_VERSION"
+fi
+echo "============================="
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	_tmp_notice=$(mktemp)
+	trap 'rm -f "${_tmp_notice:-}"' EXIT
+	__NOTICE_OUTPUT_FILE="$_tmp_notice"
+	echo "Preparing notice (dry run → temporary file, not NOTICE.txt)" >&2
+else
+	__NOTICE_OUTPUT_FILE="NOTICE.txt"
+	echo "Preparing ${__NOTICE_OUTPUT_FILE}"
+fi
+# shellcheck source=scripts/release/create-notice.sh
+source "${SCRIPT_DIR}/create-notice.sh"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	trap - EXIT
+	rm -f "$_tmp_notice"
+fi
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	echo "dry-run: skipping AUTHORS (requires git)." >&2
+else
+	echo "Updating author information"
+	git log --format='%aN' | sort -fu > AUTHORS
+fi
+
+echo "Updating changelog"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	python3 "${SCRIPT_DIR}/changelog.py" --dry "${RELEASE_VERSION}" >/dev/null || {
+		_changelog_ec=$?
+		echo "error: changelog.py failed for milestone ${RELEASE_VERSION} (dry run); see messages above." >&2
+		exit "$_changelog_ec"
+	}
+else
+	# For exit on error we check the substitution explicitly (set -e is unreliable here).
+	CHANGELOG="$(python3 "${SCRIPT_DIR}/changelog.py" "${RELEASE_VERSION}")" || {
+		_changelog_ec=$?
+		echo "error: changelog.py failed for milestone ${RELEASE_VERSION}; see messages above." >&2
+		exit "$_changelog_ec"
+	}
+	printf '%s\n\n%s' "$CHANGELOG" "$(cat CHANGELOG.md)" > CHANGELOG.md
+fi
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+	echo "dry-run: would write esrally/_version.py: __version__ = \"$RELEASE_VERSION\"" >&2
+	echo "dry-run: skipping git add/commit, pip install, and esrally --version check." >&2
+	echo ""
+	echo "===================="
+	echo "Dry run finished for ${RELEASE_VERSION}"
+	echo "===================="
+	exit 0
+fi
+
+echo "Updating release version number"
+printf '__version__ = "%s"\n' "$RELEASE_VERSION" > esrally/_version.py
+
+# Stage only files this script generates. Avoids `git commit -a`, which would include any
+# other dirty tracked files if the tree was not clean.
+git add AUTHORS CHANGELOG.md esrally/_version.py
+while IFS= read -r staged; do
+	[[ -z "$staged" ]] && continue
+	case "$staged" in
+	AUTHORS|CHANGELOG.md|esrally/_version.py) ;;
+	*)
+		echo "error: staged file outside release allowlist: $staged" >&2
+		echo "Unstage unrelated changes (e.g. git restore --staged <file>) or start from a clean tree." >&2
+		exit 1
+		;;
+	esac
+done < <(git diff --cached --name-only)
+
+# Non-empty PREPARE_RELEASE_NO_VERIFY adds --no-verify (e.g. scripts/release/prepare-docker.sh).
+git commit -m "Bump version to $RELEASE_VERSION" ${PREPARE_RELEASE_NO_VERIFY:+--no-verify}
+
+pip install --editable .
+
+# Check version
+_version_out=$(esrally --version)
+_version_needle="esrally ${RELEASE_VERSION} (git revision"
+case "$_version_out" in
+*"${_version_needle}"*) ;;
+*)
+	echo "ERROR: Rally version string [${_version_out}] does not start with expected version string [esrally ${RELEASE_VERSION}]"
+	exit 2
+	;;
+esac
+
+echo ""
+echo "===================="
+echo "Please open a pull request for ${RELEASE_VERSION}"
+echo "===================="

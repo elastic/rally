@@ -17,6 +17,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import argparse
 import os
 import sys
 
@@ -25,25 +26,52 @@ import github3
 ORG = "elastic"
 REPO = "rally"
 
+# Path to the GitHub API token file.
+CHANGELOG_TOKEN_PATH = os.path.expanduser(os.environ.get("RALLY_CHANGELOG_TOKEN_FILE", "~/.github/rally_release_changelog.token"))
 
-def find_milestone(repo, title):
-    for m in repo.milestones(state="open", sort="due_date"):
+
+def find_milestone(repo, title, state):
+    for m in repo.milestones(state=state, sort="due_date"):
         if m.title == title:
             return m
     return None
 
 
+def ensure_open_milestone(repo, title, dry_run=False):
+    """Return an open milestone for *title*, creating one if missing (unless *dry_run*)."""
+    m = find_milestone(repo, title, state="open")
+    if m:
+        return m
+
+    closed = find_milestone(repo, title, state="closed")
+    if closed:
+        print("Milestone already closed: [%s]." % title, file=sys.stderr)
+        sys.exit(2)
+
+    if dry_run:
+        print("dry-run: no open milestone [%s]; would create on GitHub in non-dry mode." % title, file=sys.stderr)
+        sys.exit(2)
+
+    m = repo.create_milestone(title, state="open")
+    if not m:
+        print("Failed to create a new milestone [%s]." % title, file=sys.stderr)
+        sys.exit(2)
+
+    print("Created a new milestone [%s]." % title, file=sys.stderr)
+    return m
+
+
 def print_category(heading, issue_list):
     if issue_list:
-        print("#### %s\n" % heading)
+        print("#### %s\n" % heading, file=sys.stdout)
         for issue in issue_list:
             print_issue(issue)
-        print("")
+        print("", file=sys.stdout)
 
 
 def print_issue(issue):
     breaking_hint = " (Breaking)" if labelled(issue, label_name="breaking") else ""
-    print("* [#%s](%s)%s: %s" % (str(issue.number), issue.html_url, breaking_hint, issue.title))
+    print("* [#%s](%s)%s: %s" % (str(issue.number), issue.html_url, breaking_hint, issue.title), file=sys.stdout)
 
 
 def labelled(issue, label_name):
@@ -81,26 +109,39 @@ def prs(gh, milestone, with_labels, without_labels=None):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("usage: %s milestone" % sys.argv[0], file=sys.stderr)
-        exit(1)
+    parser = argparse.ArgumentParser(description="Generate Rally release changelog text from GitHub milestones.")
+    parser.add_argument(
+        "--dry",
+        action="store_true",
+        help="Do not create milestones on GitHub; fail if the milestone is missing.",
+    )
+    parser.add_argument("milestone", help="Milestone title (release version), e.g. 2.13.0")
+    args = parser.parse_args()
+    milestone_name = args.milestone
+    dry_run = args.dry
 
-    milestone_name = sys.argv[1]
+    # requires a personal GitHub access token with permission `public_repo` (see https://github.com/settings/tokens)
+    try:
+        with open(CHANGELOG_TOKEN_PATH, encoding="utf-8") as token_file:
+            token = token_file.readline().strip()
+    except OSError as e:
+        print("changelog.py: cannot read token file [%s]: %s" % (CHANGELOG_TOKEN_PATH, e), file=sys.stderr)
+        sys.exit(1)
 
-    # requires a personal Github access token with permission `public_repo` (see https://github.com/settings/tokens)
-    gh = github3.login(token=open("%s/.github/rally_release_changelog.token" % os.getenv("HOME")).readline().strip())
+    gh = github3.login(token=token)
+    if gh is None:
+        print("changelog.py: GitHub login failed (invalid token or API error).", file=sys.stderr)
+        sys.exit(1)
 
     rally_repo = gh.repository(ORG, REPO)
 
-    milestone = find_milestone(rally_repo, title=milestone_name)
-    if not milestone:
-        print("No open milestone named [%s] found." % milestone_name, file=sys.stderr)
-        exit(2)
+    milestone = ensure_open_milestone(rally_repo, milestone_name, dry_run=dry_run)
     if milestone.open_issues > 0:
         print("There are [%d] open issues on milestone [%s]. Aborting..." % (milestone.open_issues, milestone_name), file=sys.stderr)
-        exit(2)
+        sys.exit(2)
 
-    print("### %s\n" % milestone_name)
+    print("changelog.py: generating changelog for milestone [%s] (markdown on stdout)" % milestone_name, file=sys.stderr)
+    print("### %s\n" % milestone_name, file=sys.stdout)
 
     print_category("Highlights", prs(gh, milestone, with_labels="highlight"))
     print_category(
@@ -112,4 +153,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print("changelog.py: error: %s" % e, file=sys.stderr)
+        sys.exit(1)
