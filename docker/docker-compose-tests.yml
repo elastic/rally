@@ -1,9 +1,8 @@
-version: '2.2'
 services:
   rally:
-    image: ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}
+    image: ${RALLY_DOCKER_IMAGE:-elastic/rally}:${RALLY_VERSION_TAG:-latest}
     container_name: rally
-    command: ${TEST_COMMAND}
+    command: ${TEST_COMMAND:---help}
     volumes:
       - rally:/rally/.rally
     networks:
@@ -28,6 +27,7 @@ services:
           interval: 5s
           timeout: 2s
           retries: 10
+
 networks:
   esnet:
     name: rally-tests
