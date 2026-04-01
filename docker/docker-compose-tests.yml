@@ -25,12 +25,14 @@ services:
       - xpack.security.enrollment.enabled=false
     volumes:
       - esdata1:/usr/share/elasticsearch/data
+    # Uncomment the following lines to expose Elasticsearch on the host machine, keep in mind that this may cause
+    # issues if you have another Elasticsearch instance running on the host.
     # ports:
     #   - 19200:9200
     networks:
       - esnet
     healthcheck:
-          test: curl -f http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s
+          test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"]
           interval: 5s
           timeout: 2s
           retries: 30
