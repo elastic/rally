@@ -1,12 +1,12 @@
 services:
 
   rally:
-    image: "${RALLY_DOCKER_IMAGE:-elastic/rally}:${RALLY_VERSION_TAG:-dev}"
+    image: ${RALLY_DOCKER_IMAGE:-elastic/rally}:${RALLY_VERSION_TAG:-dev}
     build:
       context: ../
-      dockerfile: docker/Dockerfiles/dev/Dockerfile
+      dockerfile: ${RALLY_DOCKER_FILE:-docker/Dockerfiles/dev/Dockerfile}
     container_name: rally
-    command: "${TEST_COMMAND:---help}"
+    command: ${TEST_COMMAND:---help}
     volumes:
       - rally:/rally/.rally
     networks:
@@ -16,13 +16,13 @@ services:
         condition: service_healthy
 
   es01:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.13
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
     container_name: es01
     environment:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
-      - xpack.security.enabled=false
-      - xpack.security.enrollment.enabled=false
+      # - xpack.security.enabled=false
+      # - xpack.security.enrollment.enabled=false
     volumes:
       - esdata1:/usr/share/elasticsearch/data
     # Uncomment the following lines to expose Elasticsearch on the host machine, keep in mind that this may cause
