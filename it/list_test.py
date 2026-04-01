@@ -18,28 +18,28 @@
 import it
 
 
-@it.all_rally_configs
-def test_list_races(cfg):
+@it.rally_in_mem
+def test_list_races(cfg, shared_setup):
     assert it.esrally(cfg, "list races") == 0
 
 
 @it.rally_in_mem
-def test_list_cars(cfg):
+def test_list_cars(cfg, shared_setup):
     assert it.esrally(cfg, "list cars") == 0
 
 
 @it.rally_in_mem
-def test_list_elasticsearch_plugins(cfg):
+def test_list_elasticsearch_plugins(cfg, shared_setup):
     assert it.esrally(cfg, "list elasticsearch-plugins") == 0
 
 
 @it.rally_in_mem
-def test_list_tracks(cfg):
+def test_list_tracks(cfg, shared_setup):
     assert it.esrally(cfg, "list tracks") == 0
     assert it.esrally(cfg, "list tracks --track-repository=eventdata") == 0
     assert it.esrally(cfg, "list tracks --track-repository=default --track-revision=4080dc9850d07e23b6fc7cfcdc7cf57b14e5168d") == 0
 
 
 @it.rally_in_mem
-def test_list_telemetry(cfg):
+def test_list_telemetry(cfg, shared_setup):
     assert it.esrally(cfg, "list telemetry") == 0

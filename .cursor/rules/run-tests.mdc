@@ -1,0 +1,15 @@
+---
+description: Run tests via make and always outside the sandbox
+alwaysApply: true
+---
+
+# Running Tests
+
+When running tests in this project:
+
+1. **Use the Make command** — Do not invoke pytest (or uv run pytest) directly. Use the project's Make targets instead:
+   - **Unit tests:** `make test` (or `make test-3.10`, etc. for a specific Python version)
+   - **Integration tests:** `make it`
+   - **With options:** Pass pytest options via `OPTS`, e.g. `make it OPTS="-x --ff"` for fail-fast and run failed tests first.
+
+2. **Run outside the sandbox** — Test commands must be executed with full permissions (e.g. request `all` or disable sandbox) so that Docker, network, and file access work correctly. Do not run test commands inside a restricted sandbox.

@@ -20,22 +20,22 @@ from esrally.utils import process
 
 
 @it.rally_in_mem
-def test_track_info_with_challenge(cfg):
+def test_track_info_with_challenge(cfg, shared_setup):
     assert it.esrally(cfg, "info --track=geonames --challenge=append-no-conflicts") == 0
 
 
 @it.rally_in_mem
-def test_track_info_with_track_repo(cfg):
+def test_track_info_with_track_repo(cfg, shared_setup):
     assert it.esrally(cfg, "info --track-repository=default --track=geonames") == 0
 
 
 @it.rally_in_mem
-def test_track_info_with_task_filter(cfg):
+def test_track_info_with_task_filter(cfg, shared_setup):
     assert it.esrally(cfg, 'info --track=geonames --challenge=append-no-conflicts --include-tasks="type:search"') == 0
 
 
 @it.rally_in_mem
-def test_track_info_fails_with_wrong_track_params(cfg):
+def test_track_info_fails_with_wrong_track_params(cfg, shared_setup):
     # simulate a typo in track parameter
     cmd = it.esrally_command_line_for(cfg, "info --track=geonames --track-params='conflict_probability:5,number-of-replicas:1'")
     output = process.run_subprocess_with_output(cmd)

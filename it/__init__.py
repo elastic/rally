@@ -17,10 +17,10 @@
 
 import errno
 import functools
+import inspect
 import json
 import os
 import platform
-import random
 import socket
 import subprocess
 import time
@@ -48,15 +48,6 @@ def all_rally_configs(t):
     return wrapper
 
 
-def random_rally_config(t):
-    @functools.wraps(t)
-    @pytest.mark.parametrize("cfg", [random.choice(CONFIG_NAMES)])
-    def wrapper(cfg, *args, **kwargs):
-        t(cfg, *args, **kwargs)
-
-    return wrapper
-
-
 def rally_in_mem(t):
     @functools.wraps(t)
     @pytest.mark.parametrize("cfg", ["in-memory-it"])
@@ -69,9 +60,16 @@ def rally_in_mem(t):
 def rally_es(t):
     @functools.wraps(t)
     @pytest.mark.parametrize("cfg", ["es-it"])
-    def wrapper(cfg, *args, **kwargs):
-        t(cfg, *args, **kwargs)
+    def wrapper(cfg, es_metrics_store, *args, **kwargs):
+        return t(cfg, *args, **kwargs)
 
+    # Expose original signature with es_metrics_store inserted after cfg so pytest
+    # injects the fixture and any other fixtures the test requests.
+    sig = inspect.signature(t)
+    params = list(sig.parameters.values())
+    es_metrics_param = inspect.Parameter("es_metrics_store", inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    new_params = params[:1] + [es_metrics_param] + params[1:]
+    wrapper.__signature__ = sig.replace(parameters=new_params)
     return wrapper
 
 

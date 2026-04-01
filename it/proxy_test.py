@@ -43,13 +43,13 @@ def http_proxy():
 
 
 @it.rally_in_mem
-def test_run_with_direct_internet_connection(cfg, http_proxy, fresh_log_file):
+def test_run_with_direct_internet_connection(cfg, shared_setup, http_proxy, fresh_log_file):
     assert it.esrally(cfg, "list tracks") == 0
     assert it.find_log_line(fresh_log_file, "Connecting directly to the Internet")
 
 
 @it.rally_in_mem
-def test_anonymous_proxy_no_connection(cfg, http_proxy):
+def test_anonymous_proxy_no_connection(cfg, shared_setup, http_proxy):
     env = dict(os.environ)
     env["http_proxy"] = http_proxy.anonymous_url
     env["https_proxy"] = http_proxy.anonymous_url
@@ -62,7 +62,7 @@ def test_anonymous_proxy_no_connection(cfg, http_proxy):
 
 
 @it.rally_in_mem
-def test_authenticated_proxy_user_can_connect(cfg, http_proxy):
+def test_authenticated_proxy_user_can_connect(cfg, shared_setup, http_proxy):
     env = dict(os.environ)
     env["http_proxy"] = http_proxy.authenticated_url
     env["https_proxy"] = http_proxy.authenticated_url

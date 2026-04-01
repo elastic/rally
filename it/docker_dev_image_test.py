@@ -22,24 +22,24 @@ from esrally import version
 from esrally.utils import process
 
 
-def test_docker_geonames():
+def test_docker_geonames(shared_setup):
     test_command = (
         "race --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
     )
     run_docker_compose_test(test_command)
 
 
-def test_docker_list_tracks():
+def test_docker_list_tracks(shared_setup):
     test_command = "list tracks"
     run_docker_compose_test(test_command)
 
 
-def test_docker_help():
+def test_docker_help(shared_setup):
     test_command = "--help"
     run_docker_compose_test(test_command)
 
 
-def test_docker_override_cmd():
+def test_docker_override_cmd(shared_setup):
     test_command = (
         "esrally race --pipeline=benchmark-only --test-mode --track=geonames "
         "--challenge=append-no-conflicts-index-only --target-hosts=es01:9200"

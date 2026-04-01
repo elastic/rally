@@ -28,7 +28,7 @@ def setup_esrallyd():
 
 
 @it.rally_in_mem
-def test_elastic_transport_module_does_not_log_at_info_level(cfg, fresh_log_file):
+def test_elastic_transport_module_does_not_log_at_info_level(cfg, shared_setup, fresh_log_file):
     """
     The 'elastic_transport' module logs at 'INFO' by default and is _very_ noisy, so we explicitly set the threshold to
     'WARNING' to avoid perturbing benchmarking results due to the high volume of logging calls by the client itself.
