@@ -305,7 +305,7 @@ def ensure_benchmark_http_port_free(http_port: int = BENCHMARK_IT_HTTP_PORT, wai
     Stop any Rally IT benchmark cluster on ``http_port`` and wait until the port is free.
 
     Used by pytest fixtures around benchmark tests so each run starts from a known state on the fixed IT port;
-    see :data:`BENCHMARK_IT_HTTP_PORT` for why the port is not chosen dynamically.
+    see `BENCHMARK_IT_HTTP_PORT` for why the port is not chosen dynamically.
     """
     assert http_port is not None
     stop_rally_provisioned_es_on_port(http_port)
