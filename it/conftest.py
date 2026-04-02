@@ -27,9 +27,6 @@ from esrally import config, version
 from esrally.utils import process
 from it import CONFIG_NAMES, ROOT_DIR, TestCluster, ensure_benchmark_http_port_free
 
-_IT_DIR = os.path.abspath(os.path.dirname(__file__))
-_GIT_CONFIG_EMPTY = os.path.join(_IT_DIR, "resources", "gitconfig-empty")
-
 
 def check_prerequisites():
     print("Checking prerequisites...")
@@ -131,21 +128,16 @@ class EsMetricsStore:
 ES_METRICS_STORE = EsMetricsStore()
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session", autouse=True, monkeypatch: pytest.MonkeyPatch)
 def isolate_git_global_config() -> Generator[None]:
     """
-    Point ``GIT_CONFIG_GLOBAL`` at ``it/resources/gitconfig-empty`` so integration tests are not
-    affected by the developer's ``~/.gitconfig`` (e.g. per-URL ``proxy=""`` can let git ignore env proxies).
+    Point ``GIT_CONFIG_GLOBAL`` at `/dev/null` so integration tests are not affected by the
+    developer's ``~/.gitconfig`` (e.g. per-URL ``proxy=""`` can let git ignore env proxies).
 
-    Restores the previous ``GIT_CONFIG_GLOBAL`` value (or unsets it) after the session.
+    Uses :class:`pytest.MonkeyPatch` so the previous value is restored after the session.
     """
-    previous = os.environ.get("GIT_CONFIG_GLOBAL")
-    os.environ["GIT_CONFIG_GLOBAL"] = _GIT_CONFIG_EMPTY
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     yield
-    if previous is None:
-        os.environ.pop("GIT_CONFIG_GLOBAL", None)
-    else:
-        os.environ["GIT_CONFIG_GLOBAL"] = previous
 
 
 @pytest.fixture(scope="session", autouse=True)

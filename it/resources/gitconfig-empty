@@ -1,2 +1,0 @@
-# Intentionally empty: integration tests set GIT_CONFIG_GLOBAL to this file
-# so subprocesses ignore the developer's ~/.gitconfig.
