@@ -16,8 +16,10 @@
 # under the License.
 import dataclasses
 import difflib
+import json
 import logging
 import os
+import re
 import subprocess
 from collections.abc import Callable, Generator, Mapping
 from pathlib import Path
@@ -33,8 +35,8 @@ LOG = logging.getLogger(__name__)
 # Compose file used by both this test module and release-docker-test.sh.
 COMPOSE_FILE = os.path.join(it.ROOT_DIR, "docker", "docker-compose-tests.yml")
 
-# Expected ``list tracks`` table (normalized) for the docker dev image IT, under it/resources/.
-LIST_TRACKS_GOLDEN_REL_PATH = os.path.join("resources", "docker_dev_image_list_tracks_stdout.golden.txt")
+# Expected ``list tracks`` track names (JSON array) for the docker dev image IT, under it/resources/.
+LIST_TRACKS_GOLDEN_REL_PATH = os.path.join("resources", "docker_dev_image_list_tracks_stdout.golden.json")
 # Set to ``1`` to overwrite that golden from the current docker run (e.g. after track list changes).
 UPDATE_DOCKER_LIST_TRACKS_GOLDEN_ENV = "RALLY_UPDATE_DOCKER_LIST_TRACKS_GOLDEN"
 
@@ -116,7 +118,7 @@ def compose_env() -> Generator[Mapping[str, str]]:
 
 
 def assert_list_tracks_stdout_matches_golden(stdout: str) -> None:
-    """``want_stdout`` checker: normalize docker ``list tracks`` stdout and compare to the golden file.
+    """``want_stdout`` checker: parse docker ``list tracks`` stdout to track names and compare to the golden JSON.
 
     Writes the golden when the file is missing, when it exists but is empty, or when
     ``RALLY_UPDATE_DOCKER_LIST_TRACKS_GOLDEN=1``. Otherwise reads the existing file and
@@ -124,7 +126,7 @@ def assert_list_tracks_stdout_matches_golden(stdout: str) -> None:
     """
     golden_path = (Path(__file__).resolve().parent / LIST_TRACKS_GOLDEN_REL_PATH).resolve()
     golden_path.parent.mkdir(parents=True, exist_ok=True)
-    normalized_actual = normalize_list_tracks_stdout(stdout)
+    actual_names = track_names_from_list_tracks_stdout(stdout)
     force_update = os.environ.get(UPDATE_DOCKER_LIST_TRACKS_GOLDEN_ENV, "") == "1"
     # Only read/compare once we know the file exists and is non-empty; otherwise (re)generate the golden.
     missing = not golden_path.is_file()
@@ -137,39 +139,65 @@ def assert_list_tracks_stdout_matches_golden(stdout: str) -> None:
         else:
             reason = "golden file is empty"
         LOG.warning("Overwriting list tracks golden (%s): %s", golden_path, reason)
-        golden_path.write_text(normalized_actual + "\n", encoding="utf-8")
-        LOG.info("Wrote list tracks golden stdout to %s", golden_path)
+        golden_path.write_text(list_tracks_stdout_as_track_names_json(stdout), encoding="utf-8")
+        LOG.info("Wrote list tracks golden (JSON) to %s", golden_path)
         return
-    normalized_expected = normalize_list_tracks_stdout(golden_path.read_text(encoding="utf-8"))
-    if normalized_actual == normalized_expected:
+    expected_names = json.loads(golden_path.read_text(encoding="utf-8"))
+    if actual_names == expected_names:
         return
     diff = "\n".join(
         difflib.unified_diff(
-            normalized_expected.splitlines(),
-            normalized_actual.splitlines(),
+            json.dumps(expected_names, indent=2).splitlines(),
+            json.dumps(actual_names, indent=2).splitlines(),
             fromfile="golden",
             tofile="actual",
             lineterm="",
         )
     )
     pytest.fail(
-        "list tracks stdout does not match golden file "
+        "list tracks track-name list does not match golden file "
         f"{golden_path.name}. Set {UPDATE_DOCKER_LIST_TRACKS_GOLDEN_ENV}=1 to refresh.\n{diff}"
     )
 
 
-def normalize_list_tracks_stdout(stdout: str) -> str:
-    """Return stable text for golden comparison: from ``Available tracks:`` onward, without variable footers."""
+def track_names_from_list_tracks_stdout(stdout: str) -> list[str]:
+    """Parse ``list tracks`` tabular stdout and return track names sorted for stable comparison."""
     text = stdout.replace("\r\n", "\n")
     idx = text.find(_AVAILABLE_TRACKS_MARKER)
     if idx == -1:
         pytest.fail("stdout did not contain the list-tracks marker " f"{_AVAILABLE_TRACKS_MARKER!r}; head:\n{text[:800]!r}")
     body = text[idx:]
-    # Drop trailing success banner; elapsed time and rule width vary between runs.
     success_idx = body.find("\n[INFO] SUCCESS")
     if success_idx != -1:
         body = body[:success_idx]
-    return body.rstrip()
+    lines = body.splitlines()
+    header_i = 0
+    while header_i < len(lines):
+        s = lines[header_i].strip()
+        if s.startswith("Name") and "Description" in s:
+            break
+        header_i += 1
+    else:
+        pytest.fail("list tracks stdout did not contain the expected table header after " f"{_AVAILABLE_TRACKS_MARKER!r}")
+    sep_i = header_i + 1
+    if sep_i >= len(lines) or "-" not in lines[sep_i]:
+        pytest.fail("list tracks stdout did not contain a table separator after the header")
+    names: list[str] = []
+    for line in lines[sep_i + 1 :]:
+        stripped = line.rstrip()
+        if not stripped.strip():
+            continue
+        if stripped.strip().replace("-", "") == "":
+            break
+        parts = re.split(r"\s{2,}", stripped.lstrip(), maxsplit=1)
+        if parts[0].strip():
+            names.append(parts[0].strip())
+    return sorted(names)
+
+
+def list_tracks_stdout_as_track_names_json(stdout: str) -> str:
+    """Return track names from ``list tracks`` stdout as a formatted JSON array (sorted strings, trailing newline)."""
+    return json.dumps(track_names_from_list_tracks_stdout(stdout), indent=2) + "\n"
 
 
 @dataclasses.dataclass

@@ -1,8 +1,10 @@
 services:
 
   # With both `image` and `build`, Compose uses the image name/tag from `image` and builds from `build` when the
-  # image is absent locally. IT builds the dev image before `compose run`; release-docker-test.sh sets RALLY_* to
-  # test a pre-built image.
+  # image is absent locally. IT builds the dev image before `compose run`; release-docker-test.sh builds first and sets
+  # RALLY_DOCKER_IMAGE / RALLY_VERSION_TAG so `compose run` uses that image (Compose pulls or finds it locally; it does
+  # not rebuild over a correctly tagged image). Keeping `build` is a convenience for ad-hoc `docker compose run`
+  # without a separate `docker compose build`.
   rally:
     image: ${RALLY_DOCKER_IMAGE:-elastic/rally}:${RALLY_VERSION_TAG:-dev}
     build:
@@ -24,8 +26,10 @@ services:
     environment:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
-      # If you enable security below, configure TLS for clients (e.g. HTTP CA from the container); see Elasticsearch
-      # Docker documentation for exporting the CA certificate.
+      # Elasticsearch 8+ Docker images enable TLS/enrollment by default; 7.x does not. When you move this service to 8+,
+      # uncomment the two lines below for unsecured local/integration use, or keep security on and trust the HTTP CA
+      # that the image generates (copy from the container, e.g. `docker cp es01:/usr/share/elasticsearch/config/certs/http_ca.crt .`
+      # — path varies by version; see Elasticsearch "Install Elasticsearch with Docker" docs for the current layout).
       # - xpack.security.enabled=false
       # - xpack.security.enrollment.enabled=false
     volumes:
