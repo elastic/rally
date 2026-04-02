@@ -51,8 +51,10 @@ dependencies = [
     "aiohttp==3.13.3",
     # License: Apache 2.0
     "aiosignal==1.4.0",
-    # License: Apache 2.0
-    "requests==2.32.5",
+    # License: Apache 2.0 (docker-py)
+    "docker==7.1.0",
+    # License: Apache 2.0 (avoid specific requests version to fix bug in docker-py)
+    "requests<2.32.0",
     # License: BSD
     "psutil==5.9.4",
     # License: MIT
