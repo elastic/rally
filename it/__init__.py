@@ -46,7 +46,9 @@ _CLUSTER_PROBE_ATTEMPTS = 5
 _CLUSTER_PROBE_DELAY_SEC = 0.5
 _CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
 
-# Host HTTP port integration tests use for Rally-provisioned benchmark Elasticsearch (see it/* tests, docker pipeline).
+# Benchmark IT HTTP port is fixed (not an ephemeral port): race/install commands, track configs, and CI compose
+# files assume this value. Switching to a free port would require threading it through every caller and external
+# reference, so we instead clear leftovers on this port before/after tests when teardown is incomplete.
 BENCHMARK_IT_HTTP_PORT = 19200
 # Default ``--cluster-name`` for ``esrally race`` / install; keep aligned with ``esrally/rally.py``.
 RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME = "rally-benchmark"
@@ -263,6 +265,11 @@ def stop_rally_provisioned_es_on_port(http_port: int = BENCHMARK_IT_HTTP_PORT) -
     """
     If a Rally benchmark or IT ``TestCluster`` Elasticsearch is listening on ``http_port``, stop it.
 
+    Rally subprocess trees do not always exit cleanly when the test runner gets a signal (e.g. ES JVM can
+    outlive the parent), and Docker can keep a published port busy briefly after ``docker stop``. That leaves
+    ``BENCHMARK_IT_HTTP_PORT`` occupied and the next test fails with low-signal bind errors. This helper is a
+    best-effort cleanup for those cases without changing Rally's global process model in this PR.
+
     Docker-provisioned nodes are stopped via ``docker stop``; tar / host-JVM nodes via terminating the
     listener PIDs (after ``SIGTERM``, ``SIGKILL`` as last resort). Only clusters named
     ``rally-benchmark`` or ``in-memory-it`` are touched; anything else raises ``AssertionError``.
@@ -294,7 +301,12 @@ def stop_rally_provisioned_es_on_port(http_port: int = BENCHMARK_IT_HTTP_PORT) -
 
 
 def ensure_benchmark_http_port_free(http_port: int = BENCHMARK_IT_HTTP_PORT, wait_timeout: int = 120) -> int:
-    """Stop any Rally IT benchmark cluster on ``http_port`` and wait until the port is free."""
+    """
+    Stop any Rally IT benchmark cluster on ``http_port`` and wait until the port is free.
+
+    Used by pytest fixtures around benchmark tests so each run starts from a known state on the fixed IT port;
+    see :data:`BENCHMARK_IT_HTTP_PORT` for why the port is not chosen dynamically.
+    """
     assert http_port is not None
     stop_rally_provisioned_es_on_port(http_port)
     wait_until_port_is_free(port_number=http_port, timeout=wait_timeout)
@@ -362,6 +374,13 @@ class TestCluster:
     def wait_for_cluster_health(self, *, wait_for_status: str = "yellow", timeout: float = 120) -> None:
         """
         Block until the cluster reaches at least the given health (server-side wait).
+
+        This is intentionally separate from :func:`esrally.client.factory.wait_for_rest_layer`, which the harness
+        already calls from :meth:`start`: that function waits until enough nodes respond (``wait_for_nodes``) and
+        implements Rally-wide retry/backoff for connection and protocol errors. Session fixtures (metrics store)
+        also reuse a cluster that may already be running; they need an explicit status wait (``wait_for_status``)
+        and AssertionErrors that point at health/timeouts, with a client ``request_timeout`` derived from the same
+        server-side ``timeout`` so the transport does not abort first.
 
         Calls ``cluster.health`` with ``wait_for_status`` and Elasticsearch's ``timeout`` query
         parameter. The HTTP client's ``request_timeout`` is set longer than ``timeout`` so the

@@ -178,6 +178,8 @@ def free_benchmark_http_port() -> Generator[int]:
     """
     Before and after the test, clear Rally IT benchmark HTTP port (19200): stop orphaned
     ``rally-benchmark`` / ``in-memory-it`` Elasticsearch (Docker or host JVM) and wait until the port is free.
+
+    See :func:`it.ensure_benchmark_http_port_free` for rationale on the fixed port and teardown behavior.
     """
     port = ensure_benchmark_http_port_free()
     yield port
@@ -186,7 +188,11 @@ def free_benchmark_http_port() -> Generator[int]:
 
 @pytest.fixture(scope="module")
 def free_benchmark_http_port_module() -> Generator[int]:
-    """Module-scoped variant of :func:`free_benchmark_http_port` for module fixtures (e.g. ``test_cluster``)."""
+    """
+    Module-scoped variant of :func:`free_benchmark_http_port` for module fixtures (e.g. ``test_cluster``).
+
+    See :func:`it.ensure_benchmark_http_port_free` for rationale on the fixed port and teardown behavior.
+    """
     port = ensure_benchmark_http_port_free()
     yield port
     ensure_benchmark_http_port_free(port)
