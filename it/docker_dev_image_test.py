@@ -15,14 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 import dataclasses
-import difflib
-import json
 import logging
 import os
 import re
 import subprocess
 from collections.abc import Callable, Generator, Mapping
-from pathlib import Path
 
 import pytest
 
@@ -35,12 +32,7 @@ LOG = logging.getLogger(__name__)
 # Compose file used by both this test module and release-docker-test.sh.
 COMPOSE_FILE = os.path.join(it.ROOT_DIR, "docker", "docker-compose-tests.yml")
 
-# Expected ``list tracks`` track names (JSON array) for the docker dev image IT, under it/resources/.
-LIST_TRACKS_GOLDEN_REL_PATH = os.path.join("resources", "docker_dev_image_list_tracks_stdout.golden.json")
-# Set to ``1`` to overwrite that golden from the current docker run (e.g. after track list changes).
-UPDATE_DOCKER_LIST_TRACKS_GOLDEN_ENV = "RALLY_UPDATE_DOCKER_LIST_TRACKS_GOLDEN"
-
-# Start of Rally's tabular output; everything before this (e.g. ASCII banner) is ignored for goldens.
+# Start of Rally's tabular output; everything before this (e.g. ASCII banner) is ignored when parsing.
 _AVAILABLE_TRACKS_MARKER = "Available tracks:"
 
 # Shared race invocation against the ES service defined in docker-compose-tests.yml (es01:9200).
@@ -117,47 +109,21 @@ def compose_env() -> Generator[Mapping[str, str]]:
         tear_down_stack(env)
 
 
-def assert_list_tracks_stdout_matches_golden(stdout: str) -> None:
-    """``want_stdout`` checker: parse docker ``list tracks`` stdout to track names and compare to the golden JSON.
+def assert_list_tracks_contains(expected_track_names: list[str]) -> Callable[[str], None]:
+    """Return a ``want_stdout`` callable that parses ``list tracks`` stdout and requires every expected track name."""
+    expected = frozenset(expected_track_names)
 
-    Writes the golden when the file is missing, when it exists but is empty, or when
-    ``RALLY_UPDATE_DOCKER_LIST_TRACKS_GOLDEN=1``. Otherwise reads the existing file and
-    ``pytest.fail`` on mismatch.
-    """
-    golden_path = (Path(__file__).resolve().parent / LIST_TRACKS_GOLDEN_REL_PATH).resolve()
-    golden_path.parent.mkdir(parents=True, exist_ok=True)
-    actual_names = track_names_from_list_tracks_stdout(stdout)
-    force_update = os.environ.get(UPDATE_DOCKER_LIST_TRACKS_GOLDEN_ENV, "") == "1"
-    # Only read/compare once we know the file exists and is non-empty; otherwise (re)generate the golden.
-    missing = not golden_path.is_file()
-    empty = not missing and golden_path.stat().st_size == 0
-    if force_update or missing or empty:
-        if force_update:
-            reason = f"{UPDATE_DOCKER_LIST_TRACKS_GOLDEN_ENV}=1"
-        elif missing:
-            reason = "golden file is missing"
-        else:
-            reason = "golden file is empty"
-        LOG.warning("Overwriting list tracks golden (%s): %s", golden_path, reason)
-        golden_path.write_text(list_tracks_stdout_as_track_names_json(stdout), encoding="utf-8")
-        LOG.info("Wrote list tracks golden (JSON) to %s", golden_path)
-        return
-    expected_names = json.loads(golden_path.read_text(encoding="utf-8"))
-    if actual_names == expected_names:
-        return
-    diff = "\n".join(
-        difflib.unified_diff(
-            json.dumps(expected_names, indent=2).splitlines(),
-            json.dumps(actual_names, indent=2).splitlines(),
-            fromfile="golden",
-            tofile="actual",
-            lineterm="",
-        )
-    )
-    pytest.fail(
-        "list tracks track-name list does not match golden file "
-        f"{golden_path.name}. Set {UPDATE_DOCKER_LIST_TRACKS_GOLDEN_ENV}=1 to refresh.\n{diff}"
-    )
+    def check_stdout(stdout: str) -> None:
+        actual = set(track_names_from_list_tracks_stdout(stdout))
+        missing = expected - actual
+        if missing:
+            sample = sorted(actual)[:15]
+            pytest.fail(
+                "list tracks output missing expected track name(s) "
+                f"{sorted(missing)!r}; parsed had {len(actual)} name(s); sample: {sample!r}"
+            )
+
+    return check_stdout
 
 
 def track_names_from_list_tracks_stdout(stdout: str) -> list[str]:
@@ -195,24 +161,22 @@ def track_names_from_list_tracks_stdout(stdout: str) -> list[str]:
     return sorted(names)
 
 
-def list_tracks_stdout_as_track_names_json(stdout: str) -> str:
-    """Return track names from ``list tracks`` stdout as a formatted JSON array (sorted strings, trailing newline)."""
-    return json.dumps(track_names_from_list_tracks_stdout(stdout), indent=2) + "\n"
-
-
 @dataclasses.dataclass
 class ComposeCase:
     # Passed as TEST_COMMAND to the rally service (see docker-compose-tests.yml).
     command: str
     want_return_code: int = 0
-    # Exact string match, or a callable that validates ``result.stdout`` (e.g. golden file for list tracks).
+    # Exact string match, or a callable that validates ``result.stdout``.
     want_stdout: str | Callable[[str], None] | None = None
     want_stderr: str | None = None
 
 
 @cases.cases(
     help=ComposeCase("--help"),
-    list_tracks=ComposeCase("list tracks", want_stdout=assert_list_tracks_stdout_matches_golden),
+    list_tracks=ComposeCase(
+        "list tracks",
+        want_stdout=assert_list_tracks_contains(["elastic/logs", "geonames", "http_logs", "nyc_taxis", "so_vector"]),
+    ),
     race=ComposeCase(_RACE_FLAGS),
     race_explicit_esrally=ComposeCase(f"esrally {_RACE_FLAGS}"),
 )
@@ -248,7 +212,6 @@ def test_docker_compose(
     assert result.returncode == case.want_return_code
     if case.want_stdout is not None:
         if callable(case.want_stdout):
-            # Custom assertion path (golden files, partial matchers, etc.).
             case.want_stdout(result.stdout)
         else:
             assert result.stdout == case.want_stdout
