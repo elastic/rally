@@ -43,16 +43,27 @@ _AVAILABLE_TRACKS_MARKER = "Available tracks:"
 
 # Shared race invocation against the ES service defined in docker-compose-tests.yml (es01:9200).
 _RACE_FLAGS = (
-    "race --pipeline=benchmark-only --test-mode --track=geonames "
-    "--challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
+    "race --pipeline=benchmark-only --test-mode --track=geonames --challenge=append-no-conflicts-index-only --target-hosts=es01:9200"
 )
+
+
+def _docker_compose_process_env(compose_env: Mapping[str, str]) -> dict[str, str]:
+    """Merge parent env with compose_env and set defaults for every var interpolated in docker-compose-tests.yml.
+
+    Avoids Docker Compose warnings (e.g. \"variable is not set\") on ``down`` / ``logs`` when ``TEST_COMMAND`` was
+    only defined for a prior ``run``.
+    """
+    env = os.environ.copy()
+    env.update(compose_env)
+    env.setdefault("TEST_COMMAND", "--help")
+    env.setdefault("RALLY_DOCKER_FILE", "docker/Dockerfiles/dev/Dockerfile")
+    return env
 
 
 def tear_down_stack(compose_env: Mapping[str, str]) -> None:
     """Stop and remove the compose project so the next run starts from a clean stack."""
     LOG.info("Tearing down docker stack... (compose_env=%s)", compose_env)
-    env = os.environ.copy()
-    env.update(compose_env)
+    env = _docker_compose_process_env(compose_env)
 
     try:
         subprocess.run(
@@ -73,6 +84,7 @@ def tear_down_stack(compose_env: Mapping[str, str]) -> None:
             f"  - output:\n{err.stdout}\n"
         )
         LOG.error(msg)
+        pytest.fail(msg)
     else:
         LOG.debug("Compose stack is down (compose_env=%s).", compose_env)
 
@@ -97,7 +109,7 @@ def compose_env() -> Generator[Mapping[str, str]]:
                 capture_output=True,
                 shell=True,
                 check=False,
-                env=env,
+                env=_docker_compose_process_env(env),
             )
             LOG.debug("Containers logs:\n%s", logs.stdout.decode("utf-8"))
         tear_down_stack(env)
@@ -151,10 +163,7 @@ def normalize_list_tracks_stdout(stdout: str) -> str:
     text = stdout.replace("\r\n", "\n")
     idx = text.find(_AVAILABLE_TRACKS_MARKER)
     if idx == -1:
-        pytest.fail(
-            "stdout did not contain the list-tracks marker "
-            f"{_AVAILABLE_TRACKS_MARKER!r}; head:\n{text[:800]!r}"
-        )
+        pytest.fail("stdout did not contain the list-tracks marker " f"{_AVAILABLE_TRACKS_MARKER!r}; head:\n{text[:800]!r}")
     body = text[idx:]
     # Drop trailing success banner; elapsed time and rule width vary between runs.
     success_idx = body.find("\n[INFO] SUCCESS")
@@ -185,8 +194,7 @@ def test_docker_compose(
 ) -> None:
     """Run one rally subcommand inside the compose-defined rally container (with ES dependency)."""
     LOG.info("Running rally with 'docker compose', command='%s', env=%r", case.command, compose_env)
-    env = os.environ.copy()
-    env.update(compose_env)
+    env = _docker_compose_process_env(compose_env)
     env["TEST_COMMAND"] = case.command
     try:
         # ``run`` starts dependencies (es01), runs the rally service once, then tears down that one-off container.

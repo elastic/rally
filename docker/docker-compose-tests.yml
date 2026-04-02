@@ -1,5 +1,8 @@
 services:
 
+  # With both `image` and `build`, Compose uses the image name/tag from `image` and builds from `build` when the
+  # image is absent locally. IT builds the dev image before `compose run`; release-docker-test.sh sets RALLY_* to
+  # test a pre-built image.
   rally:
     image: ${RALLY_DOCKER_IMAGE:-elastic/rally}:${RALLY_VERSION_TAG:-dev}
     build:
@@ -21,12 +24,14 @@ services:
     environment:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      # If you enable security below, configure TLS for clients (e.g. HTTP CA from the container); see Elasticsearch
+      # Docker documentation for exporting the CA certificate.
       # - xpack.security.enabled=false
       # - xpack.security.enrollment.enabled=false
     volumes:
       - esdata1:/usr/share/elasticsearch/data
-    # Uncomment the following lines to expose Elasticsearch on the host machine, keep in mind that this may cause
-    # issues if you have another Elasticsearch instance running on the host.
+    # Uncomment `ports` when you need HTTP access from the host (debugging, curl from the machine running Compose).
+    # Pick a host port that does not conflict with another local Elasticsearch instance.
     # ports:
     #   - 19200:9200
     networks:
