@@ -163,6 +163,61 @@ class TestGitRepository:
         assert repo.track_file("unittest") == "/tmp/tracks/default/unittest/track.json"
 
 
+class TestRenderTrack:
+    @mock.patch("esrally.track.loader.track_repo")
+    @mock.patch("esrally.track.loader.render_template_from_file")
+    def test_render_track_to_stdout(self, mock_render, mock_repo, capsys):
+        mock_repo.return_value.track_name = "unittest"
+        mock_repo.return_value.track_file.return_value = "/path/to/track/unittest/track.json"
+        mock_render.return_value = '{"short-description": "test", "indices": [{"name": "test"}]}'
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        loader.render_track(cfg)
+
+        mock_render.assert_called_once_with(
+            "/path/to/track/unittest/track.json",
+            {},
+            build_flavor=None,
+            serverless_operator=False,
+        )
+        captured = capsys.readouterr()
+        assert '"short-description": "test"' in captured.out
+        assert '"indices"' in captured.out
+
+    @mock.patch("esrally.track.loader.track_repo")
+    @mock.patch("esrally.track.loader.render_template_from_file")
+    def test_render_track_to_file(self, mock_render, mock_repo, tmp_path):
+        mock_repo.return_value.track_name = "unittest"
+        mock_repo.return_value.track_file.return_value = "/path/to/track/unittest/track.json"
+        mock_render.return_value = '{"short-description": "test"}'
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        output_file = tmp_path / "rendered.json"
+        loader.render_track(cfg, output_path=str(output_file))
+
+        assert output_file.exists()
+        contents = output_file.read_text()
+        assert '"short-description": "test"' in contents
+        assert contents.endswith("\n")
+
+    @mock.patch("esrally.track.loader.track_repo")
+    @mock.patch("esrally.track.loader.render_template_from_file")
+    def test_render_track_invalid_json_raises(self, mock_render, mock_repo):
+        mock_repo.return_value.track_name = "unittest"
+        mock_repo.return_value.track_file.return_value = "/path/to/track/unittest/track.json"
+        mock_render.return_value = "not valid json {{"
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        with pytest.raises(Exception):
+            loader.render_track(cfg)
+
+
 class TestTrackPreparation:
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")
@@ -860,8 +915,7 @@ class TestTemplateSource:
     @mock.patch("esrally.utils.io.dirname")
     @mock.patch.object(loader.TemplateSource, "read_glob_files")
     def test_entrypoint_of_replace_includes(self, patched_read_glob, patched_dirname):
-        track = textwrap.dedent(
-            """
+        track = textwrap.dedent("""
         {% import "rally.helpers" as rally with context %}
         {
           "version": 2,
@@ -894,8 +948,7 @@ class TestTemplateSource:
             {{ rally.collect(parts="challenges/*.json") }}
           ]
         }
-        """
-        )
+        """)
 
         def dummy_read_glob(c):
             return f'{{"replaced {c}": "true"}}'
@@ -905,8 +958,7 @@ class TestTemplateSource:
         base_path = "~/.rally/benchmarks/tracks/default/geonames"
         template_file_name = "track.json"
         tmpl_src = loader.TemplateSource(base_path, template_file_name)
-        expected_response = textwrap.dedent(
-            """
+        expected_response = textwrap.dedent("""
             {% import "rally.helpers" as rally with context %}
             {
               "version": 2,
@@ -939,8 +991,7 @@ class TestTemplateSource:
                 {"replaced ~/.rally/benchmarks/tracks/default/geonames/challenges/*.json": "true"}
               ]
             }
-            """
-        )
+            """)
 
         assert tmpl_src.replace_includes(base_path, track) == expected_response
 
@@ -1109,15 +1160,13 @@ class TestTemplateRender:
 
 
 class TestCompleteTrackParams:
-    assembled_source = textwrap.dedent(
-        """{% import "rally.helpers" as rally with context %}
+    assembled_source = textwrap.dedent("""{% import "rally.helpers" as rally with context %}
         "key1": "value1",
         "key2": {{ value2 | default(3) }},
         "key3": {{ value3 | default("default_value3") }}
         "key4": {{ value2 | default(3) }}
         "key5": {{ build_flavor }}
-    """
-    )
+    """)
 
     def test_check_complete_track_params_contains_all_track_params(self):
         complete_track_params = loader.CompleteTrackParams()
@@ -1172,8 +1221,7 @@ class TestCompleteTrackParams:
 
 
 class TestTrackPostProcessing:
-    track_with_params_as_string = textwrap.dedent(
-        """{
+    track_with_params_as_string = textwrap.dedent("""{
         "indices": [
             {
                 "name": "test-index",
@@ -1247,8 +1295,7 @@ class TestTrackPostProcessing:
                 ]
             }
         ]
-    }"""
-    )
+    }""")
 
     def test_post_processes_track_spec(self):
         track_specification = {

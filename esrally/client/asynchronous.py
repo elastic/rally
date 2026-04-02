@@ -49,25 +49,62 @@ from esrally.client.context import RequestContextHolder
 from esrally.utils import io, versions
 
 
-class StaticTransport:
-    def __init__(self):
-        self.closed = False
-
-    def is_closing(self):
-        return False
-
-    def close(self):
-        self.closed = True
+class StaticTransport(asyncio.Transport):
+    def __init__(self, protocol: asyncio.Protocol):
+        self._closed = False
+        self._protocol = protocol
+        super().__init__()
 
     def abort(self):
         self.close()
+
+    def can_write_eof(self):
+        return False
+
+    def close(self):
+        self._closed = True
+        # allows immediate connection closure, without creating closed future
+        # see https://github.com/aio-libs/aiohttp/pull/11107
+        self._protocol.connection_lost(None)
+
+    def get_protocol(self):
+        return self._protocol
+
+    def get_write_buffer_limits(self):
+        return (0, 0)
+
+    def get_write_buffer_size(self):
+        return 0
+
+    def is_closing(self):
+        return self._closed
+
+    def is_reading(self):
+        return False
+
+    def pause_reading(self):
+        pass
+
+    def resume_reading(self):
+        pass
+
+    def set_protocol(self, protocol):
+        self._protocol = protocol
+
+    def set_write_buffer_limits(self, high=None, low=None):
+        pass
+
+    def write(self, data):
+        pass
+
+    def write_eof(self):
+        pass
 
 
 class StaticConnector(BaseConnector):
     async def _create_connection(self, req: "ClientRequest", traces: list["Trace"], timeout: "ClientTimeout") -> ResponseHandler:
         handler = ResponseHandler(self._loop)
-        handler.transport = StaticTransport()
-        handler.protocol = ""
+        handler.transport = StaticTransport(handler)
         return handler
 
 
