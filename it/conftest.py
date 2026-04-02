@@ -128,16 +128,19 @@ class EsMetricsStore:
 ES_METRICS_STORE = EsMetricsStore()
 
 
-@pytest.fixture(scope="session", autouse=True, monkeypatch: pytest.MonkeyPatch)
+@pytest.fixture(scope="session", autouse=True)
 def isolate_git_global_config() -> Generator[None]:
     """
-    Point ``GIT_CONFIG_GLOBAL`` at `/dev/null` so integration tests are not affected by the
+    Point ``GIT_CONFIG_GLOBAL`` at :data:`os.devnull` so integration tests are not affected by the
     developer's ``~/.gitconfig`` (e.g. per-URL ``proxy=""`` can let git ignore env proxies).
 
-    Uses :class:`pytest.MonkeyPatch` so the previous value is restored after the session.
+    Session-scoped fixtures cannot use pytest's function-scoped ``monkeypatch`` fixture; use a
+    dedicated :class:`pytest.MonkeyPatch` instance and :meth:`~pytest.MonkeyPatch.undo` after the session.
     """
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    mp = pytest.MonkeyPatch()
+    mp.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     yield
+    mp.undo()
 
 
 @pytest.fixture(scope="session", autouse=True)

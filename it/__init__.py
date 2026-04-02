@@ -50,7 +50,7 @@ _CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
 BENCHMARK_IT_HTTP_PORT = 19200
 # Default ``--cluster-name`` for ``esrally race`` / install; keep aligned with ``esrally/rally.py``.
 RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME = "rally-benchmark"
-# Only these cluster names may be torn down on :data:`BENCHMARK_IT_HTTP_PORT` (metrics store uses 10200).
+# Only these cluster names may be torn down on `BENCHMARK_IT_HTTP_PORT` (metrics store uses 10200).
 _BENCHMARK_CLUSTER_NAMES_ON_IT_PORT = frozenset({RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME, "in-memory-it"})
 _DOCKER_PUBLISH_STOP_ROUNDS = 3
 _LISTENER_SIGTERM_WAIT_SEC = 8.0
