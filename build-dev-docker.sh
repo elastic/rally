@@ -22,7 +22,7 @@
 # Logged in on Docker Hub (docker login)
 
 # fail this script immediately if any command fails with a non-zero exit code
-set -eu
+set -euo pipefail
 
 function push_failed {
     echo "Error while pushing Docker image. Did you \`docker login\`?"
