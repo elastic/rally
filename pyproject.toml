@@ -1,9 +1,16 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
+# Create a version file without a git hash
+# N commits after X.Y.Z, version is X.Y.Z.post1.devN
 [tool.hatch.version]
-path = "esrally/_version.py"
+source = "vcs"
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+version_scheme = "no-guess-dev"
+[tool.hatch.build.hooks.vcs]
+version-file = "esrally/_version.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -167,7 +174,7 @@ profile = 'black'
 # set to true for more verbose output of tests
 log_cli = false
 log_level = "INFO"
-addopts = "--verbose --color=yes"
+addopts = "--verbose --color=yes --import-mode=importlib"
 testpaths = "tests"
 junit_family = "xunit2"
 junit_logging = "all"
