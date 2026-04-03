@@ -89,8 +89,14 @@ def esrally(cfg: str, command_line: str, check: bool = False) -> int:
     try:
         return subprocess.run(command_line, shell=True, check=check, capture_output=True, text=True).returncode
     except subprocess.CalledProcessError as err:
-        output = "    ".join([""] + err.stdout.splitlines(keepends=True))
-        pytest.fail("Failed running esrally:\n" f" - command line: {command_line}\n" f" - output: {output}\n")
+        stdout = "    ".join([""] + (err.stdout or "").splitlines(keepends=True))
+        stderr = "    ".join([""] + (err.stderr or "").splitlines(keepends=True))
+        pytest.fail(
+            "Failed running esrally:\n"
+            f" - command line: {command_line}\n"
+            f" - stdout: {stdout}\n"
+            f" - stderr: {stderr}\n"
+        )
 
 
 def race(cfg: str, command_line: str, enable_assertions: bool = True, check: bool = False) -> int:

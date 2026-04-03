@@ -686,7 +686,6 @@ requires-dist = [
     { name = "boto3-stubs", marker = "extra == 'develop'", specifier = "==1.26.125" },
     { name = "certifi" },
     { name = "docker", specifier = "==7.1.0" },
-    { name = "docker", specifier = ">=7.1.0" },
     { name = "ecs-logging", specifier = "==2.2.0" },
     { name = "elastic-transport", specifier = "==9.2.1" },
     { name = "elasticsearch", extras = ["async"], specifier = "==9.3.0" },

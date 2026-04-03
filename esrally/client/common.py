@@ -63,6 +63,9 @@ def get_compatibility_mode(version: str | int | None = None) -> int:
         # By default, return the minimum compatibility mode for better compatibility.
         return _MIN_COMPATIBILITY_MODE
 
+    if isinstance(version, str) and versions.is_serverless(version):
+        return _MIN_COMPATIBILITY_MODE
+
     # Normalize version to an integer major version.
     if isinstance(version, str):
         if not versions.is_version_identifier(version):
