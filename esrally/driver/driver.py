@@ -45,6 +45,7 @@ from esrally import (
     telemetry,
     track,
     types,
+    version,
 )
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
@@ -701,7 +702,7 @@ class Driver:
             self.logger.error("Unable to create API keys. Stopping benchmark.")
             raise exceptions.SystemSetupError(e.message)
 
-    def prepare_benchmark(self, t):
+    def prepare_benchmark(self, t: track.Track) -> None:
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
@@ -712,44 +713,62 @@ class Driver:
             self.metrics_store, downsample_factor, self.track.meta_data, self.challenge.meta_data
         )
 
-        es_clients = self.create_es_clients()
-        self.default_sync_es_client = es_clients["default"]
+        prepare_only: bool = convert.to_bool(self.config.opts("race", "prepare.only", mandatory=False, default_value=False))
+        serverless_mode: bool = convert.to_bool(self.config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
+        serverless_operator: bool = convert.to_bool(self.config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
+        enabled_telemetry_devices = self.config.opts("telemetry", "devices")
 
-        skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
-        uses_static_responses = self.config.opts("client", "options").uses_static_responses
-        serverless_mode = convert.to_bool(self.config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
-        serverless_operator = convert.to_bool(self.config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
-        build_hash = None
-        if skip_rest_api_check:
-            self.logger.info("Skipping REST API check as requested explicitly.")
-        elif uses_static_responses:
-            self.logger.info("Skipping REST API check as static responses are used.")
+        if prepare_only:
+            self.logger.info("Prepare-only mode: skipping Elasticsearch client and REST checks; preparing track on disk only.")
+            dist_flavor: str = self.config.opts("mechanic", "distribution.flavor", mandatory=False) or "default"
+            dist_ver: str = self.config.opts("mechanic", "distribution.version", mandatory=False) or version.minimum_es_version()
+            build_hash: str = dist_flavor
+            self.driver_actor.cluster_details = {
+                "version": {"build_flavor": dist_flavor, "number": dist_ver, "build_hash": build_hash},
+            }
+            self.telemetry = telemetry.Telemetry(
+                enabled_devices=enabled_telemetry_devices,
+                devices=[],
+                serverless_mode=serverless_mode,
+                serverless_operator=serverless_operator,
+            )
         else:
-            if serverless_mode and not serverless_operator:
-                self.logger.info("Skipping REST API check while targetting serverless cluster with a public user.")
-            else:
-                self.wait_for_rest_api(es_clients)
-            self.driver_actor.cluster_details = self.retrieve_cluster_info(es_clients)
-            if serverless_mode:
-                # overwrite static serverless version number
-                self.driver_actor.cluster_details["version"]["number"] = "serverless"
-                if serverless_operator:
-                    # overwrite build hash if running as operator
-                    build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
-                    self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
-                    self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
+            es_clients = self.create_es_clients()
+            self.default_sync_es_client = es_clients["default"]
 
-        # Avoid issuing any requests to the target cluster when static responses are enabled. The results
-        # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
-        self.prepare_telemetry(
-            es_clients,
-            enable=not uses_static_responses,
-            index_names=self.track.index_names(),
-            data_stream_names=self.track.data_stream_names(),
-            build_hash=build_hash,
-            serverless_mode=serverless_mode,
-            serverless_operator=serverless_operator,
-        )
+            skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
+            uses_static_responses = self.config.opts("client", "options").uses_static_responses
+            build_hash = None
+            if skip_rest_api_check:
+                self.logger.info("Skipping REST API check as requested explicitly.")
+            elif uses_static_responses:
+                self.logger.info("Skipping REST API check as static responses are used.")
+            else:
+                if serverless_mode and not serverless_operator:
+                    self.logger.info("Skipping REST API check while targetting serverless cluster with a public user.")
+                else:
+                    self.wait_for_rest_api(es_clients)
+                self.driver_actor.cluster_details = self.retrieve_cluster_info(es_clients)
+                if serverless_mode:
+                    # overwrite static serverless version number
+                    self.driver_actor.cluster_details["version"]["number"] = "serverless"
+                    if serverless_operator:
+                        # overwrite build hash if running as operator
+                        build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
+                        self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
+                        self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
+
+            # Avoid issuing any requests to the target cluster when static responses are enabled. The results
+            # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
+            self.prepare_telemetry(
+                es_clients,
+                enable=not uses_static_responses,
+                index_names=self.track.index_names(),
+                data_stream_names=self.track.data_stream_names(),
+                build_hash=build_hash,
+                serverless_mode=serverless_mode,
+                serverless_operator=serverless_operator,
+            )
 
         for host in self.config.opts("driver", "load_driver_hosts"):
             host_config = {

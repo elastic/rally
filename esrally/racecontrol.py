@@ -39,7 +39,7 @@ from esrally import (
     types,
     version,
 )
-from esrally.utils import console, opts, versions
+from esrally.utils import console, convert, opts, versions
 
 pipelines = collections.OrderedDict()
 
@@ -112,6 +112,16 @@ class BenchmarkActor(actor.RallyActor):
         assert self.cfg is not None
         self.coordinator = BenchmarkCoordinator(msg.cfg)
         self.coordinator.setup(sources=msg.sources)
+        prepare_only: bool = convert.to_bool(self.cfg.opts("race", "prepare.only", mandatory=False, default_value=False))
+        if prepare_only:
+            self.mechanic = None
+            team_revision: Optional[str] = self.cfg.opts("mechanic", "repository.revision", mandatory=False)
+            if team_revision:
+                self.coordinator.race.team_revision = team_revision
+            self.logger.info("Prepare-only mode: skipping engine; preparing track data only.")
+            self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
+            self.send(self.main_driver, driver.PrepareBenchmark(self.cfg, self.coordinator.current_track))
+            return
         self.logger.info("Asking mechanic to start the engine.")
         self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
         self.send(
@@ -138,15 +148,36 @@ class BenchmarkActor(actor.RallyActor):
     @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PreparationComplete(self, msg, sender):
         self.coordinator.on_preparation_complete(msg.distribution_flavor, msg.distribution_version, msg.revision)
+        # esrally race --prepare-only (race.prepare.only): exit after track prep instead of StartBenchmark.
+        prepare_only: bool = convert.to_bool(self.cfg.opts("race", "prepare.only", mandatory=False, default_value=False))
+        if prepare_only:
+            self.logger.info("Prepare-only mode: skipping benchmark; shutting down driver%s.", " and engine" if self.mechanic else "")
+            self._finish_prepare_only()
+            return
         self.logger.info("Telling driver to start benchmark.")
         self.send(self.main_driver, driver.StartBenchmark())
+
+    def _finish_prepare_only(self) -> None:
+        # Same teardown order as receiveMsg_BenchmarkComplete (exit driver, StopEngine -> EngineStopped -> Success),
+        # but without running the challenge or on_benchmark_complete (no results, no summary).
+        assert self.coordinator is not None
+        assert self.main_driver is not None
+        self.coordinator.on_prepare_only_complete()
+        self.send(self.main_driver, thespian.actors.ActorExitRequest())
+        self.main_driver = None
+        if self.mechanic is not None:
+            self.logger.info("Asking mechanic to stop the engine.")
+            self.send(self.mechanic, mechanic.StopEngine())
+        else:
+            self.send(self.start_sender, Success())
 
     @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
     def receiveMsg_TaskFinished(self, msg, sender):
         self.coordinator.on_task_finished(msg.metrics)
         # We choose *NOT* to reset our own metrics store's timer as this one is only used to collect complete metrics records from
         # other stores (used by driver and mechanic). Hence there is no need to reset the timer in our own metrics store.
-        self.send(self.mechanic, mechanic.ResetRelativeTime(msg.next_task_scheduled_in))
+        if self.mechanic is not None:
+            self.send(self.mechanic, mechanic.ResetRelativeTime(msg.next_task_scheduled_in))
 
     @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
     def receiveMsg_BenchmarkCancelled(self, msg, sender):
@@ -192,38 +223,48 @@ class BenchmarkCoordinator:
         # to load the track we need to know the correct cluster distribution version. Usually, this value should be set
         # but there are rare cases (external pipeline and user did not specify the distribution version) where we need
         # to derive it ourselves. For source builds we always assume "main"
+        prepare_only: bool = convert.to_bool(self.cfg.opts("race", "prepare.only", mandatory=False, default_value=False))
+        if prepare_only:
+            # Do not open reporting datastore (e.g. Elasticsearch metrics); prepare-only never persists benchmark metrics.
+            self.cfg.add(config.Scope.benchmark, "reporting", "datastore.type", "in-memory")
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
-            hosts = self.cfg.opts("client", "hosts").default
-            client_options = self.cfg.opts("client", "options").default
-            (
-                distribution_flavor,
-                distribution_version,
-                distribution_build_hash,
-                serverless_operator,
-            ) = client.factory.cluster_distribution_version(hosts, client_options)
-
-            self.logger.info(
-                "Automatically derived distribution flavor [%s], version [%s], and build hash [%s]",
-                distribution_flavor,
-                distribution_version,
-                distribution_build_hash,
-            )
-            self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
-            self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.flavor", distribution_flavor)
-            if versions.is_serverless(distribution_flavor):
-                if not self.cfg.exists("driver", "serverless.mode"):
-                    self.cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
-
-                if not self.cfg.exists("driver", "serverless.operator"):
-                    self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", serverless_operator)
-                console.info(f"Detected Elasticsearch Serverless mode with operator=[{serverless_operator}].")
+            if prepare_only:
+                # No cluster contact: seed version for track repo selection and messaging (see GitTrackRepository.update).
+                self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", version.minimum_es_version())
+                if not self.cfg.exists("mechanic", "distribution.flavor"):
+                    self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.flavor", "default")
             else:
-                min_es_version = versions.Version.from_string(version.minimum_es_version())
-                specified_version = versions.Version.from_string(distribution_version)
-                if specified_version < min_es_version:
-                    raise exceptions.SystemSetupError(
-                        f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]"
-                    )
+                hosts = self.cfg.opts("client", "hosts").default
+                client_options = self.cfg.opts("client", "options").default
+                (
+                    distribution_flavor,
+                    distribution_version,
+                    distribution_build_hash,
+                    serverless_operator,
+                ) = client.factory.cluster_distribution_version(hosts, client_options)
+
+                self.logger.info(
+                    "Automatically derived distribution flavor [%s], version [%s], and build hash [%s]",
+                    distribution_flavor,
+                    distribution_version,
+                    distribution_build_hash,
+                )
+                self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", distribution_version)
+                self.cfg.add(config.Scope.benchmark, "mechanic", "distribution.flavor", distribution_flavor)
+                if versions.is_serverless(distribution_flavor):
+                    if not self.cfg.exists("driver", "serverless.mode"):
+                        self.cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+
+                    if not self.cfg.exists("driver", "serverless.operator"):
+                        self.cfg.add(config.Scope.benchmark, "driver", "serverless.operator", serverless_operator)
+                    console.info(f"Detected Elasticsearch Serverless mode with operator=[{serverless_operator}].")
+                else:
+                    min_es_version = versions.Version.from_string(version.minimum_es_version())
+                    specified_version = versions.Version.from_string(distribution_version)
+                    if specified_version < min_es_version:
+                        raise exceptions.SystemSetupError(
+                            f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]"
+                        )
 
         self.current_track = track.load_track(self.cfg, install_dependencies=True)
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)
@@ -250,24 +291,55 @@ class BenchmarkCoordinator:
         self.race.distribution_flavor = distribution_flavor
         self.race.distribution_version = distribution_version
         self.race.revision = revision
-        # store race initially (without any results) so other components can retrieve full metadata
-        self.race_store.store_race(self.race)
-        if self.race.challenge.auto_generated:
+        prepare_only: bool = convert.to_bool(self.cfg.opts("race", "prepare.only", mandatory=False, default_value=False))
+        if not prepare_only:
+            # store race initially (without any results) so other components can retrieve full metadata
+            self.race_store.store_race(self.race)
+        # Prepare-only: skip store_race here so no partial race.json is written when we never run the benchmark.
+        if prepare_only:
+            if self.race.challenge.auto_generated:
+                console.info(
+                    "Prepared track [{}] and car {} with version [{}]; "
+                    "prepare-only mode - not running the benchmark or persisting a race record.\n".format(
+                        self.race.track_name, self.race.car, self.race.distribution_version
+                    ),
+                    force=True,
+                    flush=True,
+                )
+            else:
+                console.info(
+                    "Prepared track [{}], challenge [{}] and car {} with version [{}]; "
+                    "prepare-only mode - not running the benchmark or persisting a race record.\n".format(
+                        self.race.track_name, self.race.challenge_name, self.race.car, self.race.distribution_version
+                    ),
+                    force=True,
+                    flush=True,
+                )
+        elif self.race.challenge.auto_generated:
             console.info(
                 "Racing on track [{}] and car {} with version [{}].\n".format(
                     self.race.track_name, self.race.car, self.race.distribution_version
-                )
+                ),
+                force=True,
+                flush=True,
             )
         else:
             console.info(
                 "Racing on track [{}], challenge [{}] and car {} with version [{}].\n".format(
                     self.race.track_name, self.race.challenge_name, self.race.car, self.race.distribution_version
-                )
+                ),
+                force=True,
+                flush=True,
             )
 
     def on_task_finished(self, new_metrics):
         self.logger.info("Bulk adding request metrics to metrics store.")
         self.metrics_store.bulk_add(new_metrics)
+
+    def on_prepare_only_complete(self) -> None:
+        # Close coordinator metrics store without flush/calculate_results/reporter.summarize (see on_benchmark_complete).
+        self.logger.info("Prepare-only run finished; closing metrics store without benchmark results.")
+        self.metrics_store.close()
 
     def on_benchmark_complete(self, new_metrics):
         self.logger.info("Benchmark is complete.")
