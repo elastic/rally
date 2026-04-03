@@ -98,8 +98,6 @@ dependencies = [
     "wheel==0.46.3",
     # License: MIT — Rally runs `python -m pip install` to install track dependencies (see esrally.track.loader).
     "pip==26.0.1",
-    # License: Apache 2.0
-    "docker>=7.1.0",
 ]
 
 [project.optional-dependencies]
