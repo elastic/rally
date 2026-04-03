@@ -122,6 +122,7 @@ Key = Literal[
     "output.path",
     "output.processingtime",
     "params",
+    "params.ignore_unused",
     "passenv",
     "pipeline",
     "plugin.community-plugin.src.dir",
