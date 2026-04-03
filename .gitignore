@@ -119,6 +119,7 @@ recipes/ccr/ccr-target-hosts.json
 /.project
 /.pydevproject
 /.vscode
+/.zed
 
 # Tracker tracks
 tracks/
