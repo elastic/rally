@@ -23,15 +23,14 @@ import it
 
 
 @pytest.fixture(scope="module")
-def test_cluster():
+def test_cluster(free_benchmark_http_port_module):
     cluster = it.TestCluster("in-memory-it")
     # test with a recent distribution
     dist = it.DISTRIBUTIONS[-1]
-    port = 19200
     race_id = str(uuid.uuid4())
-
-    it.wait_until_port_is_free(port_number=port)
-    cluster.install(distribution_version=dist, node_name="rally-node", car="4gheap,basic-license", http_port=port)
+    cluster.install(
+        distribution_version=dist, node_name="rally-node", car="4gheap,basic-license", http_port=free_benchmark_http_port_module
+    )
     cluster.start(race_id=race_id)
     yield cluster
     cluster.stop()
