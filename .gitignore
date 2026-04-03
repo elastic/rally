@@ -60,7 +60,9 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-esrally/_version.py  # hatch-vcs
+
+# hatch-vcs version file
+esrally/_version.py
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
