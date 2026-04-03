@@ -31,7 +31,7 @@ from esrally import client, version
 from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
-DISTRIBUTIONS = [version.minimum_es_version(), "9.2.4"]
+DISTRIBUTIONS = ["8.19.13", "9.2.7"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
