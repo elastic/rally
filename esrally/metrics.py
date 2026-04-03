@@ -347,9 +347,26 @@ class MetaInfoScope(Enum):
     """
 
 
-def calculate_results(store, race):
+def calculate_results(store, race, cfg=None):
     calc = GlobalStatsCalculator(store, race.track, race.challenge)
-    return calc()
+    cluster_names = []
+    if cfg is not None:
+        try:
+            all_hosts = cfg.opts("client", "hosts").all_hosts
+            if isinstance(all_hosts, dict) and len(all_hosts) > 1:
+                cluster_names = list(all_hosts.keys())
+        except Exception:
+            pass
+    if not cluster_names:
+        return calc()
+    # Multi-cluster: compute stats per cluster and attach to a single GlobalStats
+    result = calc(cluster_name=cluster_names[0])
+    result.cluster_names = cluster_names
+    result.op_metrics_by_cluster = {}
+    for cn in cluster_names:
+        cluster_stats = calc(cluster_name=cn)
+        result.op_metrics_by_cluster[cn] = cluster_stats.op_metrics
+    return result
 
 
 def calculate_system_results(store, node_name):
@@ -750,7 +767,15 @@ class MetricsStore:
         raise NotImplementedError("abstract method")
 
     def get_one(
-        self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+        self,
+        name,
+        sample_type=None,
+        node_name=None,
+        task=None,
+        cluster_name=None,
+        mapper=lambda doc: doc["value"],
+        sort_key=None,
+        sort_reverse=False,
     ):
         """
         Gets one value for the given metric name (even if there should be more than one).
@@ -759,6 +784,7 @@ class MetricsStore:
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
         :param task The task name to query. Optional.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :param sort_key The key to sort the docs before returning the first value. Optional.
         :param sort_reverse  The flag to reverse the sort. Optional.
         :return: The corresponding value for the given metric name or None if there is no value.
@@ -769,7 +795,7 @@ class MetricsStore:
     def _first_or_none(values):
         return values[0] if values else None
 
-    def get(self, name, task=None, operation_type=None, sample_type=None, node_name=None):
+    def get(self, name, task=None, operation_type=None, sample_type=None, node_name=None, cluster_name=None):
         """
         Gets all raw values for the given metric name.
 
@@ -778,11 +804,21 @@ class MetricsStore:
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: A list of all values for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, node_name, lambda doc: doc["value"])
+        return self._get(name, task, operation_type, sample_type, node_name, cluster_name, lambda doc: doc["value"])
 
-    def get_raw(self, name, task=None, operation_type=None, sample_type=None, node_name=None, mapper=lambda doc: doc):
+    def get_raw(
+        self,
+        name,
+        task=None,
+        operation_type=None,
+        sample_type=None,
+        node_name=None,
+        cluster_name=None,
+        mapper=lambda doc: doc,
+    ):
         """
         Gets all raw records for the given metric name.
 
@@ -791,12 +827,13 @@ class MetricsStore:
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :param mapper A record mapper. By default, the complete record is returned.
         :return: A list of all raw records for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, node_name, mapper)
+        return self._get(name, task, operation_type, sample_type, node_name, cluster_name, mapper)
 
-    def get_unit(self, name, task=None, operation_type=None, node_name=None):
+    def get_unit(self, name, task=None, operation_type=None, node_name=None, cluster_name=None):
         """
         Gets the unit for the given metric name.
 
@@ -804,15 +841,16 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param node_name The name of the node where this metric was gathered. Optional.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: The corresponding unit for the given metric name or None if no metric record is available.
         """
         # does not make too much sense to ask for a sample type here
-        return self._first_or_none(self._get(name, task, operation_type, None, node_name, lambda doc: doc["unit"]))
+        return self._first_or_none(self._get(name, task, operation_type, None, node_name, cluster_name, lambda doc: doc["unit"]))
 
-    def _get(self, name, task, operation_type, sample_type, node_name, mapper):
+    def _get(self, name, task, operation_type, sample_type, node_name, cluster_name, mapper):
         raise NotImplementedError("abstract method")
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None, cluster_name=None):
         """
         Gets the error rate for a specific task.
 
@@ -823,7 +861,7 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=None):
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None, cluster_name=None):
         """
         Gets standard statistics for the given metric.
 
@@ -831,11 +869,12 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: A metric_stats structure.
         """
         raise NotImplementedError("abstract method")
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None, cluster_name=None):
         """
         Retrieves percentile metrics for the given metric.
 
@@ -851,7 +890,7 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_median(self, name, task=None, operation_type=None, sample_type=None):
+    def get_median(self, name, task=None, operation_type=None, sample_type=None, cluster_name=None):
         """
         Retrieves median value of the given metric.
 
@@ -859,13 +898,14 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: The median value.
         """
         median = "50.0"
-        percentiles = self.get_percentiles(name, task, operation_type, sample_type, percentiles=[median])
+        percentiles = self.get_percentiles(name, task, operation_type, sample_type, percentiles=[median], cluster_name=cluster_name)
         return percentiles[median] if percentiles else None
 
-    def get_mean(self, name, task=None, operation_type=None, sample_type=None):
+    def get_mean(self, name, task=None, operation_type=None, sample_type=None, cluster_name=None):
         """
         Retrieves mean of the given metric.
 
@@ -873,9 +913,10 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: The mean.
         """
-        stats = self.get_stats(name, task, operation_type, sample_type)
+        stats = self.get_stats(name, task, operation_type, sample_type, cluster_name=cluster_name)
         return stats["avg"] if stats else None
 
 
@@ -988,9 +1029,9 @@ class EsMetricsStore(MetricsStore):
     def _add(self, doc):
         self._docs.append(doc)
 
-    def _get(self, name, task, operation_type, sample_type, node_name, mapper):
+    def _get(self, name, task, operation_type, sample_type, node_name, cluster_name, mapper):
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, node_name),
+            "query": self._query_by_name(name, task, operation_type, sample_type, node_name, cluster_name),
             "track_total_hits": True,
             "size": 10000,
         }
@@ -1003,11 +1044,19 @@ class EsMetricsStore(MetricsStore):
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
     def get_one(
-        self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+        self,
+        name,
+        sample_type=None,
+        node_name=None,
+        task=None,
+        cluster_name=None,
+        mapper=lambda doc: doc["value"],
+        sort_key=None,
+        sort_reverse=False,
     ):
         order = "desc" if sort_reverse else "asc"
         query = {
-            "query": self._query_by_name(name, task, None, sample_type, node_name),
+            "query": self._query_by_name(name, task, None, sample_type, node_name, cluster_name),
             "size": 1,
         }
         if sort_key:
@@ -1024,9 +1073,9 @@ class EsMetricsStore(MetricsStore):
         else:
             return None
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None, cluster_name=None):
         query = {
-            "query": self._query_by_name("service_time", task, operation_type, sample_type, None),
+            "query": self._query_by_name("service_time", task, operation_type, sample_type, None, cluster_name),
             "size": 0,
             "aggs": {
                 "error_rate": {
@@ -1060,7 +1109,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return count_errors / (count_errors + count_success)
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=None):
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None, cluster_name=None):
         """
         Gets standard statistics for the given metric name.
 
@@ -1068,7 +1117,7 @@ class EsMetricsStore(MetricsStore):
         https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-metrics-stats-aggregation.html
         """
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, None),
+            "query": self._query_by_name(name, task, operation_type, sample_type, None, cluster_name),
             "size": 0,
             "aggs": {
                 "metric_stats": {
@@ -1082,11 +1131,11 @@ class EsMetricsStore(MetricsStore):
         result = self._client.search(index=self._index, body=query)
         return result["aggregations"]["metric_stats"]
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None, cluster_name=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, None),
+            "query": self._query_by_name(name, task, operation_type, sample_type, None, cluster_name),
             "size": 0,
             "aggs": {
                 "percentile_stats": {
@@ -1110,7 +1159,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return None
 
-    def _query_by_name(self, name, task, operation_type, sample_type, node_name):
+    def _query_by_name(self, name, task, operation_type, sample_type, node_name, cluster_name=None):
         q = {
             "bool": {
                 "filter": [
@@ -1159,6 +1208,14 @@ class EsMetricsStore(MetricsStore):
                     },
                 },
             )
+        if cluster_name:
+            q["bool"]["filter"].append(
+                {
+                    "term": {
+                        "meta.cluster": cluster_name,
+                    },
+                },
+            )
         return q
 
     def to_externalizable(self, clear=False):
@@ -1204,11 +1261,11 @@ class InMemoryMetricsStore(MetricsStore):
         )
         return compressed
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None, cluster_name=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         result = collections.OrderedDict()
-        values = self.get(name, task, operation_type, sample_type)
+        values = self.get(name, task, operation_type, sample_type, cluster_name=cluster_name)
         if len(values) > 0:
             sorted_values = sorted(values)
             for percentile in percentiles:
@@ -1237,7 +1294,7 @@ class InMemoryMetricsStore(MetricsStore):
             higher_score = sorted_values[lr_next]
             return lower_score + (higher_score - lower_score) * fr
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None, cluster_name=None):
         error = 0
         total_count = 0
         for doc in self.docs:
@@ -1247,6 +1304,7 @@ class InMemoryMetricsStore(MetricsStore):
                 and doc["task"] == task
                 and (operation_type is None or doc["operation-type"] == operation_type)
                 and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+                and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
             ):
                 total_count += 1
                 if doc["meta"]["success"] is False:
@@ -1256,8 +1314,8 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return 0.0
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=SampleType.Normal):
-        values = self.get(name, task, operation_type, sample_type)
+    def get_stats(self, name, task=None, operation_type=None, sample_type=SampleType.Normal, cluster_name=None):
+        values = self.get(name, task, operation_type, sample_type, cluster_name=cluster_name)
         sorted_values = sorted(values)
         if len(sorted_values) > 0:
             return {
@@ -1270,7 +1328,7 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return None
 
-    def _get(self, name, task, operation_type, sample_type, node_name, mapper):
+    def _get(self, name, task, operation_type, sample_type, node_name, cluster_name, mapper):
         return [
             mapper(doc)
             for doc in self.docs
@@ -1279,10 +1337,19 @@ class InMemoryMetricsStore(MetricsStore):
             and (operation_type is None or doc["operation-type"] == operation_type)
             and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
             and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
+            and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
         ]
 
     def get_one(
-        self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+        self,
+        name,
+        sample_type=None,
+        node_name=None,
+        task=None,
+        cluster_name=None,
+        mapper=lambda doc: doc["value"],
+        sort_key=None,
+        sort_reverse=False,
     ):
         if sort_key:
             docs = sorted(self.docs, key=lambda k: k[sort_key], reverse=sort_reverse)
@@ -1294,6 +1361,7 @@ class InMemoryMetricsStore(MetricsStore):
                 and (task is None or doc["task"] == task)
                 and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
                 and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
+                and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
             ):
                 return mapper(doc)
         return None
@@ -2092,24 +2160,24 @@ class GlobalStatsCalculator:
         self.track = track
         self.challenge = challenge
 
-    def __call__(self):
+    def __call__(self, cluster_name=None):
         result = GlobalStats()
 
         for tasks in self.challenge.schedule:
             for task in tasks:
                 t = task.name
                 op_type = task.operation.type
-                error_rate = self.error_rate(t, op_type)
-                duration = self.duration(t)
+                error_rate = self.error_rate(t, op_type, cluster_name=cluster_name)
+                duration = self.duration(t, cluster_name=cluster_name)
                 if task.operation.include_in_reporting or error_rate > 0:
                     self.logger.debug("Gathering request metrics for [%s].", t)
                     result.add_op_metrics(
                         t,
                         task.operation.name,
-                        self.summary_stats("throughput", t, op_type),
-                        self.single_latency(t, op_type),
-                        self.single_latency(t, op_type, metric_name="service_time"),
-                        self.single_latency(t, op_type, metric_name="processing_time"),
+                        self.summary_stats("throughput", t, op_type, cluster_name=cluster_name),
+                        self.single_latency(t, op_type, cluster_name=cluster_name),
+                        self.single_latency(t, op_type, metric_name="service_time", cluster_name=cluster_name),
+                        self.single_latency(t, op_type, metric_name="processing_time", cluster_name=cluster_name),
                         error_rate,
                         duration,
                         self.merge(self.track.meta_data, self.challenge.meta_data, task.operation.meta_data, task.meta_data),
@@ -2199,11 +2267,29 @@ class GlobalStatsCalculator:
     def one(self, metric_name):
         return self.store.get_one(metric_name)
 
-    def summary_stats(self, metric_name, task_name, operation_type):
-        mean = self.store.get_mean(metric_name, task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
-        median = self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
-        unit = self.store.get_unit(metric_name, task=task_name, operation_type=operation_type)
-        stats = self.store.get_stats(metric_name, task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
+    def summary_stats(self, metric_name, task_name, operation_type, cluster_name=None):
+        mean = self.store.get_mean(
+            metric_name,
+            task=task_name,
+            operation_type=operation_type,
+            sample_type=SampleType.Normal,
+            cluster_name=cluster_name,
+        )
+        median = self.store.get_median(
+            metric_name,
+            task=task_name,
+            operation_type=operation_type,
+            sample_type=SampleType.Normal,
+            cluster_name=cluster_name,
+        )
+        unit = self.store.get_unit(metric_name, task=task_name, operation_type=operation_type, cluster_name=cluster_name)
+        stats = self.store.get_stats(
+            metric_name,
+            task=task_name,
+            operation_type=operation_type,
+            sample_type=SampleType.Normal,
+            cluster_name=cluster_name,
+        )
         if mean and median and stats:
             return {
                 "min": stats["min"],
@@ -2267,20 +2353,39 @@ class GlobalStatsCalculator:
                     result.append({"index": index, "field": field, "value": v["value"], "unit": v["unit"]})
         return result
 
-    def error_rate(self, task_name, operation_type):
-        return self.store.get_error_rate(task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
-
-    def duration(self, task_name):
-        return self.store.get_one(
-            "service_time", task=task_name, mapper=lambda doc: doc["relative-time"], sort_key="relative-time", sort_reverse=True
+    def error_rate(self, task_name, operation_type, cluster_name=None):
+        return self.store.get_error_rate(
+            task=task_name, operation_type=operation_type, sample_type=SampleType.Normal, cluster_name=cluster_name
         )
 
-    def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
-        return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
+    def duration(self, task_name, cluster_name=None):
+        return self.store.get_one(
+            "service_time",
+            task=task_name,
+            cluster_name=cluster_name,
+            mapper=lambda doc: doc["relative-time"],
+            sort_key="relative-time",
+            sort_reverse=True,
+        )
 
-    def single_latency(self, task, operation_type, metric_name="latency"):
+    def median(self, metric_name, task_name=None, operation_type=None, sample_type=None, cluster_name=None):
+        return self.store.get_median(
+            metric_name,
+            task=task_name,
+            operation_type=operation_type,
+            sample_type=sample_type,
+            cluster_name=cluster_name,
+        )
+
+    def single_latency(self, task, operation_type, metric_name="latency", cluster_name=None):
         sample_type = SampleType.Normal
-        stats = self.store.get_stats(metric_name, task=task, operation_type=operation_type, sample_type=sample_type)
+        stats = self.store.get_stats(
+            metric_name,
+            task=task,
+            operation_type=operation_type,
+            sample_type=sample_type,
+            cluster_name=cluster_name,
+        )
         sample_size = stats["count"] if stats else 0
         if sample_size > 0:
             percentiles = self.store.get_percentiles(
@@ -2289,9 +2394,16 @@ class GlobalStatsCalculator:
                 operation_type=operation_type,
                 sample_type=sample_type,
                 percentiles=percentiles_for_sample_size(sample_size),
+                cluster_name=cluster_name,
             )
-            mean = self.store.get_mean(metric_name, task=task, operation_type=operation_type, sample_type=sample_type)
-            unit = self.store.get_unit(metric_name, task=task, operation_type=operation_type)
+            mean = self.store.get_mean(
+                metric_name,
+                task=task,
+                operation_type=operation_type,
+                sample_type=sample_type,
+                cluster_name=cluster_name,
+            )
+            unit = self.store.get_unit(metric_name, task=task, operation_type=operation_type, cluster_name=cluster_name)
             stats = collections.OrderedDict()
             for k, v in percentiles.items():
                 # safely encode so we don't have any dots in field names
@@ -2306,6 +2418,8 @@ class GlobalStatsCalculator:
 class GlobalStats:
     def __init__(self, d=None):
         self.op_metrics = self.v(d, "op_metrics", default=[])
+        self.cluster_names = self.v(d, "cluster_names", default=[])
+        self.op_metrics_by_cluster = self.v(d, "op_metrics_by_cluster", default={})
         self.total_time = self.v(d, "total_time")
         self.total_time_per_shard = self.v(d, "total_time_per_shard", default={})
         self.indexing_throttle_time = self.v(d, "indexing_throttle_time")

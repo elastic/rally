@@ -311,3 +311,44 @@ class TestClientOptions:
             "default": {"timeout": 60, "max_connections": 512},
             "remote": {"timeout": 60, "max_connections": 1024},
         }
+
+
+class TestSingleClusterTargetHosts:
+    def test_exposes_one_cluster_as_default(self):
+        target_hosts = opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"], "cluster-b": ["10.0.0.1:9200"]}')
+        single = opts.SingleClusterTargetHosts(target_hosts, "cluster-b")
+        assert single.default == [{"host": "10.0.0.1", "port": 9200}]
+        assert single.all_hosts == {"default": [{"host": "10.0.0.1", "port": 9200}]}
+        assert single["default"] == single.default
+
+    def test_subscript_returns_default(self):
+        target_hosts = opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"]}')
+        single = opts.SingleClusterTargetHosts(target_hosts, "cluster-a")
+        assert single["default"] == [{"host": "127.0.0.1", "port": 9200}]
+
+
+class TestSingleClusterClientOptions:
+    def test_exposes_one_cluster_options_as_default(self):
+        client_options_string = '{"cluster-a": {"timeout": 60}, "cluster-b": {"timeout": 120, "use_ssl": true}}'
+        target_hosts = opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"], "cluster-b": ["10.0.0.1:9200"]}')
+        client_options = opts.ClientOptions(client_options_string, target_hosts=target_hosts)
+        single = opts.SingleClusterClientOptions(client_options, "cluster-b")
+        assert single.default == {"timeout": 120, "use_ssl": True}
+        assert single.all_client_options == {"default": {"timeout": 120, "use_ssl": True}}
+
+    def test_uses_static_responses(self):
+        client_options_string = '{"cluster-a": {"timeout": 60}, "cluster-b": {"timeout": 60, "static_responses": "responses.json"}}'
+        target_hosts = opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"], "cluster-b": ["10.0.0.1:9200"]}')
+        client_options = opts.ClientOptions(client_options_string, target_hosts=target_hosts)
+        single_with_static = opts.SingleClusterClientOptions(client_options, "cluster-b")
+        single_without_static = opts.SingleClusterClientOptions(client_options, "cluster-a")
+        assert single_with_static.uses_static_responses == "responses.json"
+        assert single_without_static.uses_static_responses is False
+
+    def test_with_max_connections(self):
+        client_options_string = '{"cluster-a": {"timeout": 60}, "cluster-b": {"timeout": 120}}'
+        target_hosts = opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"], "cluster-b": ["10.0.0.1:9200"]}')
+        client_options = opts.ClientOptions(client_options_string, target_hosts=target_hosts)
+        single = opts.SingleClusterClientOptions(client_options, "cluster-a")
+        result = single.with_max_connections(256)
+        assert result == {"default": {"timeout": 60, "max_connections": 256}}
