@@ -59,7 +59,7 @@ else
   branch_name="${RALLY_BRANCH}"
 fi
 export RALLY_VERSION=$(hatch version)
-export RALLY_VERSION_TAG="${RALLY_VERSION}"
+export RALLY_VERSION_TAG="${branch_name}-${GIT_SHA}-${DATE}-${ARCH}"
 MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
 if [[ "$RALLY_BRANCH" == "$MAIN_BRANCH" ]]; then
