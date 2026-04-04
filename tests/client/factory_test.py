@@ -372,7 +372,7 @@ class TestEsClientFactory:
             hosts=["https://localhost:9200"],
             transport_class=RallyAsyncTransport,
             ssl_context=f.ssl_context,
-            maxsize=f.max_connections,
+            connections_per_node=f.max_connections,
             verify_certs=True,
             serializer=f.client_options["serializer"],
             api_key=api_key,
@@ -540,8 +540,9 @@ class TestRestLayer:
         ):
             client.wait_for_rest_layer(es, max_attempts=3)
 
+    @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_connection_protocol_error(self, es):
+    def test_connection_protocol_error(self, es, sleep):
         es.cluster.health.side_effect = elasticsearch.ConnectionError(
             message="N/A",
             errors=[urllib3.exceptions.ProtocolError("Connection aborted.")],  # type: ignore[arg-type]
@@ -550,7 +551,24 @@ class TestRestLayer:
             exceptions.SystemSetupError,
             match="Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?",
         ):
-            client.wait_for_rest_layer(es, max_attempts=3)
+            client.wait_for_rest_layer(es, max_attempts=1)
+        assert es.cluster.health.call_count == 2
+
+    @mock.patch("time.sleep")
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_connection_protocol_error_fails_fast_before_max_attempts(self, es, sleep):
+        """Persistent protocol errors must not use the full max_attempts * sleep budget."""
+        es.cluster.health.side_effect = elasticsearch.ConnectionError(
+            message="N/A",
+            errors=[urllib3.exceptions.ProtocolError("Connection aborted.")],  # type: ignore[arg-type]
+        )
+        with pytest.raises(
+            exceptions.SystemSetupError,
+            match="Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?",
+        ):
+            client.wait_for_rest_layer(es, max_attempts=40)
+        # Cap is 8 consecutive protocol errors -> raise on the 9th; each attempt calls health once.
+        assert es.cluster.health.call_count == 9
 
 
 class TestApiKeys:
