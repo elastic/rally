@@ -20,9 +20,7 @@ import it
 
 
 @it.random_rally_config
-def test_static_responses(cfg):
-    port = 19200
-    it.wait_until_port_is_free(port_number=port)
+def test_static_responses(cfg, free_benchmark_http_port):
     dist_version = it.DISTRIBUTIONS[-1]
     cwd = os.path.dirname(__file__)
     responses = os.path.join(cwd, "resources", "static-responses.json")

@@ -17,13 +17,15 @@
 
 import os
 import shutil
+import socket
 import tempfile
+from collections.abc import Generator
 
 import pytest
 
 from esrally import config, version
 from esrally.utils import process
-from it import CONFIG_NAMES, ROOT_DIR, TestCluster
+from it import CONFIG_NAMES, ROOT_DIR, TestCluster, ensure_benchmark_http_port_free
 
 
 def check_prerequisites():
@@ -73,22 +75,52 @@ def remove_integration_test_config():
 
 
 class EsMetricsStore:
-    VERSION = "8.5.1"
+    """Session-scoped Elasticsearch used as the integration-test metrics store."""
 
-    def __init__(self):
+    VERSION = "8.5.1"
+    HTTP_PORT = 10200
+
+    def __init__(self) -> None:
         self.cluster = TestCluster("in-memory-it")
 
-    def start(self):
+    def start(self) -> None:
+        """Ensure metrics Elasticsearch is up on :attr:`HTTP_PORT`, installing it if needed."""
+        port = self.HTTP_PORT
+        cluster = self.cluster
+        name = cluster.probe_cluster_on_port(port)
+        if name == cluster.cfg:
+            print("Elasticsearch metrics store already running; waiting for cluster health (yellow)...")
+            cluster.http_port = port
+            cluster.wait_for_cluster_health()
+            return
+        if name is not None:
+            raise AssertionError(
+                f"Port {port} answers Elasticsearch but reports cluster name {name!r}; "
+                f"integration tests expect {cluster.cfg!r} for the metrics store. "
+                f"Stop the other cluster or change EsMetricsStore.HTTP_PORT."
+            )
+        probe_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            if probe_sock.connect_ex(("127.0.0.1", port)) == 0:
+                raise AssertionError(
+                    f"Something is listening on 127.0.0.1:{port} but the Elasticsearch REST probe did not succeed "
+                    f"(expected cluster name {cluster.cfg!r} when reusing the metrics store). "
+                    f"Free the port or check firewall/proxy. If Elasticsearch is still starting, wait and retry."
+                )
+        finally:
+            probe_sock.close()
         print("Starting Elasticsearch metrics store...")
         self.cluster.install(
             distribution_version=EsMetricsStore.VERSION,
             node_name="metrics-store",
             car="defaults,basic-license",
-            http_port=10200,
+            http_port=self.HTTP_PORT,
         )
         self.cluster.start(race_id="metrics-store")
+        print("Waiting for metrics store cluster health (yellow)...")
+        self.cluster.wait_for_cluster_health()
 
-    def stop(self):
+    def stop(self) -> None:
         print("Stopping Elasticsearch metrics store...")
         self.cluster.stop()
 
@@ -97,7 +129,27 @@ ES_METRICS_STORE = EsMetricsStore()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def shared_setup():
+def isolate_git_global_config() -> Generator[None]:
+    """
+    Point ``GIT_CONFIG_GLOBAL`` at :data:`os.devnull` so integration tests are not affected by the
+    developer's ``~/.gitconfig`` (e.g. per-URL ``proxy=""`` can let git ignore env proxies).
+
+    Session-scoped fixtures cannot use pytest's function-scoped ``monkeypatch`` fixture; use a
+    dedicated :class:`pytest.MonkeyPatch` instance and :meth:`~pytest.MonkeyPatch.undo` after the session.
+    """
+    mp = pytest.MonkeyPatch()
+    mp.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    yield
+    mp.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shared_setup(isolate_git_global_config: None) -> Generator[None]:
+    """
+    Session autouse hook: prerequisites, Rally IT config, metrics store, and docker image.
+
+    Depends on :func:`isolate_git_global_config` so git runs with a neutral global config first.
+    """
     print("\nStarting shared setup...")
     check_prerequisites()
     install_integration_test_config()
@@ -119,6 +171,31 @@ class ConfigFile:
             self.config_file_name = "rally.ini"
         self.source_path = os.path.join(os.path.dirname(__file__), "resources", self.config_file_name)
         self.target_path = os.path.join(self.rally_home, self.config_file_name)
+
+
+@pytest.fixture
+def free_benchmark_http_port() -> Generator[int]:
+    """
+    Before and after the test, clear Rally IT benchmark HTTP port (19200): stop orphaned
+    ``rally-benchmark`` / ``in-memory-it`` Elasticsearch (Docker or host JVM) and wait until the port is free.
+
+    See :func:`it.ensure_benchmark_http_port_free` for rationale on the fixed port and teardown behavior.
+    """
+    port = ensure_benchmark_http_port_free()
+    yield port
+    ensure_benchmark_http_port_free(port)
+
+
+@pytest.fixture(scope="module")
+def free_benchmark_http_port_module() -> Generator[int]:
+    """
+    Module-scoped variant of :func:`free_benchmark_http_port` for module fixtures (e.g. ``test_cluster``).
+
+    See :func:`it.ensure_benchmark_http_port_free` for rationale on the fixed port and teardown behavior.
+    """
+    port = ensure_benchmark_http_port_free()
+    yield port
+    ensure_benchmark_http_port_free(port)
 
 
 # ensures that a fresh log file is available
