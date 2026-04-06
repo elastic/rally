@@ -257,6 +257,7 @@ def rally_race(
     test_mode: bool = False,
     target_hosts: list[str] | None = None,
     pipeline: str | None = "benchmark-only",
+    challenge: str | None = None,
     rally_options: list[str] | None = None,
     logger: logging.Logger = LOG,
     **kwargs: Any,
@@ -269,6 +270,8 @@ def rally_race(
         rally_options += ["--target-hosts", ",".join(target_hosts)]
     if pipeline:
         rally_options += ["--pipeline", pipeline]
+    if challenge:
+        rally_options += ["--challenge", challenge]
     logger.info("Running rally race (options=%s, ES_VERSION=%s).", rally_options, os.environ["ES_VERSION"])
     run_rally("race", rally_options=rally_options, logger=logger, **kwargs)
     logger.info("Terminated rally race.")

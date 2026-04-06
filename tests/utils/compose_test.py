@@ -358,6 +358,7 @@ class RallyRaceCase:
     target_hosts: list[str] | None
     pipeline: str | None
     want_rally_options: list[str]
+    challenge: str | None = None
 
 
 @cases(
@@ -379,6 +380,13 @@ class RallyRaceCase:
         pipeline="p",
         want_rally_options=["--track", "t", "--target-hosts", "h1:9200,h2:9200", "--pipeline", "p"],
     ),
+    with_challenge=RallyRaceCase(
+        test_mode=False,
+        target_hosts=None,
+        pipeline="benchmark-only",
+        want_rally_options=["--track", "t", "--pipeline", "benchmark-only", "--challenge", "append-no-conflicts"],
+        challenge="append-no-conflicts",
+    ),
 )
 @mock.patch("esrally.utils.compose.run_rally")
 def test_rally_race(mock_run: mock.MagicMock, case: RallyRaceCase, monkeypatch: pytest.MonkeyPatch):
@@ -389,6 +397,7 @@ def test_rally_race(mock_run: mock.MagicMock, case: RallyRaceCase, monkeypatch: 
         test_mode=case.test_mode,
         target_hosts=case.target_hosts,
         pipeline=case.pipeline,
+        challenge=case.challenge,
         logger=log,
     )
     mock_run.assert_called_once()
