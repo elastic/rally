@@ -25,6 +25,7 @@ import pytest
 import tabulate
 
 from esrally import config
+from esrally.paths import rally_root
 from esrally.utils.cases import cases
 from esrally.utils.compose import (
     ComposeConfig,
@@ -124,7 +125,7 @@ class ComposePathsCase:
         compose_file="/proj/sub/compose.yaml",
         compose_dir=None,
         want_file="/proj/sub/compose.yaml",
-        want_dir="/proj/sub",
+        want_dir=os.path.dirname(rally_root()),
     ),
 )
 def test_compose_config_paths(case: ComposePathsCase):
@@ -138,12 +139,18 @@ def test_compose_config_paths(case: ComposePathsCase):
 
 
 def test_compose_config_default_file_and_dir_from_class_default(monkeypatch: pytest.MonkeyPatch):
-    """``DEFAULT_COMPOSE_FILE`` is fixed at import time; override the class attribute to test defaults."""
-    monkeypatch.setattr(ComposeConfig, "DEFAULT_COMPOSE_FILE", "/stack/compose.yaml")
+    monkeypatch.setattr(ComposeConfig, "_default_compose_file", staticmethod(lambda: "/stack/compose.yaml"))
     c = config.Config()
     cc = ComposeConfig.from_config(c)
     assert cc.compose_file == "/stack/compose.yaml"
-    assert cc.compose_dir == os.path.dirname("/stack/compose.yaml")
+    assert cc.compose_dir == os.path.dirname(rally_root())
+
+
+def test_compose_config_compose_file_from_rally_compose_file_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("RALLY_COMPOSE_FILE", "/env/compose.yaml")
+    c = config.Config()
+    cc = ComposeConfig.from_config(c)
+    assert cc.compose_file == "/env/compose.yaml"
 
 
 @dataclass
@@ -211,6 +218,8 @@ def test_run_compose(mock_run: mock.MagicMock, case: RunComposeCase):
     mock_run.assert_called_once()
     call_kw = mock_run.call_args.kwargs
     assert call_kw["cwd"] == case.want_cwd
+    # Mirrors compose_dir for build.context (Compose resolves relative context from the compose file dir).
+    assert call_kw["env"]["RALLY_COMPOSE_DIR"] == case.want_cwd
     assert call_kw["check"] is True
     (argv,) = mock_run.call_args[0]
     assert argv == ["docker", "compose"] + case.want_argv_suffix
@@ -264,6 +273,7 @@ def test_compose_wrappers(mock_run: mock.MagicMock, case: WrapperCase):
     kwargs["cfg"] = cfg
     kwargs.setdefault("logger", _silent_logger())
     case.func(**kwargs)
+    assert mock_run.call_args.kwargs["env"]["RALLY_COMPOSE_DIR"] == "/w"
     (argv,) = mock_run.call_args[0]
     assert argv[0:2] == ["docker", "compose"]
     assert case.want_command in argv
@@ -420,6 +430,7 @@ def test_run_rally_invokes_run_service(mock_run: mock.MagicMock):
     cfg = _compose_cfg(compose_file="", compose_dir="/w")
     log = _silent_logger()
     run_rally("list", ["tracks"], cfg=cfg, logger=log)
+    assert mock_run.call_args.kwargs["env"]["RALLY_COMPOSE_DIR"] == "/w"
     (argv,) = mock_run.call_args[0]
     assert "run" in argv
     assert "rally" in argv

@@ -39,15 +39,25 @@ class ComposeConfig(config.Config):
             raise TypeError(f"Expected compose.cmd to be a string or list of strings, but got [{type(cmd).__name__}]")
         return cmd
 
-    DEFAULT_COMPOSE_FILE = os.environ.get("COMPOSE_FILE", os.path.join(os.path.dirname(paths.rally_root()), "compose.yaml"))
+    @staticmethod
+    def _default_compose_file() -> str:
+        return os.environ.get(
+            "RALLY_COMPOSE_FILE",
+            os.path.join(os.path.dirname(__file__), "resources", "compose.yaml"),
+        )
 
     @property
     def compose_file(self) -> str:
-        return self.opts(section="compose", key="compose.file", default_value=self.DEFAULT_COMPOSE_FILE, mandatory=False)
+        return self.opts(section="compose", key="compose.file", default_value=self._default_compose_file(), mandatory=False)
 
     @property
     def compose_dir(self) -> str:
-        return self.opts(section="compose", key="compose.dir", default_value=os.path.dirname(self.compose_file), mandatory=False)
+        return self.opts(
+            section="compose",
+            key="compose.dir",
+            default_value=os.path.dirname(paths.rally_root()),
+            mandatory=False,
+        )
 
 
 def decode(output: bytes | None) -> str:
@@ -97,6 +107,7 @@ def run_compose(
     service: str | None = None,
     args: list[str] | None = None,
     *,
+    env: dict[str, str] | None = None,
     cfg: types.Config | None = None,
     compose_dir: str | None = None,
     compose_options: list[str] | None = None,
@@ -121,9 +132,13 @@ def run_compose(
     compose_dir = compose_dir or cfg.compose_dir
     kwargs.setdefault("stderr", subprocess.PIPE)
     kwargs.setdefault("cwd", compose_dir)
+    run_env = os.environ.copy()
+    run_env.update(env or {})
+    # Absolute repo root: Compose resolves relative build.context from the compose file path, not cwd.
+    run_env["RALLY_COMPOSE_DIR"] = compose_dir
     try:
         logger.debug("Running compose command: %s", cmd)
-        result = subprocess.run(cfg.compose_cmd + cmd, check=check, **kwargs)
+        result = subprocess.run(cfg.compose_cmd + cmd, check=check, env=run_env, **kwargs)
     except subprocess.CalledProcessError as e:
         logger.error(
             "Compose command returned nonzero exit status (%s): %s\nstdout:%s\nstderr:%s",
