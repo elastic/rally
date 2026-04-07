@@ -120,5 +120,5 @@ recipes/ccr/ccr-target-hosts.json
 /.pydevproject
 /.vscode
 
-# Tracker tracks
-tracks/
+# Tracker tracks (repository root only; not it/tracks/ integration tests)
+/tracks/
