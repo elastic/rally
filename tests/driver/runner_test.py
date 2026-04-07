@@ -8483,3 +8483,125 @@ class TestEsqlRunner:
         assert result["completion_time_in_millis"] is None
         assert result["start_time_in_millis"] is None
         assert result["expiration_time_in_millis"] is None
+
+
+class TestEsqlProfileRunner:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_without_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value={"profile": {}})
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | stats c = count(*)"})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from logs-* | stats c = count(*)", "profile": True}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_with_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value={"profile": {}})
+        esql_profile = runner.EsqlProfile()
+        query_filter = {"range": {"@timestamp": {"gte": "2023"}}}
+        result = await esql_profile(es, params={"query": "from * | limit 1", "filter": query_filter})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from * | limit 1", "profile": True, "filter": query_filter}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_with_body(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value={"profile": {}})
+        esql_profile = runner.EsqlProfile()
+        pragma = {"data_partitioning": "doc"}
+        result = await esql_profile(es, params={"query": "from * | limit 1", "body": {"pragma": pragma}})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"pragma": pragma, "query": "from * | limit 1", "profile": True}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_phase_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "query": {"took_nanos": 5_000_000},
+                "planning": {"took_nanos": 2_000_000},
+                "parsing": {"took_nanos": 500_000},
+                "drivers": [],
+                "plans": [],
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["success"] is True
+        assert result["query.took_ms"] == 5.0
+        assert result["planning.took_ms"] == 2.0
+        assert result["parsing.took_ms"] == 0.5
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_driver_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "drivers": [
+                    {
+                        "description": "data",
+                        "took_nanos": 10_000_000,
+                        "cpu_nanos": 8_000_000,
+                        "operators": [
+                            {"operator": "LuceneSourceOperator[...]", "status": {"process_nanos": 3_000_000, "processed_slices": 5}},
+                            {"operator": "TopNOperator[...]", "status": {"emit_nanos": 1_000_000, "receive_nanos": 1_500_000}},
+                        ],
+                    },
+                    {
+                        "description": "data",
+                        "took_nanos": 12_000_000,
+                        "cpu_nanos": 6_000_000,
+                        "operators": [],
+                    },
+                ],
+                "plans": [],
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result["data.number"] == 2
+        assert result["data.took_ms"] == 12.0  # max
+        assert result["data.cpu_ms"] == 8.0  # max
+        assert result["data.took_total_ms"] == 22.0  # sum
+        assert result["data.cpu_total_ms"] == 14.0  # sum
+        assert result["data.LuceneSourceOperator.process_ms"] == 3.0
+        assert result["data.LuceneSourceOperator.processed_slices"] == 5
+        assert result["data.TopNOperator.process_ms"] == 2.5
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_plan_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "drivers": [],
+                "plans": [
+                    {
+                        "description": "node_reduction",
+                        "logical_optimization_nanos": 1_000_000,
+                        "physical_optimization_nanos": 2_000_000,
+                        "reduction_nanos": 500_000,
+                    }
+                ],
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result["node_reduction.logical_optimization.took_ms"] == 1.0
+        assert result["node_reduction.physical_optimization.took_ms"] == 2.0
+        assert result["node_reduction.reduction.took_ms"] == 0.5

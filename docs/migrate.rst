@@ -1,13 +1,26 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.13.0
+-------------------------
+
+Python 3.9 is unsupported; use Python 3.10 through 3.13
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 2.13.0 drops support for Python 3.9. Supported interpreters are 3.10.x through 3.13.x. Check the :ref:`updated installation instructions <install_python>` for more details.
+
+Development uses uv instead of nox
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+
 Migrating to Rally 2.12.0
 -------------------------
 
-Minimum Python version is 3.10.0
+Minimum Python version is 3.9.0
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Rally 2.12.0 requires Python 3.10.0 or above. Check the :ref:`updated installation instructions <install_python>` for more details.
+Rally 2.12.0 requires Python 3.9.0 or above. Check the :ref:`updated installation instructions <install_python>` for more details.
 
 The metrics store keeps existing index templates
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
