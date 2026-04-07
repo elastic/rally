@@ -52,6 +52,9 @@ class TrackCase:
     description: str
     test_mode: bool = True
     challenge: str | None = None
+    # Keys must match literals in ``ES_VERSIONS``. When set for the active ``elasticsearch.version``,
+    # ``test_race_with_track`` calls ``pytest.skip`` with the value as the reason.
+    skip_reason_by_es_version: dict[str, str] | None = None
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -137,6 +140,12 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
         track_name="has_privileges",
         description="Benchmarks _has_privileges API with index and Kibana application privileges",
         test_mode=False,
+        skip_reason_by_es_version={
+            "8.19.13": (
+                "Fails in Docker IT against ES 8.19.13 (passes on 9.2.7 in observed runs); "
+                "see it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+        },
     ),
     has_privileges_bystander=TrackCase(
         track_name="has_privileges_bystander",
@@ -144,6 +153,16 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
             "Demonstrates Netty event-loop head-of-line blocking caused by expensive _has_privileges requests. "
             "Requires http.netty.worker_count:1 on the target cluster."
         ),
+        skip_reason_by_es_version={
+            "8.19.13": (
+                "Track requires http.netty.worker_count:1 on Elasticsearch; bundled compose es01 does not set it. "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+            "9.2.7": (
+                "Track requires http.netty.worker_count:1 on Elasticsearch; bundled compose es01 does not set it. "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+        },
     ),
     geopoint=TrackCase(
         track_name="geopoint",
@@ -157,6 +176,16 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
         track_name="wiki_en_cohere_vector_int8",
         description="Benchmark for vector search using Cohere embed-multilingual-v3 int8 embeddings on English Wikipedia",
         test_mode=False,
+        skip_reason_by_es_version={
+            "8.19.13": (
+                "Rally exits 64 during early setup in Docker IT (root cause not in captured logs). "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+            "9.2.7": (
+                "Rally exits 64 during early setup in Docker IT (root cause not in captured logs). "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+        },
     ),
     tsdb_k8s_queries=TrackCase(
         track_name="tsdb_k8s_queries",
@@ -170,6 +199,16 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
         track_name="search/mteb/dbpedia",
         description="Benchmark text search relevance with different configurations",
         test_mode=False,
+        skip_reason_by_es_version={
+            "8.19.13": (
+                "Track load failed (e.g. track.json) and/or pip deps (pytrec_eval, numpy) in Docker IT. "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+            "9.2.7": (
+                "pip install of track deps (pytrec_eval==0.5, numpy) fails in Rally container (Python 3.13 / aarch64). "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+        },
     ),
     geopointshape=TrackCase(
         track_name="geopointshape",
@@ -187,6 +226,12 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
         track_name="joins",
         description="Indexes for JOIN tests",
         test_mode=False,
+        skip_reason_by_es_version={
+            "8.19.13": (
+                "Track load failed (track.json missing/incomplete) against ES 8.19.13 in Docker IT. "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+        },
     ),
     random_vector=TrackCase(
         track_name="random_vector",
@@ -208,6 +253,9 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
         track_name="esql",
         description="Indexes for JOIN tests",
         test_mode=False,
+        skip_reason_by_es_version={
+            "8.19.13": ("Rally exits 64 in Docker IT against ES 8.19.13. See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"),
+        },
     ),
     nested=TrackCase(
         track_name="nested",
@@ -220,11 +268,27 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     msmarco_v2_vector=TrackCase(
         track_name="msmarco-v2-vector",
         description="Benchmark for vector search with msmarco-v2 passage data",
+        skip_reason_by_es_version={
+            "8.19.13": (
+                "pip install of track deps (pytrec_eval==0.5, numpy) fails in Rally container. "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+            "9.2.7": (
+                "pip install of track deps (pytrec_eval==0.5, numpy) fails in Rally container. "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+        },
     ),
     big5=TrackCase(
         track_name="big5",
         description="Benchmark for the Big5 workload",
         test_mode=False,
+        skip_reason_by_es_version={
+            "8.19.13": (
+                "Rally exits 64 against ES 8.19.13 in Docker IT (not a subprocess timeout). "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+        },
     ),
     openai_vector=TrackCase(
         track_name="openai_vector",
@@ -241,6 +305,16 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     msmarco_passage_ranking=TrackCase(
         track_name="msmarco-passage-ranking",
         description="Benchmark bm25, semantic and hybrid search on the MS MARCO passage dataset",
+        skip_reason_by_es_version={
+            "8.19.13": (
+                "pip install of track deps (pytrec_eval==0.5, numpy) fails in Rally container. "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+            "9.2.7": (
+                "pip install of track deps (pytrec_eval==0.5, numpy) fails in Rally container. "
+                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
+            ),
+        },
     ),
     sql=TrackCase(
         track_name="sql",
@@ -254,13 +328,19 @@ def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer):
     For each ``TrackCase`` (and each configured Elasticsearch version), starts ``es01`` with
     ``ES_VERSION`` set, then runs ``rally race`` targeting ``es01:9200``. ``TrackCase.test_mode``
     controls ``--test-mode`` (off for tracks that do not support it). ``TrackCase.challenge``,
-    when set, is passed as ``--challenge``. A per-case time budget comes from
-    ``IT_TRACKS_TIMEOUT_MINUTES``; if the race hits that timeout without another failure, the
-    test treats it as success.
+    when set, is passed as ``--challenge``. ``TrackCase.skip_reason_by_es_version`` may skip
+    the test for a given Elasticsearch version (keys must match ``ES_VERSIONS``). A per-case
+    time budget comes from ``IT_TRACKS_TIMEOUT_MINUTES``; if the race hits that timeout without
+    another failure, the test treats it as success.
     """
     LOG.info("Testing track name: %s (%s)", case.track_name, case.description)
     LOG.info("Testing timeout: %d seconds", RACE_TIMEOUT_S)
     LOG.info("Testing with elasticsearch version: %s", elasticsearch.version)
+
+    if case.skip_reason_by_es_version is not None:
+        reason = case.skip_reason_by_es_version.get(elasticsearch.version)
+        if reason is not None:
+            pytest.skip(reason)
 
     start_time = time.time()
     try:

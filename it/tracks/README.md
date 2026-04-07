@@ -5,6 +5,7 @@ This directory holds integration tests that run **Rally `race` inside Docker** (
 ## Contents
 
 - **`race_test.py`** — defines `TrackCase` entries and `test_race_with_track`, parametrized over tracks and over `ES_VERSIONS` in that module. Module-scoped fixtures build the Rally image and configure Compose; each test starts `es01` with the requested `ES_VERSION`, runs `rally race` toward `es01:9200`, and tears Elasticsearch down afterward.
+- **`TRACK_RACE_EXECUTION_FINDINGS.md`** — notes from Docker IT runs (failures, timeouts, environment). Some `TrackCase` rows set `skip_reason_by_es_version` (map of `ES_VERSIONS` string to reason) so known-broken `(track, ES version)` pairs are skipped with an explicit message until fixed.
 
 ## Prerequisites
 
