@@ -1837,10 +1837,10 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)
 
-        # Store cluster name (project ID for serverless, cluster ID for ECH, cluster name for on-prem)
-        cluster_name = client_info.get("cluster_name")
-        if cluster_name:
-            self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "cluster_name", cluster_name)
+        # Store target ID (project ID for serverless, cluster ID for ECH, cluster name for on-prem)
+        target_id = client_info.get("cluster_name")
+        if target_id:
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "target_id", target_id)
 
         # Determine and store target platform
         if versions.is_serverless(distribution_flavor):

@@ -3547,7 +3547,7 @@ class TestClusterEnvironmentInfo:
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
         calls = [
-            mock.call(metrics.MetaInfoScope.cluster, None, "cluster_name", "my-benchmark-cluster"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "target_id", "my-benchmark-cluster"),
             mock.call(metrics.MetaInfoScope.cluster, None, "target_platform", "on-prem"),
         ]
 

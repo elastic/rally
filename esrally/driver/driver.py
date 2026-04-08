@@ -49,7 +49,7 @@ from esrally import (
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
-from esrally.utils import console, convert, net
+from esrally.utils import console, convert, net, versions
 from esrally.utils.error_behavior import OnErrorBehavior
 
 
@@ -134,10 +134,13 @@ class WorkerIdle:
 
 
 class PreparationComplete:
-    def __init__(self, distribution_flavor, distribution_version, revision):
+    def __init__(self, distribution_flavor, distribution_version, revision, target_id=None, target_platform=None, target_auth_type=None):
         self.distribution_flavor = distribution_flavor
         self.distribution_version = distribution_version
         self.revision = revision
+        self.target_id = target_id
+        self.target_platform = target_platform
+        self.target_auth_type = target_auth_type
 
 
 class StartWorker:
@@ -359,6 +362,32 @@ class DriverActor(actor.RallyActor):
         build_version = cluster_version.get("number", build_flavor)
         build_hash = cluster_version.get("build_hash", build_flavor)
 
+        # Determine target_id (cluster_name from GET /)
+        target_id = self.cluster_details.get("cluster_name") if self.cluster_details else None
+
+        # Determine target_platform
+        if versions.is_serverless(build_flavor):
+            target_platform = "serverless"
+        else:
+            target_platform = "on-prem"
+            try:
+                meta = getattr(self.cluster_details, "meta", None)
+                if meta is not None:
+                    headers = getattr(meta, "headers", {})
+                    if "x-found-handling-cluster" in headers:
+                        target_platform = "hosted"
+            except Exception:
+                pass
+
+        # Determine target_auth_type from client options
+        target_auth_type = None
+        if self.driver is not None:
+            client_options = self.driver.config.opts("client", "options").default
+            if client_options.get("api_key"):
+                target_auth_type = "api_key"
+            elif client_options.get("basic_auth_user") or client_options.get("basic_auth"):
+                target_auth_type = "basic"
+
         for child in self.children:
             self.send(child, thespian.actors.ActorExitRequest())
         self.children = []
@@ -368,6 +397,9 @@ class DriverActor(actor.RallyActor):
                 build_flavor,
                 build_version,
                 build_hash,
+                target_id=target_id,
+                target_platform=target_platform,
+                target_auth_type=target_auth_type,
             ),
         )
 
