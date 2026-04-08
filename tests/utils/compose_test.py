@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 from dataclasses import dataclass
 from unittest import mock
 
@@ -219,7 +220,7 @@ def test_run_compose(mock_run: mock.MagicMock, case: RunComposeCase):
     call_kw = mock_run.call_args.kwargs
     assert call_kw["cwd"] == case.want_cwd
     # Mirrors compose_dir for build.context (Compose resolves relative context from the compose file dir).
-    assert call_kw["env"]["RALLY_COMPOSE_DIR"] == case.want_cwd
+    assert call_kw["env"]["RALLY_DOCKER_DIR"] == case.want_cwd
     assert call_kw["check"] is True
     (argv,) = mock_run.call_args[0]
     assert argv == ["docker", "compose"] + case.want_argv_suffix
@@ -234,12 +235,6 @@ class WrapperCase:
 
 
 @cases(
-    run_service_rm=WrapperCase(
-        func=run_service,
-        kwargs={"service": "app", "args": None, "remove": True, "compose_options": ["-T"]},
-        want_command="run",
-        want_compose_options_tail=["-T", "--rm", "app"],
-    ),
     run_service_no_rm=WrapperCase(
         func=run_service,
         kwargs={"service": "app", "remove": False},
@@ -258,6 +253,12 @@ class WrapperCase:
         want_command="rm",
         want_compose_options_tail=["--force", "--volumes", "es"],
     ),
+    remove_stop_force=WrapperCase(
+        func=remove_service,
+        kwargs={"service": "rally", "force": True, "stop": True, "check": False},
+        want_command="rm",
+        want_compose_options_tail=["--force", "--stop", "rally"],
+    ),
     build=WrapperCase(
         func=build_image,
         kwargs={"service": "rally"},
@@ -273,12 +274,40 @@ def test_compose_wrappers(mock_run: mock.MagicMock, case: WrapperCase):
     kwargs["cfg"] = cfg
     kwargs.setdefault("logger", _silent_logger())
     case.func(**kwargs)
-    assert mock_run.call_args.kwargs["env"]["RALLY_COMPOSE_DIR"] == "/w"
+    assert mock_run.call_args.kwargs["env"]["RALLY_DOCKER_DIR"] == "/w"
     (argv,) = mock_run.call_args[0]
     assert argv[0:2] == ["docker", "compose"]
     assert case.want_command in argv
     tail_start = argv.index(case.want_command) + 1
     assert argv[tail_start:] == case.want_compose_options_tail
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_run_service_remove_true_invokes_rm_after_run(mock_run: mock.MagicMock):
+    """``run_service(remove=True)`` ends with ``docker compose rm --force --stop`` for the same service (see run_service docstring)."""
+    mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
+    cfg = _compose_cfg(compose_file="/stack.yaml", compose_dir="/w")
+    run_service("rally", ["list", "tracks"], cfg=cfg, compose_options=["-T"], logger=_silent_logger())
+    assert mock_run.call_count == 2
+    (run_argv,) = mock_run.call_args_list[0][0]
+    assert run_argv[run_argv.index("run") + 1 :] == ["-T", "--rm", "rally", "list", "tracks"]
+    (rm_argv,) = mock_run.call_args_list[1][0]
+    assert rm_argv[rm_argv.index("rm") + 1 :] == ["--force", "--stop", "rally"]
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_run_service_timeout_still_invokes_rm(mock_run: mock.MagicMock):
+    """Even when ``run`` hits ``TimeoutExpired``, ``finally`` still attempts ``compose rm --stop``."""
+    mock_run.side_effect = [
+        subprocess.TimeoutExpired(cmd=["docker", "compose"], timeout=1),
+        mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b""),
+    ]
+    cfg = _compose_cfg(compose_file="", compose_dir="/w")
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_service("rally", ["x"], cfg=cfg, logger=_silent_logger(), timeout=1)
+    assert mock_run.call_count == 2
+    (rm_argv,) = mock_run.call_args_list[1][0]
+    assert rm_argv[rm_argv.index("rm") + 1 :] == ["--force", "--stop", "rally"]
 
 
 @dataclass
@@ -430,8 +459,9 @@ def test_run_rally_invokes_run_service(mock_run: mock.MagicMock):
     cfg = _compose_cfg(compose_file="", compose_dir="/w")
     log = _silent_logger()
     run_rally("list", ["tracks"], cfg=cfg, logger=log)
-    assert mock_run.call_args.kwargs["env"]["RALLY_COMPOSE_DIR"] == "/w"
-    (argv,) = mock_run.call_args[0]
+    assert mock_run.call_count == 2
+    assert mock_run.call_args_list[0].kwargs["env"]["RALLY_DOCKER_DIR"] == "/w"
+    (argv,) = mock_run.call_args_list[0][0]
     assert "run" in argv
     assert "rally" in argv
     assert argv[-2:] == ["list", "tracks"]

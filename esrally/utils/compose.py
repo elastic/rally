@@ -135,7 +135,7 @@ def run_compose(
     run_env = os.environ.copy()
     run_env.update(env or {})
     # Absolute repo root: Compose resolves relative build.context from the compose file path, not cwd.
-    run_env["RALLY_COMPOSE_DIR"] = compose_dir
+    run_env["RALLY_DOCKER_DIR"] = compose_dir
     try:
         logger.debug("Running compose command: %s", cmd)
         result = subprocess.run(cfg.compose_cmd + cmd, check=check, env=run_env, **kwargs)
@@ -171,13 +171,43 @@ def run_service(
     logger: logging.Logger = LOG,
     **kwargs: Any,
 ) -> subprocess.CompletedProcess:
+    """Run a one-off ``docker compose run`` for ``service``."""
     compose_options = compose_options or []
     if remove:
         compose_options += ["--rm"]
     logger.info("Run service '%s' (options=%s)", service, compose_options)
-    result = run_compose("run", service, args, cfg=cfg, compose_options=compose_options, compose_file=compose_file, logger=logger, **kwargs)
-    logger.info("Ran service '%s'.", service)
-    return result
+    try:
+        result = run_compose(
+            "run", service, args, cfg=cfg, compose_options=compose_options, compose_file=compose_file, logger=logger, **kwargs
+        )
+        logger.info("Ran service '%s'.", service)
+        return result
+    finally:
+        if remove:
+            # When ``remove=True`` (default), ``docker compose run`` is invoked with ``--rm``. That alone
+            # does not guarantee container removal: if the parent process hits ``subprocess`` ``timeout``
+            # or is killed, the CLI may exit before ``--rm`` runs, leaving ``*-run-*`` containers alive.
+
+            # Therefore, when ``remove=True``, a ``finally`` block always calls
+            # :func:`remove_service` with ``force=True``, ``stop=True``, and ``check=False`` so running
+            # containers for that service are stopped and removed best-effort (failures are logged, not
+            # raised). Exceptions from the ``run`` itself (e.g. ``TimeoutExpired``, ``CalledProcessError``)
+            # are still propagated after ``finally`` completes.
+
+            cleanup_kw = {k: kwargs[k] for k in ("compose_dir", "env") if k in kwargs}
+            try:
+                remove_service(
+                    service,
+                    force=True,
+                    stop=True,
+                    check=False,
+                    cfg=cfg,
+                    compose_file=compose_file,
+                    logger=logger,
+                    **cleanup_kw,
+                )
+            except Exception as exc:
+                logger.warning("Best-effort compose rm after run failed for service=%s: %s", service, exc)
 
 
 def build_image(
@@ -213,15 +243,26 @@ def remove_service(
     service: str | None = None,
     *,
     force: bool = False,
+    stop: bool = False,
     check: bool = False,
     volumes: bool = False,
     logger: logging.Logger = LOG,
     compose_options: list[str] | None = None,
     **kwargs: Any,
 ) -> subprocess.CompletedProcess:
+    """Remove containers for a compose service via ``docker compose rm``.
+
+    ``stop``: if True, pass ``--stop`` so running containers are stopped before removal. Needed
+    to clean up orphaned ``compose run`` containers when the CLI died without applying ``--rm``.
+
+    With ``check=False`` (common for teardown), a non-zero exit from ``docker compose rm`` does
+    not raise; callers should treat this as best-effort idempotent cleanup.
+    """
     compose_options = compose_options or []
     if force:
         compose_options += ["--force"]
+    if stop:
+        compose_options += ["--stop"]
     if volumes:
         compose_options += ["--volumes"]
     logger.info("Removing service '%s' (options=%s)", service, compose_options)

@@ -1,8 +1,12 @@
+# Project name: resources (containers, networks, volumes) are prefixed and isolated
+# from other Compose stacks. Do not add `ports:` — Elasticsearch and Rally are only
+# reachable on the internal Docker network (service DNS names, e.g. es01:9200).
+name: rally_it_tracks
+
 services:
 
   es01:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-9.3.1}
-    container_name: es01
     networks:
       - elastic-net
     environment:
@@ -24,18 +28,14 @@ services:
 
   rally:
     build:
-      # Relative build.context is resolved from this compose file's directory; default ../../../ reaches checkout root.
-      context: ${RALLY_DOCKER_DIR:-../../../}
+      # Relative to this file: ../.. is the Rally checkout root.
+      context: ${RALLY_DOCKER_DIR:-../..}
       dockerfile: ${RALLY_DOCKER_FILE:-docker/Dockerfiles/dev/Dockerfile}
-    container_name: rally-driver
     depends_on:
       es01:
         condition: service_healthy
     volumes:
       - rally_data:/rally/.rally
-    # The command below lists tracks by default so the container doesn't exit immediately.
-    # You will likely override this via CLI to run actual benchmarks.
-    # command: "esrally list tracks"
     networks:
       - elastic-net
 

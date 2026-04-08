@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-import os
 import subprocess
 import time
 from collections.abc import Generator
@@ -28,22 +27,18 @@ import pytest
 from esrally import config
 from esrally.utils import compose
 from esrally.utils.cases import cases
+from it.tracks.helpers import (
+    DEFAULT_IT_TRACKS_ES_VERSIONS,
+    it_tracks_no_skip_from_config,
+)
 
 LOG = logging.getLogger(__name__)
 
 # Must match the number of entries passed to @cases on test_race_with_track.
 _TRACK_CASE_COUNT = 38
 
-ES_VERSIONS = ["8.19.13", "9.2.7"]
-
-# Let have 120 minutes for all track sto complete. In case it times out before
-# returning any other error, we will accept the testing outcome as it would require
-# too much to complete all the tests in a reasonable time frame. We can always
-# increase this timeout if we see that some tracks require much more time to complete.
-TEST_TIMEOUT_M = int(os.environ.get("IT_TRACKS_TIMEOUT_MINUTES", "120"))
-# The max time for a single track to complete is the total time divided by the number of tracks and ES versions we
-# test against.
-RACE_TIMEOUT_S = TEST_TIMEOUT_M * 60 / _TRACK_CASE_COUNT / len(ES_VERSIONS)
+# Default ES versions (overridden by conftest / IT_TRACKS_ES_VERSIONS / --it-tracks-es-versions).
+ES_VERSIONS = list(DEFAULT_IT_TRACKS_ES_VERSIONS)
 
 
 @dataclasses.dataclass
@@ -52,8 +47,8 @@ class TrackCase:
     description: str
     test_mode: bool = True
     challenge: str | None = None
-    # Keys must match literals in ``ES_VERSIONS``. When set for the active ``elasticsearch.version``,
-    # ``test_race_with_track`` calls ``pytest.skip`` with the value as the reason.
+    # Keys are ES version strings (see configured versions in conftest). When set for the active
+    # ``elasticsearch.version``, ``test_race_with_track`` skips unless ``IT_TRACKS_NO_SKIP`` / ``--it-tracks-no-skip``.
     skip_reason_by_es_version: dict[str, str] | None = None
 
 
@@ -75,8 +70,9 @@ class ElasticsearchServer:
     version: str
 
 
-@pytest.fixture(scope="function", params=ES_VERSIONS, ids=lambda param: f"es_version_{param}")
+@pytest.fixture
 def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
+    """Indirect parametrization from ``it/tracks/conftest.py`` (ES version string in ``request.param``)."""
     compose.remove_service("es01", force=True, volumes=True)
     monkeypatch.setenv("ES_VERSION", request.param)
     es = ElasticsearchServer(version=request.param)
@@ -322,24 +318,25 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
         test_mode=False,
     ),
 )
-def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer):
+def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer, race_timeout_s: float, request: pytest.FixtureRequest):
     """Integration test: run Rally in Docker against a compose-managed Elasticsearch node.
 
     For each ``TrackCase`` (and each configured Elasticsearch version), starts ``es01`` with
     ``ES_VERSION`` set, then runs ``rally race`` targeting ``es01:9200``. ``TrackCase.test_mode``
     controls ``--test-mode`` (off for tracks that do not support it). ``TrackCase.challenge``,
     when set, is passed as ``--challenge``. ``TrackCase.skip_reason_by_es_version`` may skip
-    the test for a given Elasticsearch version (keys must match ``ES_VERSIONS``). A per-case
-    time budget comes from ``IT_TRACKS_TIMEOUT_MINUTES``; if the race hits that timeout without
-    another failure, the test treats it as success.
+    unless ``IT_TRACKS_NO_SKIP`` / ``--it-tracks-no-skip``. Per-race timeout is ``race_timeout_s``
+    (total minutes from CLI/env divided by ``N``; ``N`` omits version-skip rows when no-skip is off;
+    see ``it/tracks/README.md``).
+    Subprocess timeout is treated as success; Rally run containers are torn down in ``run_service``.
     """
     LOG.info("Testing track name: %s (%s)", case.track_name, case.description)
-    LOG.info("Testing timeout: %d seconds", RACE_TIMEOUT_S)
+    LOG.info("Testing timeout: %s seconds", race_timeout_s)
     LOG.info("Testing with elasticsearch version: %s", elasticsearch.version)
 
     if case.skip_reason_by_es_version is not None:
         reason = case.skip_reason_by_es_version.get(elasticsearch.version)
-        if reason is not None:
+        if reason is not None and not it_tracks_no_skip_from_config(request.config):
             pytest.skip(reason)
 
     start_time = time.time()
@@ -349,7 +346,8 @@ def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer):
             test_mode=case.test_mode,
             target_hosts=["es01:9200"],
             challenge=case.challenge,
-            timeout=RACE_TIMEOUT_S,
+            timeout=race_timeout_s,
+            remove=True,
         )
     except subprocess.TimeoutExpired:
         LOG.warning("Race timeout: no errors until now and we take it as a success.")
