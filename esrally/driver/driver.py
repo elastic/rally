@@ -631,12 +631,14 @@ class Driver:
         log_root = paths.race_root(self.config)
 
         es_default = es["default"]
+        all_client_options = self.config.opts("client", "options").all_client_options
+        default_client_options = all_client_options.get("default", {})
 
         if enable:
             devices = [
                 telemetry.NodeStats(telemetry_params, es, self.metrics_store),
                 telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
-                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store, build_hash),
+                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store, build_hash, default_client_options),
                 telemetry.JvmStatsSummary(es_default, self.metrics_store),
                 telemetry.IndexStats(es_default, self.metrics_store),
                 telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
