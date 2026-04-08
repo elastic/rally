@@ -3632,6 +3632,26 @@ class TestClusterEnvironmentInfo:
         metrics_store_add_meta_info.assert_any_call(metrics.MetaInfoScope.cluster, None, "target_auth_type", "basic")
 
     @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_stores_basic_auth_type_from_combined_tuple(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "version": {
+                "build_hash": "abc123",
+                "number": "8.0.0",
+                "build_flavor": "default",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client_options = {"basic_auth": ("elastic", "changeme"), "timeout": 60}
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None, client_options)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+
+        metrics_store_add_meta_info.assert_any_call(metrics.MetaInfoScope.cluster, None, "target_auth_type", "basic")
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
     def test_no_auth_type_stored_when_no_auth_options(self, metrics_store_add_meta_info):
         cluster_info = {
             "version": {
@@ -3649,7 +3669,7 @@ class TestClusterEnvironmentInfo:
         t.on_benchmark_start()
 
         auth_type_calls = [
-            c for c in metrics_store_add_meta_info.call_args_list if c == mock.call(metrics.MetaInfoScope.cluster, None, "target_auth_type", mock.ANY)
+            c for c in metrics_store_add_meta_info.call_args_list if len(c[0]) >= 3 and c[0][2] == "target_auth_type"
         ]
         assert len(auth_type_calls) == 0
 
