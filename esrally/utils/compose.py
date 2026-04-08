@@ -160,6 +160,55 @@ def run_compose(
     return result
 
 
+def _cleanup_compose_run_service(
+    service: str | None,
+    *,
+    cfg: types.Config | None = None,
+    compose_file: str | None = None,
+    logger: logging.Logger = LOG,
+    **kwargs: Any,
+) -> None:
+    """Tear down containers for a service after ``docker compose run``.
+
+    ``docker compose rm`` and ``compose stop`` **exclude** one-off containers (``compose run`` creates
+    ``*-run-*`` names with ``com.docker.compose.oneoff=True``; see Docker Compose ``oneOffExclude`` in
+    ``pkg/compose/remove.go`` / ``stop.go``). So ``rm --stop`` never sees orphaned run containers when the
+    CLI exits early (e.g. ``subprocess`` ``timeout``).
+
+    ``docker compose kill`` **includes** one-off containers (``pkg/compose/kill.go``). We kill, then remove
+    IDs from ``compose ps -a -q`` (``ps --all`` includes one-off), via ``docker rm -f``.
+    """
+    run_kwargs = {k: kwargs[k] for k in ("compose_dir", "env") if k in kwargs}
+    run_compose("kill", service, check=False, cfg=cfg, compose_file=compose_file, logger=logger, **run_kwargs)
+    listed = run_compose(
+        "ps",
+        service,
+        compose_options=["-a", "-q"],
+        check=False,
+        stdout=subprocess.PIPE,
+        cfg=cfg,
+        compose_file=compose_file,
+        logger=logger,
+        **run_kwargs,
+    )
+    raw = listed.stdout or b""
+    ids = [line.strip() for line in raw.decode("utf-8").splitlines() if line.strip()]
+    if not ids:
+        return
+    rm_env = os.environ.copy()
+    extra_env = run_kwargs.get("env")
+    if extra_env:
+        rm_env.update(extra_env)
+    rm_result = subprocess.run(["docker", "rm", "-f", *ids], check=False, capture_output=True, env=rm_env)
+    if rm_result.returncode != 0:
+        logger.warning(
+            "docker rm -f after compose run cleanup failed (service=%s, returncode=%s): stderr:%s",
+            service,
+            rm_result.returncode,
+            decode(rm_result.stderr),
+        )
+
+
 def run_service(
     service: str | None = None,
     args: list[str] | None = None,
@@ -184,30 +233,24 @@ def run_service(
         return result
     finally:
         if remove:
-            # When ``remove=True`` (default), ``docker compose run`` is invoked with ``--rm``. That alone
-            # does not guarantee container removal: if the parent process hits ``subprocess`` ``timeout``
-            # or is killed, the CLI may exit before ``--rm`` runs, leaving ``*-run-*`` containers alive.
-
-            # Therefore, when ``remove=True``, a ``finally`` block always calls
-            # :func:`remove_service` with ``force=True``, ``stop=True``, and ``check=False`` so running
-            # containers for that service are stopped and removed best-effort (failures are logged, not
-            # raised). Exceptions from the ``run`` itself (e.g. ``TimeoutExpired``, ``CalledProcessError``)
-            # are still propagated after ``finally`` completes.
+            # When ``remove=True`` (default), ``docker compose run`` uses ``--rm``, but if the parent hits
+            # ``subprocess`` ``timeout`` or is killed, the CLI may exit before ``--rm`` runs.
+            #
+            # ``docker compose rm --stop`` does **not** remove ``compose run`` one-off containers: Compose
+            # filters them out (``oneOffExclude``). So we use :func:`_cleanup_compose_run_service` instead:
+            # ``compose kill`` (includes one-offs), then ``compose ps -a -q`` and ``docker rm -f``.
 
             cleanup_kw = {k: kwargs[k] for k in ("compose_dir", "env") if k in kwargs}
             try:
-                remove_service(
+                _cleanup_compose_run_service(
                     service,
-                    force=True,
-                    stop=True,
-                    check=False,
                     cfg=cfg,
                     compose_file=compose_file,
                     logger=logger,
                     **cleanup_kw,
                 )
             except Exception as exc:
-                logger.warning("Best-effort compose rm after run failed for service=%s: %s", service, exc)
+                logger.warning("Best-effort cleanup after compose run failed for service=%s: %s", service, exc)
 
 
 def build_image(
@@ -252,8 +295,11 @@ def remove_service(
 ) -> subprocess.CompletedProcess:
     """Remove containers for a compose service via ``docker compose rm``.
 
-    ``stop``: if True, pass ``--stop`` so running containers are stopped before removal. Needed
-    to clean up orphaned ``compose run`` containers when the CLI died without applying ``--rm``.
+    Intended for regular service containers (e.g. from ``compose up``). **Does not** remove one-off
+    containers created by ``docker compose run`` (Compose applies ``oneOffExclude`` for ``rm``/``stop``);
+    :func:`run_service` uses :func:`_cleanup_compose_run_service` for those.
+
+    ``stop``: if True, pass ``--stop`` so running containers are stopped before removal.
 
     With ``check=False`` (common for teardown), a non-zero exit from ``docker compose rm`` does
     not raise; callers should treat this as best-effort idempotent cleanup.

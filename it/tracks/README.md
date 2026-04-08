@@ -59,7 +59,9 @@ Filtering uses `fnmatch` on **`track_name`** (e.g. `elastic/*` matches `elastic/
 
 ## Rally container cleanup
 
-`compose.run_service(..., remove=True)` (used by `rally_race`) wraps `docker compose run` in **`try` / `finally`** and always runs **`compose rm --stop --force`** for the Rally service afterward. That covers **`subprocess` timeouts**: the client may be killed before `docker compose run --rm` removes the one-off container, so the **`finally`** teardown avoids accumulating orphaned `…-rally-run-…` containers. Teardown is best-effort when `check=False`. The persistent `es01` service is managed only by the `elasticsearch` fixture in `race_test.py`.
+`compose.run_service(..., remove=True)` (used by `rally_race`) wraps `docker compose run` in **`try` / `finally`**. After the run (including on **`subprocess` timeout**), it runs **`docker compose kill`** on the Rally service, then **`docker compose ps -a -q`** and **`docker rm -f`** on those IDs.
+
+**Why not `compose rm --stop`?** Docker Compose’s **`rm`** and **`stop`** commands **ignore one-off containers** created by **`docker compose run`** (internal `oneOffExclude` filter), so they never matched `…-rally-run-…` containers. **`compose kill`** includes one-offs, so orphaned run containers are actually stopped and removed when the test driver times out or exits before `run --rm` runs. Teardown is best-effort (`check=False` / logged warnings). The persistent `es01` service is still torn down with **`remove_service`** in the `elasticsearch` fixture only.
 
 ## Examples
 

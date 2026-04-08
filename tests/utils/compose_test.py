@@ -284,30 +284,38 @@ def test_compose_wrappers(mock_run: mock.MagicMock, case: WrapperCase):
 
 @mock.patch("esrally.utils.compose.subprocess.run")
 def test_run_service_remove_true_invokes_rm_after_run(mock_run: mock.MagicMock):
-    """``run_service(remove=True)`` ends with ``docker compose rm --force --stop`` for the same service (see run_service docstring)."""
+    """``run_service(remove=True)`` ends with ``compose kill`` + ``compose ps -a -q`` (``rm`` excludes one-off run containers)."""
     mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
     cfg = _compose_cfg(compose_file="/stack.yaml", compose_dir="/w")
     run_service("rally", ["list", "tracks"], cfg=cfg, compose_options=["-T"], logger=_silent_logger())
-    assert mock_run.call_count == 2
+    assert mock_run.call_count == 3
     (run_argv,) = mock_run.call_args_list[0][0]
     assert run_argv[run_argv.index("run") + 1 :] == ["-T", "--rm", "rally", "list", "tracks"]
-    (rm_argv,) = mock_run.call_args_list[1][0]
-    assert rm_argv[rm_argv.index("rm") + 1 :] == ["--force", "--stop", "rally"]
+    (kill_argv,) = mock_run.call_args_list[1][0]
+    assert kill_argv[kill_argv.index("kill") + 1 :] == ["rally"]
+    (ps_argv,) = mock_run.call_args_list[2][0]
+    assert ps_argv[ps_argv.index("ps") + 1 :] == ["-a", "-q", "rally"]
 
 
 @mock.patch("esrally.utils.compose.subprocess.run")
 def test_run_service_timeout_still_invokes_rm(mock_run: mock.MagicMock):
-    """Even when ``run`` hits ``TimeoutExpired``, ``finally`` still attempts ``compose rm --stop``."""
+    """Even when ``run`` hits ``TimeoutExpired``, ``finally`` still runs kill + ps + ``docker rm -f`` for listed IDs."""
     mock_run.side_effect = [
         subprocess.TimeoutExpired(cmd=["docker", "compose"], timeout=1),
+        mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b""),
+        mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"deadbeef\ncafebabe\n", stderr=b""),
         mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b""),
     ]
     cfg = _compose_cfg(compose_file="", compose_dir="/w")
     with pytest.raises(subprocess.TimeoutExpired):
         run_service("rally", ["x"], cfg=cfg, logger=_silent_logger(), timeout=1)
-    assert mock_run.call_count == 2
-    (rm_argv,) = mock_run.call_args_list[1][0]
-    assert rm_argv[rm_argv.index("rm") + 1 :] == ["--force", "--stop", "rally"]
+    assert mock_run.call_count == 4
+    (kill_argv,) = mock_run.call_args_list[1][0]
+    assert kill_argv[kill_argv.index("kill") + 1 :] == ["rally"]
+    (ps_argv,) = mock_run.call_args_list[2][0]
+    assert ps_argv[ps_argv.index("ps") + 1 :] == ["-a", "-q", "rally"]
+    (docker_rm_argv,) = mock_run.call_args_list[3][0]
+    assert docker_rm_argv == ["docker", "rm", "-f", "deadbeef", "cafebabe"]
 
 
 @dataclass
@@ -459,7 +467,7 @@ def test_run_rally_invokes_run_service(mock_run: mock.MagicMock):
     cfg = _compose_cfg(compose_file="", compose_dir="/w")
     log = _silent_logger()
     run_rally("list", ["tracks"], cfg=cfg, logger=log)
-    assert mock_run.call_count == 2
+    assert mock_run.call_count == 3
     assert mock_run.call_args_list[0].kwargs["env"]["RALLY_DOCKER_DIR"] == "/w"
     (argv,) = mock_run.call_args_list[0][0]
     assert "run" in argv
