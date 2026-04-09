@@ -229,9 +229,7 @@ def test_run_compose(mock_run: mock.MagicMock, case: RunComposeCase, monkeypatch
 
 
 @mock.patch("esrally.utils.compose.subprocess.run")
-def test_run_compose_injects_project_name_from_compose_project_name_env(
-    mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_compose_injects_project_name_from_compose_project_name_env(mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
     mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", "rally_it_tracks_gw0")
     cfg = _compose_cfg()

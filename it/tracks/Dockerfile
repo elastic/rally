@@ -1,5 +1,6 @@
 # Fork of docker/Dockerfiles/dev/Dockerfile for it/tracks: bundles elastic/rally-tracks under /tracks (read-only for rally user).
-FROM docker.elastic.co/wolfi/chainguard-base:latest AS builder
+# Publicly pullable base (CI and forks); docker.elastic.co wolfi mirrors require registry auth on anonymous runners.
+FROM cgr.dev/chainguard/wolfi-base:latest AS builder
 ARG RALLY_VERSION
 ARG RALLY_LICENSE
 
