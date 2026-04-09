@@ -400,9 +400,7 @@ def track_params_for_reporting(track_params):
     """
     if not track_params:
         return {}
-    return {
-        k: (SECRET_TRACK_PARAM_PLACEHOLDER if str(k).startswith("secret_") else v) for k, v in track_params.items()
-    }
+    return {k: (SECRET_TRACK_PARAM_PLACEHOLDER if str(k).startswith("secret_") else v) for k, v in track_params.items()}
 
 
 class MetricsStore:
