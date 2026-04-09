@@ -14,6 +14,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+"""Docker track race integration tests for Rally.
+
+See ``it/tracks/README.md`` for how to run, timeouts, and pytest options.
+``conftest.py`` in this directory configures pytest isolation from ``it/conftest.py``.
+"""
+
 from __future__ import annotations
 
 import dataclasses
@@ -34,15 +41,14 @@ from it.tracks.helpers import (
 
 LOG = logging.getLogger(__name__)
 
-# Must match the number of entries passed to @cases on test_race_with_track.
-_TRACK_CASE_COUNT = 38
-
 # Default ES versions (overridden by conftest / IT_TRACKS_ES_VERSIONS / --it-tracks-es-versions).
 ES_VERSIONS = list(DEFAULT_IT_TRACKS_ES_VERSIONS)
 
 
 @dataclasses.dataclass
 class TrackCase:
+    """One Rally track exercised by :func:`test_race_with_track`."""
+
     track_name: str
     description: str
     test_mode: bool = True
@@ -247,7 +253,7 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     ),
     esql=TrackCase(
         track_name="esql",
-        description="Indexes for JOIN tests",
+        description="Benchmarks for Elasticsearch SQL (ESQL) queries",
         test_mode=False,
         skip_reason_by_es_version={
             "8.19.14": ("Rally exits 64 in Docker IT against ES 8.19.14. See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"),

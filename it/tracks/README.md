@@ -11,12 +11,18 @@ This directory holds integration tests that run **Rally `race` inside Docker** (
 
 ## Prerequisites
 
-Same as the rest of the `it/` suite: Docker and Docker Compose available, with the daemon running. Other integration checks run from [`it/conftest.py`](../conftest.py) (for example `docker ps` / `docker compose version`).
+You need Docker and Docker Compose available, with the daemon running.
+
+When you run the broader **`it/`** tree (for example **`make it`**), pytest loads [`it/conftest.py`](../conftest.py), which checks prerequisites (for example `docker ps` / `docker compose version`) before tests run.
+
+**Track-only runs** (`pytest it/tracks/`, **`make it_tracks`**) use [`pytest.ini`](pytest.ini) in this directory, which sets `confcutdir` here so **parent `it/conftest.py` is not loaded**. Those checks do **not** run automatically; you still need a working Docker/Compose environment.
 
 ## How to run
 
-- Full integration test run (includes these tests): `make it`
-- Only this folder: `uv run -- pytest -s it/tracks/` or `make it_tracks` (see `Makefile`; extra pytest args via `ARGS=...`)
+- **Other `it/` integration tests (excludes track races):** `make it` passes `--ignore=it/tracks` (see the `it` target in the root `Makefile`).
+- **This directory:** `make it_tracks` (builds the Compose images via `it_tracks_image`, then runs pytest with `-s` and `LOG_CI_LEVEL` logging) or `uv run -- pytest -s it/tracks/`. Extra pytest args: `make it_tracks ARGS='…'`.
+
+Direct `pytest it/tracks/` relies on **`pytest_sessionstart`** / the **`build_rally`** fixture to build the Rally image when needed; **`make it_tracks`** always builds first via `docker compose --file it/tracks/compose.yaml build`, which matches a typical CI-style workflow.
 
 ### Parallel by default (pytest-xdist)
 
@@ -77,6 +83,10 @@ Filtering uses `fnmatch` on **`track_name`** (e.g. `elastic/*` matches `elastic/
 `compose.run_service(..., remove=True)` (used by `rally_race`) wraps `docker compose run` in **`try` / `finally`**. After the run (including on **`subprocess` timeout**), it runs **`docker compose kill`** on the Rally service, then **`docker compose ps -a -q`** and **`docker rm -f`** on those IDs.
 
 **Why not `compose rm --stop`?** Docker Compose’s **`rm`** and **`stop`** commands **ignore one-off containers** created by **`docker compose run`** (internal `oneOffExclude` filter), so they never matched `…-rally-run-…` containers. **`compose kill`** includes one-offs, so orphaned run containers are actually stopped and removed when the test driver times out or exits before `run --rm` runs. Teardown is best-effort (`check=False` / logged warnings). The persistent `es01` service is still torn down with **`remove_service`** in the `elasticsearch` fixture only.
+
+## Session teardown (Compose project)
+
+`pytest_sessionfinish` in **`conftest.py`** calls **`compose.teardown_project`** as a safety net when the session ends (including **Ctrl+C**), so leftover containers are less likely if fixture teardown is skipped. Under **pytest-xdist**, **each worker** runs **`teardown_project`** (that process owns **`COMPOSE_PROJECT_NAME`**); the **controller** skips **`teardown_project`** while workers are active so it does not tear down the wrong project name. In **serial** mode (no xdist, or **`-n 0`**), the main process runs **`teardown_project`** once.
 
 ## Examples
 

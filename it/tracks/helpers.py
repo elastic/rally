@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 
 # Default Elasticsearch distribution versions for track race IT (Docker compose es01 image tag).
+# Keep in sync with the es-version matrix in .github/workflows/ci.yml (job it-tracks-race).
 DEFAULT_IT_TRACKS_ES_VERSIONS: list[str] = ["8.19.14", "9.3.3"]
 
 
