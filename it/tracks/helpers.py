@@ -19,7 +19,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
+import re
+from pathlib import Path
+
+from esrally.paths import rally_root
 
 # Default Elasticsearch distribution versions for track race IT (Docker compose es01 image tag).
 # Keep in sync with the es-version matrix in .github/workflows/ci.yml (job it-tracks-race).
@@ -148,9 +153,60 @@ def it_tracks_xdist_group_by_es_version(config: object) -> bool:
 
     When the requested xdist worker count exceeds the number of configured ES versions, per-version
     groups would cap concurrency at the version count; omitting those marks lets all workers run
-    races in parallel (each worker still uses its own ``COMPOSE_PROJECT_NAME``).
+    races in parallel. Each test uses a distinct ``COMPOSE_PROJECT_NAME`` derived from its nodeid.
     """
     return it_tracks_xdist_num_workers(config) <= it_tracks_es_version_worker_count(config)
+
+
+def it_tracks_log_root() -> Path:
+    """Base directory for host-mounted it/tracks logs (gitignored ``logs/`` at the checkout root).
+
+    Default is ``<rally-checkout>/logs`` (parent of the ``esrally`` package directory from
+    :func:`rally_root`, then ``logs``). Override with absolute path in env ``IT_TRACKS_LOG_ROOT``.
+    """
+    raw = os.environ.get("IT_TRACKS_LOG_ROOT", "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return Path(rally_root()).resolve().parent / "logs"
+
+
+def it_tracks_host_log_dir_for_nodeid(log_root: Path, nodeid: str) -> Path:
+    """Return the host directory for ``es01/`` and ``rally/`` log bind mounts for this pytest node.
+
+    Mirrors the pytest nodeid with ``::`` turned into a path segment (``/``) so
+    ``IT_TRACKS_HOST_LOG_DIR`` has no ``:`` characters—Docker Compose treats ``:`` as special in
+    volume specs. Example: ``it/tracks/race_test.py::test_race_with_track[es_8.19.14-foo]`` →
+    ``…/logs/it/tracks/race_test.py/test_race_with_track[es_8.19.14-foo]``.
+    """
+    if "::" not in nodeid:
+        return (log_root / nodeid).resolve()
+    file_part, test_part = nodeid.split("::", 1)
+    path = Path(file_part)
+    return (log_root / path.parent / path.name / test_part).resolve()
+
+
+_COMPOSE_PROJECT_SAFE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,200}$")
+
+
+def compose_project_name_for_nodeid(nodeid: str) -> str:
+    """Docker-Compose-safe ``-p`` value, unique per pytest ``nodeid`` (raw nodeid is usually invalid)."""
+    lowered = nodeid.lower()
+    if _COMPOSE_PROJECT_SAFE.fullmatch(lowered):
+        return lowered
+    out: list[str] = []
+    for ch in lowered:
+        if ch.isalnum() or ch in "_-":
+            out.append(ch)
+        else:
+            out.append("_")
+    slug = "".join(out).strip("_")
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+    if len(slug) > 200:
+        slug = slug[:200].rstrip("_")
+    if _COMPOSE_PROJECT_SAFE.fullmatch(slug):
+        return slug
+    return "ittr_" + hashlib.sha256(nodeid.encode("utf-8")).hexdigest()[:48]
 
 
 def it_tracks_race_timeout_seconds(

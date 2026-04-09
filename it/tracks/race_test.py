@@ -36,6 +36,9 @@ from esrally.utils import compose
 from esrally.utils.cases import cases
 from it.tracks.helpers import (
     DEFAULT_IT_TRACKS_ES_VERSIONS,
+    compose_project_name_for_nodeid,
+    it_tracks_host_log_dir_for_nodeid,
+    it_tracks_log_root,
     it_tracks_no_skip_from_config,
 )
 
@@ -79,14 +82,20 @@ class ElasticsearchServer:
 @pytest.fixture
 def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     """Indirect parametrization from ``it/tracks/conftest.py`` (ES version string in ``request.param``)."""
-    compose.remove_service("es01", force=True, volumes=True)
+    log_root = it_tracks_log_root()
+    host_log = it_tracks_host_log_dir_for_nodeid(log_root, request.node.nodeid)
+    host_log.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("IT_TRACKS_HOST_LOG_DIR", str(host_log))
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", compose_project_name_for_nodeid(request.node.nodeid))
     monkeypatch.setenv("ES_VERSION", request.param)
+    compose.remove_service("es01", force=True, volumes=True)
     es = ElasticsearchServer(version=request.param)
     try:
         compose.start_elasticsearch("es01")
         yield es
     finally:
         compose.remove_service("es01", force=True, volumes=True)
+        compose.teardown_project(cfg=compose.ComposeConfig())
 
 
 @cases(

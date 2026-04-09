@@ -176,6 +176,20 @@ jobs:
         env:
           IT_TRACKS_ES_VERSIONS: ${{ matrix.es-version }}
           ASSETS_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Zip it/tracks host logs
+        if: failure()
+        run: |
+          cd "${{ github.workspace }}"
+          if [ -d logs ]; then
+            zip -r "it-tracks-logs-${{ matrix.es-version }}.zip" logs
+          fi
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: it-tracks-logs-${{ matrix.es-version }}
+          path: it-tracks-logs-${{ matrix.es-version }}.zip
+          if-no-files-found: ignore
       - name: Check disk space after
         run: df -h
       - uses: elastic/es-perf-github-status@v2

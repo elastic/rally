@@ -30,8 +30,8 @@ and track-name deselection, **excluding** nodes that would ``pytest.skip`` for
 ``skip_reason_by_es_version`` unless ``--it-tracks-no-skip`` / ``IT_TRACKS_NO_SKIP``
 is set (see ``pytest_collection_finish``).
 
-Under pytest-xdist, each worker sets ``COMPOSE_PROJECT_NAME`` from its worker id
-so Docker Compose stacks do not clash. When the worker count does not exceed the
+Each ``test_race_with_track`` node sets ``COMPOSE_PROJECT_NAME`` from its pytest
+nodeid (Docker-safe) and host logs under ``logs/…`` (see README). When the worker count does not exceed the
 number of configured ES versions, race tests get ``xdist_group`` per version so
 ``loadgroup`` keeps one version lane per worker; otherwise marks are omitted so
 extra workers are not idle. ``pytest.ini`` defaults to ``-n auto`` and ``--dist loadgroup``; the
@@ -50,6 +50,7 @@ import pytest
 from esrally.utils import compose
 from it.tracks.helpers import (
     it_tracks_es_version_worker_count,
+    it_tracks_log_root,
     it_tracks_no_skip_from_config,
     it_tracks_xdist_group_by_es_version,
     it_tracks_xdist_num_workers,
@@ -62,6 +63,18 @@ from it.tracks.helpers import (
 _TRACKS_DIR = Path(__file__).resolve().parent
 os.environ.setdefault("RALLY_COMPOSE_FILE", str(_TRACKS_DIR / "compose.yaml"))
 os.environ.setdefault("RALLY_IT_TRACKS_ROOT", "/tracks")
+
+
+def _ensure_default_it_tracks_host_log_dir() -> None:
+    """So ``docker compose build`` / parse sees ``IT_TRACKS_HOST_LOG_DIR`` before the first test."""
+    if os.environ.get("IT_TRACKS_HOST_LOG_DIR", "").strip():
+        return
+    p = it_tracks_log_root() / "_compose_default"
+    p.mkdir(parents=True, exist_ok=True)
+    os.environ["IT_TRACKS_HOST_LOG_DIR"] = str(p.resolve())
+
+
+_ensure_default_it_tracks_host_log_dir()
 
 _IT_TRACKS_ES_VERSIONS_KEY = pytest.StashKey[list[str]]()
 _IT_TRACKS_RACE_TIMEOUT_S_KEY = pytest.StashKey[float]()
@@ -101,24 +114,10 @@ def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
     return it_tracks_es_version_worker_count(config)
 
 
-def _compose_project_suffix_for_worker(worker_id: str) -> str:
-    safe = "".join(c if c.isalnum() else "_" for c in worker_id)
-    return safe or "worker"
-
-
 def pytest_configure(config: pytest.Config) -> None:
-    """Resolve ES version list once and stash for ``pytest_generate_tests``.
-
-    On pytest-xdist workers, set ``COMPOSE_PROJECT_NAME`` so each worker uses an
-    isolated Compose stack (containers, volumes, networks).
-    """
+    """Resolve ES version list once and stash for ``pytest_generate_tests``."""
     cli_es = config.getoption("--it-tracks-es-versions")
     config.stash[_IT_TRACKS_ES_VERSIONS_KEY] = resolve_es_versions(cli_es)
-
-    workerinput = getattr(config, "workerinput", None)
-    if isinstance(workerinput, dict):
-        wid = workerinput.get("workerid", "gw0")
-        os.environ["COMPOSE_PROJECT_NAME"] = f"rally_it_tracks_{_compose_project_suffix_for_worker(str(wid))}"
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -256,7 +255,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 
     Workers still run the module ``build_rally`` fixture (cheap when the image exists). The
     stable ``image:`` in ``compose.yaml`` ensures all workers use the same tag regardless of
-    ``COMPOSE_PROJECT_NAME``.
+    per-test ``COMPOSE_PROJECT_NAME``.
     """
     wi = getattr(session.config, "workerinput", None)
     opt = getattr(session.config, "option", None)
@@ -275,9 +274,10 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     runs on normal exit and on the first interrupt that ends the session. Uses a fresh
     :class:`~esrally.utils.compose.ComposeConfig` so it works even if ``init_config`` was never set.
 
-    Under pytest-xdist, only **worker** processes set ``COMPOSE_PROJECT_NAME`` (see ``pytest_configure``);
-    the controller must not run ``docker compose down`` or it would target the wrong project name while
-    workers still hold containers.
+    Under pytest-xdist, only **workers** run ``docker compose down`` here; the controller must not run it
+    while workers still hold containers. Each test sets ``COMPOSE_PROJECT_NAME`` from its nodeid; this hook
+    tears down the **last** project name left in the worker env (per-test teardown also runs
+    ``teardown_project`` in the ``elasticsearch`` fixture).
     """
     wi = getattr(session.config, "workerinput", None)
     opt = getattr(session.config, "option", None)

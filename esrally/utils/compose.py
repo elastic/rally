@@ -366,14 +366,23 @@ def run_rally(
     try:
         return run_service("rally", rally_args, logger=logger, **kwargs)
     except subprocess.CalledProcessError as e:
-        logger.error(
-            "Rally returned nonzero exit status (%s): %s\nstdout: %s\nstderr: %s\n",
-            e.returncode,
-            e,
-            e.stdout.decode("utf-8") if e.stdout else None,
-            e.stderr.decode("utf-8") if e.stderr else None,
-            exc_info=logger.isEnabledFor(logging.DEBUG),
-        )
+        if e.stderr is None and e.stdout:
+            logger.error(
+                "Rally returned nonzero exit status (%s): %s\ncombined output:%s",
+                e.returncode,
+                e,
+                decode(e.stdout),
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
+        else:
+            logger.error(
+                "Rally returned nonzero exit status (%s): %s\nstdout:%s\nstderr:%s",
+                e.returncode,
+                e,
+                decode(e.stdout),
+                decode(e.stderr),
+                exc_info=logger.isEnabledFor(logging.DEBUG),
+            )
         raise e
     finally:
         logger.info("Terminated rally.")
@@ -415,7 +424,14 @@ def rally_race(
     if challenge:
         rally_options += ["--challenge", challenge]
     logger.info("Running rally race (options=%s, ES_VERSION=%s).", rally_options, os.environ["ES_VERSION"])
-    run_rally("race", rally_options=rally_options, logger=logger, **kwargs)
+    run_rally(
+        "race",
+        rally_options=rally_options,
+        logger=logger,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        **kwargs,
+    )
     logger.info("Terminated rally race.")
 
 

@@ -19,13 +19,17 @@
 
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 
 import pytest
 
 from it.tracks.helpers import (
     DEFAULT_IT_TRACKS_ES_VERSIONS,
+    compose_project_name_for_nodeid,
     it_tracks_es_version_worker_count,
+    it_tracks_host_log_dir_for_nodeid,
+    it_tracks_log_root,
     it_tracks_no_skip_enabled,
     it_tracks_race_timeout_seconds,
     it_tracks_xdist_group_by_es_version,
@@ -38,6 +42,8 @@ from it.tracks.helpers import (
 )
 
 _LEN_DEFAULT_ES_VERSIONS = len(DEFAULT_IT_TRACKS_ES_VERSIONS)
+
+_COMPOSE_PROJECT_SAFE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,200}$")
 
 
 def test_parse_es_versions_csv_empty_uses_defaults() -> None:
@@ -260,3 +266,37 @@ def test_race_item_counts_toward_timeout_budget(
         )
         is expect
     )
+
+
+def test_it_tracks_log_root_from_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base = tmp_path / "lr"
+    base.mkdir()
+    monkeypatch.setenv("IT_TRACKS_LOG_ROOT", str(base))
+    assert it_tracks_log_root() == base.resolve()
+
+
+def test_it_tracks_log_root_default_name_is_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("IT_TRACKS_LOG_ROOT", raising=False)
+    assert it_tracks_log_root().name == "logs"
+
+
+def test_it_tracks_host_log_dir_for_nodeid_mirrors_pytest_nodeid(tmp_path) -> None:
+    log_root = tmp_path / "logs"
+    log_root.mkdir()
+    nodeid = "it/tracks/race_test.py::test_race_with_track[es_8.19.14-elastic_logs]"
+    got = it_tracks_host_log_dir_for_nodeid(log_root, nodeid)
+    assert got == log_root / "it" / "tracks" / "race_test.py" / "test_race_with_track[es_8.19.14-elastic_logs]"
+
+
+def test_it_tracks_host_log_dir_without_double_colon(tmp_path) -> None:
+    log_root = tmp_path / "logs"
+    log_root.mkdir()
+    assert it_tracks_host_log_dir_for_nodeid(log_root, "single/id") == log_root / "single" / "id"
+
+
+def test_compose_project_name_for_nodeid_stable_slug() -> None:
+    nodeid = "it/tracks/race_test.py::test_race_with_track[es_8.19.14-elastic_logs]"
+    a = compose_project_name_for_nodeid(nodeid)
+    b = compose_project_name_for_nodeid(nodeid)
+    assert a == b
+    assert _COMPOSE_PROJECT_SAFE_RE.fullmatch(a) or a.startswith("ittr_")

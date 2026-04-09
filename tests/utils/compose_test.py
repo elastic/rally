@@ -509,6 +509,8 @@ def test_rally_race(mock_run: mock.MagicMock, case: RallyRaceCase, monkeypatch: 
     args, kwargs = mock_run.call_args
     assert args[0] == "race"
     assert kwargs["rally_options"] == case.want_rally_options
+    assert kwargs["stdout"] == subprocess.PIPE
+    assert kwargs["stderr"] == subprocess.STDOUT
 
 
 @mock.patch("esrally.utils.compose.start_service")
