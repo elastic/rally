@@ -88,7 +88,7 @@ Filtering uses `fnmatch` on **`track_name`** (e.g. `elastic/*` matches `elastic/
 
 ## Rally container cleanup
 
-`compose.rally_race` runs Rally via `compose.run_rally`, which passes **`name="rally"`** into `compose.run_service` so **`docker compose run`** uses **`--name rally`**. That keeps `containers.log` and Docker Desktop prefixes short (instead of a long one-off name derived from **`COMPOSE_PROJECT_NAME`**). Override with **`rally_race(..., name="…")`** when you need a unique **`docker compose run --name`** (for example multiple concurrent races on the same daemon, e.g. pytest-xdist with more workers than ES-version lanes).
+`compose.rally_race` runs Rally via `compose.run_rally`, which sets **`docker compose run --name`** to **`rally_` plus eight URL-safe base64 characters** (unique per invocation, so parallel xdist workers do not collide on the Docker daemon). Pass **`rally_race(..., name="…")`** (forwarded to **`run_rally`**) to pin a fixed name when you want one.
 
 `compose.run_service(..., remove=True)` (used by `rally_race`) wraps `docker compose run` in **`try` / `finally`**. After the run (including on **`subprocess` timeout**), it runs **`docker compose kill`** on the Rally service, then **`docker compose ps -a -q`** and **`docker rm -f`** on those IDs.
 

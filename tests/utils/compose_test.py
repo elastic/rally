@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,7 @@ from esrally.paths import rally_root
 from esrally.utils.cases import cases
 from esrally.utils.compose import (
     ComposeConfig,
+    _default_rally_compose_run_name,
     build_image,
     decode,
     list_tracks,
@@ -79,6 +81,11 @@ class DecodeCase:
 )
 def test_decode(case: DecodeCase):
     assert decode(case.given) == case.want
+
+
+def test_default_rally_compose_run_name_format() -> None:
+    name = _default_rally_compose_run_name()
+    assert re.fullmatch(r"rally_[A-Za-z0-9_-]{8}", name), name
 
 
 @dataclass
@@ -529,7 +536,6 @@ class RallyRaceCase:
     track_name: str = "t"
     remove: bool = True
     name: str | None = None
-    want_name: str = "rally"
 
 
 @cases(
@@ -579,7 +585,6 @@ class RallyRaceCase:
         pipeline="benchmark-only",
         want_rally_options=["--track", "t", "--pipeline", "benchmark-only"],
         name="race_gw0",
-        want_name="race_gw0",
     ),
 )
 @mock.patch("esrally.utils.compose.run_rally")
@@ -615,7 +620,10 @@ def test_rally_race(mock_run: mock.MagicMock, case: RallyRaceCase, monkeypatch: 
     args, kwargs = mock_run.call_args
     assert args[0] == "race"
     assert kwargs["rally_options"] == case.want_rally_options
-    assert kwargs.get("name", "rally") == case.want_name
+    if case.name is not None:
+        assert kwargs["name"] == case.name
+    else:
+        assert "name" not in kwargs
     assert kwargs["stdout"] == subprocess.PIPE
     assert kwargs["stderr"] == subprocess.STDOUT
     assert kwargs["remove"] == case.remove
@@ -654,8 +662,9 @@ def test_teardown_project(mock_cleanup: mock.MagicMock, mock_run_compose: mock.M
     assert mock_run_compose.call_args[1]["check"] is False
 
 
+@mock.patch("esrally.utils.compose._default_rally_compose_run_name", return_value="rally_ABCDEFGH")
 @mock.patch("esrally.utils.compose.subprocess.run")
-def test_run_rally_invokes_run_service(mock_run: mock.MagicMock):
+def test_run_rally_invokes_run_service(mock_run: mock.MagicMock, _mock_default_name: mock.MagicMock) -> None:
     mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
     cfg = _compose_cfg(compose_file="", compose_dir="/w")
     log = _silent_logger()
@@ -666,5 +675,5 @@ def test_run_rally_invokes_run_service(mock_run: mock.MagicMock):
     assert "run" in argv
     assert "rally" in argv
     run_idx = argv.index("run")
-    assert argv[run_idx + 1 : run_idx + 3] == ["--name", "rally"]
+    assert argv[run_idx + 1 : run_idx + 3] == ["--name", "rally_ABCDEFGH"]
     assert argv[-2:] == ["list", "tracks"]

@@ -14,10 +14,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import base64
 import logging
 import os
 import posixpath
 import re
+import secrets
 import shlex
 import subprocess
 from pathlib import Path
@@ -26,6 +28,12 @@ from typing import Any, BinaryIO
 from esrally import config, paths, types
 
 LOG = logging.getLogger(__name__)
+
+
+def _default_rally_compose_run_name() -> str:
+    """Return a Docker-safe unique ``docker compose run --name`` (``rally_`` + 8 URL-safe base64 chars)."""
+    raw = base64.urlsafe_b64encode(secrets.token_bytes(9)).decode("ascii").rstrip("=")
+    return f"rally_{raw[:8]}"
 
 
 class ComposeConfig(config.Config):
@@ -428,16 +436,17 @@ def run_rally(
     args: list[str] | None = None,
     *,
     rally_options: list[str] | None = None,
-    name: str = "rally",
+    name: str | None = None,
     logger: logging.Logger = LOG,
     **kwargs: Any,
 ) -> subprocess.CompletedProcess:
     rally_options = rally_options or []
     args = args or []
     rally_args = [command] + rally_options + args
+    effective_name = name if name is not None else _default_rally_compose_run_name()
     logger.info("Running rally (args=%s).", rally_args)
     try:
-        return run_service("rally", rally_args, logger=logger, name=name, **kwargs)
+        return run_service("rally", rally_args, logger=logger, name=effective_name, **kwargs)
     except subprocess.CalledProcessError as e:
         if e.stderr is None and e.stdout:
             logger.error(
@@ -487,8 +496,9 @@ def rally_race(
     ``remove`` defaults to ``True`` (``--rm`` and :func:`run_service` cleanup). Callers may set ``False`` to
     defer one-off removal (unusual; it/tracks uses ``True`` and captures logs via ``docker compose logs -f``).
 
-    Extra keyword arguments are forwarded to :func:`run_rally` (e.g. ``name=...`` overrides the default
-    ``docker compose run --name``; use distinct values when multiple races may run concurrently on one daemon).
+    Extra keyword arguments are forwarded to :func:`run_rally` (e.g. ``name=...`` sets ``docker compose run --name``
+    explicitly; otherwise :func:`run_rally` picks ``rally_`` plus eight URL-safe base64 characters so parallel runs
+    do not clash on the Docker daemon).
     """
     rally_options = rally_options or []
     root = tracks_root if tracks_root is not None else os.environ.get("RALLY_IT_TRACKS_ROOT")
