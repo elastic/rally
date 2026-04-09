@@ -343,7 +343,7 @@ def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer, ra
     unless ``IT_TRACKS_NO_SKIP`` / ``--it-tracks-no-skip``. Per-race timeout is ``race_timeout_s``
     (total minutes from CLI/env divided by ``N``; ``N`` omits version-skip rows when no-skip is off;
     see ``it/tracks/README.md``).
-    Subprocess timeout is treated as success; Rally run containers are torn down in ``run_service``.
+    Subprocess timeout is treated as success; Rally one-off containers are removed in compose ``teardown_project``.
     """
     LOG.info("Testing track name: %s (%s)", case.track_name, case.description)
     LOG.info("Testing timeout: %s seconds", race_timeout_s)
@@ -362,7 +362,6 @@ def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer, ra
             target_hosts=["es01:9200"],
             challenge=case.challenge,
             timeout=race_timeout_s,
-            remove=True,
         )
     except subprocess.TimeoutExpired:
         LOG.warning("Race timeout: no errors until now and we take it as a success.")

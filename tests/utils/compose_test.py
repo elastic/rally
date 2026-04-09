@@ -20,6 +20,7 @@ import logging
 import os
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -42,6 +43,7 @@ from esrally.utils.compose import (
     start_elasticsearch,
     start_service,
     teardown_project,
+    write_project_logs,
 )
 
 
@@ -247,6 +249,19 @@ def test_run_compose_injects_project_name_from_compose_project_name_env(mock_run
 
 
 @mock.patch("esrally.utils.compose.subprocess.run")
+def test_run_compose_capture_output_no_stderr_default(mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``capture_output=True`` must not be combined with ``stderr=PIPE`` (``subprocess.run`` raises)."""
+    mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"x\n", stderr=b"")
+    monkeypatch.delenv("COMPOSE_PROJECT_NAME", raising=False)
+    cfg = _compose_cfg()
+    run_compose("logs", cfg=cfg, check=False, capture_output=True)
+    kw = mock_run.call_args.kwargs
+    assert kw.get("capture_output") is True
+    assert "stderr" not in kw
+    assert "stdout" not in kw
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
 def test_run_compose_skips_injected_project_name_when_compose_options_has_dash_p(
     mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -256,6 +271,54 @@ def test_run_compose_skips_injected_project_name_when_compose_options_has_dash_p
     run_compose("ps", cfg=cfg, compose_options=["-p", "explicit"], check=True)
     (argv,) = mock_run.call_args[0]
     assert argv == ["docker", "compose", "--file", "/tmp/compose.yaml", "ps", "-p", "explicit"]
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_write_project_logs_merged_output_and_argv(mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    mock_run.return_value = mock.Mock(
+        spec=["returncode", "stdout", "stderr"],
+        returncode=0,
+        stdout=b"es01  | line1\nrally | line2\n",
+        stderr=b"",
+    )
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "proj_logs_test")
+    cfg = _compose_cfg()
+    out = tmp_path / "containers.log"
+    write_project_logs(out, cfg=cfg, logger=_silent_logger())
+    assert out.read_text(encoding="utf-8") == "es01  | line1\nrally | line2\n"
+    (argv,) = mock_run.call_args[0]
+    assert argv == [
+        "docker",
+        "compose",
+        "--project-name",
+        "proj_logs_test",
+        "--file",
+        "/tmp/compose.yaml",
+        "logs",
+        "--timestamps",
+        "--no-color",
+    ]
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_write_project_logs_appends_stderr_and_warns_on_failure(
+    mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mock_run.return_value = mock.Mock(
+        spec=["returncode", "stdout", "stderr"],
+        returncode=1,
+        stdout=b"partial\n",
+        stderr=b"no such project",
+    )
+    monkeypatch.delenv("COMPOSE_PROJECT_NAME", raising=False)
+    cfg = _compose_cfg()
+    log = mock.create_autospec(logging.Logger, instance=True)
+    out = tmp_path / "c.log"
+    write_project_logs(out, cfg=cfg, logger=log)
+    text = out.read_text(encoding="utf-8")
+    assert "partial" in text
+    assert "no such project" in text
+    log.warning.assert_called()
 
 
 @mock.patch("esrally.utils.compose.subprocess.run")
@@ -511,6 +574,20 @@ def test_rally_race(mock_run: mock.MagicMock, case: RallyRaceCase, monkeypatch: 
     assert kwargs["rally_options"] == case.want_rally_options
     assert kwargs["stdout"] == subprocess.PIPE
     assert kwargs["stderr"] == subprocess.STDOUT
+    assert kwargs["remove"] is False
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_run_service_remove_false_single_compose_run(mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.delenv("COMPOSE_PROJECT_NAME", raising=False)
+    cfg = _compose_cfg(compose_file="/stack.yaml", compose_dir="/w")
+    run_service("rally", ["race", "--track", "t"], cfg=cfg, remove=False, logger=_silent_logger())
+    assert mock_run.call_count == 1
+    (argv,) = mock_run.call_args[0]
+    assert "run" in argv
+    assert "--rm" not in argv
+    assert argv[argv.index("run") + 1 :].index("rally") >= 0
 
 
 @mock.patch("esrally.utils.compose.start_service")

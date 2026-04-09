@@ -130,9 +130,9 @@ venv-destroy: clean-venv
 
 # --- Other goals ---
 
-# It delete many temporary files types.
+# It delete many temporary files types (including gitignored host logs under logs/, e.g. it/tracks).
 clean-others: clean-pycache
-	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
+	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs/ junit-py*.xml NOTICE.txt
 
 # Avoid conflicts between .pyc/pycache related files created by local Python interpreters and other interpreters in Docker
 clean-pycache:

@@ -31,7 +31,9 @@ and track-name deselection, **excluding** nodes that would ``pytest.skip`` for
 is set (see ``pytest_collection_finish``).
 
 Each ``test_race_with_track`` node sets ``COMPOSE_PROJECT_NAME`` from its pytest
-nodeid (Docker-safe) and host logs under ``logs/…`` (see README). When the worker count does not exceed the
+nodeid (Docker-safe) and host logs under ``logs/…`` (see README). After each race test, merged
+container logs are written to ``containers.log`` in that host log directory (before compose teardown).
+When the worker count does not exceed the
 number of configured ES versions, race tests get ``xdist_group`` per version so
 ``loadgroup`` keeps one version lane per worker; otherwise marks are omitted so
 extra workers are not idle. ``pytest.ini`` defaults to ``-n auto`` and ``--dist loadgroup``; the
@@ -50,6 +52,7 @@ import pytest
 from esrally.utils import compose
 from it.tracks.helpers import (
     it_tracks_es_version_worker_count,
+    it_tracks_host_log_dir_for_nodeid,
     it_tracks_log_root,
     it_tracks_no_skip_from_config,
     it_tracks_xdist_group_by_es_version,
@@ -248,6 +251,18 @@ def pytest_configure_node(node: object) -> None:
 
 def pytest_report_header() -> str:
     return "it/tracks: isolated from it/conftest.py (via pytest.ini confcutdir)"
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
+    """Dump merged ``docker compose logs`` before fixture teardown removes containers.
+
+    ``tryfirst`` runs before pytest's default teardown (which unwinds the ``elasticsearch`` fixture).
+    """
+    if "test_race_with_track" not in item.nodeid:
+        return
+    dest = it_tracks_host_log_dir_for_nodeid(it_tracks_log_root(), item.nodeid) / "containers.log"
+    compose.write_project_logs(dest, cfg=compose.ComposeConfig())
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:

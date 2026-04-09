@@ -20,6 +20,7 @@ import posixpath
 import re
 import shlex
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from esrally import config, paths, types
@@ -138,7 +139,8 @@ def run_compose(
         cmd += args
 
     compose_dir = compose_dir or cfg.compose_dir
-    kwargs.setdefault("stderr", subprocess.PIPE)
+    if not kwargs.get("capture_output"):
+        kwargs.setdefault("stderr", subprocess.PIPE)
     kwargs.setdefault("cwd", compose_dir)
     run_env = os.environ.copy()
     run_env.update(env or {})
@@ -169,6 +171,56 @@ def run_compose(
             decode(result.stderr),
         )
     return result
+
+
+def write_project_logs(
+    path: Path,
+    *,
+    cfg: types.Config | None = None,
+    logger: logging.Logger = LOG,
+) -> None:
+    """Write merged ``docker compose logs`` for ``COMPOSE_PROJECT_NAME`` to ``path`` (all services).
+
+    Best-effort: uses ``check=False`` and logs a warning on failure. Intended for diagnostics
+    while containers for the project still exist (e.g. pytest teardown before ``compose down``).
+    """
+    path = path.resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        result = run_compose(
+            "logs",
+            args=["--timestamps", "--no-color"],
+            cfg=cfg,
+            check=False,
+            capture_output=True,
+            logger=logger,
+        )
+    except OSError as exc:
+        logger.warning("Could not run compose logs (path=%s): %s", path, exc)
+        return
+    stdout = (result.stdout or b"").decode("utf-8", errors="replace")
+    stderr = (result.stderr or b"").decode("utf-8", errors="replace")
+    out_parts: list[str] = []
+    if stdout:
+        out_parts.append(stdout)
+    if stderr:
+        out_parts.append("# compose logs stderr\n" + stderr)
+    try:
+        body = "\n".join(out_parts)
+        if body and not body.endswith("\n"):
+            body += "\n"
+        path.write_text(body, encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Could not write compose logs file (path=%s): %s", path, exc)
+        return
+    if result.returncode != 0:
+        err_preview = stderr[:500]
+        logger.warning(
+            "Compose logs exited with %s (path=%s)%s",
+            result.returncode,
+            path,
+            f": {err_preview!r}" if err_preview else "",
+        )
 
 
 def _cleanup_compose_run_service(
@@ -408,6 +460,11 @@ def rally_race(
     logger: logging.Logger = LOG,
     **kwargs: Any,
 ) -> None:
+    """Run ``docker compose run rally …`` without ``--rm`` so the one-off container remains until project teardown.
+
+    ``remove`` is forced false so :func:`run_service` does not call :func:`_cleanup_compose_run_service` immediately;
+    :func:`teardown_project` (e.g. it/tracks ``elasticsearch`` fixture) removes one-offs after ``docker compose logs``.
+    """
     rally_options = rally_options or []
     root = tracks_root if tracks_root is not None else os.environ.get("RALLY_IT_TRACKS_ROOT")
     if root:
@@ -430,7 +487,7 @@ def rally_race(
         logger=logger,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        **kwargs,
+        **{**kwargs, "remove": False},
     )
     logger.info("Terminated rally race.")
 
