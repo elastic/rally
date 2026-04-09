@@ -282,6 +282,29 @@ def start_service(
     return result
 
 
+def teardown_project(
+    *,
+    cfg: types.Config | None = None,
+    logger: logging.Logger = LOG,
+    **kwargs: Any,
+) -> None:
+    """Best-effort removal of all project containers, including ``compose run`` one-offs, then ``down``.
+
+    Use when exiting abruptly (e.g. ``KeyboardInterrupt``) so fixture teardown or ``run_service`` ``finally``
+    may not run: ``compose kill`` / ``docker rm`` covers one-off containers that ``compose rm`` skips,
+    then ``docker compose down --volumes --remove-orphans`` drops the rest of the stack.
+    """
+    run_kwargs = {k: kwargs[k] for k in ("compose_dir", "env", "compose_file") if k in kwargs}
+    try:
+        _cleanup_compose_run_service(None, cfg=cfg, logger=logger, **run_kwargs)
+    except Exception as exc:
+        logger.warning("Best-effort cleanup of compose run containers failed: %s", exc)
+    try:
+        run_compose("down", args=["--volumes", "--remove-orphans"], check=False, cfg=cfg, logger=logger, **run_kwargs)
+    except Exception as exc:
+        logger.warning("Best-effort compose down failed: %s", exc)
+
+
 def remove_service(
     service: str | None = None,
     *,

@@ -18,12 +18,24 @@ Same as the rest of the `it/` suite: Docker and Docker Compose available, with t
 - Full integration test run (includes these tests): `make it`
 - Only this folder: `uv run -- pytest -s it/tracks/` or `make it_tracks` (see `Makefile`; extra pytest args via `ARGS=...`)
 
+### Parallel by default (pytest-xdist)
+
+[`pytest.ini`](pytest.ini) enables **`-n auto`** and **`--dist loadgroup`** by default. The **`pytest_xdist_auto_num_workers`** hook in `conftest.py` (see pytest-xdist docs) sets the worker count to **the number of configured Elasticsearch versions** (from `--it-tracks-es-versions`, else `IT_TRACKS_ES_VERSIONS`, else defaults)—not host CPU count. Each worker gets its own **`COMPOSE_PROJECT_NAME`** (Docker stack isolation). The Rally service in [`compose.yaml`](compose.yaml) uses a fixed **`image: rally-it-tracks-rally:it`** next to **`build:`** so every worker references the same local image tag (not a per-project default name). The xdist **controller** runs **`docker compose build rally` once** in **`pytest_sessionstart`**; workers still invoke the module **`build_rally`** fixture, which is a quick no-op when the image is already built. Race tests are marked with **`pytest.mark.xdist_group`** per ES version so **loadgroup** keeps one version per worker. **`conftest.py` registers `pytest_collection_modifyitems` with `tryfirst=True`** so those marks are present before xdist rewrites nodeids on workers; otherwise grouping would not apply.
+
+**Opt out of parallelism** (single process, one Docker stack, easier debugging): pass **`-n 0`** (or set distribution off in a way your pytest version supports, e.g. overriding `--dist` if needed).
+
+**Explicit worker count:** e.g. **`-n 2`** still works; use a count that matches your ES version list when relying on **loadgroup** (typically one worker per version).
+
+**Note:** pytest-xdist’s environment variable **`PYTEST_XDIST_AUTO_NUM_WORKERS`** is **not** consulted for `-n auto` in this tree, because the custom hook runs first and wins (firstresult hook).
+
+With multiple workers, the per-race subprocess timeout is **`(total_timeout_minutes × 60) / max(1, N) × num_workers`** (see below): the same global **`N`** as in serial mode, scaled by the xdist worker count.
+
 ## Environment variables
 
 | Variable | Purpose |
 | -------- | ------- |
 | `IT_TRACKS_NO_SKIP` | If truthy (`1`, `true`, `yes`, `on`, case-insensitive), do **not** skip tests that would be skipped only because of `TrackCase.skip_reason_by_es_version`. Does **not** affect `@pytest.mark.skip` or other skips. |
-| `IT_TRACKS_ES_VERSIONS` | Comma-separated ES image tags for `es01` (e.g. `8.19.13,9.2.7`). Default when unset: `8.19.13` and `9.2.7`. |
+| `IT_TRACKS_ES_VERSIONS` | Comma-separated ES image tags for `es01` (e.g. `8.19.14,9.3.3`). Default when unset: `8.19.14` and `9.3.3`. |
 | `IT_TRACKS_TIMEOUT_MINUTES` | Total wall-clock **minutes** budget for **all** selected `test_race_with_track` runs before dividing by `N` (default `120`). Overridden by `--it-tracks-total-timeout-minutes` when that flag is passed. |
 | `IT_TRACKS_NAME` | Comma-separated [`fnmatch`](https://docs.python.org/3/library/fnmatch.html) patterns matched against **`TrackCase.track_name`** only. If set, tests whose `track_name` matches **no** pattern are **deselected** (removed from the run and from `N`). Patterns are **OR**-ed: `geo*,elastic/*` keeps a case if either pattern matches. |
 
@@ -47,9 +59,12 @@ After collection (including `-k` / keyword deselection and the track-name filter
 
 Then each race subprocess uses:
 
-**`race_timeout_s = (total_timeout_minutes × 60) / max(1, N)`**
+- **Serial** (no xdist, or equivalently a single worker):  
+  **`race_timeout_s = (total_timeout_minutes × 60) / max(1, N)`**
+- **Parallel** (pytest-xdist with **`-n num_workers`**):  
+  **`race_timeout_s = (total_timeout_minutes × 60) / max(1, N) × num_workers`**
 
-So the total budget is split across races that are expected to execute the subprocess, not across parametrized rows that will skip immediately. If **no** items count (`N == 0`), `max(1, N)` avoids division by zero (the full budget is stashed but unused).
+The parallel formula uses the **same global `N`** as serial (computed on the controller and sent to workers) so the divisor is not accidentally recomputed from a worker-local subset. So the total budget is split across races that are expected to execute the subprocess, not across parametrized rows that will skip immediately; the **× num_workers** term matches the agreed policy when multiple races run at once. If **no** items count (`N == 0`), `max(1, N)` avoids division by zero (the full budget is stashed but unused).
 
 If a race hits that subprocess timeout without another failure, the test treats it as success (see `race_test.py`).
 
@@ -70,11 +85,14 @@ Filtering uses `fnmatch` on **`track_name`** (e.g. `elastic/*` matches `elastic/
 uv run -- pytest it/tracks/ --it-tracks-name='geo*'
 
 # Single ES version from env
-IT_TRACKS_ES_VERSIONS=8.19.13 uv run -- pytest -s it/tracks/
+IT_TRACKS_ES_VERSIONS=8.19.14 uv run -- pytest -s it/tracks/
 
 # Force-run cases that would skip for known Docker issues
 IT_TRACKS_NO_SKIP=1 uv run -- pytest -s it/tracks/
 
-# Shorter total budget (per-race timeout is total_min*60/N)
+# Shorter total budget (per-race timeout is total_min*60/N, or × num_workers with xdist)
 uv run -- pytest it/tracks/ --it-tracks-total-timeout-minutes=60
+
+# Serial run (disable default xdist)
+uv run -- pytest -s it/tracks/ -n 0
 ```

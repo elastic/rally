@@ -22,11 +22,11 @@ from __future__ import annotations
 import os
 
 # Default Elasticsearch distribution versions for track race IT (Docker compose es01 image tag).
-DEFAULT_IT_TRACKS_ES_VERSIONS: list[str] = ["8.19.13", "9.2.7"]
+DEFAULT_IT_TRACKS_ES_VERSIONS: list[str] = ["8.19.14", "9.3.3"]
 
 
 def parse_es_versions_csv(raw: str | None) -> list[str]:
-    """Parse a comma-separated list of ES version strings (e.g. ``8.19.13,9.2.7``)."""
+    """Parse a comma-separated list of ES version strings (e.g. ``8.19.14,9.3.3``)."""
     if not raw or not raw.strip():
         return list(DEFAULT_IT_TRACKS_ES_VERSIONS)
     return [p.strip() for p in raw.split(",") if p.strip()]
@@ -99,3 +99,46 @@ def race_item_counts_toward_timeout_budget(
     if not skip_reason_by_es_version:
         return True
     return skip_reason_by_es_version.get(es_version) is None
+
+
+def it_tracks_es_version_worker_count(config: object) -> int:
+    """How many xdist workers to use for one-worker-per-ES-version layout (minimum 1).
+
+    Resolves the ES version list like ``resolve_es_versions``: non-empty
+    ``config.getoption('--it-tracks-es-versions', default=None)`` when ``getoption``
+    exists, else env ``IT_TRACKS_ES_VERSIONS`` / defaults.
+    """
+    getoption = getattr(config, "getoption", None)
+    cli_es = getoption("--it-tracks-es-versions", default=None) if callable(getoption) else None
+    return max(1, len(resolve_es_versions(cli_es)))
+
+
+def it_tracks_xdist_num_workers(config: object) -> int:
+    """Return pytest-xdist worker count from ``config.option.numprocesses``, or 1 if not distributed.
+
+    For ``numprocesses == "auto"``, returns :func:`it_tracks_es_version_worker_count` (one worker per
+    configured Elasticsearch distribution version, not host CPU count).
+    """
+    opt = getattr(config, "option", None)
+    if opt is None:
+        return 1
+    np = getattr(opt, "numprocesses", 0)
+    if np in (0, False, None):
+        return 1
+    if np == "auto":
+        return it_tracks_es_version_worker_count(config)
+    try:
+        return max(1, int(np))
+    except (TypeError, ValueError):
+        return 1
+
+
+def it_tracks_race_timeout_seconds(
+    total_timeout_minutes: int,
+    n: int,
+    *,
+    xdist_num_workers: int = 1,
+) -> float:
+    """Per-race subprocess timeout: ``(total_min * 60) / max(1, N) * max(1, xdist_num_workers)``."""
+    base = (total_timeout_minutes * 60) / max(1, n)
+    return base * max(1, xdist_num_workers)

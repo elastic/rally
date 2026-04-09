@@ -19,17 +19,24 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from it.tracks.helpers import (
     DEFAULT_IT_TRACKS_ES_VERSIONS,
+    it_tracks_es_version_worker_count,
     it_tracks_no_skip_enabled,
+    it_tracks_race_timeout_seconds,
+    it_tracks_xdist_num_workers,
     parse_es_versions_csv,
     race_item_counts_toward_timeout_budget,
     resolve_es_versions,
     resolve_track_name_patterns,
     total_timeout_minutes,
 )
+
+_LEN_DEFAULT_ES_VERSIONS = len(DEFAULT_IT_TRACKS_ES_VERSIONS)
 
 
 def test_parse_es_versions_csv_empty_uses_defaults() -> None:
@@ -103,11 +110,73 @@ def test_total_timeout_minutes_default(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_race_timeout_formula_matches_conftest() -> None:
-    """``(total_min * 60) / max(1, N)`` as computed in ``it/tracks/conftest.py``."""
+    """``(total_min * 60) / max(1, N) * workers`` (``workers`` 1 without xdist)."""
     total_min = 120
     n = 76
-    assert (total_min * 60) / max(1, n) == pytest.approx(7200 / 76)
-    assert (total_min * 60) / max(1, 0) == 7200.0
+    assert it_tracks_race_timeout_seconds(total_min, n) == pytest.approx(7200 / 76)
+    assert it_tracks_race_timeout_seconds(total_min, 0) == 7200.0
+    assert it_tracks_race_timeout_seconds(total_min, n, xdist_num_workers=2) == pytest.approx(2 * 7200 / 76)
+
+
+@pytest.mark.parametrize(
+    ("numprocesses", "expect", "auto_cli_es", "clear_it_tracks_es_env"),
+    [
+        (0, 1, None, False),
+        (False, 1, None, False),
+        (None, 1, None, False),
+        (2, 2, None, False),
+        ("auto", _LEN_DEFAULT_ES_VERSIONS, None, True),
+        ("auto", 3, "7.0.0,8.0.0,9.0.0", True),
+    ],
+)
+def test_it_tracks_xdist_num_workers(
+    numprocesses: object,
+    expect: int,
+    auto_cli_es: str | None,
+    clear_it_tracks_es_env: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if clear_it_tracks_es_env:
+        monkeypatch.delenv("IT_TRACKS_ES_VERSIONS", raising=False)
+
+    def getoption(name: str, default: object = None) -> object:
+        if name == "--it-tracks-es-versions":
+            return default if auto_cli_es is None else auto_cli_es
+        return default
+
+    if numprocesses == "auto":
+        cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=numprocesses), getoption=getoption)
+    else:
+        cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=numprocesses))
+    assert it_tracks_xdist_num_workers(cfg) == expect
+
+
+def test_it_tracks_es_version_worker_count_uses_defaults_without_cli(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("IT_TRACKS_ES_VERSIONS", raising=False)
+
+    def getoption(name: str, default: object = None) -> object:
+        return default
+
+    cfg = SimpleNamespace(getoption=getoption)
+    assert it_tracks_es_version_worker_count(cfg) == _LEN_DEFAULT_ES_VERSIONS
+
+
+def test_it_tracks_es_version_worker_count_uses_cli_csv() -> None:
+    def getoption(name: str, default: object = None) -> object:
+        if name == "--it-tracks-es-versions":
+            return "7.0.0,8.0.0,9.0.0"
+        return default
+
+    assert it_tracks_es_version_worker_count(SimpleNamespace(getoption=getoption)) == 3
+
+
+def test_it_tracks_es_version_worker_count_without_getoption_uses_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("IT_TRACKS_ES_VERSIONS", raising=False)
+    assert it_tracks_es_version_worker_count(SimpleNamespace()) == _LEN_DEFAULT_ES_VERSIONS
 
 
 @pytest.mark.parametrize(

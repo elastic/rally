@@ -6,7 +6,7 @@ name: rally_it_tracks
 services:
 
   es01:
-    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-9.3.1}
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-9.3.3}
     networks:
       - elastic-net
     environment:
@@ -27,6 +27,8 @@ services:
       retries: 5
 
   rally:
+    # Fixed tag so pytest-xdist workers (each with a different COMPOSE_PROJECT_NAME) share one image.
+    image: rally-it-tracks-rally:it
     build:
       # Relative to this file: ../.. is the Rally checkout root.
       context: ${RALLY_DOCKER_DIR:-../..}

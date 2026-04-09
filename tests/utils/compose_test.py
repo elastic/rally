@@ -41,6 +41,7 @@ from esrally.utils.compose import (
     run_service,
     start_elasticsearch,
     start_service,
+    teardown_project,
 )
 
 
@@ -459,6 +460,18 @@ def test_start_elasticsearch(mock_start: mock.MagicMock, monkeypatch: pytest.Mon
     log = _silent_logger()
     start_elasticsearch("es01", detach=True, logger=log)
     mock_start.assert_called_once_with("es01", detach=True, logger=log)
+
+
+@mock.patch("esrally.utils.compose.run_compose")
+@mock.patch("esrally.utils.compose._cleanup_compose_run_service")
+def test_teardown_project(mock_cleanup: mock.MagicMock, mock_run_compose: mock.MagicMock) -> None:
+    cfg = _compose_cfg()
+    log = _silent_logger()
+    teardown_project(cfg=cfg, logger=log)
+    mock_cleanup.assert_called_once_with(None, cfg=cfg, logger=log)
+    mock_run_compose.assert_called_once()
+    assert mock_run_compose.call_args[0][0] == "down"
+    assert mock_run_compose.call_args[1]["check"] is False
 
 
 @mock.patch("esrally.utils.compose.subprocess.run")
