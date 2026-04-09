@@ -40,6 +40,7 @@ from it.tracks.helpers import (
     it_tracks_host_log_dir_for_nodeid,
     it_tracks_log_root,
     it_tracks_no_skip_from_config,
+    prepare_it_tracks_compose_bind_mount_dirs,
 )
 
 LOG = logging.getLogger(__name__)
@@ -85,6 +86,7 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     log_root = it_tracks_log_root()
     host_log = it_tracks_host_log_dir_for_nodeid(log_root, request.node.nodeid)
     host_log.mkdir(parents=True, exist_ok=True)
+    prepare_it_tracks_compose_bind_mount_dirs(host_log)
     monkeypatch.setenv("IT_TRACKS_HOST_LOG_DIR", str(host_log))
     monkeypatch.setenv("COMPOSE_PROJECT_NAME", compose_project_name_for_nodeid(request.node.nodeid))
     monkeypatch.setenv("ES_VERSION", request.param)

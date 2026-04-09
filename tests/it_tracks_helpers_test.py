@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import re
+import stat
 from types import SimpleNamespace
 
 import pytest
@@ -35,6 +36,7 @@ from it.tracks.helpers import (
     it_tracks_xdist_group_by_es_version,
     it_tracks_xdist_num_workers,
     parse_es_versions_csv,
+    prepare_it_tracks_compose_bind_mount_dirs,
     race_item_counts_toward_timeout_budget,
     resolve_es_versions,
     resolve_track_name_patterns,
@@ -300,6 +302,14 @@ def test_it_tracks_host_log_dir_without_double_colon(tmp_path) -> None:
     log_root = tmp_path / "logs"
     log_root.mkdir()
     assert it_tracks_host_log_dir_for_nodeid(log_root, "single/id") == log_root / "single" / "id"
+
+
+def test_prepare_it_tracks_compose_bind_mount_dirs(tmp_path) -> None:
+    prepare_it_tracks_compose_bind_mount_dirs(tmp_path)
+    for name in ("es01", "rally"):
+        d = tmp_path / name
+        assert d.is_dir()
+        assert stat.S_IMODE(d.stat().st_mode) == 0o777
 
 
 def test_compose_project_name_for_nodeid_stable_slug() -> None:

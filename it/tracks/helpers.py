@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import stat
 from pathlib import Path
 
 from esrally.paths import rally_root
@@ -168,6 +169,23 @@ def it_tracks_log_root() -> Path:
     if raw:
         return Path(raw).expanduser().resolve()
     return Path(rally_root()).resolve().parent / "logs"
+
+
+def prepare_it_tracks_compose_bind_mount_dirs(host_log: Path) -> None:
+    """Create ``es01/`` and ``rally/`` under ``host_log`` and allow the stack to write there.
+
+    Compose bind-mounts these paths into the Elasticsearch and Rally images, which run as
+    uid **1000**. Pytest on CI often runs as another uid, and on Linux Docker creates
+    missing host paths for bind mounts as **root**—either case yields permission denied
+    when the JVM opens ``gc.log`` under ``…/es01`` (or Rally writes under ``…/rally``).
+
+    Call this after creating ``host_log`` and before ``docker compose up`` for it/tracks.
+    """
+    mode = stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO
+    for name in ("es01", "rally"):
+        d = host_log / name
+        d.mkdir(parents=True, exist_ok=True)
+        d.chmod(mode)
 
 
 def it_tracks_host_log_dir_for_nodeid(log_root: Path, nodeid: str) -> Path:

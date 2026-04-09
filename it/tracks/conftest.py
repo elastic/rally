@@ -59,6 +59,7 @@ from it.tracks.helpers import (
     it_tracks_no_skip_from_config,
     it_tracks_xdist_group_by_es_version,
     it_tracks_xdist_num_workers,
+    prepare_it_tracks_compose_bind_mount_dirs,
     race_item_counts_toward_timeout_budget,
     resolve_es_versions,
     resolve_track_name_patterns,
@@ -76,6 +77,7 @@ def _ensure_default_it_tracks_host_log_dir() -> None:
         return
     p = it_tracks_log_root() / "_compose_default"
     p.mkdir(parents=True, exist_ok=True)
+    prepare_it_tracks_compose_bind_mount_dirs(p)
     os.environ["IT_TRACKS_HOST_LOG_DIR"] = str(p.resolve())
 
 
