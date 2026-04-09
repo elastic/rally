@@ -204,8 +204,9 @@ class RunComposeCase:
     ),
 )
 @mock.patch("esrally.utils.compose.subprocess.run")
-def test_run_compose(mock_run: mock.MagicMock, case: RunComposeCase):
+def test_run_compose(mock_run: mock.MagicMock, case: RunComposeCase, monkeypatch: pytest.MonkeyPatch) -> None:
     mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.delenv("COMPOSE_PROJECT_NAME", raising=False)
     cfg = _compose_cfg(compose_file=case.cfg_compose_file, compose_dir=case.cfg_compose_dir)
     run_compose(
         case.command,
@@ -225,6 +226,50 @@ def test_run_compose(mock_run: mock.MagicMock, case: RunComposeCase):
     assert call_kw["check"] is True
     (argv,) = mock_run.call_args[0]
     assert argv == ["docker", "compose"] + case.want_argv_suffix
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_run_compose_injects_project_name_from_compose_project_name_env(
+    mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "rally_it_tracks_gw0")
+    cfg = _compose_cfg()
+    run_compose("ps", cfg=cfg, check=True)
+    (argv,) = mock_run.call_args[0]
+    assert argv == [
+        "docker",
+        "compose",
+        "--project-name",
+        "rally_it_tracks_gw0",
+        "--file",
+        "/tmp/compose.yaml",
+        "ps",
+    ]
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_run_compose_skips_injected_project_name_when_compose_options_has_dash_p(
+    mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "from_env_should_not_duplicate")
+    cfg = _compose_cfg()
+    run_compose("ps", cfg=cfg, compose_options=["-p", "explicit"], check=True)
+    (argv,) = mock_run.call_args[0]
+    assert argv == ["docker", "compose", "--file", "/tmp/compose.yaml", "ps", "-p", "explicit"]
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_run_compose_skips_injected_project_name_when_compose_options_has_long_form(
+    mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "from_env_should_not_duplicate")
+    cfg = _compose_cfg()
+    run_compose("ps", cfg=cfg, compose_options=["--project-name", "explicit"], check=True)
+    (argv,) = mock_run.call_args[0]
+    assert argv == ["docker", "compose", "--file", "/tmp/compose.yaml", "ps", "--project-name", "explicit"]
 
 
 @dataclass
@@ -407,6 +452,8 @@ class RallyRaceCase:
     pipeline: str | None
     want_rally_options: list[str]
     challenge: str | None = None
+    it_tracks_root: str | None = None
+    track_name: str = "t"
 
 
 @cases(
@@ -435,13 +482,25 @@ class RallyRaceCase:
         want_rally_options=["--track", "t", "--pipeline", "benchmark-only", "--challenge", "append-no-conflicts"],
         challenge="append-no-conflicts",
     ),
+    bundled_track_path=RallyRaceCase(
+        test_mode=False,
+        target_hosts=None,
+        pipeline="benchmark-only",
+        want_rally_options=["--track-path", "/tracks/elastic/apm", "--pipeline", "benchmark-only"],
+        it_tracks_root="/tracks",
+        track_name="elastic/apm",
+    ),
 )
 @mock.patch("esrally.utils.compose.run_rally")
 def test_rally_race(mock_run: mock.MagicMock, case: RallyRaceCase, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ES_VERSION", "8.0.0")
+    if case.it_tracks_root is None:
+        monkeypatch.delenv("RALLY_IT_TRACKS_ROOT", raising=False)
+    else:
+        monkeypatch.setenv("RALLY_IT_TRACKS_ROOT", case.it_tracks_root)
     log = _silent_logger()
     rally_race(
-        "t",
+        case.track_name,
         test_mode=case.test_mode,
         target_hosts=case.target_hosts,
         pipeline=case.pipeline,

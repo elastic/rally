@@ -32,7 +32,9 @@ services:
     build:
       # Relative to this file: ../.. is the Rally checkout root.
       context: ${RALLY_DOCKER_DIR:-../..}
-      dockerfile: ${RALLY_DOCKER_FILE:-docker/Dockerfiles/dev/Dockerfile}
+      dockerfile: ${RALLY_DOCKER_FILE:-it/tracks/Dockerfile}
+      args:
+        RALLY_TRACKS_REF: ${RALLY_TRACKS_REF:-master}
     depends_on:
       es01:
         condition: service_healthy

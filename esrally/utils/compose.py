@@ -16,6 +16,7 @@
 # under the License.
 import logging
 import os
+import posixpath
 import re
 import shlex
 import subprocess
@@ -102,6 +103,13 @@ def parse_tabulate_simple_table(text: str) -> list[dict[str, str]]:
     return rows
 
 
+def _compose_options_set_project_name(compose_options: list[str] | None) -> bool:
+    """True if ``compose_options`` already passes ``-p`` / ``--project-name`` to the CLI."""
+    if not compose_options:
+        return False
+    return any(opt in ("-p", "--project-name") for opt in compose_options)
+
+
 def run_compose(
     command: str,
     service: str | None = None,
@@ -136,6 +144,9 @@ def run_compose(
     run_env.update(env or {})
     # Absolute repo root: Compose resolves relative build.context from the compose file path, not cwd.
     run_env["RALLY_DOCKER_DIR"] = compose_dir
+    project = (run_env.get("COMPOSE_PROJECT_NAME") or "").strip()
+    if project and not _compose_options_set_project_name(compose_options):
+        cmd = ["--project-name", project] + cmd
     try:
         logger.debug("Running compose command: %s", cmd)
         result = subprocess.run(cfg.compose_cmd + cmd, check=check, env=run_env, **kwargs)
@@ -384,11 +395,17 @@ def rally_race(
     pipeline: str | None = "benchmark-only",
     challenge: str | None = None,
     rally_options: list[str] | None = None,
+    tracks_root: str | None = None,
     logger: logging.Logger = LOG,
     **kwargs: Any,
 ) -> None:
     rally_options = rally_options or []
-    rally_options += ["--track", track_name]
+    root = tracks_root if tracks_root is not None else os.environ.get("RALLY_IT_TRACKS_ROOT")
+    if root:
+        # track_name is the path relative to the rally-tracks repo root inside the container.
+        rally_options += ["--track-path", posixpath.join(root, track_name)]
+    else:
+        rally_options += ["--track", track_name]
     if test_mode:
         rally_options += ["--test-mode"]
     if target_hosts:

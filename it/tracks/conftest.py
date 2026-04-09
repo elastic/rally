@@ -31,8 +31,10 @@ and track-name deselection, **excluding** nodes that would ``pytest.skip`` for
 is set (see ``pytest_collection_finish``).
 
 Under pytest-xdist, each worker sets ``COMPOSE_PROJECT_NAME`` from its worker id
-so Docker Compose stacks do not clash, and race tests are marked with
-``xdist_group`` per Elasticsearch version. ``pytest.ini`` defaults to ``-n auto`` and ``--dist loadgroup``; the
+so Docker Compose stacks do not clash. When the worker count does not exceed the
+number of configured ES versions, race tests get ``xdist_group`` per version so
+``loadgroup`` keeps one version lane per worker; otherwise marks are omitted so
+extra workers are not idle. ``pytest.ini`` defaults to ``-n auto`` and ``--dist loadgroup``; the
 ``pytest_xdist_auto_num_workers`` hook maps ``auto`` to the number of configured
 ES versions (see README).
 """
@@ -49,6 +51,7 @@ from esrally.utils import compose
 from it.tracks.helpers import (
     it_tracks_es_version_worker_count,
     it_tracks_no_skip_from_config,
+    it_tracks_xdist_group_by_es_version,
     it_tracks_xdist_num_workers,
     race_item_counts_toward_timeout_budget,
     resolve_es_versions,
@@ -58,6 +61,7 @@ from it.tracks.helpers import (
 
 _TRACKS_DIR = Path(__file__).resolve().parent
 os.environ.setdefault("RALLY_COMPOSE_FILE", str(_TRACKS_DIR / "compose.yaml"))
+os.environ.setdefault("RALLY_IT_TRACKS_ROOT", "/tracks")
 
 _IT_TRACKS_ES_VERSIONS_KEY = pytest.StashKey[list[str]]()
 _IT_TRACKS_RACE_TIMEOUT_S_KEY = pytest.StashKey[float]()
@@ -134,13 +138,16 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Deselect ``test_race_with_track`` nodes by track name; add xdist groups per ES version.
+    """Deselect ``test_race_with_track`` nodes by track name; optionally add xdist groups per ES version.
 
     ``tryfirst=True`` ensures ``xdist_group`` marks exist before pytest-xdist's worker
     ``pytest_collection_modifyitems`` (see ``xdist.remote.WorkerInteractor``): that hook
     appends ``@<group>`` to ``item._nodeid`` when ``--dist loadgroup``. If this hook ran
     later, nodeids would stay ungrouped and scheduling would load-balance individual tests,
     mixing Elasticsearch versions across workers.
+
+    Per-version groups are skipped when ``-n`` exceeds the ES version count (see
+    ``it_tracks_xdist_group_by_es_version`` in ``helpers``).
     """
     cli = config.getoption("--it-tracks-name", default=None)
     patterns = resolve_track_name_patterns(cli, os.environ.get("IT_TRACKS_NAME"))
@@ -167,7 +174,7 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
         items[:] = kept
 
     xdist_group = getattr(pytest.mark, "xdist_group", None)
-    if xdist_group is not None:
+    if xdist_group is not None and it_tracks_xdist_group_by_es_version(config):
         for item in items:
             if "test_race_with_track" not in item.nodeid:
                 continue

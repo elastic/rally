@@ -114,11 +114,20 @@ def it_tracks_es_version_worker_count(config: object) -> int:
 
 
 def it_tracks_xdist_num_workers(config: object) -> int:
-    """Return pytest-xdist worker count from ``config.option.numprocesses``, or 1 if not distributed.
+    """Return pytest-xdist worker count, or 1 if not distributed.
 
-    For ``numprocesses == "auto"``, returns :func:`it_tracks_es_version_worker_count` (one worker per
-    configured Elasticsearch distribution version, not host CPU count).
+    On xdist **worker** processes, ``remote.setup_config`` clears ``option.numprocesses``; pytest-xdist
+    sets ``PYTEST_XDIST_WORKER_COUNT`` to the real pool size (see ``xdist.remote``), which we read first.
+
+    On the controller or a normal run, use ``config.option.numprocesses``. For ``numprocesses == "auto"``,
+    returns :func:`it_tracks_es_version_worker_count` (one worker per configured ES version, not host CPU).
     """
+    wc = os.environ.get("PYTEST_XDIST_WORKER_COUNT")
+    if wc is not None:
+        try:
+            return max(1, int(wc))
+        except ValueError:
+            pass
     opt = getattr(config, "option", None)
     if opt is None:
         return 1
@@ -131,6 +140,16 @@ def it_tracks_xdist_num_workers(config: object) -> int:
         return max(1, int(np))
     except (TypeError, ValueError):
         return 1
+
+
+def it_tracks_xdist_group_by_es_version(config: object) -> bool:
+    """Whether to mark race tests with ``xdist_group`` per ES version under ``--dist loadgroup``.
+
+    When the requested xdist worker count exceeds the number of configured ES versions, per-version
+    groups would cap concurrency at the version count; omitting those marks lets all workers run
+    races in parallel (each worker still uses its own ``COMPOSE_PROJECT_NAME``).
+    """
+    return it_tracks_xdist_num_workers(config) <= it_tracks_es_version_worker_count(config)
 
 
 def it_tracks_race_timeout_seconds(

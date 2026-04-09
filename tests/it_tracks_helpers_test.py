@@ -28,6 +28,7 @@ from it.tracks.helpers import (
     it_tracks_es_version_worker_count,
     it_tracks_no_skip_enabled,
     it_tracks_race_timeout_seconds,
+    it_tracks_xdist_group_by_es_version,
     it_tracks_xdist_num_workers,
     parse_es_versions_csv,
     race_item_counts_toward_timeout_budget,
@@ -136,6 +137,7 @@ def test_it_tracks_xdist_num_workers(
     clear_it_tracks_es_env: bool,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("PYTEST_XDIST_WORKER_COUNT", raising=False)
     if clear_it_tracks_es_env:
         monkeypatch.delenv("IT_TRACKS_ES_VERSIONS", raising=False)
 
@@ -149,6 +151,58 @@ def test_it_tracks_xdist_num_workers(
     else:
         cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=numprocesses))
     assert it_tracks_xdist_num_workers(cfg) == expect
+
+
+def test_it_tracks_xdist_num_workers_prefers_pytest_xdist_worker_count_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Worker subprocesses clear ``numprocesses``; xdist sets ``PYTEST_XDIST_WORKER_COUNT``."""
+    monkeypatch.setenv("PYTEST_XDIST_WORKER_COUNT", "4")
+    cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=None))
+    assert it_tracks_xdist_num_workers(cfg) == 4
+
+
+@pytest.mark.parametrize(
+    ("numprocesses", "cli_es", "expect_group", "needs_getoption"),
+    [
+        (4, None, False, False),
+        (2, "7.0.0,8.0.0,9.0.0,10.0.0", True, True),
+        (4, "7.0.0,8.0.0,9.0.0,10.0.0", True, True),
+        (0, None, True, False),
+        (2, None, True, True),
+        ("auto", None, True, True),
+    ],
+)
+def test_it_tracks_xdist_group_by_es_version(
+    numprocesses: object,
+    cli_es: str | None,
+    expect_group: bool,
+    needs_getoption: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PYTEST_XDIST_WORKER_COUNT", raising=False)
+    monkeypatch.delenv("IT_TRACKS_ES_VERSIONS", raising=False)
+
+    def getoption(name: str, default: object = None) -> object:
+        if name == "--it-tracks-es-versions":
+            return default if cli_es is None else cli_es
+        return default
+
+    if needs_getoption or numprocesses == "auto":
+        cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=numprocesses), getoption=getoption)
+    else:
+        cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=numprocesses))
+    assert it_tracks_xdist_group_by_es_version(cfg) is expect_group
+
+
+def test_it_tracks_xdist_group_by_es_version_false_when_xdist_env_worker_count_exceeds_versions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mirrors xdist worker: ``numprocesses`` is None but env carries the real pool size."""
+    monkeypatch.delenv("IT_TRACKS_ES_VERSIONS", raising=False)
+    monkeypatch.setenv("PYTEST_XDIST_WORKER_COUNT", "4")
+    cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=None))
+    assert it_tracks_xdist_group_by_es_version(cfg) is False
 
 
 def test_it_tracks_es_version_worker_count_uses_defaults_without_cli(
