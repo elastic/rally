@@ -171,7 +171,7 @@ jobs:
       - name: Check disk space before
         run: df -h
       - name: Run tests
-        run: make it_tracks ARGS='-n 4'
+        run: make it_tracks ARGS='-n 1'
         timeout-minutes: 160
         env:
           IT_TRACKS_ES_VERSIONS: ${{ matrix.es-version }}
