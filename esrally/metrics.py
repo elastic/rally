@@ -389,14 +389,20 @@ class SampleType(IntEnum):
     Normal = 1
 
 
+SECRET_TRACK_PARAM_PLACEHOLDER = "<hidden>"
+
+
 def track_params_for_reporting(track_params):
     """
-    Track parameters whose names start with ``secret_`` are omitted from metrics documents,
-    race records, and other persisted reporting. They remain in configuration for track loading.
+    Track parameters whose names start with ``secret_`` are included in metrics documents,
+    race records, and other persisted reporting, but their values are replaced with
+    ``SECRET_TRACK_PARAM_PLACEHOLDER`` (``"<hidden>"``). Actual values remain only in configuration for track loading.
     """
     if not track_params:
         return {}
-    return {k: v for k, v in track_params.items() if not str(k).startswith("secret_")}
+    return {
+        k: (SECRET_TRACK_PARAM_PLACEHOLDER if str(k).startswith("secret_") else v) for k, v in track_params.items()
+    }
 
 
 class MetricsStore:

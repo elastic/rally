@@ -134,9 +134,14 @@ class TestTrackParamsForReporting:
         assert metrics.track_params_for_reporting({}) == {}
         assert metrics.track_params_for_reporting(None) == {}
 
-    def test_omits_secret_prefix(self):
+    def test_redacts_secret_prefix_values(self):
         params = {"clients": 8, "secret_api_key": "x", "secret_": "edge", "SECRET_not_filtered": 1}
-        assert metrics.track_params_for_reporting(params) == {"clients": 8, "SECRET_not_filtered": 1}
+        assert metrics.track_params_for_reporting(params) == {
+            "clients": 8,
+            "secret_api_key": metrics.SECRET_TRACK_PARAM_PLACEHOLDER,
+            "secret_": metrics.SECRET_TRACK_PARAM_PLACEHOLDER,
+            "SECRET_not_filtered": 1,
+        }
 
 
 class TestEsClient:
@@ -679,7 +684,7 @@ class TestEsMetrics:
         self.es_mock.create_index.assert_called_with(index="rally-metrics-2016-01")
         self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
 
-    def test_put_value_omits_secret_prefixed_track_params(self):
+    def test_put_value_redacts_secret_prefixed_track_param_values(self):
         self.cfg.add(config.Scope.application, "track", "params", {"shard-count": 3, "secret_token": "nope"})
         self.metrics_store = metrics.EsMetricsStore(
             self.cfg, client_factory_class=MockClientFactory, index_template_provider_class=DummyIndexTemplateProvider, clock=StaticClock
@@ -701,7 +706,7 @@ class TestEsMetrics:
             "environment": "unittest",
             "sample-type": "normal",
             "track": "test",
-            "track-params": {"shard-count": 3},
+            "track-params": {"shard-count": 3, "secret_token": metrics.SECRET_TRACK_PARAM_PLACEHOLDER},
             "challenge": "append",
             "car": "defaults",
             "name": "indexing_throughput",
@@ -1404,7 +1409,7 @@ class TestEsRaceStore:
         }
         self.es_mock.index.assert_called_with(index="rally-races-2016-01", id=self.RACE_ID, item=expected_doc)
 
-    def test_store_race_omits_secret_prefixed_track_params(self):
+    def test_store_race_redacts_secret_prefixed_track_param_values(self):
         schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
 
         t = track.Track(
@@ -1438,7 +1443,10 @@ class TestEsRaceStore:
         self.race_store.store_race(race)
 
         indexed = self.es_mock.index.call_args.kwargs["item"]
-        assert indexed["track-params"] == {"shard-count": 3}
+        assert indexed["track-params"] == {
+            "shard-count": 3,
+            "secret_token": metrics.SECRET_TRACK_PARAM_PLACEHOLDER,
+        }
 
     @mock.patch("esrally.utils.console.println")
     def test_delete_race(self, console):

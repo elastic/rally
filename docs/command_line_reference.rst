@@ -280,7 +280,7 @@ Example JSON file::
       "clients": 16
    }
 
-Track parameters whose names start with ``secret_`` (for example ``secret_api_key``) are **not** written to the metrics store, race records, or results documents; they are still available to the track (Jinja templates, parameter sources, and so on). All other track parameters are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races`` with JSON output, persisted ``track-params`` follow the same rule::
+Track parameters whose names start with ``secret_`` (for example ``secret_api_key``) are written to the metrics store, race records, and results documents with their value replaced by ``<hidden>``; the real value is still available to the track (Jinja templates, parameter sources, and so on) and is not persisted. All track parameter keys are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races`` with JSON output, persisted ``track-params`` follow the same rule::
 
 
     Race Timestamp    Track    Track Parameters          Challenge            Car       User Tags
