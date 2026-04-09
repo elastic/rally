@@ -3668,9 +3668,7 @@ class TestClusterEnvironmentInfo:
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 
-        auth_type_calls = [
-            c for c in metrics_store_add_meta_info.call_args_list if len(c[0]) >= 3 and c[0][2] == "target_auth_type"
-        ]
+        auth_type_calls = [c for c in metrics_store_add_meta_info.call_args_list if len(c[0]) >= 3 and c[0][2] == "target_auth_type"]
         assert len(auth_type_calls) == 0
 
 

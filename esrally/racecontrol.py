@@ -253,7 +253,9 @@ class BenchmarkCoordinator:
         )
         self.race_store = metrics.race_store(self.cfg)
 
-    def on_preparation_complete(self, distribution_flavor, distribution_version, revision, target_id=None, target_platform=None, target_auth_type=None):
+    def on_preparation_complete(
+        self, distribution_flavor, distribution_version, revision, target_id=None, target_platform=None, target_auth_type=None
+    ):
         self.race.distribution_flavor = distribution_flavor
         self.race.distribution_version = distribution_version
         self.race.revision = revision
