@@ -288,6 +288,14 @@ def test_it_tracks_host_log_dir_for_nodeid_mirrors_pytest_nodeid(tmp_path) -> No
     assert got == log_root / "it" / "tracks" / "race_test.py" / "test_race_with_track[es_8.19.14-elastic_logs]"
 
 
+def test_it_tracks_host_log_dir_short_nodeid_gets_it_tracks_prefix(tmp_path) -> None:
+    log_root = tmp_path / "logs"
+    log_root.mkdir()
+    nodeid = "race_test.py::test_race_with_track[es_9.3.3-geonames]"
+    got = it_tracks_host_log_dir_for_nodeid(log_root, nodeid)
+    assert got == log_root / "it" / "tracks" / "race_test.py" / "test_race_with_track[es_9.3.3-geonames]"
+
+
 def test_it_tracks_host_log_dir_without_double_colon(tmp_path) -> None:
     log_root = tmp_path / "logs"
     log_root.mkdir()

@@ -175,13 +175,19 @@ def it_tracks_host_log_dir_for_nodeid(log_root: Path, nodeid: str) -> Path:
 
     Mirrors the pytest nodeid with ``::`` turned into a path segment (``/``) so
     ``IT_TRACKS_HOST_LOG_DIR`` has no ``:`` characters—Docker Compose treats ``:`` as special in
-    volume specs. Example: ``it/tracks/race_test.py::test_race_with_track[es_8.19.14-foo]`` →
-    ``…/logs/it/tracks/race_test.py/test_race_with_track[es_8.19.14-foo]``.
+    volume specs.
+
+    When the file segment is only a basename (typical under ``it/tracks/pytest.ini`` confcutdir),
+    e.g. ``race_test.py::test_race_with_track[…]``, the directory is normalized under
+    ``…/logs/it/tracks/race_test.py/…``. A full path such as
+    ``it/tracks/race_test.py::test_race_with_track[…]`` is left as-is under ``log_root``.
     """
     if "::" not in nodeid:
         return (log_root / nodeid).resolve()
     file_part, test_part = nodeid.split("::", 1)
     path = Path(file_part)
+    if path.parent == Path("."):
+        path = Path("it") / "tracks" / path.name
     return (log_root / path.parent / path.name / test_part).resolve()
 
 

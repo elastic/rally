@@ -49,7 +49,7 @@ With multiple workers, the per-race subprocess timeout is **`(total_timeout_minu
 
 ## Host logs (`logs/`)
 
-Integration runs create **`logs/<path derived from nodeid>/`** (the pytest **`::`** after the file is a **`/`** segment so paths work in Compose volume specs—e.g. `logs/it/tracks/race_test.py/test_race_with_track[es_8.19.14-geonames]/es01` and `…/rally`) with Elasticsearch **`ES_LOG_STYLE=file`** and Rally’s `~/.rally/logs` bind-mounted there. The directory **`logs/`** is gitignored. **`COMPOSE_PROJECT_NAME`** is a **Docker-safe** slug derived from the same nodeid (raw pytest nodeids usually contain `/` and `:` and are invalid for `docker compose -p`).
+Integration runs create **`logs/<path derived from nodeid>/`**: the pytest **`::`** after the file becomes a **`/`** segment so paths work in Compose volume specs. When the nodeid file part is only a basename (common with this tree’s **`pytest.ini`** confcutdir), logs are stored under **`logs/it/tracks/<module>/…`** (e.g. `logs/it/tracks/race_test.py/test_race_with_track[es_8.19.14-geonames]/es01` and `…/rally`). Longer nodeids that already include `it/tracks/…` behave the same. Elasticsearch uses **`ES_LOG_STYLE=file`**; Rally’s `~/.rally/logs` is bind-mounted there. The directory **`logs/`** is gitignored. **`COMPOSE_PROJECT_NAME`** is a **Docker-safe** slug derived from the same nodeid (raw pytest nodeids usually contain `/` and `:` and are invalid for `docker compose -p`).
 
 On **`race`** failure, Rally’s **combined stdout+stderr** from `docker compose run` is logged at **ERROR**; pytest is configured (see [`pytest.ini`](pytest.ini)) to capture **INFO** and above so failed tests show useful context in the report.
 
