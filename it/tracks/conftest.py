@@ -31,8 +31,8 @@ and track-name deselection, **excluding** nodes that would ``pytest.skip`` for
 is set (see ``pytest_collection_finish``).
 
 Each ``test_race_with_track`` node sets ``COMPOSE_PROJECT_NAME`` from its pytest
-nodeid (Docker-safe) and host logs under ``logs/…`` (see README). After each race test, merged
-container logs are written to ``containers.log`` in that host log directory (before compose teardown).
+nodeid (Docker-safe) and host logs under ``logs/…`` (see README). While ``es01`` is up, a background
+``docker compose logs -f`` process appends merged container output to ``containers.log`` in that directory.
 When the worker count does not exceed the
 number of configured ES versions, race tests get ``xdist_group`` per version so
 ``loadgroup`` keeps one version lane per worker; otherwise marks are omitted so
@@ -45,6 +45,8 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import subprocess
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -253,16 +255,29 @@ def pytest_report_header() -> str:
     return "it/tracks: isolated from it/conftest.py (via pytest.ini confcutdir)"
 
 
-@pytest.hookimpl(tryfirst=True)
-def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
-    """Dump merged ``docker compose logs`` before fixture teardown removes containers.
+_LOG_FOLLOW_STOP_TIMEOUT_S = 15.0
+_LOG_FOLLOW_KILL_TIMEOUT_S = 5.0
 
-    ``tryfirst`` runs before pytest's default teardown (which unwinds the ``elasticsearch`` fixture).
-    """
-    if "test_race_with_track" not in item.nodeid:
-        return
-    dest = it_tracks_host_log_dir_for_nodeid(it_tracks_log_root(), item.nodeid) / "containers.log"
-    compose.write_project_logs(dest, cfg=compose.ComposeConfig())
+
+@pytest.fixture(autouse=True)
+def it_tracks_compose_logs_follow(request: pytest.FixtureRequest, elasticsearch: object) -> Generator[None, None, None]:
+    """Background ``docker compose logs -f`` into ``containers.log``; stopped before ``elasticsearch`` teardown."""
+    dest = it_tracks_host_log_dir_for_nodeid(it_tracks_log_root(), request.node.nodeid) / "containers.log"
+    proc, log_f = compose.spawn_compose_logs_follow(dest, cfg=compose.ComposeConfig())
+    try:
+        yield
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=_LOG_FOLLOW_STOP_TIMEOUT_S)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=_LOG_FOLLOW_KILL_TIMEOUT_S)
+        try:
+            log_f.close()
+        except OSError:
+            pass
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:

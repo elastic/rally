@@ -21,7 +21,7 @@ import re
 import shlex
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from esrally import config, paths, types
 
@@ -111,6 +111,25 @@ def _compose_options_set_project_name(compose_options: list[str] | None) -> bool
     return any(opt in ("-p", "--project-name") for opt in compose_options)
 
 
+def _strip_compose_run_name_options(opts: list[str]) -> list[str]:
+    """Remove ``--name`` / value pairs from ``docker compose run`` option args (so a single name can win)."""
+    out: list[str] = []
+    i = 0
+    while i < len(opts):
+        opt = opts[i]
+        if opt == "--name":
+            i += 1
+            if i < len(opts):
+                i += 1
+            continue
+        if opt.startswith("--name="):
+            i += 1
+            continue
+        out.append(opt)
+        i += 1
+    return out
+
+
 def run_compose(
     command: str,
     service: str | None = None,
@@ -173,54 +192,51 @@ def run_compose(
     return result
 
 
-def write_project_logs(
+def spawn_compose_logs_follow(  # pylint: disable=consider-using-with
     path: Path,
     *,
     cfg: types.Config | None = None,
+    compose_file: str | None = None,
+    compose_dir: str | None = None,
+    env: dict[str, str] | None = None,
     logger: logging.Logger = LOG,
-) -> None:
-    """Write merged ``docker compose logs`` for ``COMPOSE_PROJECT_NAME`` to ``path`` (all services).
+) -> tuple[subprocess.Popen, BinaryIO]:
+    """Start ``docker compose logs -f`` for the current project; write merged service output to ``path``.
 
-    Best-effort: uses ``check=False`` and logs a warning on failure. Intended for diagnostics
-    while containers for the project still exist (e.g. pytest teardown before ``compose down``).
+    Caller must stop the returned :class:`~subprocess.Popen` and close the file handle (e.g. in a pytest
+    fixture ``finally``). ``stderr`` is discarded to avoid blocking on a full pipe while following.
+    Intentionally not using ``with`` so the subprocess and file outlive this function.
     """
+    cfg = ComposeConfig.from_config(cfg)
     path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
+    log_file = open(path, "wb")
+    cmd: list[str] = []
+    cf = compose_file or cfg.compose_file
+    if cf:
+        cmd += ["--file", cf]
+    cmd += ["logs", "-f", "--timestamps", "--no-color"]
+    cdir = compose_dir or cfg.compose_dir
+    run_env = os.environ.copy()
+    run_env.update(env or {})
+    run_env["RALLY_DOCKER_DIR"] = cdir
+    project = (run_env.get("COMPOSE_PROJECT_NAME") or "").strip()
+    if project and not _compose_options_set_project_name(None):
+        cmd = ["--project-name", project] + cmd
+    full_cmd = cfg.compose_cmd + cmd
+    logger.debug("Spawning compose logs follow: %s", full_cmd)
     try:
-        result = run_compose(
-            "logs",
-            args=["--timestamps", "--no-color"],
-            cfg=cfg,
-            check=False,
-            capture_output=True,
-            logger=logger,
+        proc = subprocess.Popen(
+            full_cmd,
+            stdout=log_file,
+            stderr=subprocess.DEVNULL,
+            cwd=cdir,
+            env=run_env,
         )
-    except OSError as exc:
-        logger.warning("Could not run compose logs (path=%s): %s", path, exc)
-        return
-    stdout = (result.stdout or b"").decode("utf-8", errors="replace")
-    stderr = (result.stderr or b"").decode("utf-8", errors="replace")
-    out_parts: list[str] = []
-    if stdout:
-        out_parts.append(stdout)
-    if stderr:
-        out_parts.append("# compose logs stderr\n" + stderr)
-    try:
-        body = "\n".join(out_parts)
-        if body and not body.endswith("\n"):
-            body += "\n"
-        path.write_text(body, encoding="utf-8")
-    except OSError as exc:
-        logger.warning("Could not write compose logs file (path=%s): %s", path, exc)
-        return
-    if result.returncode != 0:
-        err_preview = stderr[:500]
-        logger.warning(
-            "Compose logs exited with %s (path=%s)%s",
-            result.returncode,
-            path,
-            f": {err_preview!r}" if err_preview else "",
-        )
+    except OSError:
+        log_file.close()
+        raise
+    return proc, log_file
 
 
 def _cleanup_compose_run_service(
@@ -277,6 +293,7 @@ def run_service(
     args: list[str] | None = None,
     *,
     remove: bool = True,
+    name: str | None = None,
     cfg: types.Config | None = None,
     compose_options: list[str] | None = None,
     compose_file: str | None = None,
@@ -284,7 +301,10 @@ def run_service(
     **kwargs: Any,
 ) -> subprocess.CompletedProcess:
     """Run a one-off ``docker compose run`` for ``service``."""
-    compose_options = compose_options or []
+    compose_options = list(compose_options or [])
+    if name is not None:
+        compose_options = _strip_compose_run_name_options(compose_options)
+        compose_options = ["--name", name] + compose_options
     if remove:
         compose_options += ["--rm"]
     logger.info("Run service '%s' (options=%s)", service, compose_options)
@@ -408,6 +428,7 @@ def run_rally(
     args: list[str] | None = None,
     *,
     rally_options: list[str] | None = None,
+    name: str = "rally",
     logger: logging.Logger = LOG,
     **kwargs: Any,
 ) -> subprocess.CompletedProcess:
@@ -416,7 +437,7 @@ def run_rally(
     rally_args = [command] + rally_options + args
     logger.info("Running rally (args=%s).", rally_args)
     try:
-        return run_service("rally", rally_args, logger=logger, **kwargs)
+        return run_service("rally", rally_args, logger=logger, name=name, **kwargs)
     except subprocess.CalledProcessError as e:
         if e.stderr is None and e.stdout:
             logger.error(
@@ -457,13 +478,17 @@ def rally_race(
     challenge: str | None = None,
     rally_options: list[str] | None = None,
     tracks_root: str | None = None,
+    remove: bool = True,
     logger: logging.Logger = LOG,
     **kwargs: Any,
 ) -> None:
-    """Run ``docker compose run rally …`` without ``--rm`` so the one-off container remains until project teardown.
+    """Run ``docker compose run rally …`` for a track race.
 
-    ``remove`` is forced false so :func:`run_service` does not call :func:`_cleanup_compose_run_service` immediately;
-    :func:`teardown_project` (e.g. it/tracks ``elasticsearch`` fixture) removes one-offs after ``docker compose logs``.
+    ``remove`` defaults to ``True`` (``--rm`` and :func:`run_service` cleanup). Callers may set ``False`` to
+    defer one-off removal (unusual; it/tracks uses ``True`` and captures logs via ``docker compose logs -f``).
+
+    Extra keyword arguments are forwarded to :func:`run_rally` (e.g. ``name=...`` overrides the default
+    ``docker compose run --name``; use distinct values when multiple races may run concurrently on one daemon).
     """
     rally_options = rally_options or []
     root = tracks_root if tracks_root is not None else os.environ.get("RALLY_IT_TRACKS_ROOT")
@@ -487,7 +512,8 @@ def rally_race(
         logger=logger,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        **{**kwargs, "remove": False},
+        remove=remove,
+        **kwargs,
     )
     logger.info("Terminated rally race.")
 

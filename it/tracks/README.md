@@ -88,6 +88,8 @@ Filtering uses `fnmatch` on **`track_name`** (e.g. `elastic/*` matches `elastic/
 
 ## Rally container cleanup
 
+`compose.rally_race` runs Rally via `compose.run_rally`, which passes **`name="rally"`** into `compose.run_service` so **`docker compose run`** uses **`--name rally`**. That keeps `containers.log` and Docker Desktop prefixes short (instead of a long one-off name derived from **`COMPOSE_PROJECT_NAME`**). Override with **`rally_race(..., name="…")`** when you need a unique **`docker compose run --name`** (for example multiple concurrent races on the same daemon, e.g. pytest-xdist with more workers than ES-version lanes).
+
 `compose.run_service(..., remove=True)` (used by `rally_race`) wraps `docker compose run` in **`try` / `finally`**. After the run (including on **`subprocess` timeout**), it runs **`docker compose kill`** on the Rally service, then **`docker compose ps -a -q`** and **`docker rm -f`** on those IDs.
 
 **Why not `compose rm --stop`?** Docker Compose’s **`rm`** and **`stop`** commands **ignore one-off containers** created by **`docker compose run`** (internal `oneOffExclude` filter), so they never matched `…-rally-run-…` containers. **`compose kill`** includes one-offs, so orphaned run containers are actually stopped and removed when the test driver times out or exits before `run --rm` runs. Teardown is best-effort (`check=False` / logged warnings). The persistent `es01` service is still torn down with **`remove_service`** in the `elasticsearch` fixture only.

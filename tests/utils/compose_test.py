@@ -40,10 +40,10 @@ from esrally.utils.compose import (
     run_compose,
     run_rally,
     run_service,
+    spawn_compose_logs_follow,
     start_elasticsearch,
     start_service,
     teardown_project,
-    write_project_logs,
 )
 
 
@@ -273,52 +273,35 @@ def test_run_compose_skips_injected_project_name_when_compose_options_has_dash_p
     assert argv == ["docker", "compose", "--file", "/tmp/compose.yaml", "ps", "-p", "explicit"]
 
 
-@mock.patch("esrally.utils.compose.subprocess.run")
-def test_write_project_logs_merged_output_and_argv(mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    mock_run.return_value = mock.Mock(
-        spec=["returncode", "stdout", "stderr"],
-        returncode=0,
-        stdout=b"es01  | line1\nrally | line2\n",
-        stderr=b"",
-    )
-    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "proj_logs_test")
+@mock.patch("esrally.utils.compose.subprocess.Popen")
+def test_spawn_compose_logs_follow_argv_and_popen_kwargs(
+    mock_popen: mock.MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mock_proc = mock.MagicMock(spec=["poll", "terminate", "kill", "wait"])
+    mock_popen.return_value = mock_proc
+    monkeypatch.setenv("COMPOSE_PROJECT_NAME", "proj_follow_test")
     cfg = _compose_cfg()
     out = tmp_path / "containers.log"
-    write_project_logs(out, cfg=cfg, logger=_silent_logger())
-    assert out.read_text(encoding="utf-8") == "es01  | line1\nrally | line2\n"
-    (argv,) = mock_run.call_args[0]
+    proc, fh = spawn_compose_logs_follow(out, cfg=cfg, logger=_silent_logger())
+    assert proc is mock_proc
+    mock_popen.assert_called_once()
+    assert mock_popen.call_args.kwargs["stderr"] == subprocess.DEVNULL
+    assert mock_popen.call_args.kwargs["cwd"] == "/tmp/compose"
+    assert mock_popen.call_args.kwargs["env"]["RALLY_DOCKER_DIR"] == "/tmp/compose"
+    (argv,) = mock_popen.call_args[0]
     assert argv == [
         "docker",
         "compose",
         "--project-name",
-        "proj_logs_test",
+        "proj_follow_test",
         "--file",
         "/tmp/compose.yaml",
         "logs",
+        "-f",
         "--timestamps",
         "--no-color",
     ]
-
-
-@mock.patch("esrally.utils.compose.subprocess.run")
-def test_write_project_logs_appends_stderr_and_warns_on_failure(
-    mock_run: mock.MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    mock_run.return_value = mock.Mock(
-        spec=["returncode", "stdout", "stderr"],
-        returncode=1,
-        stdout=b"partial\n",
-        stderr=b"no such project",
-    )
-    monkeypatch.delenv("COMPOSE_PROJECT_NAME", raising=False)
-    cfg = _compose_cfg()
-    log = mock.create_autospec(logging.Logger, instance=True)
-    out = tmp_path / "c.log"
-    write_project_logs(out, cfg=cfg, logger=log)
-    text = out.read_text(encoding="utf-8")
-    assert "partial" in text
-    assert "no such project" in text
-    log.warning.assert_called()
+    fh.close()
 
 
 @mock.patch("esrally.utils.compose.subprocess.run")
@@ -402,6 +385,35 @@ def test_run_service_remove_true_invokes_rm_after_run(mock_run: mock.MagicMock):
     assert kill_argv[kill_argv.index("kill") + 1 :] == ["rally"]
     (ps_argv,) = mock_run.call_args_list[2][0]
     assert ps_argv[ps_argv.index("ps") + 1 :] == ["-a", "-q", "rally"]
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_run_service_name_injects_compose_run_name(mock_run: mock.MagicMock) -> None:
+    mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
+    cfg = _compose_cfg(compose_file="/stack.yaml", compose_dir="/w")
+    run_service("rally", ["list", "tracks"], cfg=cfg, name="myrace", logger=_silent_logger())
+    (argv,) = mock_run.call_args_list[0][0]
+    run_idx = argv.index("run")
+    assert argv[run_idx + 1 : run_idx + 5] == ["--name", "myrace", "--rm", "rally"]
+
+
+@mock.patch("esrally.utils.compose.subprocess.run")
+def test_run_service_name_strips_duplicate_compose_options_name(mock_run: mock.MagicMock) -> None:
+    mock_run.return_value = mock.Mock(spec=["returncode", "stdout", "stderr"], returncode=0, stdout=b"", stderr=b"")
+    cfg = _compose_cfg(compose_file="/stack.yaml", compose_dir="/w")
+    run_service(
+        "rally",
+        ["race", "--track", "t"],
+        cfg=cfg,
+        name="winner",
+        compose_options=["--name", "loser", "-T"],
+        logger=_silent_logger(),
+    )
+    (argv,) = mock_run.call_args_list[0][0]
+    run_idx = argv.index("run")
+    tail = argv[run_idx + 1 :]
+    assert tail[:4] == ["--name", "winner", "-T", "--rm"]
+    assert "loser" not in tail
 
 
 @mock.patch("esrally.utils.compose.subprocess.run")
@@ -515,6 +527,9 @@ class RallyRaceCase:
     challenge: str | None = None
     it_tracks_root: str | None = None
     track_name: str = "t"
+    remove: bool = True
+    name: str | None = None
+    want_name: str = "rally"
 
 
 @cases(
@@ -551,6 +566,21 @@ class RallyRaceCase:
         it_tracks_root="/tracks",
         track_name="elastic/apm",
     ),
+    remove_false=RallyRaceCase(
+        test_mode=False,
+        target_hosts=None,
+        pipeline="benchmark-only",
+        want_rally_options=["--track", "t", "--pipeline", "benchmark-only"],
+        remove=False,
+    ),
+    name_override=RallyRaceCase(
+        test_mode=False,
+        target_hosts=None,
+        pipeline="benchmark-only",
+        want_rally_options=["--track", "t", "--pipeline", "benchmark-only"],
+        name="race_gw0",
+        want_name="race_gw0",
+    ),
 )
 @mock.patch("esrally.utils.compose.run_rally")
 def test_rally_race(mock_run: mock.MagicMock, case: RallyRaceCase, monkeypatch: pytest.MonkeyPatch):
@@ -560,21 +590,35 @@ def test_rally_race(mock_run: mock.MagicMock, case: RallyRaceCase, monkeypatch: 
     else:
         monkeypatch.setenv("RALLY_IT_TRACKS_ROOT", case.it_tracks_root)
     log = _silent_logger()
-    rally_race(
-        case.track_name,
-        test_mode=case.test_mode,
-        target_hosts=case.target_hosts,
-        pipeline=case.pipeline,
-        challenge=case.challenge,
-        logger=log,
-    )
+    if case.name is not None:
+        rally_race(
+            case.track_name,
+            test_mode=case.test_mode,
+            target_hosts=case.target_hosts,
+            pipeline=case.pipeline,
+            challenge=case.challenge,
+            remove=case.remove,
+            logger=log,
+            name=case.name,
+        )
+    else:
+        rally_race(
+            case.track_name,
+            test_mode=case.test_mode,
+            target_hosts=case.target_hosts,
+            pipeline=case.pipeline,
+            challenge=case.challenge,
+            remove=case.remove,
+            logger=log,
+        )
     mock_run.assert_called_once()
     args, kwargs = mock_run.call_args
     assert args[0] == "race"
     assert kwargs["rally_options"] == case.want_rally_options
+    assert kwargs.get("name", "rally") == case.want_name
     assert kwargs["stdout"] == subprocess.PIPE
     assert kwargs["stderr"] == subprocess.STDOUT
-    assert kwargs["remove"] is False
+    assert kwargs["remove"] == case.remove
 
 
 @mock.patch("esrally.utils.compose.subprocess.run")
@@ -621,4 +665,6 @@ def test_run_rally_invokes_run_service(mock_run: mock.MagicMock):
     (argv,) = mock_run.call_args_list[0][0]
     assert "run" in argv
     assert "rally" in argv
+    run_idx = argv.index("run")
+    assert argv[run_idx + 1 : run_idx + 3] == ["--name", "rally"]
     assert argv[-2:] == ["list", "tracks"]
