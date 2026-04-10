@@ -1476,6 +1476,9 @@ class Race:
         revision=None,
         results=None,
         meta_data=None,
+        target_id=None,
+        target_platform=None,
+        target_auth_type=None,
     ):
         if results is None:
             results = {}
@@ -1506,6 +1509,9 @@ class Race:
         self.revision = revision
         self.results = results
         self.meta_data = meta_data
+        self.target_id = target_id
+        self.target_platform = target_platform
+        self.target_auth_type = target_auth_type
 
     @property
     def track_name(self):
@@ -1594,6 +1600,12 @@ class Race:
             result_template["car-params"] = self.car_params
         if self.plugin_params:
             result_template["plugin-params"] = self.plugin_params
+        if self.target_id:
+            result_template["target-id"] = self.target_id
+        if self.target_platform:
+            result_template["target-platform"] = self.target_platform
+        if self.target_auth_type:
+            result_template["target-auth-type"] = self.target_auth_type
         if self.meta_data:
             result_template["meta"] = self.meta_data
 
