@@ -7,7 +7,7 @@ This directory holds integration tests that run **Rally `race` inside Docker** (
 - **`race_test.py`** — defines `TrackCase` entries and `test_race_with_track`, parametrized over tracks and over Elasticsearch versions. Module-scoped fixtures build the Rally image and configure Compose; each test starts `es01` with the requested `ES_VERSION`, runs `rally race` toward `es01:9200`, and tears Elasticsearch down afterward. Version list and timeouts are driven by `conftest.py` (see below).
 - **`conftest.py`** — registers pytest options, parametrizes the `elasticsearch` fixture indirectly, optionally filters tests by track name, and stashes per-race timeout after collection.
 - **`helpers.py`** — small pure functions for parsing CLI/env (shared with unit tests).
-- **`TRACK_RACE_EXECUTION_FINDINGS.md`** — notes from Docker IT runs (failures, timeouts, environment). Some `TrackCase` rows set `skip_reason_by_es_version` (map of ES version string to reason) so known-broken `(track, ES version)` pairs are skipped with an explicit message until fixed.
+- **`TRACK_RACE_EXECUTION_FINDINGS.md`** — notes from Docker IT runs (failures, timeouts, environment). Some `TrackCase` rows set `skip_reason_by_es_version` as an **ordered** list of `(prefix, reason)` pairs (first `es_version.startswith(prefix)` wins; use `""` when the reason applies to every version) so known-broken combinations are skipped with an explicit message until fixed.
 
 ## Prerequisites
 
@@ -68,7 +68,7 @@ On **`race`** failure, Rally’s **combined stdout+stderr** from `docker compose
 
 After collection (including `-k` / keyword deselection and the track-name filter), let **`N`** be the number of collected **`test_race_with_track`** items that **actually run** `rally race` for timeout purposes:
 
-- With **`IT_TRACKS_NO_SKIP` / `--it-tracks-no-skip` off** (default): exclude items that would **`pytest.skip`** because `TrackCase.skip_reason_by_es_version` has an entry for the parametrized Elasticsearch version (same condition as in `race_test.py`: `.get(version) is not None`).
+- With **`IT_TRACKS_NO_SKIP` / `--it-tracks-no-skip` off** (default): exclude items that would **`pytest.skip`** because an entry in `TrackCase.skip_reason_by_es_version` **prefix-matches** the parametrized Elasticsearch version in list order (same rule as `race_test.py`; see `race_item_counts_toward_timeout_budget` in `helpers.py`).
 - With **no-skip on**: every collected race item counts toward **`N`**.
 
 Then each race subprocess uses:

@@ -1,4 +1,4 @@
-# Fork of docker/Dockerfiles/dev/Dockerfile for it/tracks: bundles elastic/rally-tracks under /tracks (read-only for rally user).
+# Fork of docker/Dockerfiles/dev/Dockerfile for it/tracks: bundles elastic/rally-tracks under /tracks (owned by rally user for preparator writes).
 # Publicly pullable base (CI and forks); docker.elastic.co wolfi mirrors require registry auth on anonymous runners.
 FROM cgr.dev/chainguard/wolfi-base:latest AS builder
 ARG RALLY_VERSION
@@ -66,7 +66,7 @@ LABEL org.label-schema.schema-version="1.0" \
 USER root
 ARG RALLY_TRACKS_REF=master
 RUN git clone --depth 1 --branch "${RALLY_TRACKS_REF}" https://github.com/elastic/rally-tracks.git /tracks
-RUN chmod -R a-w /tracks
+RUN chown -R 1000:0 /tracks
 
 USER 1000
 

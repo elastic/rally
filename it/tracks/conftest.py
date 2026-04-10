@@ -52,19 +52,7 @@ from pathlib import Path
 import pytest
 
 from esrally.utils import compose
-from it.tracks.helpers import (
-    it_tracks_es_version_worker_count,
-    it_tracks_host_log_dir_for_nodeid,
-    it_tracks_log_root,
-    it_tracks_no_skip_from_config,
-    it_tracks_xdist_group_by_es_version,
-    it_tracks_xdist_num_workers,
-    prepare_it_tracks_compose_bind_mount_dirs,
-    race_item_counts_toward_timeout_budget,
-    resolve_es_versions,
-    resolve_track_name_patterns,
-    total_timeout_minutes,
-)
+from it.tracks import helpers
 
 _TRACKS_DIR = Path(__file__).resolve().parent
 os.environ.setdefault("RALLY_COMPOSE_FILE", str(_TRACKS_DIR / "compose.yaml"))
@@ -75,9 +63,9 @@ def _ensure_default_it_tracks_host_log_dir() -> None:
     """So ``docker compose build`` / parse sees ``IT_TRACKS_HOST_LOG_DIR`` before the first test."""
     if os.environ.get("IT_TRACKS_HOST_LOG_DIR", "").strip():
         return
-    p = it_tracks_log_root() / "_compose_default"
+    p = helpers.log_root() / "_compose_default"
     p.mkdir(parents=True, exist_ok=True)
-    prepare_it_tracks_compose_bind_mount_dirs(p)
+    helpers.prepare_compose_bind_mount_dirs(p)
     os.environ["IT_TRACKS_HOST_LOG_DIR"] = str(p.resolve())
 
 
@@ -118,13 +106,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 @pytest.hookimpl(tryfirst=True)
 def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
     """Spawn one pytest-xdist worker per configured Elasticsearch version for ``-n auto``."""
-    return it_tracks_es_version_worker_count(config)
+    return helpers.es_version_worker_count(config)
 
 
 def pytest_configure(config: pytest.Config) -> None:
     """Resolve ES version list once and stash for ``pytest_generate_tests``."""
     cli_es = config.getoption("--it-tracks-es-versions")
-    config.stash[_IT_TRACKS_ES_VERSIONS_KEY] = resolve_es_versions(cli_es)
+    config.stash[_IT_TRACKS_ES_VERSIONS_KEY] = helpers.resolve_es_versions(cli_es)
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -153,10 +141,10 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
     mixing Elasticsearch versions across workers.
 
     Per-version groups are skipped when ``-n`` exceeds the ES version count (see
-    ``it_tracks_xdist_group_by_es_version`` in ``helpers``).
+    ``helpers.xdist_group_by_es_version``).
     """
     cli = config.getoption("--it-tracks-name", default=None)
-    patterns = resolve_track_name_patterns(cli, os.environ.get("IT_TRACKS_NAME"))
+    patterns = helpers.resolve_track_name_patterns(cli, os.environ.get("IT_TRACKS_NAME"))
     if patterns:
         kept: list[pytest.Item] = []
         deselected: list[pytest.Item] = []
@@ -180,7 +168,7 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
         items[:] = kept
 
     xdist_group = getattr(pytest.mark, "xdist_group", None)
-    if xdist_group is not None and it_tracks_xdist_group_by_es_version(config):
+    if xdist_group is not None and helpers.xdist_group_by_es_version(config):
         for item in items:
             if "test_race_with_track" not in item.nodeid:
                 continue
@@ -196,8 +184,9 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     """Compute per-race timeout from global ``N``, then scale by xdist worker count.
 
     ``N`` counts collected ``test_race_with_track`` items after other deselection, but
-    omits items that would skip for ``TrackCase.skip_reason_by_es_version`` at the
-    active ES version when no-skip mode is off (same rule as ``race_test``). If
+    omits items that would skip for ``TrackCase.skip_reason_by_es_version`` (ordered prefix
+    pairs; same rule as ``race_test.test_race_with_track``) at the active ES version when no-skip
+    mode is off. If
     ``callspec`` cannot be read, the item still counts (conservative budget).
 
     Stashes ``race_timeout_s_base`` for the controller to send to workers via
@@ -205,7 +194,7 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     when set so the timeout matches the controller's global ``N``.
     """
     race_items = [i for i in session.items if "test_race_with_track" in i.nodeid]
-    no_skip = it_tracks_no_skip_from_config(session.config)
+    no_skip = not helpers.skip_reasons_enabled(session.config)
     n = 0
     for item in race_items:
         try:
@@ -215,14 +204,14 @@ def pytest_collection_finish(session: pytest.Session) -> None:
         except (AttributeError, KeyError, ValueError):
             n += 1
             continue
-        if race_item_counts_toward_timeout_budget(
+        if helpers.race_item_counts_toward_timeout_budget(
             no_skip=no_skip,
             skip_reason_by_es_version=case.skip_reason_by_es_version,
             es_version=es_version,
         ):
             n += 1
     cli_t = session.config.getoption("--it-tracks-total-timeout-minutes")
-    tmin = total_timeout_minutes(cli_t)
+    tmin = helpers.total_timeout_minutes(cli_t)
     race_timeout_s_base = (tmin * 60) / max(1, n)
     session.config.stash[_IT_TRACKS_RACE_TIMEOUT_BASE_S_KEY] = race_timeout_s_base
 
@@ -233,7 +222,7 @@ def pytest_collection_finish(session: pytest.Session) -> None:
         if isinstance(workerinput, dict) and "workercount" in workerinput:
             nw = max(1, int(workerinput["workercount"]))
         else:
-            nw = it_tracks_xdist_num_workers(session.config)
+            nw = helpers.xdist_num_workers(session.config)
         session.config.stash[_IT_TRACKS_RACE_TIMEOUT_S_KEY] = race_timeout_s_base * nw
 
 
@@ -249,7 +238,7 @@ def pytest_configure_node(node: object) -> None:
     wi = getattr(node, "workerinput", None)
     if not isinstance(wi, dict):
         return
-    nw = max(1, int(wi.get("workercount", it_tracks_xdist_num_workers(cfg))))
+    nw = max(1, int(wi.get("workercount", helpers.xdist_num_workers(cfg))))
     wi["it_tracks_race_timeout_s"] = race_timeout_s_base * nw
 
 
@@ -264,7 +253,7 @@ _LOG_FOLLOW_KILL_TIMEOUT_S = 5.0
 @pytest.fixture(autouse=True)
 def it_tracks_compose_logs_follow(request: pytest.FixtureRequest, elasticsearch: object) -> Generator[None, None, None]:
     """Background ``docker compose logs -f`` into ``containers.log``; stopped before ``elasticsearch`` teardown."""
-    dest = it_tracks_host_log_dir_for_nodeid(it_tracks_log_root(), request.node.nodeid) / "containers.log"
+    dest = helpers.host_log_dir_for_nodeid(helpers.log_root(), request.node.nodeid) / "containers.log"
     proc, log_f = compose.spawn_compose_logs_follow(dest, cfg=compose.ComposeConfig())
     try:
         yield

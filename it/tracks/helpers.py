@@ -26,6 +26,7 @@ import stat
 from pathlib import Path
 
 from esrally.paths import rally_root
+from esrally.utils import convert
 
 # Default Elasticsearch distribution versions for track race IT (Docker compose es01 image tag).
 # Keep in sync with the es-version matrix in .github/workflows/ci.yml (job it-tracks-race).
@@ -64,18 +65,32 @@ def resolve_track_name_patterns(cli_value: str | None, env_value: str | None) ->
     return patterns or None
 
 
-def it_tracks_no_skip_enabled(*, cli_flag: bool, env_name: str = "IT_TRACKS_NO_SKIP") -> bool:
-    """True if ``--it-tracks-no-skip`` was passed or ``IT_TRACKS_NO_SKIP`` is truthy."""
-    if cli_flag:
-        return True
-    v = os.environ.get(env_name, "").strip().lower()
-    return v in ("1", "true", "yes", "on")
+def skip_reasons_enabled(config: object) -> bool:
+    """True when ``TrackCase`` per-version skip reasons apply for this run.
+
+    False when ``--it-tracks-no-skip`` is set or ``IT_TRACKS_NO_SKIP`` requests no-skip:
+    ``on`` (case-insensitive), or any value :func:`esrally.utils.convert.to_bool` maps to true.
+    Empty or unparseable env leaves skip reasons enabled.
+    """
+    if config.getoption("--it-tracks-no-skip", default=False):
+        return False
+    try:
+        return not convert.to_bool(os.environ.get("IT_TRACKS_NO_SKIP", "").strip() or "false")
+    except ValueError:
+        return False
 
 
-def it_tracks_no_skip_from_config(config: object) -> bool:
-    """True if ``--it-tracks-no-skip`` or ``IT_TRACKS_NO_SKIP`` requests running skip-reason cases."""
-    flag = bool(config.getoption("--it-tracks-no-skip", default=False))
-    return it_tracks_no_skip_enabled(cli_flag=flag)
+def skip_reason_for_entries(
+    entries: list[tuple[str, str]] | None,
+    es_version: str,
+) -> str | None:
+    """First skip message whose prefix matches ``es_version``, or ``None`` if the node would run."""
+    if not entries:
+        return None
+    for prefix, reason in entries:
+        if es_version.startswith(prefix):
+            return reason
+    return None
 
 
 def total_timeout_minutes(cli_minutes: int | None, env_name: str = "IT_TRACKS_TIMEOUT_MINUTES", default: int = 120) -> int:
@@ -91,24 +106,22 @@ def total_timeout_minutes(cli_minutes: int | None, env_name: str = "IT_TRACKS_TI
 def race_item_counts_toward_timeout_budget(
     *,
     no_skip: bool,
-    skip_reason_by_es_version: dict[str, str] | None,
+    skip_reason_by_es_version: list[tuple[str, str]] | None,
     es_version: str,
 ) -> bool:
     """Whether a parametrized ``test_race_with_track`` node counts toward timeout divisor ``N``.
 
     When ``no_skip`` is true (``--it-tracks-no-skip`` / ``IT_TRACKS_NO_SKIP``), every collected
-    race node counts. Otherwise, nodes that would ``pytest.skip`` for the active ES version
-    (``skip_reason_by_es_version.get(es_version) is not None``) do not count—matching
-    ``race_test.test_race_with_track``.
+    race node counts. Otherwise, nodes that would ``pytest.skip`` for the active ES version do
+    not count—matching ``race_test.test_race_with_track`` (ordered ``(prefix, reason)`` pairs;
+    first ``es_version.startswith(prefix)`` wins).
     """
     if no_skip:
         return True
-    if not skip_reason_by_es_version:
-        return True
-    return skip_reason_by_es_version.get(es_version) is None
+    return skip_reason_for_entries(skip_reason_by_es_version, es_version) is None
 
 
-def it_tracks_es_version_worker_count(config: object) -> int:
+def es_version_worker_count(config: object) -> int:
     """How many xdist workers to use for one-worker-per-ES-version layout (minimum 1).
 
     Resolves the ES version list like ``resolve_es_versions``: non-empty
@@ -120,7 +133,7 @@ def it_tracks_es_version_worker_count(config: object) -> int:
     return max(1, len(resolve_es_versions(cli_es)))
 
 
-def it_tracks_xdist_num_workers(config: object) -> int:
+def xdist_num_workers(config: object) -> int:
     """Return pytest-xdist worker count, or 1 if not distributed.
 
     On xdist **worker** processes, ``remote.setup_config`` clears ``option.numprocesses``; pytest-xdist
@@ -142,24 +155,24 @@ def it_tracks_xdist_num_workers(config: object) -> int:
     if np in (0, False, None):
         return 1
     if np == "auto":
-        return it_tracks_es_version_worker_count(config)
+        return es_version_worker_count(config)
     try:
         return max(1, int(np))
     except (TypeError, ValueError):
         return 1
 
 
-def it_tracks_xdist_group_by_es_version(config: object) -> bool:
+def xdist_group_by_es_version(config: object) -> bool:
     """Whether to mark race tests with ``xdist_group`` per ES version under ``--dist loadgroup``.
 
     When the requested xdist worker count exceeds the number of configured ES versions, per-version
     groups would cap concurrency at the version count; omitting those marks lets all workers run
     races in parallel. Each test uses a distinct ``COMPOSE_PROJECT_NAME`` derived from its nodeid.
     """
-    return it_tracks_xdist_num_workers(config) <= it_tracks_es_version_worker_count(config)
+    return xdist_num_workers(config) <= es_version_worker_count(config)
 
 
-def it_tracks_log_root() -> Path:
+def log_root() -> Path:
     """Base directory for host-mounted it/tracks logs (gitignored ``logs/`` at the checkout root).
 
     Default is ``<rally-checkout>/logs`` (parent of the ``esrally`` package directory from
@@ -171,7 +184,7 @@ def it_tracks_log_root() -> Path:
     return Path(rally_root()).resolve().parent / "logs"
 
 
-def prepare_it_tracks_compose_bind_mount_dirs(host_log: Path) -> None:
+def prepare_compose_bind_mount_dirs(host_log: Path) -> None:
     """Create ``es01/`` and ``rally/`` under ``host_log`` and allow the stack to write there.
 
     Compose bind-mounts these paths into the Elasticsearch and Rally images, which run as
@@ -188,7 +201,7 @@ def prepare_it_tracks_compose_bind_mount_dirs(host_log: Path) -> None:
         d.chmod(mode)
 
 
-def it_tracks_host_log_dir_for_nodeid(log_root: Path, nodeid: str) -> Path:
+def host_log_dir_for_nodeid(log_root: Path, nodeid: str) -> Path:
     """Return the host directory for ``es01/`` and ``rally/`` log bind mounts for this pytest node.
 
     Mirrors the pytest nodeid with ``::`` turned into a path segment (``/``) so
@@ -233,7 +246,7 @@ def compose_project_name_for_nodeid(nodeid: str) -> str:
     return "ittr_" + hashlib.sha256(nodeid.encode("utf-8")).hexdigest()[:48]
 
 
-def it_tracks_race_timeout_seconds(
+def race_timeout_seconds(
     total_timeout_minutes: int,
     n: int,
     *,
