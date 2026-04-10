@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import random
+import shlex
 import socket
 import subprocess
 import time
@@ -76,11 +77,7 @@ def rally_es(t):
     return wrapper
 
 
-def esrally_command_line_for(cfg: str, command_line: str) -> str:
-    return f"esrally {command_line} --configuration-name='{cfg}'"
-
-
-def esrally(cfg: str, command_line: str, check: bool = True) -> CompletedProcess:
+def esrally(cfg: str, command_line: str, check: bool = True, env: dict[str, str] | None = None, **kwargs) -> CompletedProcess:
     """
     Run ``esrally`` for subcommands other than ``race`` (see ``race``).
 
@@ -88,14 +85,20 @@ def esrally(cfg: str, command_line: str, check: bool = True) -> CompletedProcess
     ``pytest.fail`` and the captured stdout is included in the message.
     With ``check=False``, returns ``subprocess.CompletedProcess`` so callers
     can inspect ``returncode`` and ``stdout``.
+
+    If ``env`` is given, it is passed to ``subprocess.run`` (full environment
+    for the child process); otherwise the current process environment is used.
     """
-    command_line = esrally_command_line_for(cfg, command_line)
-    LOG.info("Running rally: %r", command_line)
+    cmd = f"esrally {command_line} --configuration-name='{cfg}'"
+    LOG.info("Running rally: %r", cmd)
+    kwargs.setdefault("stderr", subprocess.STDOUT)
     try:
-        return subprocess.run(command_line, shell=True, check=check, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        return subprocess.run(cmd, shell=True, check=check, env=env, stdout=subprocess.PIPE, text=True, **kwargs)
     except subprocess.CalledProcessError as err:
-        output = "    ".join([""] + (err.stdout or "").splitlines(keepends=True))
-        pytest.fail(f"Failed running esrally:\n - command line: {command_line}\n - output: {output}\n")
+        stdout = "    ".join([""] + (err.stdout or "").splitlines(keepends=True))
+        stderr = "    ".join([""] + (err.stderr or "").splitlines(keepends=True))
+        command = shlex.join(err.args)
+        pytest.fail(f"Failed running esrally:\n - command: {command}\n - stdout: {stdout}\n - stderr: {stderr}\n")
 
 
 def race(cfg: str, command_line: str, enable_assertions: bool = True, check: bool = True) -> CompletedProcess:
