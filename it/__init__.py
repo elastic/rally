@@ -24,6 +24,7 @@ import random
 import socket
 import subprocess
 import time
+from subprocess import CompletedProcess
 
 import pytest
 
@@ -79,30 +80,37 @@ def esrally_command_line_for(cfg: str, command_line: str) -> str:
     return f"esrally {command_line} --configuration-name='{cfg}'"
 
 
-def esrally(cfg: str, command_line: str, check: bool = False) -> int:
+def esrally(cfg: str, command_line: str, check: bool = True) -> CompletedProcess:
     """
-    This method should be used for rally invocations of the all commands besides race.
-    These commands may have different CLI options than race.
+    Run ``esrally`` for subcommands other than ``race`` (see ``race``).
+
+    With ``check=True`` (default), a non-zero exit code fails the test via
+    ``pytest.fail`` and the captured stdout is included in the message.
+    With ``check=False``, returns ``subprocess.CompletedProcess`` so callers
+    can inspect ``returncode`` and ``stdout``.
     """
     command_line = esrally_command_line_for(cfg, command_line)
     LOG.info("Running rally: %r", command_line)
     try:
-        return subprocess.run(command_line, shell=True, check=check, capture_output=True, text=True).returncode
+        return subprocess.run(command_line, shell=True, check=check, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     except subprocess.CalledProcessError as err:
-        stdout = "    ".join([""] + (err.stdout or "").splitlines(keepends=True))
-        stderr = "    ".join([""] + (err.stderr or "").splitlines(keepends=True))
-        pytest.fail("Failed running esrally:\n" f" - command line: {command_line}\n" f" - stdout: {stdout}\n" f" - stderr: {stderr}\n")
+        output = "    ".join([""] + (err.stdout or "").splitlines(keepends=True))
+        pytest.fail(f"Failed running esrally:\n - command line: {command_line}\n - output: {output}\n")
 
 
-def race(cfg: str, command_line: str, enable_assertions: bool = True, check: bool = False) -> int:
+def race(cfg: str, command_line: str, enable_assertions: bool = True, check: bool = True) -> CompletedProcess:
     """
-    This method should be used for rally invocations of the race command.
-    It sets up some defaults for how the integration tests expect to run races.
+    Run ``esrally race`` with integration-test defaults (kill running processes,
+    abort on error, optional ``--enable-assertions``).
+
+    The ``check`` argument is forwarded to ``esrally``: ``True`` fails the test
+    on non-zero exit; ``False`` returns ``subprocess.CompletedProcess`` for
+    ``returncode`` / ``stdout`` inspection.
     """
-    race_command = f"race {command_line} --kill-running-processes --on-error='abort'"
+    cmd = f"race {command_line} --kill-running-processes --on-error='abort'"
     if enable_assertions:
-        race_command += " --enable-assertions"
-    return esrally(cfg, race_command, check=check)
+        cmd += " --enable-assertions"
+    return esrally(cfg, cmd, check=check)
 
 
 def shell_cmd(command_line):
@@ -169,14 +177,15 @@ class TestCluster:
 
     def start(self, race_id):
         cmd = f'start --runtime-jdk="bundled" --installation-id={self.installation_id} --race-id={race_id}'
-        esrally(self.cfg, cmd, check=True)
+        esrally(self.cfg, cmd)
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         client.wait_for_rest_layer(es)
         assert es.info()["cluster_name"] == self.cfg
 
     def stop(self):
         if self.installation_id:
-            if esrally(self.cfg, f"stop --installation-id={self.installation_id}") != 0:
+            r = esrally(self.cfg, f"stop --installation-id={self.installation_id}", check=False)
+            if r.returncode != 0:
                 raise AssertionError("Failed to stop Elasticsearch test cluster.")
 
     def __str__(self):

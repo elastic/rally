@@ -21,17 +21,17 @@ from esrally.utils import process
 
 @it.rally_in_mem
 def test_track_info_with_challenge(cfg):
-    assert it.esrally(cfg, "info --track=geonames --challenge=append-no-conflicts") == 0
+    it.esrally(cfg, "info --track=geonames --challenge=append-no-conflicts")
 
 
 @it.rally_in_mem
 def test_track_info_with_track_repo(cfg):
-    assert it.esrally(cfg, "info --track-repository=default --track=geonames") == 0
+    it.esrally(cfg, "info --track-repository=default --track=geonames")
 
 
 @it.rally_in_mem
 def test_track_info_with_task_filter(cfg):
-    assert it.esrally(cfg, 'info --track=geonames --challenge=append-no-conflicts --include-tasks="type:search"') == 0
+    it.esrally(cfg, 'info --track=geonames --challenge=append-no-conflicts --include-tasks="type:search"')
 
 
 @it.rally_in_mem

@@ -45,9 +45,13 @@ def test_elastic_transport_module_does_not_log_at_info_level(cfg, fresh_log_file
     port = 19200
     it.wait_until_port_is_free(port_number=port)
     dist = it.DISTRIBUTIONS[-1]
-    it.race(
-        cfg,
-        f'--distribution-version={dist} --track="geonames" --include-tasks=delete-index '
-        f"--test-mode --car=4gheap,trial-license --target-hosts=127.0.0.1:{port} ",
+    assert (
+        it.race(
+            cfg,
+            f'--distribution-version={dist} --track="geonames" --include-tasks=delete-index '
+            f"--test-mode --car=4gheap,trial-license --target-hosts=127.0.0.1:{port} ",
+            check=False,
+        ).returncode
+        == 0
     )
     assert it.find_log_line(fresh_log_file, "elastic_transport.transport INFO") is None

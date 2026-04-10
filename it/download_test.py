@@ -21,9 +21,9 @@ import it
 @it.random_rally_config
 def test_download_distribution(cfg):
     for d in it.DISTRIBUTIONS:
-        assert it.esrally(cfg, f'download --distribution-version="{d}" --quiet') == 0
+        it.esrally(cfg, f'download --distribution-version="{d}" --quiet')
 
 
 @it.random_rally_config
 def test_does_not_download_unsupported_distribution(cfg):
-    assert it.esrally(cfg, 'download --distribution-version="1.7.6" --quiet') != 0
+    assert it.esrally(cfg, 'download --distribution-version="1.7.6" --quiet', check=False).returncode != 0

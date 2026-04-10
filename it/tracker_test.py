@@ -47,19 +47,16 @@ def test_create_track(cfg, tmp_path, test_cluster):
         f'--include-tasks="delete-index,create-index,check-cluster-health,index-append" --quiet'
     )
 
-    it.race(cfg, cmd, check=True)
+    assert it.race(cfg, cmd, check=False).returncode == 0
 
     # create the track
     track_name = f"test-track-{uuid.uuid4()}"
     track_path = tmp_path / track_name
 
-    assert (
-        it.esrally(
-            cfg,
-            f"create-track --target-hosts=127.0.0.1:{test_cluster.http_port} --indices=geonames "
-            f"--track={track_name} --output-path={tmp_path}",
-        )
-        == 0
+    it.esrally(
+        cfg,
+        f"create-track --target-hosts=127.0.0.1:{test_cluster.http_port} --indices=geonames "
+        f"--track={track_name} --output-path={tmp_path}",
     )
 
     base_generated_corpora = "geonames-documents"
@@ -84,8 +81,8 @@ def test_create_track(cfg, tmp_path, test_cluster):
 
     # run a benchmark in test mode with the created track
     cmd = f"--test-mode --pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} --track-path={track_path}"
-    assert it.race(cfg, cmd) == 0
+    it.race(cfg, cmd)
 
     # and also run a normal (short) benchmark using the created track
     cmd = f"--pipeline=benchmark-only --target-hosts=127.0.0.1:{test_cluster.http_port} --track-path={track_path}"
-    assert it.race(cfg, cmd) == 0
+    it.race(cfg, cmd)
