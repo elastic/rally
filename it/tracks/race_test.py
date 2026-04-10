@@ -44,7 +44,7 @@ ES_VERSIONS = list(helpers.DEFAULT_IT_TRACKS_ES_VERSIONS)
 
 @dataclasses.dataclass
 class TrackCase:
-    """One Rally track exercised by :func:`test_race_with_track`."""
+    """One Rally track exercised by ``test_race_with_track``."""
 
     track_name: str
     description: str
@@ -316,8 +316,8 @@ def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer, ra
     For each ``TrackCase`` (and each configured Elasticsearch version), starts ``es01`` with
     ``ES_VERSION`` set, then runs ``rally race`` targeting ``es01:9200``. ``TrackCase.test_mode``
     controls ``--test-mode`` (off for tracks that do not support it). ``TrackCase.challenge``,
-    when set, is passed as ``--challenge``. :func:`it.tracks.helpers.it_tracks_skip_reason_for_entries`
-    when :func:`it.tracks.helpers.it_tracks_skip_reasons_enabled` is true. Per-race timeout is ``race_timeout_s``
+    when set, is passed as ``--challenge``. ``it.tracks.helpers.skip_reason_for_entries``
+    when ``it.tracks.helpers.skip_reasons_enabled`` is true. Per-race timeout is ``race_timeout_s``
     (total minutes from CLI/env divided by ``N``; ``N`` omits version-skip rows when no-skip is off;
     see ``it/tracks/README.md``).
     Subprocess timeout is treated as success; Rally one-off containers are torn down in ``run_service``

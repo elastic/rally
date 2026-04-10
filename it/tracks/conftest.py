@@ -293,7 +293,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 
     Per-test fixture teardown can be skipped if the process exits before unwinding generators; this hook
     runs on normal exit and on the first interrupt that ends the session. Uses a fresh
-    :class:`~esrally.utils.compose.ComposeConfig` so it works even if ``init_config`` was never set.
+    ``esrally.utils.compose.ComposeConfig`` so it works even if ``init_config`` was never set.
 
     Under pytest-xdist, only **workers** run ``docker compose down`` here; the controller must not run it
     while workers still hold containers. Each test sets ``COMPOSE_PROJECT_NAME`` from its nodeid; this hook

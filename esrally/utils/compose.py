@@ -211,7 +211,7 @@ def spawn_compose_logs_follow(  # pylint: disable=consider-using-with
 ) -> tuple[subprocess.Popen, BinaryIO]:
     """Start ``docker compose logs -f`` for the current project; write merged service output to ``path``.
 
-    Caller must stop the returned :class:`~subprocess.Popen` and close the file handle (e.g. in a pytest
+    Caller must stop the returned ``subprocess.Popen`` and close the file handle (e.g. in a pytest
     fixture ``finally``). ``stderr`` is discarded to avoid blocking on a full pipe while following.
     Intentionally not using ``with`` so the subprocess and file outlive this function.
     """
@@ -328,7 +328,7 @@ def run_service(
             # ``subprocess`` ``timeout`` or is killed, the CLI may exit before ``--rm`` runs.
             #
             # ``docker compose rm --stop`` does **not** remove ``compose run`` one-off containers: Compose
-            # filters them out (``oneOffExclude``). So we use :func:`_cleanup_compose_run_service` instead:
+            # filters them out (``oneOffExclude``). So we use ``_cleanup_compose_run_service`` instead:
             # ``compose kill`` (includes one-offs), then ``compose ps -a -q`` and ``docker rm -f``.
 
             cleanup_kw = {k: kwargs[k] for k in ("compose_dir", "env") if k in kwargs}
@@ -411,7 +411,7 @@ def remove_service(
 
     Intended for regular service containers (e.g. from ``compose up``). **Does not** remove one-off
     containers created by ``docker compose run`` (Compose applies ``oneOffExclude`` for ``rm``/``stop``);
-    :func:`run_service` uses :func:`_cleanup_compose_run_service` for those.
+    ``run_service`` uses ``_cleanup_compose_run_service`` for those.
 
     ``stop``: if True, pass ``--stop`` so running containers are stopped before removal.
 
@@ -493,11 +493,11 @@ def rally_race(
 ) -> None:
     """Run ``docker compose run rally …`` for a track race.
 
-    ``remove`` defaults to ``True`` (``--rm`` and :func:`run_service` cleanup). Callers may set ``False`` to
+    ``remove`` defaults to ``True`` (``--rm`` and ``run_service`` cleanup). Callers may set ``False`` to
     defer one-off removal (unusual; it/tracks uses ``True`` and captures logs via ``docker compose logs -f``).
 
-    Extra keyword arguments are forwarded to :func:`run_rally` (e.g. ``name=...`` sets ``docker compose run --name``
-    explicitly; otherwise :func:`run_rally` picks ``rally_`` plus eight URL-safe base64 characters so parallel runs
+    Extra keyword arguments are forwarded to ``run_rally`` (e.g. ``name=...`` sets ``docker compose run --name``
+    explicitly; otherwise ``run_rally`` picks ``rally_`` plus eight URL-safe base64 characters so parallel runs
     do not clash on the Docker daemon).
     """
     rally_options = rally_options or []

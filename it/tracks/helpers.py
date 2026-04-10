@@ -69,7 +69,7 @@ def skip_reasons_enabled(config: object) -> bool:
     """True when ``TrackCase`` per-version skip reasons apply for this run.
 
     False when ``--it-tracks-no-skip`` is set or ``IT_TRACKS_NO_SKIP`` requests no-skip:
-    ``on`` (case-insensitive), or any value :func:`esrally.utils.convert.to_bool` maps to true.
+    ``on`` (case-insensitive), or any value ``esrally.utils.convert.to_bool`` maps to true.
     Empty or unparseable env leaves skip reasons enabled.
     """
     if config.getoption("--it-tracks-no-skip", default=False):
@@ -140,7 +140,7 @@ def xdist_num_workers(config: object) -> int:
     sets ``PYTEST_XDIST_WORKER_COUNT`` to the real pool size (see ``xdist.remote``), which we read first.
 
     On the controller or a normal run, use ``config.option.numprocesses``. For ``numprocesses == "auto"``,
-    returns :func:`it_tracks_es_version_worker_count` (one worker per configured ES version, not host CPU).
+    returns ``es_version_worker_count`` (one worker per configured ES version, not host CPU).
     """
     wc = os.environ.get("PYTEST_XDIST_WORKER_COUNT")
     if wc is not None:
@@ -176,7 +176,7 @@ def log_root() -> Path:
     """Base directory for host-mounted it/tracks logs (gitignored ``logs/`` at the checkout root).
 
     Default is ``<rally-checkout>/logs`` (parent of the ``esrally`` package directory from
-    :func:`rally_root`, then ``logs``). Override with absolute path in env ``IT_TRACKS_LOG_ROOT``.
+    ``rally_root``, then ``logs``). Override with absolute path in env ``IT_TRACKS_LOG_ROOT``.
     """
     raw = os.environ.get("IT_TRACKS_LOG_ROOT", "").strip()
     if raw:
