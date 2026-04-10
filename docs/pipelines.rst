@@ -30,7 +30,7 @@ from-distribution
 
 This pipeline allows to benchmark an official Elasticsearch distribution which will be automatically downloaded by Rally. An example invocation::
 
-    esrally race --track=geonames --pipeline=from-distribution --distribution-version=|ES_CLIENT_VER|
+    esrally race --track=geonames --pipeline=from-distribution --distribution-version={ES_CLIENT_VER}
 
 The version numbers have to match the name in the download URL path.
 
