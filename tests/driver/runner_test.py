@@ -404,6 +404,67 @@ class TestSelectiveJsonParser:
             "supporters": True,
         }
 
+    def test_parse_optional_props_returns_only_found(self):
+        doc = io.BytesIO(
+            json.dumps(
+                {
+                    "num_reduce_phases": 3,
+                    "hits": {"total": {"value": 10}},
+                    "_clusters": {"total": 2, "successful": 2},
+                }
+            ).encode()
+        )
+        found = runner.parse_optional_props(
+            doc,
+            ["num_reduce_phases", "_clusters.total", "_clusters.successful", "nonexistent"],
+        )
+        assert found == {
+            "num_reduce_phases": 3,
+            "_clusters.total": 2,
+            "_clusters.successful": 2,
+        }
+        assert "nonexistent" not in found
+
+    def test_parse_optional_props_empty_when_none_match(self):
+        doc = io.BytesIO(json.dumps({"a": 1, "b": 2}).encode())
+        found = runner.parse_optional_props(doc, ["x", "y.z"])
+        assert found == {}
+
+    def test_extract_cluster_details_returns_per_cluster_took(self):
+        doc = io.BytesIO(
+            json.dumps(
+                {
+                    "_clusters": {
+                        "details": {
+                            "c1": {
+                                "status": "successful",
+                                "indices": "idx1",
+                                "took": 5,
+                                "timed_out": False,
+                                "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                            },
+                            "c2": {
+                                "status": "successful",
+                                "indices": "idx2",
+                                "took": 10,
+                                "timed_out": False,
+                            },
+                        }
+                    }
+                }
+            ).encode()
+        )
+        details = runner.extract_cluster_details(doc)
+        assert details["c1"]["took"] == 5
+        assert details["c1"]["_shards"] == {"total": 1, "successful": 1, "skipped": 0, "failed": 0}
+        assert details["c2"]["took"] == 10
+        assert "_shards" not in details["c2"]
+
+    def test_extract_cluster_details_empty_when_absent(self):
+        doc = io.BytesIO(json.dumps({"hits": {"total": {"value": 0}}}).encode())
+        details = runner.extract_cluster_details(doc)
+        assert details == {}
+
 
 def _build_bulk_body(*lines):
     return "".join(line + "\n" for line in lines)
@@ -2599,6 +2660,165 @@ class TestQueryRunner:
             headers=None,
         )
         es.clear_scroll.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_detailed_results_with_num_reduce_phases_and_clusters(self, es):
+        es.options.return_value = es
+        search_response = {
+            "took": 38,
+            "timed_out": False,
+            "num_reduce_phases": 22,
+            "_shards": {"total": 21, "successful": 21, "skipped": 0, "failed": 0},
+            "_clusters": {
+                "total": 21,
+                "successful": 21,
+                "skipped": 0,
+                "running": 0,
+                "partial": 0,
+                "failed": 0,
+                "details": {
+                    "_origin": {
+                        "status": "successful",
+                        "indices": "cps_scaling_test_origin_2026-01-25-1",
+                        "took": 31,
+                        "timed_out": False,
+                        "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                    },
+                    "remote_cluster_1": {
+                        "status": "successful",
+                        "indices": "cps_scaling_test_*_2026-01-25-1",
+                        "took": 1,
+                        "timed_out": False,
+                        "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                    },
+                },
+            },
+            "hits": {
+                "total": {"value": 10000, "relation": "gte"},
+                "max_score": None,
+                "hits": [],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        query_runner = runner.Query()
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert result["num_reduce_phases"] == 22
+        assert result["clusters"] == {
+            "total": 21,
+            "successful": 21,
+            "skipped": 0,
+            "running": 0,
+            "partial": 0,
+            "failed": 0,
+            "details": {
+                "_origin": {
+                    "status": "successful",
+                    "indices": "cps_scaling_test_origin_2026-01-25-1",
+                    "took": 31,
+                    "timed_out": False,
+                    "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                },
+                "remote_cluster_1": {
+                    "status": "successful",
+                    "indices": "cps_scaling_test_*_2026-01-25-1",
+                    "took": 1,
+                    "timed_out": False,
+                    "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                },
+            },
+        }
+        assert result["hits"] == 10000
+        assert result["took"] == 38
+        assert result["shards"] == {"total": 21, "successful": 21, "skipped": 0, "failed": 0}
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_detailed_results_without_optional_fields(self, es):
+        """When response has no num_reduce_phases or _clusters, result must not include those keys."""
+        es.options.return_value = es
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+            "hits": {
+                "total": {"value": 2, "relation": "eq"},
+                "hits": [
+                    {"title": "some-doc-1"},
+                    {"title": "some-doc-2"},
+                ],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        query_runner = runner.Query()
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert "num_reduce_phases" not in result
+        assert "clusters" not in result
+        assert result["hits"] == 2
+        assert result["took"] == 5
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_detailed_results_clusters_summary_only(self, es):
+        """When _clusters is present but details is empty or missing, result has clusters summary only."""
+        es.options.return_value = es
+        search_response = {
+            "took": 10,
+            "timed_out": False,
+            "_shards": {"total": 2, "successful": 2, "skipped": 0, "failed": 0},
+            "_clusters": {
+                "total": 2,
+                "successful": 2,
+                "skipped": 0,
+                "running": 0,
+                "partial": 0,
+                "failed": 0,
+            },
+            "hits": {"total": {"value": 0, "relation": "eq"}, "hits": []},
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        query_runner = runner.Query()
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert "clusters" in result
+        assert result["clusters"] == {
+            "total": 2,
+            "successful": 2,
+            "skipped": 0,
+            "running": 0,
+            "partial": 0,
+            "failed": 0,
+        }
+        assert "details" not in result["clusters"]
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
