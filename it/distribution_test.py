@@ -36,13 +36,10 @@ def test_tar_distributions(cfg, dist, track):
     it.wait_until_port_is_free(port_number=port)
 
     enable_assertions = track != "http_logs"  # http_logs assertions fail in test mode
-    assert (
-        it.race(
-            cfg,
-            f'--distribution-version="{dist}" --track="{track}" --test-mode --car=4gheap,basic-license --target-hosts=127.0.0.1:{port}',
-            enable_assertions=enable_assertions,
-        )
-        == 0
+    it.race(
+        cfg,
+        f'--distribution-version="{dist}" --track="{track}" --test-mode --car=4gheap,basic-license --target-hosts=127.0.0.1:{port}',
+        enable_assertions=enable_assertions,
     )
 
 
@@ -52,14 +49,11 @@ def test_docker_distribution(cfg):
     # only test the most recent Docker distribution
     dist = it.DISTRIBUTIONS[-1]
     it.wait_until_port_is_free(port_number=port)
-    assert (
-        it.race(
-            cfg,
-            f'--pipeline="docker" --distribution-version="{dist}" '
-            f'--track="geonames" --challenge="append-no-conflicts-index-only" --test-mode '
-            f"--car=4gheap,basic-license --target-hosts=127.0.0.1:{port}",
-        )
-        == 0
+    it.race(
+        cfg,
+        f'--pipeline="docker" --distribution-version="{dist}" '
+        f'--track="geonames" --challenge="append-no-conflicts-index-only" --test-mode '
+        f"--car=4gheap,basic-license --target-hosts=127.0.0.1:{port}",
     )
 
 
@@ -69,8 +63,10 @@ def test_does_not_benchmark_unsupported_distribution(cfg):
     it.wait_until_port_is_free(port_number=port)
     assert (
         it.race(
-            cfg, f'--distribution-version="1.7.6" --track="{it.TRACKS[0]}" ' f"--target-hosts=127.0.0.1:{port} --test-mode --car=4gheap"
-        )
+            cfg,
+            f'--distribution-version="1.7.6" --track="{it.TRACKS[0]}" ' f"--target-hosts=127.0.0.1:{port} --test-mode --car=4gheap",
+            check=False,
+        ).returncode
         != 0
     )
 
@@ -78,13 +74,12 @@ def test_does_not_benchmark_unsupported_distribution(cfg):
 @it.random_rally_config
 def test_interrupt(cfg):
     port = 19200
-    dist = it.DISTRIBUTIONS[-1]
     # simulate a user cancelling a benchmark
-    cmd = it.esrally_command_line_for(
-        cfg,
-        f'race --distribution-version="{dist}" --track="geonames" '
+    cmd = (
+        f'esrally race --distribution-version="{it.DISTRIBUTIONS[-1]}" --track="geonames" '
         f"--kill-running-processes --target-hosts=127.0.0.1:{port} --test-mode "
-        f"--car=4gheap,basic-license",
+        f"--car=4gheap,basic-license "
+        f"--configuration-name='{cfg}'"
     )
     assert run_subprocess_and_interrupt(cmd, 2, 15) == 130
 
@@ -95,14 +90,11 @@ def test_create_api_key_per_client(cfg):
     it.wait_until_port_is_free(port_number=port)
     dist = it.DISTRIBUTIONS[-1]
     opts = "use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password',create_api_key_per_client:true"
-    assert (
-        it.race(
-            cfg,
-            f'--distribution-version={dist} --track="geonames" '
-            f"--test-mode --car=4gheap,trial-license,x-pack-security --target-hosts=127.0.0.1:{port} "
-            f"--client-options={opts}",
-        )
-        == 0
+    it.race(
+        cfg,
+        f'--distribution-version={dist} --track="geonames" '
+        f"--test-mode --car=4gheap,trial-license,x-pack-security --target-hosts=127.0.0.1:{port} "
+        f"--client-options={opts}",
     )
 
 
@@ -142,10 +134,10 @@ def test_multi_target_hosts(cfg, test_cluster):
             f"--client-options={client_options_str} "
         )
 
-    assert it.race(cfg, race_params()) == 0
+    it.race(cfg, race_params())
 
     target_hosts["extra_cluster"] = [hosts]
-    assert it.race(cfg, race_params()) != 0
+    assert it.race(cfg, race_params(), check=False).returncode != 0
 
 
 @it.random_rally_config
@@ -191,10 +183,10 @@ def execute_eventdata(cfg, test_cluster, challenges, track_params):
             f'--track-repository=eventdata --track=eventdata --track-params="{track_params}" '
             f"--challenge={challenge}"
         )
-        assert it.race(cfg, cmd) == 0
+        it.race(cfg, cmd)
 
 
-def run_subprocess_and_interrupt(command_line, min_sleep=2, max_sleep=15):
+def run_subprocess_and_interrupt(command_line, min_sleep=2, max_sleep=15) -> int:
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] to interrupt.", command_line)
     command_line_args = shlex.split(command_line)

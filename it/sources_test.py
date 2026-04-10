@@ -26,69 +26,51 @@ def test_sources(cfg):
     it.wait_until_port_is_free(port_number=port)
 
     # Default sources build method
-    assert (
-        it.race(
-            cfg,
-            f"--revision=latest --track=geonames --test-mode  --target-hosts=127.0.0.1:{port} "
-            f"--challenge=append-no-conflicts --car=4gheap,basic-license --elasticsearch-plugins=analysis-icu",
-        )
-        == 0
+    it.race(
+        cfg,
+        f"--revision=latest --track=geonames --test-mode  --target-hosts=127.0.0.1:{port} "
+        f"--challenge=append-no-conflicts --car=4gheap,basic-license --elasticsearch-plugins=analysis-icu",
     )
 
     # Default sources build method
     it.wait_until_port_is_free(port_number=port)
-    assert (
-        it.race(
-            cfg,
-            f"--pipeline=from-sources --track=geonames --test-mode --target-hosts=127.0.0.1:{port} "
-            f'--challenge=append-no-conflicts-index-only --car="4gheap,basic-license,ea"',
-        )
-        == 0
+    it.race(
+        cfg,
+        f"--pipeline=from-sources --track=geonames --test-mode --target-hosts=127.0.0.1:{port} "
+        f'--challenge=append-no-conflicts-index-only --car="4gheap,basic-license,ea"',
     )
 
     # Docker sources build method
-    assert (
-        it.race(
-            cfg,
-            f"--revision=@2022-07-07 --track=geonames --test-mode  --target-hosts=127.0.0.1:{port} "
-            f"--challenge=append-no-conflicts --car=4gheap,basic-license --elasticsearch-plugins=analysis-icu "
-            f"--source-build-method=docker",
-        )
-        == 0
+    it.race(
+        cfg,
+        f"--revision=@2022-07-07 --track=geonames --test-mode  --target-hosts=127.0.0.1:{port} "
+        f"--challenge=append-no-conflicts --car=4gheap,basic-license --elasticsearch-plugins=analysis-icu "
+        f"--source-build-method=docker",
     )
 
     # Docker sources build method
     it.wait_until_port_is_free(port_number=port)
-    assert (
-        it.race(
-            cfg,
-            f"--pipeline=from-sources --track=geonames --test-mode --target-hosts=127.0.0.1:{port} "
-            f'--source-build-method=docker --challenge=append-no-conflicts-index-only --car="4gheap,basic-license,ea"',
-        )
-        == 0
+    it.race(
+        cfg,
+        f"--pipeline=from-sources --track=geonames --test-mode --target-hosts=127.0.0.1:{port} "
+        f'--source-build-method=docker --challenge=append-no-conflicts-index-only --car="4gheap,basic-license,ea"',
     )
 
 
 @it.random_rally_config
 def test_build_es_and_plugin_with_docker(cfg):
-    assert (
-        it.esrally(
-            cfg,
-            "build --source-build-method=docker --revision=latest --target-arch aarch64 --target-os linux "
-            "--elasticsearch-plugins=analysis-icu --quiet",
-        )
-        == 0
+    it.esrally(
+        cfg,
+        "build --source-build-method=docker --revision=latest --target-arch aarch64 --target-os linux "
+        "--elasticsearch-plugins=analysis-icu --quiet",
     )
 
 
 @it.random_rally_config
 def test_build_es(cfg):
-    assert (
-        it.esrally(
-            cfg,
-            "build --revision=latest --target-arch aarch64 --target-os linux --quiet",
-        )
-        == 0
+    it.esrally(
+        cfg,
+        "build --revision=latest --target-arch aarch64 --target-os linux --quiet",
     )
 
 

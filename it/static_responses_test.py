@@ -27,12 +27,9 @@ def test_static_responses(cfg):
     cwd = os.path.dirname(__file__)
     responses = os.path.join(cwd, "resources", "static-responses.json")
 
-    assert (
-        it.race(
-            cfg,
-            f'--pipeline=benchmark-only --distribution-version="{dist_version}" '
-            f"--client-options=\"static_responses:'{responses}'\" "
-            "--track=geonames --challenge=append-no-conflicts-index-only",
-        )
-        == 0
+    it.race(
+        cfg,
+        f'--pipeline=benchmark-only --distribution-version="{dist_version}" '
+        f"--client-options=\"static_responses:'{responses}'\" "
+        "--track=geonames --challenge=append-no-conflicts-index-only",
     )

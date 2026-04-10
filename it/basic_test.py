@@ -15,37 +15,26 @@
 # specific language governing permissions and limitations
 # under the License.
 import os
-import tempfile
 
 import it
-from esrally.utils import process
 
 
 @it.rally_in_mem
 def test_run_without_arguments(cfg):
-    cmd = it.esrally_command_line_for(cfg, "")
-    output = process.run_subprocess_with_output(cmd)
-    expected = "usage: esrally [-h] [--version]"
-    assert expected in "\n".join(output)
+    assert "usage: esrally [-h] [--version]" in it.esrally(cfg, "", check=False).stderr
 
 
 @it.rally_in_mem
 def test_run_with_help(cfg):
-    cmd = it.esrally_command_line_for(cfg, "--help")
-    output = process.run_subprocess_with_output(cmd)
-    expected = "usage: esrally [-h] [--version]"
-    assert expected in "\n".join(output)
+    assert "usage: esrally [-h] [--version]" in it.esrally(cfg, "--help").stdout
 
 
 @it.rally_in_mem
-def test_run_without_http_connection(cfg):
-    cmd = it.esrally_command_line_for(cfg, "list tracks")
-    with tempfile.TemporaryDirectory() as tmpdir:
-        env = os.environ.copy()
-        env["http_proxy"] = "http://invalid"
-        env["https_proxy"] = "http://invalid"
-        # make sure we don't have any saved state
-        env["RALLY_HOME"] = tmpdir
-        output = process.run_subprocess_with_output(cmd, env=env)
-        expected = "[ERROR] Cannot list"
-        assert expected in "\n".join(output)
+def test_run_without_http_connection(cfg, tmpdir):
+    env = os.environ.copy()
+    env["http_proxy"] = "http://invalid"
+    env["https_proxy"] = "http://invalid"
+    # make sure we don't have any saved state
+    env["RALLY_HOME"] = str(tmpdir)
+    result = it.esrally(cfg, "list tracks", env=env, check=False)
+    assert "[ERROR] Cannot list" in result.stdout
