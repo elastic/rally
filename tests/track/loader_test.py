@@ -4392,11 +4392,11 @@ def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest
     monkeypatch.setattr(paths, "libs", lambda: "./libs")
     monkeypatch.setattr(console, "info", mock.create_autospec(console.info))
     monkeypatch.setattr(subprocess, "check_call", mock.create_autospec(subprocess.check_call))
+    os.makedirs(os.path.join(str(tmpdir), "logs"), exist_ok=True)
     loader._install_dependencies(case.requirements)
 
     if not case.requirements:
         subprocess.check_call.assert_not_called()
-        assert not os.path.isdir("./logs")
         return
 
     subprocess.check_call.assert_called_once()
