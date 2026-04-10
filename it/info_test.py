@@ -16,7 +16,6 @@
 # under the License.
 
 import it
-from esrally.utils import process
 
 
 @it.rally_in_mem
@@ -37,12 +36,17 @@ def test_track_info_with_task_filter(cfg):
 @it.rally_in_mem
 def test_track_info_fails_with_wrong_track_params(cfg):
     # simulate a typo in track parameter
-    cmd = it.esrally_command_line_for(cfg, "info --track=geonames --track-params='conflict_probability:5,number-of-replicas:1'")
-    output = process.run_subprocess_with_output(cmd)
+    result = it.esrally(
+        cfg,
+        "info --track=geonames --track-params='conflict_probability:5,number-of-replicas:1'",
+        check=False,
+    )
+    assert result.returncode != 0
+    output = (result.stdout or "") + (result.stderr or "")
     expected = (
         'Some of your track parameter(s) "number-of-replicas" are not used by this track; '
         'perhaps you intend to use "number_of_replicas" instead.\n\nAll track parameters you '
         "provided are:\n- conflict_probability\n- number-of-replicas\n\nAll parameters exposed by this track"
     )
 
-    assert expected in "\n".join(output)
+    assert expected in output

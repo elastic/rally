@@ -47,7 +47,7 @@ def test_create_track(cfg, tmp_path, test_cluster):
         f'--include-tasks="delete-index,create-index,check-cluster-health,index-append" --quiet'
     )
 
-    assert it.race(cfg, cmd, check=False).returncode == 0
+    it.race(cfg, cmd)
 
     # create the track
     track_name = f"test-track-{uuid.uuid4()}"

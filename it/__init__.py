@@ -183,7 +183,7 @@ class TestCluster:
                 f'--seed-hosts="127.0.0.1:{http_port + 100}" --cluster-name={self.cfg}'
             ),
         )
-        self.installation_id = json.loads("".join(result.stdout))["installation-id"]
+        self.installation_id = json.loads(result.stdout)["installation-id"]
 
     def start(self, race_id):
         esrally(self.cfg, f'start --runtime-jdk="bundled" --installation-id={self.installation_id} --race-id={race_id}')
