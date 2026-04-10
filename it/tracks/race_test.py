@@ -307,6 +307,7 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     sql=TrackCase(
         track_name="sql",
         description="SQL query performance based on NOAA Weather data",
+        test_mode=False,
     ),
 )
 def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer, race_timeout_s: float, request: pytest.FixtureRequest):

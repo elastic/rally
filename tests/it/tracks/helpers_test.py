@@ -97,6 +97,7 @@ def test_resolve_track_name_patterns_comma_or() -> None:
         (False, "YES", False),
         (False, "on", False),
         (False, "0", True),
+        (False, "", True),
     ],
 )
 def test_it_tracks_skip_reasons_enabled(
