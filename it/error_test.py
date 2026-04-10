@@ -15,12 +15,10 @@
 # specific language governing permissions and limitations
 # under the License.
 import it
-from esrally.utils import process
 
 
 @it.rally_in_mem
 def test_error_prints_when_quiet(cfg):
-    cmd = it.esrally_command_line_for(cfg, "build --revision=nonsense --quiet")
-    output = process.run_subprocess_with_output(cmd)
-    expected = "[ERROR] Cannot build."
-    assert expected in "\n".join(output)
+    result = it.esrally(cfg, "build --revision=nonsense --quiet", check=False)
+    assert result.returncode != 0
+    assert "[ERROR] Cannot build." in result.stdout

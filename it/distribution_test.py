@@ -74,13 +74,12 @@ def test_does_not_benchmark_unsupported_distribution(cfg):
 @it.random_rally_config
 def test_interrupt(cfg):
     port = 19200
-    dist = it.DISTRIBUTIONS[-1]
     # simulate a user cancelling a benchmark
-    cmd = it.esrally_command_line_for(
-        cfg,
-        f'race --distribution-version="{dist}" --track="geonames" '
+    cmd = (
+        f'esrally race --distribution-version="{it.DISTRIBUTIONS[-1]}" --track="geonames" '
         f"--kill-running-processes --target-hosts=127.0.0.1:{port} --test-mode "
-        f"--car=4gheap,basic-license",
+        f"--car=4gheap,basic-license "
+        f"--configuration-name='{cfg}'"
     )
     assert run_subprocess_and_interrupt(cmd, 2, 15) == 130
 
@@ -187,7 +186,7 @@ def execute_eventdata(cfg, test_cluster, challenges, track_params):
         it.race(cfg, cmd)
 
 
-def run_subprocess_and_interrupt(command_line, min_sleep=2, max_sleep=15):
+def run_subprocess_and_interrupt(command_line, min_sleep=2, max_sleep=15) -> int:
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] to interrupt.", command_line)
     command_line_args = shlex.split(command_line)

@@ -21,7 +21,6 @@ import json
 import logging
 import os
 import random
-import shlex
 import socket
 import subprocess
 import time
@@ -103,8 +102,7 @@ def esrally(cfg: str, command_line: str, check: bool = True, env: dict[str, str]
     except subprocess.CalledProcessError as err:
         stdout = "    ".join([""] + (err.stdout or "").splitlines(keepends=True))
         stderr = "    ".join([""] + (err.stderr or "").splitlines(keepends=True))
-        command = shlex.join(err.args)
-        pytest.fail(f"Failed running esrally:\n - command: {command}\n - stdout: {stdout}\n - stderr: {stderr}\n")
+        pytest.fail(f"Failed running esrally:\n - command: {err.cmd}\n - stdout: {stdout}\n - stderr: {stderr}\n")
 
 
 def race(cfg: str, command_line: str, enable_assertions: bool = True, check: bool = True) -> CompletedProcess:
