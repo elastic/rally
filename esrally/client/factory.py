@@ -309,8 +309,8 @@ def wait_for_rest_layer(es: Any, max_attempts: int = 40) -> bool:
     Waits for ``max_attempts`` until Elasticsearch's REST API is available.
 
     Repeated urllib3 protocol errors (common while nodes start, or when the URL scheme is wrong)
-    are retried up to :data:`_MAX_CONSECUTIVE_PROTOCOL_CONNECTION_ERRORS` times in a row before
-    raising :class:`~esrally.exceptions.SystemSetupError`, instead of sleeping through all
+    are retried up to ``_MAX_CONSECUTIVE_PROTOCOL_CONNECTION_ERRORS`` times in a row before
+    raising ``SystemSetupError`` (``esrally.exceptions``), instead of sleeping through all
     ``max_attempts``.
 
     :param es: Elasticsearch client to use for connecting.

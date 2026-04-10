@@ -84,7 +84,7 @@ class EsMetricsStore:
         self.cluster = TestCluster("in-memory-it")
 
     def start(self) -> None:
-        """Ensure metrics Elasticsearch is up on :attr:`HTTP_PORT`, installing it if needed."""
+        """Ensure metrics Elasticsearch is up on ``HTTP_PORT``, installing it if needed."""
         port = self.HTTP_PORT
         cluster = self.cluster
         name = cluster.probe_cluster_on_port(port)
@@ -131,11 +131,11 @@ ES_METRICS_STORE = EsMetricsStore()
 @pytest.fixture(scope="session", autouse=True)
 def isolate_git_global_config() -> Generator[None]:
     """
-    Point ``GIT_CONFIG_GLOBAL`` at :data:`os.devnull` so integration tests are not affected by the
+    Point ``GIT_CONFIG_GLOBAL`` at ``os.devnull`` so integration tests are not affected by the
     developer's ``~/.gitconfig`` (e.g. per-URL ``proxy=""`` can let git ignore env proxies).
 
     Session-scoped fixtures cannot use pytest's function-scoped ``monkeypatch`` fixture; use a
-    dedicated :class:`pytest.MonkeyPatch` instance and :meth:`~pytest.MonkeyPatch.undo` after the session.
+    dedicated ``pytest.MonkeyPatch`` instance and ``pytest.MonkeyPatch.undo`` after the session.
     """
     mp = pytest.MonkeyPatch()
     mp.setenv("GIT_CONFIG_GLOBAL", os.devnull)
@@ -148,7 +148,7 @@ def shared_setup(isolate_git_global_config: None) -> Generator[None]:
     """
     Session autouse hook: prerequisites, Rally IT config, metrics store, and docker image.
 
-    Depends on :func:`isolate_git_global_config` so git runs with a neutral global config first.
+    Depends on ``isolate_git_global_config`` so git runs with a neutral global config first.
     """
     print("\nStarting shared setup...")
     check_prerequisites()
@@ -179,7 +179,7 @@ def free_benchmark_http_port() -> Generator[int]:
     Before and after the test, clear Rally IT benchmark HTTP port (19200): stop orphaned
     ``rally-benchmark`` / ``in-memory-it`` Elasticsearch (Docker or host JVM) and wait until the port is free.
 
-    See :func:`it.ensure_benchmark_http_port_free` for rationale on the fixed port and teardown behavior.
+    See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
     port = ensure_benchmark_http_port_free()
     yield port
@@ -189,9 +189,9 @@ def free_benchmark_http_port() -> Generator[int]:
 @pytest.fixture(scope="module")
 def free_benchmark_http_port_module() -> Generator[int]:
     """
-    Module-scoped variant of :func:`free_benchmark_http_port` for module fixtures (e.g. ``test_cluster``).
+    Module-scoped variant of ``free_benchmark_http_port`` for module fixtures (e.g. ``test_cluster``).
 
-    See :func:`it.ensure_benchmark_http_port_free` for rationale on the fixed port and teardown behavior.
+    See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
     port = ensure_benchmark_http_port_free()
     yield port

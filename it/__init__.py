@@ -345,7 +345,7 @@ class TestCluster:
         without failing on transient connection errors during startup.
 
         :param http_port: HTTP port of the candidate cluster.
-        :return: True if ``cluster.info`` succeeds and ``cluster_name`` equals :attr:`cfg`.
+        :return: True if ``cluster.info`` succeeds and ``cluster_name`` equals this harness's ``cfg``.
         """
         return self.probe_cluster_on_port(http_port) == self.cfg
 
@@ -380,8 +380,8 @@ class TestCluster:
         """
         Block until the cluster reaches at least the given health (server-side wait).
 
-        This is intentionally separate from :func:`esrally.client.factory.wait_for_rest_layer`, which the harness
-        already calls from :meth:`start`: that function waits until enough nodes respond (``wait_for_nodes``) and
+        This is intentionally separate from ``esrally.client.factory.wait_for_rest_layer``, which the harness
+        already calls from ``start``: that function waits until enough nodes respond (``wait_for_nodes``) and
         implements Rally-wide retry/backoff for connection and protocol errors. Session fixtures (metrics store)
         also reuse a cluster that may already be running; they need an explicit status wait (``wait_for_status``)
         and AssertionErrors that point at health/timeouts, with a client ``request_timeout`` derived from the same
@@ -391,8 +391,8 @@ class TestCluster:
         parameter. The HTTP client's ``request_timeout`` is set longer than ``timeout`` so the
         transport does not give up before the server finishes waiting.
 
-        Green satisfies ``wait_for_status="yellow"``. Requires :attr:`http_port` (after
-        :meth:`install` / :meth:`start`, or when reusing a running cluster).
+        Green satisfies ``wait_for_status="yellow"``. Requires ``http_port`` (after
+        ``install`` / ``start``, or when reusing a running cluster).
 
         :param wait_for_status: Minimum cluster health to wait for (Elasticsearch API value).
         :param timeout: Server-side wait budget in seconds.

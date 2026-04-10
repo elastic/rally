@@ -400,7 +400,7 @@ def _do_tar_decompress(target_directory: str, compressed_file: tarfile.TarFile) 
     """
     Extract a tar archive into ``target_directory`` and close the handle.
 
-    On Python 3.12+, use :meth:`tarfile.TarFile.extractall` ``filter="tar"`` (PEP 706) so extraction
+    On Python 3.12+, use ``tarfile.TarFile.extractall`` with ``filter="tar"`` (PEP 706) so extraction
     follows the documented tar safety profile; older interpreters use the legacy default, which does
     not apply PEP 706 member-path filtering.
     """
