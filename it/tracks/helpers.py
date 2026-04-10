@@ -26,7 +26,6 @@ import stat
 from pathlib import Path
 
 from esrally.paths import rally_root
-from esrally.utils import convert
 
 # Default Elasticsearch distribution versions for track race IT (Docker compose es01 image tag).
 # Keep in sync with the es-version matrix in .github/workflows/ci.yml (job it-tracks-race).
@@ -65,19 +64,30 @@ def resolve_track_name_patterns(cli_value: str | None, env_value: str | None) ->
     return patterns or None
 
 
+_NO_SKIP_ENV_TRUTHY = frozenset({"1", "true", "yes", "y", "t", "on"})
+_SKIP_REASONS_ENV_FALSY = frozenset({"0", "false", "no", "n", "f"})
+
+
 def skip_reasons_enabled(config: object) -> bool:
     """True when ``TrackCase`` per-version skip reasons apply for this run.
 
-    False when ``--it-tracks-no-skip`` is set or ``IT_TRACKS_NO_SKIP`` requests no-skip:
-    ``on`` (case-insensitive), or any value ``esrally.utils.convert.to_bool`` maps to true.
-    Empty or unparseable env leaves skip reasons enabled.
+    False when ``--it-tracks-no-skip`` is set, or when ``IT_TRACKS_NO_SKIP`` is set to a
+    case-insensitive no-skip token (``1``, ``true``, ``yes``, ``y``, ``t``, ``on``).
+
+    Empty env, falsy tokens (``0``, ``false``, ``no``, ``n``, ``f``), or any other
+    unparseable value leaves skip reasons enabled.
     """
     if config.getoption("--it-tracks-no-skip", default=False):
         return False
-    try:
-        return not convert.to_bool(os.environ.get("IT_TRACKS_NO_SKIP", "").strip() or "false")
-    except ValueError:
+    raw = os.environ.get("IT_TRACKS_NO_SKIP", "").strip()
+    if not raw:
+        return True
+    key = raw.lower()
+    if key in _NO_SKIP_ENV_TRUTHY:
         return False
+    if key in _SKIP_REASONS_ENV_FALSY:
+        return True
+    return True
 
 
 def skip_reason_for_entries(

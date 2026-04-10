@@ -347,7 +347,7 @@ def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer, ra
         end_time = time.time()
         LOG.info(
             "Race terminated after %d seconds for track [%s] and elasticsearch version [%s]",
-            end_time - start_time,
+            int(end_time - start_time),
             case.track_name,
             elasticsearch.version,
         )
