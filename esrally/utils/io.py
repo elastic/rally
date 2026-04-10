@@ -24,6 +24,7 @@ import mmap
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import zipfile
 from collections.abc import Collection, Mapping, Sequence
@@ -396,8 +397,21 @@ def _do_decompress_manually_with_lib(target_directory: str, filename: str, compr
 
 
 def _do_tar_decompress(target_directory: str, compressed_file: tarfile.TarFile) -> None:
+    """
+    Extract a tar archive into ``target_directory`` and close the handle.
+
+    On Python 3.12+, use ``tarfile.TarFile.extractall`` with ``filter="tar"`` (PEP 706) so extraction
+    follows the documented tar safety profile; older interpreters use the legacy default, which does
+    not apply PEP 706 member-path filtering.
+    """
     try:
-        compressed_file.extractall(path=target_directory, filter="tar")
+        if sys.version_info >= (3, 12):
+            compressed_file.extractall(path=target_directory, filter="tar")
+        else:
+            # ``extractall`` has no ``filter`` argument before Python 3.12. Without PEP 706's "tar"
+            # profile, member names can escape ``target_directory`` (e.g. via ``../``), which is
+            # path traversal if the archive is not from a trusted source.
+            compressed_file.extractall(path=target_directory)
     except Exception:
         raise RuntimeError(f"Could not decompress provided archive [{compressed_file.name!r}]. Please check if it is a valid tar file.")
     finally:
