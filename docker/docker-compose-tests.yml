@@ -21,7 +21,7 @@ services:
         condition: service_healthy
 
   es01:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.13
     container_name: es01
     environment:
       - discovery.type=single-node
@@ -30,8 +30,8 @@ services:
       # uncomment the two lines below for unsecured local/integration use, or keep security on and trust the HTTP CA
       # that the image generates (copy from the container, e.g. `docker cp es01:/usr/share/elasticsearch/config/certs/http_ca.crt .`
       # — path varies by version; see Elasticsearch "Install Elasticsearch with Docker" docs for the current layout).
-      # - xpack.security.enabled=false
-      # - xpack.security.enrollment.enabled=false
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
     volumes:
       - esdata1:/usr/share/elasticsearch/data
     # Uncomment `ports` when you need HTTP access from the host (debugging, curl from the machine running Compose).

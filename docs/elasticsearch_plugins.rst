@@ -44,7 +44,7 @@ In order to tell Rally to install a plugin, use the ``--elasticsearch-plugins`` 
 
 Example::
 
-    esrally race --track=geonames --distribution-version=7.12.0 --elasticsearch-plugins="analysis-icu,analysis-phonetic"
+    esrally race --track=geonames --distribution-version=9.2.4 --elasticsearch-plugins="analysis-icu,analysis-phonetic"
 
 This will install the plugins ``analysis-icu`` and ``analysis-phonetic`` (in that order). In order to use the features that these plugins provide, you need to write a :doc:`custom track </adding_tracks>`.
 

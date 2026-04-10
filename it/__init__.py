@@ -20,7 +20,6 @@ import functools
 import json
 import logging
 import os
-import platform
 import random
 import signal
 import socket
@@ -30,14 +29,11 @@ import time
 import psutil
 import pytest
 
-from esrally import client
+from esrally import client, version
 from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
-DISTRIBUTIONS = ["8.4.0"]
-# There are no ARM distribution artefacts for 6.8.0, which can't be tested on Apple Silicon
-if platform.machine() != "arm64":
-    DISTRIBUTIONS.insert(0, "6.8.0")
+DISTRIBUTIONS = ["8.19.13", "9.2.7"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -56,6 +52,9 @@ RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME = "rally-benchmark"
 _BENCHMARK_CLUSTER_NAMES_ON_IT_PORT = frozenset({RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME, "in-memory-it"})
 _DOCKER_PUBLISH_STOP_ROUNDS = 3
 _LISTENER_SIGTERM_WAIT_SEC = 8.0
+
+
+LOG = logging.getLogger(__name__)
 
 
 def all_rally_configs(t):
@@ -94,19 +93,26 @@ def rally_es(t):
     return wrapper
 
 
-def esrally_command_line_for(cfg, command_line):
+def esrally_command_line_for(cfg: str, command_line: str) -> str:
     return f"esrally {command_line} --configuration-name='{cfg}'"
 
 
-def esrally(cfg, command_line):
+def esrally(cfg: str, command_line: str, check: bool = False) -> int:
     """
     This method should be used for rally invocations of the all commands besides race.
     These commands may have different CLI options than race.
     """
-    return subprocess.call(esrally_command_line_for(cfg, command_line), shell=True)
+    command_line = esrally_command_line_for(cfg, command_line)
+    LOG.info("Running rally: %r", command_line)
+    try:
+        return subprocess.run(command_line, shell=True, check=check, capture_output=True, text=True).returncode
+    except subprocess.CalledProcessError as err:
+        stdout = "    ".join([""] + (err.stdout or "").splitlines(keepends=True))
+        stderr = "    ".join([""] + (err.stderr or "").splitlines(keepends=True))
+        pytest.fail("Failed running esrally:\n" f" - command line: {command_line}\n" f" - stdout: {stdout}\n" f" - stderr: {stderr}\n")
 
 
-def race(cfg, command_line, enable_assertions=True):
+def race(cfg: str, command_line: str, enable_assertions: bool = True, check: bool = False) -> int:
     """
     This method should be used for rally invocations of the race command.
     It sets up some defaults for how the integration tests expect to run races.
@@ -114,7 +120,7 @@ def race(cfg, command_line, enable_assertions=True):
     race_command = f"race {command_line} --kill-running-processes --on-error='abort'"
     if enable_assertions:
         race_command += " --enable-assertions"
-    return esrally(cfg, race_command)
+    return esrally(cfg, race_command, check=check)
 
 
 def shell_cmd(command_line):
@@ -365,8 +371,7 @@ class TestCluster:
 
     def start(self, race_id):
         cmd = f'start --runtime-jdk="bundled" --installation-id={self.installation_id} --race-id={race_id}'
-        if esrally(self.cfg, cmd) != 0:
-            raise AssertionError("Failed to start Elasticsearch test cluster.")
+        esrally(self.cfg, cmd, check=True)
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         client.wait_for_rest_layer(es)
         assert es.info()["cluster_name"] == self.cfg
