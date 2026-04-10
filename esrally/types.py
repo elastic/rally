@@ -127,6 +127,7 @@ Key = Literal[
     "plugin.community-plugin.src.dir",
     "plugin.community-plugin.src.subdir",
     "plugin.params",
+    "prepare.only",
     "preserve.install",
     "preserve_benchmark_candidate",
     "private.url",

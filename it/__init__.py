@@ -32,7 +32,7 @@ from esrally.utils import process
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["8.4.0"]
-# There are no ARM distribution artefacts for 6.8.0, which can't be tested on Apple Silicon
+# There are no ARM distribution artifacts for 6.8.0, which can't be tested on Apple Silicon
 if platform.machine() != "arm64":
     DISTRIBUTIONS.insert(0, "6.8.0")
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
@@ -138,9 +138,9 @@ class TestCluster:
     def __init__(self, cfg):
         self.cfg = cfg
         self.installation_id = None
-        self.http_port = None
+        self.http_port: int | None = None
 
-    def install(self, distribution_version, node_name, car, http_port):
+    def install(self, distribution_version, node_name, car, http_port: int):
         self.http_port = http_port
         transport_port = http_port + 100
         try:

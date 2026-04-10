@@ -27,6 +27,7 @@ import elasticsearch
 import pytest
 
 from esrally import config, exceptions, metrics, track
+from esrally import version as rally_version
 from esrally.driver import driver, runner, scheduler
 from esrally.driver.driver import ApiKey, ClientContext
 from esrally.track import params
@@ -158,12 +159,26 @@ class TestDriver:
         self.track = track.Track(name="unittest", description="unittest track", challenges=[another_challenge, default_challenge])
 
     def teardown_method(self):
-        self.StaticClientFactory.close()
+        if TestDriver.StaticClientFactory.PATCHER is not None:
+            self.StaticClientFactory.close()
 
     def create_test_driver_actor(self):
         client = "client_marker"
         attrs = {"create_client.return_value": client}
         return mock.Mock(**attrs)
+
+    def test_prepare_benchmark_prepare_only_skips_es_client_factory(self) -> None:
+        self.cfg.add(config.Scope.applicationOverride, "race", "prepare.only", True)
+        factory = mock.Mock(side_effect=AssertionError("EsClientFactory must not be used in prepare-only mode"))
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=factory)
+        d.prepare_benchmark(t=self.track)
+
+        factory.assert_not_called()
+        driver_actor.prepare_track.assert_called_once_with(["localhost"], self.cfg, self.track)
+        assert d.driver_actor.cluster_details["version"]["build_flavor"] == "default"
+        assert d.driver_actor.cluster_details["version"]["number"] == rally_version.minimum_es_version()
+        assert d.telemetry.devices == []
 
     @mock.patch("esrally.utils.net.resolve")
     def test_start_benchmark_and_prepare_track(self, resolve):
