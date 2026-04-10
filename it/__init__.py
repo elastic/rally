@@ -29,8 +29,7 @@ from subprocess import CompletedProcess
 
 import pytest
 
-from esrally import client, version
-from esrally.utils import process
+from esrally import client
 
 CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["8.19.13", "9.2.7"]
@@ -79,19 +78,26 @@ def rally_es(t):
 
 def esrally(cfg: str, command_line: str, check: bool = True, env: dict[str, str] | None = None, **kwargs) -> CompletedProcess:
     """
-    Run ``esrally`` for subcommands other than ``race`` (see ``race``).
+    Run ``esrally`` in a shell for integration tests.
 
-    With ``check=True`` (default), a non-zero exit code fails the test via
-    ``pytest.fail`` and the captured stdout is included in the message.
-    With ``check=False``, returns ``subprocess.CompletedProcess`` so callers
-    can inspect ``returncode`` and ``stdout``.
+    ``command_line`` is everything after the ``esrally`` executable: the
+    subcommand and its flags. ``cfg`` is passed as ``--configuration-name``.
 
-    If ``env`` is given, it is passed to ``subprocess.run`` (full environment
-    for the child process); otherwise the current process environment is used.
+    Returns a ``subprocess.CompletedProcess``. If ``check`` is ``True`` (the
+    default), a non-zero exit code triggers ``pytest.fail`` with command and
+    captured output in the failure message. If ``check`` is ``False``, callers
+    inspect ``returncode`` and ``stdout`` themselves.
+
+    ``env`` is the complete environment for the child process when set; when
+    ``None``, the child inherits the current process environment.
+
+    Extra keyword arguments are forwarded to ``subprocess.run`` (alongside
+    ``shell=True``, ``stdout=subprocess.PIPE``, and ``text=True``). Unless
+    overridden, ``stderr`` defaults to ``subprocess.PIPE``.
     """
     cmd = f"esrally {command_line} --configuration-name='{cfg}'"
     LOG.info("Running rally: %r", cmd)
-    kwargs.setdefault("stderr", subprocess.STDOUT)
+    kwargs.setdefault("stderr", subprocess.PIPE)
     try:
         return subprocess.run(cmd, shell=True, check=check, env=env, stdout=subprocess.PIPE, text=True, **kwargs)
     except subprocess.CalledProcessError as err:
@@ -103,12 +109,23 @@ def esrally(cfg: str, command_line: str, check: bool = True, env: dict[str, str]
 
 def race(cfg: str, command_line: str, enable_assertions: bool = True, check: bool = True) -> CompletedProcess:
     """
-    Run ``esrally race`` with integration-test defaults (kill running processes,
-    abort on error, optional ``--enable-assertions``).
+    Run ``esrally race`` with defaults used across the ``it`` suite.
 
-    The ``check`` argument is forwarded to ``esrally``: ``True`` fails the test
-    on non-zero exit; ``False`` returns ``subprocess.CompletedProcess`` for
-    ``returncode`` / ``stdout`` inspection.
+    ``command_line`` is everything after the ``race`` subcommand (track,
+    pipeline, hosts, and similar flags). The wrapper always appends
+    ``--kill-running-processes`` and ``--on-error='abort'``. When
+    ``enable_assertions`` is ``True`` (the default), it also adds
+    ``--enable-assertions``.
+
+    The return value and ``check`` semantics match ``esrally``: with
+    ``check=True``, failure is reported via ``pytest.fail``; with
+    ``check=False``, you read ``returncode`` and ``stdout`` from the
+    ``CompletedProcess``.
+
+    This helper only forwards ``check`` to ``esrally``. For a custom
+    ``env`` or other ``subprocess.run`` options, call ``esrally`` and pass a
+    ``race ...`` fragment in ``command_line`` yourself (including the same
+    trailing flags if you want parity with this function).
     """
     cmd = f"race {command_line} --kill-running-processes --on-error='abort'"
     if enable_assertions:
@@ -160,36 +177,25 @@ class TestCluster:
 
     def install(self, distribution_version, node_name, car, http_port):
         self.http_port = http_port
-        transport_port = http_port + 100
-        try:
-            output = process.run_subprocess_with_output(
-                "esrally install --configuration-name={cfg} --quiet --distribution-version={dist} --build-type=tar "
-                "--http-port={http_port} --node={node_name} --master-nodes={node_name} --car={car} "
-                '--seed-hosts="127.0.0.1:{transport_port}" --cluster-name={cfg}'.format(
-                    cfg=self.cfg,
-                    dist=distribution_version,
-                    http_port=http_port,
-                    node_name=node_name,
-                    car=car,
-                    transport_port=transport_port,
-                )
-            )
-            self.installation_id = json.loads("".join(output))["installation-id"]
-        except BaseException as e:
-            raise AssertionError(f"Failed to install Elasticsearch {distribution_version}.", e)
+        result = esrally(
+            self.cfg,
+            (
+                f"install --quiet --distribution-version={distribution_version} --build-type=tar "
+                f"--http-port={http_port} --node={node_name} --master-nodes={node_name} --car={car} "
+                f'--seed-hosts="127.0.0.1:{http_port + 100}" --cluster-name={self.cfg}'
+            ),
+        )
+        self.installation_id = json.loads("".join(result.stdout))["installation-id"]
 
     def start(self, race_id):
-        cmd = f'start --runtime-jdk="bundled" --installation-id={self.installation_id} --race-id={race_id}'
-        esrally(self.cfg, cmd)
+        esrally(self.cfg, f'start --runtime-jdk="bundled" --installation-id={self.installation_id} --race-id={race_id}')
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         client.wait_for_rest_layer(es)
         assert es.info()["cluster_name"] == self.cfg
 
     def stop(self):
         if self.installation_id:
-            r = esrally(self.cfg, f"stop --installation-id={self.installation_id}", check=False)
-            if r.returncode != 0:
-                raise AssertionError("Failed to stop Elasticsearch test cluster.")
+            esrally(self.cfg, f"stop --installation-id={self.installation_id}")
 
     def __str__(self):
         return f"TestCluster[installation-id={self.installation_id}]"
