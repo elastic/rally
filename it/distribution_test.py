@@ -31,15 +31,14 @@ import it
 @pytest.mark.parametrize("dist", it.DISTRIBUTIONS)
 @pytest.mark.parametrize("track", it.TRACKS)
 @pytest.mark.parametrize("cfg", [random.choice(it.CONFIG_NAMES)])
-def test_tar_distributions(cfg, dist, track):
-    port = 19200
-    it.wait_until_port_is_free(port_number=port)
+def test_tar_distributions(cfg, dist, track, free_benchmark_http_port: int):
 
     enable_assertions = track != "http_logs"  # http_logs assertions fail in test mode
     assert (
         it.race(
             cfg,
-            f'--distribution-version="{dist}" --track="{track}" --test-mode --car=4gheap,basic-license --target-hosts=127.0.0.1:{port}',
+            f'--distribution-version="{dist}" --track="{track}" --test-mode --car=4gheap,basic-license '
+            f"--target-hosts=127.0.0.1:{free_benchmark_http_port}",
             enable_assertions=enable_assertions,
         )
         == 0
@@ -47,59 +46,54 @@ def test_tar_distributions(cfg, dist, track):
 
 
 @it.random_rally_config
-def test_docker_distribution(cfg):
-    port = 19200
+def test_docker_distribution(cfg, free_benchmark_http_port: int):
     # only test the most recent Docker distribution
     dist = it.DISTRIBUTIONS[-1]
-    it.wait_until_port_is_free(port_number=port)
     assert (
         it.race(
             cfg,
             f'--pipeline="docker" --distribution-version="{dist}" '
             f'--track="geonames" --challenge="append-no-conflicts-index-only" --test-mode '
-            f"--car=4gheap,basic-license --target-hosts=127.0.0.1:{port}",
+            f"--car=4gheap,basic-license --target-hosts=127.0.0.1:{free_benchmark_http_port}",
         )
         == 0
     )
 
 
 @it.random_rally_config
-def test_does_not_benchmark_unsupported_distribution(cfg):
-    port = 19200
-    it.wait_until_port_is_free(port_number=port)
+def test_does_not_benchmark_unsupported_distribution(cfg, free_benchmark_http_port: int):
     assert (
         it.race(
-            cfg, f'--distribution-version="1.7.6" --track="{it.TRACKS[0]}" ' f"--target-hosts=127.0.0.1:{port} --test-mode --car=4gheap"
+            cfg,
+            f'--distribution-version="1.7.6" --track="{it.TRACKS[0]}" '
+            f"--target-hosts=127.0.0.1:{free_benchmark_http_port} --test-mode --car=4gheap",
         )
         != 0
     )
 
 
 @it.random_rally_config
-def test_interrupt(cfg):
-    port = 19200
+def test_interrupt(cfg, free_benchmark_http_port: int):
     dist = it.DISTRIBUTIONS[-1]
     # simulate a user cancelling a benchmark
     cmd = it.esrally_command_line_for(
         cfg,
         f'race --distribution-version="{dist}" --track="geonames" '
-        f"--kill-running-processes --target-hosts=127.0.0.1:{port} --test-mode "
+        f"--kill-running-processes --target-hosts=127.0.0.1:{free_benchmark_http_port} --test-mode "
         f"--car=4gheap,basic-license",
     )
     assert run_subprocess_and_interrupt(cmd, 2, 15) == 130
 
 
 @it.random_rally_config
-def test_create_api_key_per_client(cfg):
-    port = 19200
-    it.wait_until_port_is_free(port_number=port)
+def test_create_api_key_per_client(cfg, free_benchmark_http_port: int):
     dist = it.DISTRIBUTIONS[-1]
     opts = "use_ssl:true,verify_certs:false,basic_auth_user:'rally',basic_auth_password:'rally-password',create_api_key_per_client:true"
     assert (
         it.race(
             cfg,
             f'--distribution-version={dist} --track="geonames" '
-            f"--test-mode --car=4gheap,trial-license,x-pack-security --target-hosts=127.0.0.1:{port} "
+            f"--test-mode --car=4gheap,trial-license,x-pack-security --target-hosts=127.0.0.1:{free_benchmark_http_port} "
             f"--client-options={opts}",
         )
         == 0
@@ -107,15 +101,14 @@ def test_create_api_key_per_client(cfg):
 
 
 @pytest.fixture(scope="module")
-def test_cluster():
+def test_cluster(free_benchmark_http_port_module: int):
     cluster = it.TestCluster("in-memory-it")
     # test with a recent distribution as eventdata is not available for all versions
     dist = it.DISTRIBUTIONS[-1]
-    port = 19200
     race_id = str(uuid.uuid4())
-
-    it.wait_until_port_is_free(port_number=port)
-    cluster.install(distribution_version=dist, node_name="rally-node", car="4gheap,basic-license", http_port=port)
+    cluster.install(
+        distribution_version=dist, node_name="rally-node", car="4gheap,basic-license", http_port=free_benchmark_http_port_module
+    )
     cluster.start(race_id=race_id)
     yield cluster
     cluster.stop()
