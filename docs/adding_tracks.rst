@@ -273,7 +273,7 @@ You can also show details about your track with ``esrally info --track-path=~/ra
 Congratulations, you have created your first track! You can test it with:
 
 .. parsed-literal::
-   esrally race --distribution-version=|ES_CLIENT_VER| --track-path=~/rally-tracks/tutorial
+   esrally race --distribution-version={ES_CLIENT_VER} --track-path=~/rally-tracks/tutorial
 
 .. _add_track_test_mode:
 
