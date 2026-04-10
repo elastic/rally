@@ -57,6 +57,9 @@ _LISTENER_SIGTERM_WAIT_SEC = 8.0
 LOG = logging.getLogger(__name__)
 
 
+LOG = logging.getLogger(__name__)
+
+
 def all_rally_configs(t):
     @functools.wraps(t)
     @pytest.mark.parametrize("cfg", CONFIG_NAMES)
