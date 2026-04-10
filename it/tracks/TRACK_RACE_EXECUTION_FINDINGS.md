@@ -2,11 +2,29 @@
 
 This note records **issues observed** while running the Docker-based track races (`test_race_with_track` in [`race_test.py`](race_test.py), often shown in logs as `it/tracks_test.py` depending on layout). Each item is tied to **track name** and **Elasticsearch distribution version** (`ES_VERSION` / `es_version_*` in pytest ids).
 
-**Elasticsearch versions under test** (see `ES_VERSIONS` in `race_test.py`): **8.19.13**, **9.2.7**.
+**Elasticsearch versions under test** (defaults: [`helpers.DEFAULT_IT_TRACKS_ES_VERSIONS`](helpers.py), used by `race_test.py`): **8.19.14**, **9.3.3**. Older captures in this file reference **8.19.13** / **9.2.7**.
 
 **Per-race time budget**: derived from `IT_TRACKS_TIMEOUT_MINUTES` (default `120`) split across all track cases and both ES versions (~**94 s** per case unless overridden). Hitting this limit without another error is treated as **pytest success** by design.
 
-### Final pytest run (completed)
+### Recent focused run (completed, 2026-04-10)
+
+Command: `make it_tracks IT_TRACKS_NAME='msmarco-passage-ranking,msmarco-v2-vector,search/mteb/dbpedia'` (default ES **8.19.14** / **9.3.3**; pytest-xdist **2** workers, `LoadGroupScheduling`).
+
+| Metric | Value |
+|--------|--------|
+| **Outcome** | **6 passed**, **0 failed** |
+| **Wall time** | **1238.58 s** (~**20 m 39 s**) |
+| **Shell exit code** | **0** |
+
+| Track | 8.19.14 | 9.3.3 |
+|-------|---------|--------|
+| `search/mteb/dbpedia` | **PASSED** | **PASSED** |
+| `msmarco-v2-vector` | **PASSED** | **PASSED** |
+| `msmarco-passage-ranking` | **PASSED** | **PASSED** |
+
+**Context:** Current [`it/tracks/Dockerfile`](Dockerfile) (**`CFLAGS` / `CXXFLAGS`** for **`pytrec_eval`**, venv **`pytrec_eval==0.5`** + **`numpy`**) and [`race_test.py`](race_test.py) without Docker-IT skip rules on these tracks. **`IT_TRACKS_NO_SKIP`** was **not** required. Under heavier host memory pressure, **`msmarco-v2-vector`** has been seen to fail with Docker exit **137** (SIGKILL) when two races run in parallel; this run succeeded with the same worker count.
+
+### Final pytest run (completed, historical full matrix)
 
 Command: `make test ARGS='it/tracks_test.py -o log_cli=true --log-cli-level=DEBUG'` (pytest node ids may show `it/tracks_test.py` while the test module lives under [`it/tracks/race_test.py`](race_test.py)).
 
@@ -18,9 +36,9 @@ Command: `make test ARGS='it/tracks_test.py -o log_cli=true --log-cli-level=DEBU
 
 ---
 
-## Pytest FAILED — full matrix (14)
+## Pytest FAILED — full matrix (14) — historical
 
-Each row is one failing parametrized case (`es_version_*` × track case).
+Each row is one failing parametrized case (`es_version_*` × track case) from the **full** matrix capture below. The **recent focused run** (default **8.19.14** / **9.3.3**, three tracks above) shows **`search/mteb/dbpedia`** and both MSMARCO tracks **passing** with the current IT image and `race_test` configuration.
 
 | Track | ES version | Category | See |
 |-------|------------|----------|-----|
@@ -45,6 +63,7 @@ Each row is one failing parametrized case (`es_version_*` × track case).
 
 | Topic | Track(s) / version(s) | Notes |
 |-------|----------------------|--------|
+| **MSMARCO + dbpedia** focused IT | **8.19.14**, **9.3.3** | **2026-04-10:** all six parametrizations **PASSED** in ~**21 min** (see **Recent focused run** above). |
 | Per-case **timeout** accepted as success | e.g. `sql`, `joins`, `big5` (**9.2.7**), `openai_vector`, `k8s_metrics`, `tsdb_k8s_queries`, `so_vector` | See §3; **`big5` @ 8.19.13** **FAILED** instead—different failure mode. |
 | **`geopointshape`** `geoGrid_aggs_*` **100%** error rate | 8.19.13, 9.2.7 | §4 |
 | **ELSER** / ML license | `elser-ingest-speedtest` @ 9.2.7 | §5 |
@@ -166,7 +185,7 @@ Compose stack uses **basic** license and **ML disabled** in image config; the tr
 | Topic | Detail |
 |-------|--------|
 | **Logs location** | Rally data under Docker named volume `rally_data` → `/rally/.rally` (including `logs/dependency.log`). Not in the git tree. |
-| **Image** | [`docker/Dockerfiles/dev/Dockerfile`](../../docker/Dockerfiles/dev/Dockerfile): Wolfi + `gcc`/`make`; may still lack pieces needed to build old C extensions for track deps. |
+| **Image** | IT races: [`it/tracks/Dockerfile`](Dockerfile) (track-dep build flags + venv **`pytrec_eval` / `numpy`**). Upstream dev image: [`docker/Dockerfiles/dev/Dockerfile`](../../docker/Dockerfiles/dev/Dockerfile). |
 | **Command** | Typical local invocation: `make test ARGS='it/tracks/... -o log_cli=true --log-cli-level=DEBUG'` (or equivalent `pytest` on `it/tracks/`). |
 
 ---
@@ -176,3 +195,4 @@ Compose stack uses **basic** license and **ML disabled** in image config; the tr
 - **Initial capture:** Aggregates Cursor terminal transcripts for `make test ARGS='it/tracks_test.py …'` / `it/tracks/` races, including multiple ES versions and both **hard failures** and **soft** warnings/timeouts. Reuse this file when triaging CI or local Docker IT failures.
 - **Update (mid-run):** Partial log: extra **9.2.7** failures on MSMARCO tracks (pip), timeouts on **`big5` / `openai_vector` / `k8s_metrics`**, etc.
 - **Update (run completed):** Final **`pytest`** result **14 failed, 62 passed** in **~4103 s**; full **FAILED** matrix added; new **§7** for **`has_privileges*`** (Netty `worker_count`) and **§8** for other exit-64 cases (**`wiki_en_cohere_vector_int8`**, **`esql`**, **`big5` @ 8.19.13**).
+- **Update (2026-04-10):** After terminal **`make it_tracks`** with `IT_TRACKS_NAME='msmarco-passage-ranking,msmarco-v2-vector,search/mteb/dbpedia'` finished (**6 passed**, **~1239 s**, exit **0**), added **Recent focused run** table and aligned default ES wording with [`helpers.py`](helpers.py) (**8.19.14** / **9.3.3**).
