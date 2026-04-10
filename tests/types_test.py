@@ -39,6 +39,7 @@ def glob_modules(path: Path, pattern, *args, **kwargs):
 
 
 project_root = Path(__file__).parent / ".."
+_logs_root = (project_root / "logs").resolve()
 
 
 class TestLiteralArgs:
@@ -70,6 +71,8 @@ class TestLiteralArgs:
         for pyfile in project_root.glob("[!.]*/**/*.py"):
             if pyfile == project_root / "esrally/types.py":
                 continue  # Should skip esrally.types module
+            if pyfile.resolve().is_relative_to(_logs_root):
+                continue  # Host-mounted it/tracks logs may use paths like …/logs/.../race_test.py/
 
             source = pyfile.read_text(encoding="utf-8", errors="replace")  # No need to be so strict
             for arg in args.copy():

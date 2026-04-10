@@ -44,7 +44,7 @@ In order to tell Rally to install a plugin, use the ``--elasticsearch-plugins`` 
 
 Example::
 
-    esrally race --track=geonames --distribution-version=9.2.4 --elasticsearch-plugins="analysis-icu,analysis-phonetic"
+    esrally race --track=geonames --distribution-version=|ES_CLIENT_VER| --elasticsearch-plugins="analysis-icu,analysis-phonetic"
 
 This will install the plugins ``analysis-icu`` and ``analysis-phonetic`` (in that order). In order to use the features that these plugins provide, you need to write a :doc:`custom track </adding_tracks>`.
 
@@ -216,9 +216,9 @@ As ``myplugin`` is not a core plugin, the Elasticsearch plugin manager does not 
     [distributions]
     plugin.myplugin.release.url=https://example.org/myplugin/releases/{{VERSION}}/myplugin-{{VERSION}}.zip
 
-Now you can run benchmarks with the custom Elasticsearch plugin, e.g. with ``esrally race --track=geonames --distribution-version=7.12.0 --elasticsearch-plugins="myplugin:simple"``.
+Now you can run benchmarks with the custom Elasticsearch plugin, e.g. with ``esrally race --track=geonames --distribution-version=|ES_CLIENT_VER| --elasticsearch-plugins="myplugin:simple"``.
 
 For this to work you need ensure two things:
 
-1. The plugin needs to be available for the version that you want to benchmark (7.12.0 in the example above).
+1. The plugin needs to be available for the version that you want to benchmark (|ES_CLIENT_VER| in the example above).
 2. Rally will choose the most appropriate branch in the team repository before starting the benchmark. See the documentation on :ref:`how branches are mapped to Elasticsearch versions <track-repositories-branch-logic>`.
