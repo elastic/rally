@@ -211,16 +211,6 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     search_mteb_dbpedia=TrackCase(
         track_name="search/mteb/dbpedia",
         description="Benchmark text search relevance with different configurations",
-        test_mode=False,
-        skip_reason_by_es_version=[
-            (
-                "",
-                (
-                    "Track load failed (e.g. track.json) and/or pip deps (pytrec_eval, numpy) in Docker IT. "
-                    "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
-                ),
-            ),
-        ],
     ),
     geopointshape=TrackCase(
         track_name="geopointshape",
@@ -283,15 +273,6 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     msmarco_v2_vector=TrackCase(
         track_name="msmarco-v2-vector",
         description="Benchmark for vector search with msmarco-v2 passage data",
-        skip_reason_by_es_version=[
-            (
-                "",
-                (
-                    "pip install of track deps (pytrec_eval==0.5, numpy) fails in Rally container. "
-                    "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
-                ),
-            ),
-        ],
     ),
     big5=TrackCase(
         track_name="big5",
@@ -322,20 +303,10 @@ def elasticsearch(request, monkeypatch) -> Generator[ElasticsearchServer]:
     msmarco_passage_ranking=TrackCase(
         track_name="msmarco-passage-ranking",
         description="Benchmark bm25, semantic and hybrid search on the MS MARCO passage dataset",
-        skip_reason_by_es_version=[
-            (
-                "",
-                (
-                    "pip install of track deps (pytrec_eval==0.5, numpy) fails in Rally container. "
-                    "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
-                ),
-            ),
-        ],
     ),
     sql=TrackCase(
         track_name="sql",
         description="SQL query performance based on NOAA Weather data",
-        test_mode=False,
     ),
 )
 def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer, race_timeout_s: float, request: pytest.FixtureRequest):

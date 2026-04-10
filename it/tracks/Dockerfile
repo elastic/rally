@@ -50,10 +50,18 @@ ENV VIRTUAL_ENV=/rally/venv
 ENV PATH=/rally/venv/bin:$PATH
 ENV UV_PROJECT_ENVIRONMENT=/rally/venv
 
+# Track deps (e.g. pytrec_eval==0.5) compile vendored trec_eval C code. GCC defaults (GNU17)
+# reject legacy non-prototype declarations; -std=gnu89 plus relaxed pointer checks allow the build.
+ENV CFLAGS="-std=gnu89 -Wno-incompatible-pointer-types -Wno-error=incompatible-pointer-types"
+ENV CXXFLAGS="-std=gnu++14 -Wno-incompatible-pointer-types -Wno-error=incompatible-pointer-types"
+
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN make install
+
+# Default tracks (e.g. msmarco-*, search/mteb/dbpedia) pull these; install into the same venv as esrally.
+RUN /rally/venv/bin/python -m pip install --no-cache-dir pytrec_eval==0.5 numpy
 
 LABEL org.label-schema.schema-version="1.0" \
   org.label-schema.vendor="Elastic" \
