@@ -48,7 +48,7 @@ dependencies = [
     # License: MIT
     "urllib3==2.6.3",
     # License: Apache 2.0
-    "aiohttp==3.13.3",
+    "aiohttp==3.13.4",
     # License: Apache 2.0
     "aiosignal==1.4.0",
     # License: Apache 2.0 (docker-py)
