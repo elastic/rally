@@ -27,8 +27,8 @@ track-name filter) and stashes ``race_timeout_s`` after collection: total budget
 minutes × 60 / ``N``, times the pytest-xdist worker count when ``-n`` is used.
 Here ``N`` is the count of collected ``test_race_with_track`` nodes after ``-k``
 and track-name deselection, **excluding** nodes that would ``pytest.skip`` for
-``skip_reason_by_es_version`` unless ``--it-tracks-no-skip`` / ``IT_TRACKS_NO_SKIP``
-is set (see ``pytest_collection_finish``).
+``skip_reason_by_es_version`` unless skip-xfail is off (``--it-skip-xfail`` passed, or
+``IT_SKIP_XFAIL`` parsed as false; see ``pytest_collection_finish``).
 
 Each ``test_race_with_track`` node sets ``COMPOSE_PROJECT_NAME`` from its pytest
 nodeid (Docker-safe) and host logs under ``logs/…`` (see README). While ``es01`` is up, a background
@@ -80,10 +80,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     """Register ``it/tracks``-specific pytest options (see README)."""
     group = parser.getgroup("it_tracks", "it/tracks Docker track race integration tests")
     group.addoption(
-        "--it-tracks-no-skip",
-        action="store_true",
-        default=False,
-        help="Run tests even when TrackCase.skip_reason_by_es_version would skip (also IT_TRACKS_NO_SKIP).",
+        "--it-skip-xfail",
+        action="store_false",
+        dest="it_skip_xfail_applies",
+        default=True,
+        help=(
+            "Default: version-based pytest skips from TrackCase.skip_reason_by_es_version apply. "
+            "Pass --it-skip-xfail to disable those skips and run all track/version combinations "
+            "(same as IT_SKIP_XFAIL parsed false by convert.to_bool). Name is inverted: the flag "
+            "turns skip-xfail off."
+        ),
     )
     group.addoption(
         "--it-tracks-es-versions",
@@ -185,8 +191,8 @@ def pytest_collection_finish(session: pytest.Session) -> None:
 
     ``N`` counts collected ``test_race_with_track`` items after other deselection, but
     omits items that would skip for ``TrackCase.skip_reason_by_es_version`` (ordered prefix
-    pairs; same rule as ``race_test.test_race_with_track``) at the active ES version when no-skip
-    mode is off. If
+    pairs; same rule as ``race_test.test_race_with_track``) at the active ES version when
+    skip-xfail applies. If
     ``callspec`` cannot be read, the item still counts (conservative budget).
 
     Stashes ``race_timeout_s_base`` for the controller to send to workers via
@@ -194,7 +200,7 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     when set so the timeout matches the controller's global ``N``.
     """
     race_items = [i for i in session.items if "test_race_with_track" in i.nodeid]
-    no_skip = not helpers.skip_reasons_enabled(session.config)
+    skip_xfail_applies = helpers.it_skip_xfail_applies(session.config)
     n = 0
     for item in race_items:
         try:
@@ -205,7 +211,7 @@ def pytest_collection_finish(session: pytest.Session) -> None:
             n += 1
             continue
         if helpers.race_item_counts_toward_timeout_budget(
-            no_skip=no_skip,
+            skip_xfail_applies=skip_xfail_applies,
             skip_reason_by_es_version=case.skip_reason_by_es_version,
             es_version=es_version,
         ):

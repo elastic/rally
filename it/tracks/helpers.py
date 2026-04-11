@@ -65,24 +65,27 @@ def resolve_track_name_patterns(cli_value: str | None, env_value: str | None) ->
     return patterns or None
 
 
-def skip_reasons_enabled(config: object) -> bool:
-    """True when ``TrackCase`` per-version skip reasons apply for this run.
+def it_skip_xfail_applies(config: object) -> bool:
+    """True when ``TrackCase`` per-version ``pytest.skip`` reasons apply for this run.
 
-    False when ``--it-tracks-no-skip`` is set, or when non-empty ``IT_TRACKS_NO_SKIP`` parses
-    as true via ``esrally.utils.convert.to_bool`` (same accepted strings as that function:
-    ``True``, ``true``, ``Yes``, ``yes``, ``t``, ``y``, ``1``).
+    **Default:** skip-xfail behavior is **on** (omit ``--it-skip-xfail`` and leave ``IT_SKIP_XFAIL``
+    unset or empty).
 
-    Empty ``IT_TRACKS_NO_SKIP`` or values that parse as false (``False``, ``false``, ``No``,
-    ``no``, ``f``, ``n``, ``0``) leave skip reasons enabled.
+    **CLI:** ``--it-skip-xfail`` uses ``store_false`` semantics: passing the flag **disables**
+    skip-xfail (this helper returns ``False``) even though the flag name suggests the opposite.
 
+    **Env ``IT_SKIP_XFAIL``:** If set and non-empty after strip, ``esrally.utils.convert.to_bool``
+    decides: literals it maps to ``True`` keep skip-xfail **on**; to ``False`` turn it **off**.
     Any other non-empty string raises ``ValueError`` from ``to_bool`` (not caught here).
+
+    CLI wins: if the flag disables skip-xfail, the env is not consulted.
     """
-    if config.getoption("--it-tracks-no-skip", default=False):
+    if not config.getoption("--it-skip-xfail", default=True):
         return False
-    raw = os.environ.get("IT_TRACKS_NO_SKIP", "").strip()
+    raw = os.environ.get("IT_SKIP_XFAIL", "").strip()
     if not raw:
         return True
-    return not convert.to_bool(raw)
+    return convert.to_bool(raw)
 
 
 def skip_reason_for_entries(
@@ -110,18 +113,18 @@ def total_timeout_minutes(cli_minutes: int | None, env_name: str = "IT_TRACKS_TI
 
 def race_item_counts_toward_timeout_budget(
     *,
-    no_skip: bool,
+    skip_xfail_applies: bool,
     skip_reason_by_es_version: list[tuple[str, str]] | None,
     es_version: str,
 ) -> bool:
     """Whether a parametrized ``test_race_with_track`` node counts toward timeout divisor ``N``.
 
-    When ``no_skip`` is true (``--it-tracks-no-skip`` / ``IT_TRACKS_NO_SKIP``), every collected
-    race node counts. Otherwise, nodes that would ``pytest.skip`` for the active ES version do
-    not count—matching ``race_test.test_race_with_track`` (ordered ``(prefix, reason)`` pairs;
-    first ``es_version.startswith(prefix)`` wins).
+    When ``skip_xfail_applies`` is false (``--it-skip-xfail`` passed, or ``IT_SKIP_XFAIL`` parsed
+    as false), every collected race node counts. Otherwise, nodes that would ``pytest.skip`` for
+    the active ES version do not count—matching ``race_test.test_race_with_track`` (ordered
+    ``(prefix, reason)`` pairs; first ``es_version.startswith(prefix)`` wins).
     """
-    if no_skip:
+    if not skip_xfail_applies:
         return True
     return skip_reason_for_entries(skip_reason_by_es_version, es_version) is None
 

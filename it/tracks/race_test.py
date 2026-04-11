@@ -52,7 +52,7 @@ class TrackCase:
     challenge: str | None = None
     # Ordered ``(prefix, reason)`` pairs: first match where ``elasticsearch.version.startswith(prefix)``
     # wins; use prefix ``""`` for a reason that applies to every version. Skipping is optional via
-    # ``IT_TRACKS_NO_SKIP`` / ``--it-tracks-no-skip``.
+    # ``IT_SKIP_XFAIL`` / ``--it-skip-xfail`` (see ``helpers.it_skip_xfail_applies``).
     skip_reason_by_es_version: list[tuple[str, str]] | None = None
 
 
@@ -317,8 +317,8 @@ def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer, ra
     ``ES_VERSION`` set, then runs ``rally race`` targeting ``es01:9200``. ``TrackCase.test_mode``
     controls ``--test-mode`` (off for tracks that do not support it). ``TrackCase.challenge``,
     when set, is passed as ``--challenge``. ``it.tracks.helpers.skip_reason_for_entries``
-    when ``it.tracks.helpers.skip_reasons_enabled`` is true. Per-race timeout is ``race_timeout_s``
-    (total minutes from CLI/env divided by ``N``; ``N`` omits version-skip rows when no-skip is off;
+    when ``it.tracks.helpers.it_skip_xfail_applies`` is true. Per-race timeout is ``race_timeout_s``
+    (total minutes from CLI/env divided by ``N``; ``N`` omits version-skip rows when skip-xfail applies;
     see ``it/tracks/README.md``).
     Subprocess timeout is treated as success; Rally one-off containers are torn down in ``run_service``
     when ``remove`` is ``True`` (default).
@@ -327,7 +327,7 @@ def test_race_with_track(case: TrackCase, elasticsearch: ElasticsearchServer, ra
     LOG.info("Testing timeout: %s seconds", race_timeout_s)
     LOG.info("Testing with elasticsearch version: %s", elasticsearch.version)
 
-    if helpers.skip_reasons_enabled(request.config):
+    if helpers.it_skip_xfail_applies(request.config):
         skip_msg = helpers.skip_reason_for_entries(case.skip_reason_by_es_version, elasticsearch.version)
         if skip_msg is not None:
             pytest.skip(skip_msg)

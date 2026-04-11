@@ -40,7 +40,7 @@ With multiple workers, the per-race subprocess timeout is **`(total_timeout_minu
 
 | Variable | Purpose |
 | -------- | ------- |
-| `IT_TRACKS_NO_SKIP` | If set to a value `esrally.utils.convert.to_bool` parses as true (`True`, `true`, `Yes`, `yes`, `t`, `y`, `1`), do **not** skip tests that would be skipped only because of `TrackCase.skip_reason_by_es_version`. Values it parses as false (`False`, `false`, `No`, `no`, `f`, `n`, `0`) leave skip reasons enabled. **Unset or empty** also leaves skip reasons enabled. Any **other non-empty** string raises `ValueError` when read. Does **not** affect `@pytest.mark.skip` or other skips. |
+| `IT_SKIP_XFAIL` | Controls whether `TrackCase.skip_reason_by_es_version` can trigger `pytest.skip` for a parametrized ES version. **Unset or empty:** skip-xfail is **on** (default). **Non-empty:** parsed with `esrally.utils.convert.to_bool` — values it maps to **true** keep skip-xfail **on**; to **false** turn it **off** (run combinations that would otherwise skip). Any **other non-empty** string raises `ValueError` when read. Does **not** affect `@pytest.mark.skip` or other skips. |
 | `IT_TRACKS_ES_VERSIONS` | Comma-separated ES image tags for `es01` (e.g. `8.19.14,9.3.3`). Default when unset: `8.19.14` and `9.3.3`. |
 | `IT_TRACKS_TIMEOUT_MINUTES` | Total wall-clock **minutes** budget for **all** selected `test_race_with_track` runs before dividing by `N` (default `120`). Overridden by `--it-tracks-total-timeout-minutes` when that flag is passed. |
 | `IT_TRACKS_NAME` | Comma-separated [`fnmatch`](https://docs.python.org/3/library/fnmatch.html) patterns matched against **`TrackCase.track_name`** only. If set, tests whose `track_name` matches **no** pattern are **deselected** (removed from the run and from `N`). Patterns are **OR**-ed: `geo*,elastic/*` keeps a case if either pattern matches. |
@@ -57,7 +57,7 @@ On **`race`** failure, Rally’s **combined stdout+stderr** from `docker compose
 
 | Flag | Notes |
 | ---- | ----- |
-| `--it-tracks-no-skip` | Same effect as `IT_TRACKS_NO_SKIP` parsed as true by `convert.to_bool` (see above). **Enabled if the flag is set *or* the env parses as true.** |
+| `--it-skip-xfail` | **Default:** omit this flag — skip-xfail is **on**. **If you pass `--it-skip-xfail` on the command line,** skip-xfail is turned **off** for that run (same effect as `IT_SKIP_XFAIL` parsed false). The name is inverted: passing the flag **disables** version-based skips. **CLI wins over `IT_SKIP_XFAIL` when the flag is present.** |
 | `--it-tracks-es-versions` | Comma-separated list; overrides `IT_TRACKS_ES_VERSIONS` when non-empty. |
 | `--it-tracks-total-timeout-minutes` | Integer; overrides `IT_TRACKS_TIMEOUT_MINUTES` when passed. |
 | `--it-tracks-name` | Non-empty value overrides `IT_TRACKS_NAME` for the name filter. |
@@ -68,8 +68,8 @@ On **`race`** failure, Rally’s **combined stdout+stderr** from `docker compose
 
 After collection (including `-k` / keyword deselection and the track-name filter), let **`N`** be the number of collected **`test_race_with_track`** items that **actually run** `rally race` for timeout purposes:
 
-- With **`IT_TRACKS_NO_SKIP` / `--it-tracks-no-skip` off** (default): exclude items that would **`pytest.skip`** because an entry in `TrackCase.skip_reason_by_es_version` **prefix-matches** the parametrized Elasticsearch version in list order (same rule as `race_test.py`; see `race_item_counts_toward_timeout_budget` in `helpers.py`).
-- With **no-skip on**: every collected race item counts toward **`N`**.
+- With **skip-xfail on** (default — omit `--it-skip-xfail`, leave `IT_SKIP_XFAIL` unset or parsed true): exclude items that would **`pytest.skip`** because an entry in `TrackCase.skip_reason_by_es_version` **prefix-matches** the parametrized Elasticsearch version in list order (same rule as `race_test.py`; see `race_item_counts_toward_timeout_budget` in `helpers.py`).
+- With **skip-xfail off** (`--it-skip-xfail` passed, or `IT_SKIP_XFAIL` parsed false): every collected race item counts toward **`N`**.
 
 Then each race subprocess uses:
 
@@ -107,8 +107,8 @@ uv run -- pytest it/tracks/ --it-tracks-name='geo*'
 # Single ES version from env
 IT_TRACKS_ES_VERSIONS=8.19.14 uv run -- pytest -s it/tracks/
 
-# Force-run cases that would skip for known Docker issues
-IT_TRACKS_NO_SKIP=1 uv run -- pytest -s it/tracks/
+# Force-run cases that would skip for known Docker issues (turn skip-xfail off via env)
+IT_SKIP_XFAIL=0 uv run -- pytest -s it/tracks/
 
 # Shorter total budget (per-race timeout is total_min*60/N, or × num_workers with xdist)
 uv run -- pytest it/tracks/ --it-tracks-total-timeout-minutes=60

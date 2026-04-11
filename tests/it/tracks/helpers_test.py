@@ -19,119 +19,106 @@
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import stat
 from types import SimpleNamespace
 
 import pytest
 
-from it.tracks.helpers import (
-    DEFAULT_IT_TRACKS_ES_VERSIONS,
-    compose_project_name_for_nodeid,
-    es_version_worker_count,
-    host_log_dir_for_nodeid,
-    log_root,
-    parse_es_versions_csv,
-    prepare_compose_bind_mount_dirs,
-    race_item_counts_toward_timeout_budget,
-    race_timeout_seconds,
-    resolve_es_versions,
-    resolve_track_name_patterns,
-    skip_reason_for_entries,
-    skip_reasons_enabled,
-    total_timeout_minutes,
-    xdist_group_by_es_version,
-    xdist_num_workers,
-)
+from esrally.utils.cases import cases
+from it.tracks import helpers
 
-_LEN_DEFAULT_ES_VERSIONS = len(DEFAULT_IT_TRACKS_ES_VERSIONS)
+_LEN_DEFAULT_ES_VERSIONS = len(helpers.DEFAULT_IT_TRACKS_ES_VERSIONS)
 
 _COMPOSE_PROJECT_SAFE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,200}$")
 
 
 def test_parse_es_versions_csv_empty_uses_defaults() -> None:
-    assert parse_es_versions_csv(None) == DEFAULT_IT_TRACKS_ES_VERSIONS
-    assert parse_es_versions_csv("") == DEFAULT_IT_TRACKS_ES_VERSIONS
-    assert parse_es_versions_csv("  ") == DEFAULT_IT_TRACKS_ES_VERSIONS
+    assert helpers.parse_es_versions_csv(None) == helpers.DEFAULT_IT_TRACKS_ES_VERSIONS
+    assert helpers.parse_es_versions_csv("") == helpers.DEFAULT_IT_TRACKS_ES_VERSIONS
+    assert helpers.parse_es_versions_csv("  ") == helpers.DEFAULT_IT_TRACKS_ES_VERSIONS
 
 
 def test_parse_es_versions_csv_splits_and_strips() -> None:
-    assert parse_es_versions_csv(" 8.1 , 9.0 ") == ["8.1", "9.0"]
+    assert helpers.parse_es_versions_csv(" 8.1 , 9.0 ") == ["8.1", "9.0"]
 
 
 def test_resolve_es_versions_cli_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IT_TRACKS_ES_VERSIONS", "7.0.0")
-    assert resolve_es_versions("8.0.0,9.0.0") == ["8.0.0", "9.0.0"]
+    assert helpers.resolve_es_versions("8.0.0,9.0.0") == ["8.0.0", "9.0.0"]
 
 
 def test_resolve_es_versions_env_when_no_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IT_TRACKS_ES_VERSIONS", "7.1.0")
-    assert resolve_es_versions(None) == ["7.1.0"]
+    assert helpers.resolve_es_versions(None) == ["7.1.0"]
 
 
 def test_resolve_es_versions_default_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("IT_TRACKS_ES_VERSIONS", raising=False)
-    assert resolve_es_versions(None) == list(DEFAULT_IT_TRACKS_ES_VERSIONS)
+    assert helpers.resolve_es_versions(None) == list(helpers.DEFAULT_IT_TRACKS_ES_VERSIONS)
 
 
 def test_resolve_track_name_patterns_none_when_unset() -> None:
-    assert resolve_track_name_patterns(None, None) is None
-    assert resolve_track_name_patterns("", None) is None
+    assert helpers.resolve_track_name_patterns(None, None) is None
+    assert helpers.resolve_track_name_patterns("", None) is None
 
 
 def test_resolve_track_name_patterns_cli_wins_over_env() -> None:
-    assert resolve_track_name_patterns("a*", "b*") == ["a*"]
+    assert helpers.resolve_track_name_patterns("a*", "b*") == ["a*"]
 
 
 def test_resolve_track_name_patterns_comma_or() -> None:
-    assert resolve_track_name_patterns("geo*,http*", None) == ["geo*", "http*"]
+    assert helpers.resolve_track_name_patterns("geo*,http*", None) == ["geo*", "http*"]
 
 
-@pytest.mark.parametrize(
-    ("cli_no_skip", "env", "expect_enabled"),
-    [
-        (False, "", True),
-        (True, "", False),
-        (False, "1", False),
-        (False, "true", False),
-        (False, "True", False),
-        (False, "Yes", False),
-        (False, "yes", False),
-        (False, "t", False),
-        (False, "y", False),
-        (False, "0", True),
-        (False, "false", True),
-        (False, "False", True),
-        (False, "No", True),
-        (False, "no", True),
-        (False, "f", True),
-        (False, "n", True),
-    ],
+@dataclasses.dataclass(frozen=True)
+class ItSkipXfailAppliesCase:
+    """``cli_returns`` is the value of ``getoption('--it-skip-xfail', default=True)`` (``False`` when flag passed)."""
+
+    cli_returns: bool
+    env_set: bool
+    env_value: str
+    want_applies: bool
+
+
+@cases(
+    default_empty_env=ItSkipXfailAppliesCase(True, False, "", True),
+    flag_disables_unset_env=ItSkipXfailAppliesCase(False, False, "", False),
+    env_true=ItSkipXfailAppliesCase(True, True, "1", True),
+    env_true_word=ItSkipXfailAppliesCase(True, True, "true", True),
+    env_false=ItSkipXfailAppliesCase(True, True, "0", False),
+    env_false_word=ItSkipXfailAppliesCase(True, True, "false", False),
+    cli_overrides_env_true=ItSkipXfailAppliesCase(False, True, "1", False),
 )
-def test_it_tracks_skip_reasons_enabled(
-    cli_no_skip: bool,
-    env: str,
-    expect_enabled: bool,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("IT_TRACKS_NO_SKIP", env)
+def test_it_skip_xfail_applies(case: ItSkipXfailAppliesCase, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("IT_SKIP_XFAIL", raising=False)
+    if case.env_set:
+        monkeypatch.setenv("IT_SKIP_XFAIL", case.env_value)
     cfg = SimpleNamespace(
-        getoption=lambda opt, default=False: cli_no_skip if opt == "--it-tracks-no-skip" else default,
+        getoption=lambda opt, default=True: case.cli_returns if opt == "--it-skip-xfail" else default,
     )
-    assert skip_reasons_enabled(cfg) is expect_enabled
+    assert helpers.it_skip_xfail_applies(cfg) is case.want_applies
 
 
-@pytest.mark.parametrize("env", ["on", "ON", "YES", "TRUE", "maybe", "tru"])
-def test_it_tracks_skip_reasons_enabled_invalid_env_raises(
-    env: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("IT_TRACKS_NO_SKIP", env)
-    cfg = SimpleNamespace(
-        getoption=lambda opt, default=False: False if opt == "--it-tracks-no-skip" else default,
-    )
+@dataclasses.dataclass(frozen=True)
+class ItSkipXfailInvalidEnvCase:
+    env: str
+
+
+@cases(
+    on=ItSkipXfailInvalidEnvCase("on"),
+    on_upper=ItSkipXfailInvalidEnvCase("ON"),
+    yes_upper=ItSkipXfailInvalidEnvCase("YES"),
+    true_upper=ItSkipXfailInvalidEnvCase("TRUE"),
+    maybe=ItSkipXfailInvalidEnvCase("maybe"),
+    tru=ItSkipXfailInvalidEnvCase("tru"),
+)
+def test_it_skip_xfail_applies_invalid_env_raises(case: ItSkipXfailInvalidEnvCase, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IT_SKIP_XFAIL", case.env)
+    cfg = SimpleNamespace(getoption=lambda opt, default=True: True if opt == "--it-skip-xfail" else default)
     with pytest.raises(ValueError):
-        skip_reasons_enabled(cfg)
+        helpers.it_skip_xfail_applies(cfg)
 
 
 @pytest.mark.parametrize(
@@ -153,31 +140,31 @@ def test_it_tracks_skip_reason_for_entries(
     es_version: str,
     expect_reason: str | None,
 ) -> None:
-    assert skip_reason_for_entries(entries, es_version) == expect_reason
+    assert helpers.skip_reason_for_entries(entries, es_version) == expect_reason
 
 
 def test_total_timeout_minutes_cli_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IT_TRACKS_TIMEOUT_MINUTES", "60")
-    assert total_timeout_minutes(90) == 90
+    assert helpers.total_timeout_minutes(90) == 90
 
 
 def test_total_timeout_minutes_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IT_TRACKS_TIMEOUT_MINUTES", "45")
-    assert total_timeout_minutes(None) == 45
+    assert helpers.total_timeout_minutes(None) == 45
 
 
 def test_total_timeout_minutes_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("IT_TRACKS_TIMEOUT_MINUTES", raising=False)
-    assert total_timeout_minutes(None) == 120
+    assert helpers.total_timeout_minutes(None) == 120
 
 
 def test_race_timeout_formula_matches_conftest() -> None:
     """``(total_min * 60) / max(1, N) * workers`` (``workers`` 1 without xdist)."""
     total_min = 120
     n = 76
-    assert race_timeout_seconds(total_min, n) == pytest.approx(7200 / 76)
-    assert race_timeout_seconds(total_min, 0) == 7200.0
-    assert race_timeout_seconds(total_min, n, xdist_num_workers=2) == pytest.approx(2 * 7200 / 76)
+    assert helpers.race_timeout_seconds(total_min, n) == pytest.approx(7200 / 76)
+    assert helpers.race_timeout_seconds(total_min, 0) == 7200.0
+    assert helpers.race_timeout_seconds(total_min, n, xdist_num_workers=2) == pytest.approx(2 * 7200 / 76)
 
 
 @pytest.mark.parametrize(
@@ -211,7 +198,7 @@ def test_it_tracks_xdist_num_workers(
         cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=numprocesses), getoption=getoption)
     else:
         cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=numprocesses))
-    assert xdist_num_workers(cfg) == expect
+    assert helpers.xdist_num_workers(cfg) == expect
 
 
 def test_it_tracks_xdist_num_workers_prefers_pytest_xdist_worker_count_env(
@@ -220,7 +207,7 @@ def test_it_tracks_xdist_num_workers_prefers_pytest_xdist_worker_count_env(
     """Worker subprocesses clear ``numprocesses``; xdist sets ``PYTEST_XDIST_WORKER_COUNT``."""
     monkeypatch.setenv("PYTEST_XDIST_WORKER_COUNT", "4")
     cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=None))
-    assert xdist_num_workers(cfg) == 4
+    assert helpers.xdist_num_workers(cfg) == 4
 
 
 @pytest.mark.parametrize(
@@ -253,7 +240,7 @@ def test_it_tracks_xdist_group_by_es_version(
         cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=numprocesses), getoption=getoption)
     else:
         cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=numprocesses))
-    assert xdist_group_by_es_version(cfg) is expect_group
+    assert helpers.xdist_group_by_es_version(cfg) is expect_group
 
 
 def test_it_tracks_xdist_group_by_es_version_false_when_xdist_env_worker_count_exceeds_versions(
@@ -263,7 +250,7 @@ def test_it_tracks_xdist_group_by_es_version_false_when_xdist_env_worker_count_e
     monkeypatch.delenv("IT_TRACKS_ES_VERSIONS", raising=False)
     monkeypatch.setenv("PYTEST_XDIST_WORKER_COUNT", "4")
     cfg = SimpleNamespace(option=SimpleNamespace(numprocesses=None))
-    assert xdist_group_by_es_version(cfg) is False
+    assert helpers.xdist_group_by_es_version(cfg) is False
 
 
 def test_it_tracks_es_version_worker_count_uses_defaults_without_cli(
@@ -275,7 +262,7 @@ def test_it_tracks_es_version_worker_count_uses_defaults_without_cli(
         return default
 
     cfg = SimpleNamespace(getoption=getoption)
-    assert es_version_worker_count(cfg) == _LEN_DEFAULT_ES_VERSIONS
+    assert helpers.es_version_worker_count(cfg) == _LEN_DEFAULT_ES_VERSIONS
 
 
 def test_it_tracks_es_version_worker_count_uses_cli_csv() -> None:
@@ -284,46 +271,46 @@ def test_it_tracks_es_version_worker_count_uses_cli_csv() -> None:
             return "7.0.0,8.0.0,9.0.0"
         return default
 
-    assert es_version_worker_count(SimpleNamespace(getoption=getoption)) == 3
+    assert helpers.es_version_worker_count(SimpleNamespace(getoption=getoption)) == 3
 
 
 def test_it_tracks_es_version_worker_count_without_getoption_uses_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("IT_TRACKS_ES_VERSIONS", raising=False)
-    assert es_version_worker_count(SimpleNamespace()) == _LEN_DEFAULT_ES_VERSIONS
+    assert helpers.es_version_worker_count(SimpleNamespace()) == _LEN_DEFAULT_ES_VERSIONS
 
 
 @pytest.mark.parametrize(
-    ("no_skip", "skip_entries", "es_version", "expect"),
+    ("skip_xfail_applies", "skip_entries", "es_version", "expect"),
     [
-        (True, [("8", "broken")], "8.19.14", True),
-        (True, None, "8.19.14", True),
+        (False, [("8", "broken")], "8.19.14", True),
         (False, None, "8.19.14", True),
-        (False, [], "8.19.14", True),
-        (False, [("8", "skip me")], "8.19.14", False),
-        (False, [("8", "")], "8.19.14", False),
-        (False, [("8", "skip me")], "9.3.3", True),
-        (False, [("9", "other")], "8.19.14", True),
-        (False, [("8.", "skip eight")], "8.19.14", False),
-        (False, [("8.", "skip eight")], "9.3.3", True),
-        (False, [("9.", "nine")], "9.3.3", False),
-        (False, [("", "all")], "8.19.14", False),
-        (False, [("", "all")], "9.3.3", False),
-        (False, [("8.", "specific"), ("", "fallback")], "8.19.14", False),
-        (False, [("8.", "specific"), ("", "fallback")], "9.3.3", False),
-        (False, [("", "fallback"), ("8.", "specific")], "8.19.14", False),
+        (True, None, "8.19.14", True),
+        (True, [], "8.19.14", True),
+        (True, [("8", "skip me")], "8.19.14", False),
+        (True, [("8", "")], "8.19.14", False),
+        (True, [("8", "skip me")], "9.3.3", True),
+        (True, [("9", "other")], "8.19.14", True),
+        (True, [("8.", "skip eight")], "8.19.14", False),
+        (True, [("8.", "skip eight")], "9.3.3", True),
+        (True, [("9.", "nine")], "9.3.3", False),
+        (True, [("", "all")], "8.19.14", False),
+        (True, [("", "all")], "9.3.3", False),
+        (True, [("8.", "specific"), ("", "fallback")], "8.19.14", False),
+        (True, [("8.", "specific"), ("", "fallback")], "9.3.3", False),
+        (True, [("", "fallback"), ("8.", "specific")], "8.19.14", False),
     ],
 )
 def test_race_item_counts_toward_timeout_budget(
-    no_skip: bool,
+    skip_xfail_applies: bool,
     skip_entries: list[tuple[str, str]] | None,
     es_version: str,
     expect: bool,
 ) -> None:
     assert (
-        race_item_counts_toward_timeout_budget(
-            no_skip=no_skip,
+        helpers.race_item_counts_toward_timeout_budget(
+            skip_xfail_applies=skip_xfail_applies,
             skip_reason_by_es_version=skip_entries,
             es_version=es_version,
         )
@@ -335,38 +322,38 @@ def test_it_tracks_log_root_from_env(tmp_path, monkeypatch: pytest.MonkeyPatch) 
     base = tmp_path / "lr"
     base.mkdir()
     monkeypatch.setenv("IT_TRACKS_LOG_ROOT", str(base))
-    assert log_root() == base.resolve()
+    assert helpers.log_root() == base.resolve()
 
 
 def test_it_tracks_log_root_default_name_is_logs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("IT_TRACKS_LOG_ROOT", raising=False)
-    assert log_root().name == "logs"
+    assert helpers.log_root().name == "logs"
 
 
 def test_it_tracks_host_log_dir_for_nodeid_mirrors_pytest_nodeid(tmp_path) -> None:
-    log_root = tmp_path / "logs"
-    log_root.mkdir()
+    root = tmp_path / "logs"
+    root.mkdir()
     nodeid = "it/tracks/race_test.py::test_race_with_track[es_8.19.14-elastic_logs]"
-    got = host_log_dir_for_nodeid(log_root, nodeid)
-    assert got == log_root / "it" / "tracks" / "race_test.py" / "test_race_with_track[es_8.19.14-elastic_logs]"
+    got = helpers.host_log_dir_for_nodeid(root, nodeid)
+    assert got == root / "it" / "tracks" / "race_test.py" / "test_race_with_track[es_8.19.14-elastic_logs]"
 
 
 def test_it_tracks_host_log_dir_short_nodeid_gets_it_tracks_prefix(tmp_path) -> None:
-    log_root = tmp_path / "logs"
-    log_root.mkdir()
+    root = tmp_path / "logs"
+    root.mkdir()
     nodeid = "race_test.py::test_race_with_track[es_9.3.3-geonames]"
-    got = host_log_dir_for_nodeid(log_root, nodeid)
-    assert got == log_root / "it" / "tracks" / "race_test.py" / "test_race_with_track[es_9.3.3-geonames]"
+    got = helpers.host_log_dir_for_nodeid(root, nodeid)
+    assert got == root / "it" / "tracks" / "race_test.py" / "test_race_with_track[es_9.3.3-geonames]"
 
 
 def test_it_tracks_host_log_dir_without_double_colon(tmp_path) -> None:
-    log_root = tmp_path / "logs"
-    log_root.mkdir()
-    assert host_log_dir_for_nodeid(log_root, "single/id") == log_root / "single" / "id"
+    root = tmp_path / "logs"
+    root.mkdir()
+    assert helpers.host_log_dir_for_nodeid(root, "single/id") == root / "single" / "id"
 
 
 def test_prepare_it_tracks_compose_bind_mount_dirs(tmp_path) -> None:
-    prepare_compose_bind_mount_dirs(tmp_path)
+    helpers.prepare_compose_bind_mount_dirs(tmp_path)
     for name in ("es01", "rally"):
         d = tmp_path / name
         assert d.is_dir()
@@ -375,7 +362,7 @@ def test_prepare_it_tracks_compose_bind_mount_dirs(tmp_path) -> None:
 
 def test_compose_project_name_for_nodeid_stable_slug() -> None:
     nodeid = "it/tracks/race_test.py::test_race_with_track[es_8.19.14-elastic_logs]"
-    a = compose_project_name_for_nodeid(nodeid)
-    b = compose_project_name_for_nodeid(nodeid)
+    a = helpers.compose_project_name_for_nodeid(nodeid)
+    b = helpers.compose_project_name_for_nodeid(nodeid)
     assert a == b
     assert _COMPOSE_PROJECT_SAFE_RE.fullmatch(a) or a.startswith("ittr_")

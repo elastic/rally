@@ -22,7 +22,7 @@ Command: `make it_tracks IT_TRACKS_NAME='msmarco-passage-ranking,msmarco-v2-vect
 | `msmarco-v2-vector` | **PASSED** | **PASSED** |
 | `msmarco-passage-ranking` | **PASSED** | **PASSED** |
 
-**Context:** Current [`it/tracks/Dockerfile`](Dockerfile) (**`CFLAGS` / `CXXFLAGS`** for **`pytrec_eval`**, venv **`pytrec_eval==0.5`** + **`numpy`**) and [`race_test.py`](race_test.py) without Docker-IT skip rules on these tracks. **`IT_TRACKS_NO_SKIP`** was **not** required. Under heavier host memory pressure, **`msmarco-v2-vector`** has been seen to fail with Docker exit **137** (SIGKILL) when two races run in parallel; this run succeeded with the same worker count.
+**Context:** Current [`it/tracks/Dockerfile`](Dockerfile) (**`CFLAGS` / `CXXFLAGS`** for **`pytrec_eval`**, venv **`pytrec_eval==0.5`** + **`numpy`**) and [`race_test.py`](race_test.py) without Docker-IT skip rules on these tracks. **`IT_SKIP_XFAIL`** did **not** need to be set to false for that run. Under heavier host memory pressure, **`msmarco-v2-vector`** has been seen to fail with Docker exit **137** (SIGKILL) when two races run in parallel; this run succeeded with the same worker count.
 
 ### Final pytest run (completed, historical full matrix)
 
