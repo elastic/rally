@@ -40,7 +40,7 @@ With multiple workers, the per-race subprocess timeout is **`(total_timeout_minu
 
 | Variable | Purpose |
 | -------- | ------- |
-| `IT_TRACKS_NO_SKIP` | If truthy (`1`, `true`, `yes`, `on`, case-insensitive), do **not** skip tests that would be skipped only because of `TrackCase.skip_reason_by_es_version`. Does **not** affect `@pytest.mark.skip` or other skips. |
+| `IT_TRACKS_NO_SKIP` | If set to a value `esrally.utils.convert.to_bool` parses as true (`True`, `true`, `Yes`, `yes`, `t`, `y`, `1`), do **not** skip tests that would be skipped only because of `TrackCase.skip_reason_by_es_version`. Values it parses as false (`False`, `false`, `No`, `no`, `f`, `n`, `0`) leave skip reasons enabled. **Unset or empty** also leaves skip reasons enabled. Any **other non-empty** string raises `ValueError` when read. Does **not** affect `@pytest.mark.skip` or other skips. |
 | `IT_TRACKS_ES_VERSIONS` | Comma-separated ES image tags for `es01` (e.g. `8.19.14,9.3.3`). Default when unset: `8.19.14` and `9.3.3`. |
 | `IT_TRACKS_TIMEOUT_MINUTES` | Total wall-clock **minutes** budget for **all** selected `test_race_with_track` runs before dividing by `N` (default `120`). Overridden by `--it-tracks-total-timeout-minutes` when that flag is passed. |
 | `IT_TRACKS_NAME` | Comma-separated [`fnmatch`](https://docs.python.org/3/library/fnmatch.html) patterns matched against **`TrackCase.track_name`** only. If set, tests whose `track_name` matches **no** pattern are **deselected** (removed from the run and from `N`). Patterns are **OR**-ed: `geo*,elastic/*` keeps a case if either pattern matches. |
@@ -57,7 +57,7 @@ On **`race`** failure, Rally’s **combined stdout+stderr** from `docker compose
 
 | Flag | Notes |
 | ---- | ----- |
-| `--it-tracks-no-skip` | Same as truthy `IT_TRACKS_NO_SKIP`. **Enabled if the flag is set *or* the env is truthy.** |
+| `--it-tracks-no-skip` | Same effect as `IT_TRACKS_NO_SKIP` parsed as true by `convert.to_bool` (see above). **Enabled if the flag is set *or* the env parses as true.** |
 | `--it-tracks-es-versions` | Comma-separated list; overrides `IT_TRACKS_ES_VERSIONS` when non-empty. |
 | `--it-tracks-total-timeout-minutes` | Integer; overrides `IT_TRACKS_TIMEOUT_MINUTES` when passed. |
 | `--it-tracks-name` | Non-empty value overrides `IT_TRACKS_NAME` for the name filter. |

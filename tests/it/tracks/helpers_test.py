@@ -94,14 +94,18 @@ def test_resolve_track_name_patterns_comma_or() -> None:
         (True, "", False),
         (False, "1", False),
         (False, "true", False),
-        (False, "YES", False),
-        (False, "on", False),
-        (False, "ON", False),
+        (False, "True", False),
+        (False, "Yes", False),
+        (False, "yes", False),
+        (False, "t", False),
+        (False, "y", False),
         (False, "0", True),
-        (False, "", True),
-        (False, "maybe", True),
-        (False, "tru", True),
-        (False, "TRUE", False),
+        (False, "false", True),
+        (False, "False", True),
+        (False, "No", True),
+        (False, "no", True),
+        (False, "f", True),
+        (False, "n", True),
     ],
 )
 def test_it_tracks_skip_reasons_enabled(
@@ -115,6 +119,19 @@ def test_it_tracks_skip_reasons_enabled(
         getoption=lambda opt, default=False: cli_no_skip if opt == "--it-tracks-no-skip" else default,
     )
     assert skip_reasons_enabled(cfg) is expect_enabled
+
+
+@pytest.mark.parametrize("env", ["on", "ON", "YES", "TRUE", "maybe", "tru"])
+def test_it_tracks_skip_reasons_enabled_invalid_env_raises(
+    env: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("IT_TRACKS_NO_SKIP", env)
+    cfg = SimpleNamespace(
+        getoption=lambda opt, default=False: False if opt == "--it-tracks-no-skip" else default,
+    )
+    with pytest.raises(ValueError):
+        skip_reasons_enabled(cfg)
 
 
 @pytest.mark.parametrize(
