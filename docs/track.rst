@@ -3228,6 +3228,63 @@ The following metrics are included when profile data is present:
 * ``<driver>.<operator>.processed_slices``: Cumulative processed slices for an operator across all driver instances.
 * ``<plan>.<optimization>.took_ms``: Time spent on a plan optimization step (``logical_optimization``, ``physical_optimization``, or ``reduction``), in milliseconds.
 
+
+enrich-policy
+~~~~~~~~~~~~~
+
+The operation ``enrich-policy`` will delete (if they exist), create and execute a list of enrich policies.
+
+Properties
+""""""""""
+
+* ``policies`` (mandatory): An object containing the name of the policy to be created as its keys and the definition of the policy as its value following the request body of `Create an enrich policy API <https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-enrich-put-policy>`_.
+* ``delete`` (optional): A boolean specifying if the operation should try to delete an existing policy with the same name before creating a new one. Defaults to ``true``.
+
+**Examples**
+
+The following snippet will create all enrich policies that have been defined in the ``policies`` section.
+It will attempt to delete them beforehand if any exist::
+
+    {
+      "name": "enrich-policy",
+      "operation": {
+        "operation-type": "enrich-policy",
+        "delete": true,
+        "policies": {
+          "nyc_rate_codes": {
+            "match": {
+              "indices": "nyc_rate_codes",
+              "match_field": "id",
+              "enrich_fields": [
+                "name"
+              ]
+            }
+          },
+          "nyc_payment_types": {
+            "match": {
+              "indices": "nyc_payment_types",
+              "match_field": "type",
+              "enrich_fields": [
+                "name"
+              ]
+            }
+          }
+        }
+      }
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+
+Meta-data
+"""""""""
+
+* ``weight``: The number of policies that have been created.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 .. _track_dependencies:
 
 dependencies
