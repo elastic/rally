@@ -132,5 +132,11 @@ class RallyRepository:
             return current_branch == revision
 
         current_revision = git.head_revision(self.repo_dir)
-        self.logger.info("Checking current revision [%s] is equal to specified revision [%s].", current_revision, revision)
+        self.logger.info("Checking current revision [%s] matches specified revision [%s].", current_revision, revision)
+        # Git short SHAs are typically 7-39 hex characters; use prefix matching for those.
+        # Full 40-char SHAs and non-hex strings (tags, etc.) use exact comparison.
+        full_sha_length = 40
+        min_short_sha_length = 7
+        if min_short_sha_length <= len(revision) < full_sha_length and all(c in "0123456789abcdef" for c in revision):
+            return current_revision.startswith(revision)
         return current_revision == revision
