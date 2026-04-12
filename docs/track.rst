@@ -3232,25 +3232,34 @@ The following metrics are included when profile data is present:
 enrich-policy
 ~~~~~~~~~~~~~
 
-The operation ``enrich-policy`` will delete (if they exist), create and execute a list of enrich policies.
+The operation ``enrich-policy`` can delete, create or execute enrich policies.
+
+All operations can occurr on different policies.
+If the same policy is specified within multiple operations, it will follow the execution order: ``delete -> create -> execute``.
+
+A refresh of all indices is performed after deletion and creation of policies and before execution.
 
 Properties
 """"""""""
 
-* ``policies`` (mandatory): An object containing the name of the policy to be created as its keys and the definition of the policy as its value following the request body of `Create an enrich policy API <https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-enrich-put-policy>`_.
-* ``delete`` (optional): A boolean specifying if the operation should try to delete an existing policy with the same name before creating a new one. Defaults to ``true``.
+* ``delete`` (optional): A list of strings specifying which policies to delete if they exists, it will ignore any non-existing policy.
+* ``create`` (optional): An object containing the name of the policy to be created as its keys and the definition of the policy as its value following the request body of `Create an enrich policy API <https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-enrich-put-policy>`_.
+* ``execute`` (optional): A list of strings specifying which policies to be executed.
 
 **Examples**
 
-The following snippet will create all enrich policies that have been defined in the ``policies`` section.
-It will attempt to delete them beforehand if any exist::
+The following snippet will attempt to delete, create and then execute the ``nyc_rate_codes`` enrich policy defined in the ``create`` section.
+
+It will also attempt to delete another policy ``nyc_trip_types`` but will **not** re-create it or execute it.
+
+Lastly, it will execute the ``nyc_vendors`` policy but will **not** delete it or create it beforehand.::
 
     {
       "name": "enrich-policy",
       "operation": {
         "operation-type": "enrich-policy",
-        "delete": true,
-        "policies": {
+        "delete": ["nyc_rate_codes", "nyc_trip_types"],
+        "create": {
           "nyc_rate_codes": {
             "match": {
               "indices": "nyc_rate_codes",
@@ -3259,17 +3268,9 @@ It will attempt to delete them beforehand if any exist::
                 "name"
               ]
             }
-          },
-          "nyc_payment_types": {
-            "match": {
-              "indices": "nyc_payment_types",
-              "match_field": "type",
-              "enrich_fields": [
-                "name"
-              ]
-            }
           }
-        }
+        },
+        "execute": ["nyc_rate_codes", "nyc_vendors"]
       }
     }
 
@@ -3281,7 +3282,7 @@ This operation is :ref:`retryable <track_operations>`.
 Meta-data
 """""""""
 
-* ``weight``: The number of policies that have been created.
+* ``weight``: The number of policies deleted, created and executed.
 * ``unit``: Always "ops".
 * ``success``: A boolean indicating whether the operation has succeeded.
 

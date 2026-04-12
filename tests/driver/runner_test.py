@@ -8393,10 +8393,26 @@ class TestEsqlProfileRunner:
 class TestEnrichPolicy:
 
     @pytest.mark.asyncio
-    async def test_call(self):
-        policy_count = 5
+    async def test_create(self):
+        policy_count = random.randint(1, 5)
         policy_data = {uuid4().hex: mock.MagicMock() for _ in range(policy_count)}
-        params = {"policies": policy_data}
+        params = {"create": policy_data}
+        es = mock.AsyncMock()
+
+        await runner.EnrichPolicy()(es, params)
+
+        es.enrich.delete_policy.assert_not_awaited()
+        es.enrich.put_policy.assert_has_awaits(
+            [mock.call(name=policy, **req_params) for policy, req_params in policy_data.items()], any_order=True
+        )
+        es.indices.refresh.assert_awaited_once_with(index="_all")
+        es.enrich.execute_policy.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_delete(self):
+        policy_count = random.randint(1, 5)
+        policy_data = [uuid4().hex for _ in range(policy_count)]
+        params = {"delete": policy_data}
         es = mock.AsyncMock()
 
         await runner.EnrichPolicy()(es, params)
@@ -8404,28 +8420,41 @@ class TestEnrichPolicy:
         es.enrich.delete_policy.assert_has_awaits(
             [mock.call(name=policy_name, ignore=[404]) for policy_name in policy_data], any_order=True
         )
-        es.enrich.put_policy.assert_has_awaits(
-            [mock.call(name=policy, **req_params) for policy, req_params in policy_data.items()], any_order=True
-        )
+        es.enrich.put_policy.assert_not_awaited()
+        es.indices.refresh.assert_awaited_once_with(index="_all")
+        es.enrich.execute_policy.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_execute(self):
+        policy_count = random.randint(1, 5)
+        policy_data = [uuid4().hex for _ in range(policy_count)]
+        params = {"execute": policy_data}
+        es = mock.AsyncMock()
+
+        await runner.EnrichPolicy()(es, params)
+
+        es.enrich.delete_policy.assert_not_awaited()
+        es.enrich.put_policy.assert_not_awaited()
         es.indices.refresh.assert_awaited_once_with(index="_all")
         es.enrich.execute_policy.assert_has_awaits(
             [mock.call(name=policy_name, wait_for_completion=True) for policy_name in policy_data], any_order=True
         )
 
-    @mock.patch("esrally.driver.runner.EnrichPolicy._execute_enrich_policy", new_callable=mock.AsyncMock)
-    @mock.patch("esrally.driver.runner.EnrichPolicy._refresh_indices", new_callable=mock.AsyncMock)
-    @mock.patch("esrally.driver.runner.EnrichPolicy._create_enrich_policy", new_callable=mock.AsyncMock)
     @pytest.mark.asyncio
-    async def test_delete_is_false(self, create_mock, refresh_mock, exec_mock):
+    async def test_delete_create_and_execute_in_the_correct_order(self):
+        policy_name = uuid4().hex
+        create_payload = {policy_name: mock.MagicMock()}
+        params = {"delete": [policy_name], "create": create_payload, "execute": [policy_name]}
         es = mock.AsyncMock()
-        params = {"policies": {uuid4().hex: {}}, "delete": False}
 
         await runner.EnrichPolicy()(es, params)
 
-        es.enrich.delete_policy.assert_not_awaited()
-        create_mock.assert_awaited()
-        refresh_mock.assert_awaited()
-        exec_mock.assert_awaited()
+        assert es.mock_calls == [
+            mock.call.enrich.delete_policy(name=policy_name, ignore=[404]),
+            mock.call.enrich.put_policy(name=policy_name, **create_payload[policy_name]),
+            mock.call.indices.refresh(index="_all"),
+            mock.call.enrich.execute_policy(name=policy_name, wait_for_completion=True),
+        ]
 
     def test_str(self):
         assert str(runner.EnrichPolicy()) == "enrich-policy"
