@@ -717,8 +717,9 @@ def create_arg_parser():
     )
     race_parser.add_argument(
         "--target-hosts",
-        help="Define a comma-separated list of host:port pairs which should be targeted if using the pipeline 'benchmark-only' "
-        "(default: localhost:9200).",
+        help="Define a comma-separated list of host:port pairs for the 'benchmark-only' pipeline (default: localhost:9200). "
+        "For the 'multi-cluster' pipeline use a JSON object with multiple named clusters (e.g. "
+        '\'{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}\') with matching keys in --client-options.',
         default="",
     )  # actually the default is pipeline specific and it is set later
     race_parser.add_argument(

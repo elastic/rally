@@ -901,7 +901,7 @@ If multiple Elasticsearch nodes are hidden behind a proxy, it is possible to add
 
 This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
 
-You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`.
+You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`. The :doc:`multi-cluster pipeline </pipelines>` runs the benchmark once per cluster and expects multiple named clusters in ``--target-hosts`` (JSON format).
 
 ``limit``
 ~~~~~~~~~
@@ -1098,6 +1098,8 @@ Examples:
 
 .. NOTE::
    **All** :ref:`built-in operations <track_operations>` will use the connection to the ``default`` cluster. However, you can utilize the client connections to the additional clusters in your :ref:`custom runners <adding_tracks_custom_runners>`.
+
+The **multi-cluster** :doc:`pipeline </pipelines>` uses multiple named clusters differently: it runs the full benchmark once per cluster, with that cluster exposed as ``default`` for that run. Use the same JSON format for ``--target-hosts`` and ``--client-options``; each run produces a separate race (e.g. ``{race-id}-cluster-a``).
 
 ``client-options``
 ~~~~~~~~~~~~~~~~~~
