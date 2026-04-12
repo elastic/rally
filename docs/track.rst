@@ -3229,25 +3229,27 @@ The following metrics are included when profile data is present:
 * ``<plan>.<optimization>.took_ms``: Time spent on a plan optimization step (``logical_optimization``, ``physical_optimization``, or ``reduction``), in milliseconds.
 
 
-create-enrich-policy
-~~~~~~~~~~~~~~~~~~~~
+enrich-policy
+~~~~~~~~~~~~~
 
-The operation ``create-enrich-policy`` will delete (if it exists), create and execute a list of enrich policies.
-It's properties follows the request body of the `Create an enrich policy API <https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-enrich-put-policy>`_
+The operation ``enrich-policy`` will delete (if they exist), create and execute a list of enrich policies.
 
-* ``policies`` (mandatory): An object containing the name of the policy to be created as its keys and the definition of the policy as its value following the request body of "Create an enrich policy".
-* ``delete`` (optional): A boolean specifying if the operation should try to delete an existing policy with the same name before creating a new one. Defaults to true.
+Properties
+""""""""""
+
+* ``policies`` (mandatory): An object containing the name of the policy to be created as its keys and the definition of the policy as its value following the request body of `Create an enrich policy API <https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-enrich-put-policy>`_.
+* ``delete`` (optional): A boolean specifying if the operation should try to delete an existing policy with the same name before creating a new one. Defaults to ``true``.
 
 **Examples**
 
 The following snippet will create all enrich policies that have been defined in the ``policies`` section.
-It will attempt to delete them beforehand if it exists::
-
+It will attempt to delete them beforehand if any exist::
 
     {
-      "name": "create-enrich-policy",
+      "name": "enrich-policy",
       "operation": {
-        "operation-type": "create-enrich-policy",
+        "operation-type": "enrich-policy",
+        "delete": true,
         "policies": {
           "nyc_rate_codes": {
             "match": {
@@ -3268,8 +3270,7 @@ It will attempt to delete them beforehand if it exists::
             }
           }
         }
-      },
-      "delete": true
+      }
     }
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.

@@ -8390,7 +8390,7 @@ class TestEsqlProfileRunner:
         assert result["node_reduction.reduction.took_ms"] == 0.5
 
 
-class TestCreateEnrichPolicy:
+class TestEnrichPolicy:
 
     @pytest.mark.asyncio
     async def test_call(self):
@@ -8399,7 +8399,7 @@ class TestCreateEnrichPolicy:
         params = {"policies": policy_data}
         es = mock.AsyncMock()
 
-        await runner.CreateEnrichPolicy()(es, params)
+        await runner.EnrichPolicy()(es, params)
 
         es.enrich.delete_policy.assert_has_awaits(
             [mock.call(name=policy_name, ignore=[404]) for policy_name in policy_data], any_order=True
@@ -8412,15 +8412,15 @@ class TestCreateEnrichPolicy:
             [mock.call(name=policy_name, wait_for_completion=True) for policy_name in policy_data], any_order=True
         )
 
-    @mock.patch("esrally.driver.runner.CreateEnrichPolicy._execute_enrich_policy", new_callable=mock.AsyncMock)
-    @mock.patch("esrally.driver.runner.CreateEnrichPolicy._refresh_indices", new_callable=mock.AsyncMock)
-    @mock.patch("esrally.driver.runner.CreateEnrichPolicy._create_enrich_policy", new_callable=mock.AsyncMock)
+    @mock.patch("esrally.driver.runner.EnrichPolicy._execute_enrich_policy", new_callable=mock.AsyncMock)
+    @mock.patch("esrally.driver.runner.EnrichPolicy._refresh_indices", new_callable=mock.AsyncMock)
+    @mock.patch("esrally.driver.runner.EnrichPolicy._create_enrich_policy", new_callable=mock.AsyncMock)
     @pytest.mark.asyncio
     async def test_delete_is_false(self, create_mock, refresh_mock, exec_mock):
         es = mock.AsyncMock()
         params = {"policies": {uuid4().hex: {}}, "delete": False}
 
-        await runner.CreateEnrichPolicy()(es, params)
+        await runner.EnrichPolicy()(es, params)
 
         es.enrich.delete_policy.assert_not_awaited()
         create_mock.assert_awaited()
@@ -8428,4 +8428,4 @@ class TestCreateEnrichPolicy:
         exec_mock.assert_awaited()
 
     def test_str(self):
-        assert str(runner.CreateEnrichPolicy()) == "create-enrich-policy"
+        assert str(runner.EnrichPolicy()) == "enrich-policy"

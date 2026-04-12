@@ -108,7 +108,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.RunUntil, Retry(RunUntil()), async_runner=True)
-    register_runner(track.OperationType.CreateEnrichPolicy, Retry(CreateEnrichPolicy()), async_runner=True)
+    register_runner(track.OperationType.EnrichPolicy, Retry(EnrichPolicy()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -3388,7 +3388,7 @@ class RunUntil(Runner):
         return "run-until"
 
 
-class CreateEnrichPolicy(Runner):
+class EnrichPolicy(Runner):
 
     async def _delete_enrich_policy(self, es, policy_data):
         reqs = []
@@ -3432,4 +3432,4 @@ class CreateEnrichPolicy(Runner):
         }
 
     def __str__(self) -> str:
-        return "create-enrich-policy"
+        return "enrich-policy"
