@@ -42,12 +42,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.8.22 /uv /uvx /bin/
 
 USER 1000
 
-COPY Makefile /rally/
-COPY README.md /rally/
-COPY .ci/variables.json /rally/.ci/
-COPY esrally/ /rally/esrally/
-COPY pyproject.toml /rally/
-COPY uv.lock /rally/
+COPY --chown=1000:0 Makefile /rally/
+COPY --chown=1000:0 README.md /rally/
+COPY --chown=1000:0 .ci/variables.json /rally/.ci/
+COPY --chown=1000:0 esrally/ /rally/esrally/
+COPY --chown=1000:0 pyproject.toml /rally/
+COPY --chown=1000:0 uv.lock /rally/
 
 ENV VIRTUAL_ENV=/rally/venv
 ENV PATH=/rally/venv/bin:$PATH
@@ -56,6 +56,7 @@ ENV UV_PROJECT_ENVIRONMENT=/rally/venv
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${RALLY_VERSION}
 RUN make install
 
 LABEL org.label-schema.schema-version="1.0" \
