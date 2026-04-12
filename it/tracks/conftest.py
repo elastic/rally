@@ -25,20 +25,20 @@ parent conftest modules are skipped.
 This module adds CLI/env controls for track races (ES versions, timeouts, skips,
 track-name filter) and stashes ``race_timeout_s`` after collection: total budget
 minutes × 60 / ``N``, times the pytest-xdist worker count when ``-n`` is used.
-Here ``N`` is the count of collected ``test_race_with_track`` nodes after ``-k``
+Here ``N`` is the count of collected ``test_race`` nodes after ``-k``
 and track-name deselection, **excluding** nodes that would ``pytest.skip`` for
-``skip_reason_by_es_version`` unless skip-xfail is off (``--it-skip-xfail`` passed, or
+``TrackCase.expect_failure`` unless skip-xfail is off (``--it-skip-xfail`` passed, or
 ``IT_SKIP_XFAIL`` parsed as false; see ``pytest_collection_finish``).
 
-Each ``test_race_with_track`` node sets ``COMPOSE_PROJECT_NAME`` from its pytest
+Each ``test_race`` node sets ``COMPOSE_PROJECT_NAME`` from its pytest
 nodeid (Docker-safe) and host logs under ``logs/…`` (see README). While ``es01`` is up, a background
 ``docker compose logs -f`` process appends merged container output to ``containers.log`` in that directory.
 When the worker count does not exceed the
 number of configured ES versions, race tests get ``xdist_group`` per version so
 ``loadgroup`` keeps one version lane per worker; otherwise marks are omitted so
-extra workers are not idle. ``pytest.ini`` defaults to ``-n auto`` and ``--dist loadgroup``; the
-``pytest_xdist_auto_num_workers`` hook maps ``auto`` to the number of configured
-ES versions (see README).
+extra workers are not idle. ``pytest.ini`` defaults to ``-n auto`` and ``--dist loadgroup``;
+``pytest_xdist_auto_num_workers`` maps ``auto`` to the number of configured ES versions (see README).
+pytest-xdist is required for these tests.
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         dest="it_skip_xfail_applies",
         default=True,
         help=(
-            "Default: version-based pytest skips from TrackCase.skip_reason_by_es_version apply. "
+            "Default: version-based pytest skips when TrackCase.expect_failure matches. "
             "Pass --it-skip-xfail to disable those skips and run all track/version combinations "
             "(same as IT_SKIP_XFAIL parsed false by convert.to_bool). Name is inverted: the flag "
             "turns skip-xfail off."
@@ -109,27 +109,27 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-@pytest.hookimpl(tryfirst=True)
-def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
-    """Spawn one pytest-xdist worker per configured Elasticsearch version for ``-n auto``."""
-    return helpers.es_version_worker_count(config)
-
-
 def pytest_configure(config: pytest.Config) -> None:
     """Resolve ES version list once and stash for ``pytest_generate_tests``."""
     cli_es = config.getoption("--it-tracks-es-versions")
     config.stash[_IT_TRACKS_ES_VERSIONS_KEY] = helpers.resolve_es_versions(cli_es)
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
+    """Spawn one pytest-xdist worker per configured Elasticsearch version for ``-n auto``."""
+    return helpers.es_version_worker_count(config)
+
+
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    """Parametrize the ``elasticsearch`` fixture indirectly for ``test_race_with_track`` only."""
-    if "elasticsearch" not in metafunc.fixturenames:
+    """Parametrize the ``elasticsearch_version`` fixture indirectly for ``test_race`` only."""
+    if "elasticsearch_version" not in metafunc.fixturenames:
         return
-    if metafunc.definition.name != "test_race_with_track":
+    if metafunc.definition.name != "test_race":
         return
     versions = metafunc.config.stash[_IT_TRACKS_ES_VERSIONS_KEY]
     metafunc.parametrize(
-        "elasticsearch",
+        "elasticsearch_version",
         versions,
         indirect=True,
         ids=lambda v: f"es_{v}",
@@ -138,7 +138,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Deselect ``test_race_with_track`` nodes by track name; optionally add xdist groups per ES version.
+    """Deselect ``test_race`` nodes by track name; optionally add xdist groups per ES version.
 
     ``tryfirst=True`` ensures ``xdist_group`` marks exist before pytest-xdist's worker
     ``pytest_collection_modifyitems`` (see ``xdist.remote.WorkerInteractor``): that hook
@@ -155,11 +155,14 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
         kept: list[pytest.Item] = []
         deselected: list[pytest.Item] = []
         for item in items:
-            if "test_race_with_track" not in item.nodeid:
+            if "test_race" not in item.nodeid:
                 kept.append(item)
                 continue
             try:
-                params = item.callspec.params
+                callspec = getattr(item, "callspec", None)
+                if callspec is None:
+                    raise AttributeError("no callspec")
+                params = callspec.params
                 case = params["case"]
                 name = case.track_name
             except (AttributeError, KeyError, ValueError):
@@ -176,10 +179,13 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
     xdist_group = getattr(pytest.mark, "xdist_group", None)
     if xdist_group is not None and helpers.xdist_group_by_es_version(config):
         for item in items:
-            if "test_race_with_track" not in item.nodeid:
+            if "test_race" not in item.nodeid:
                 continue
             try:
-                es_version = item.callspec.params["elasticsearch"]
+                callspec = getattr(item, "callspec", None)
+                if callspec is None:
+                    raise AttributeError("no callspec")
+                es_version = callspec.params["elasticsearch_version"]
             except (AttributeError, KeyError, ValueError):
                 continue
             group_id = "".join(c if c.isalnum() or c in "._-" else "_" for c in str(es_version))
@@ -189,9 +195,9 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
 def pytest_collection_finish(session: pytest.Session) -> None:
     """Compute per-race timeout from global ``N``, then scale by xdist worker count.
 
-    ``N`` counts collected ``test_race_with_track`` items after other deselection, but
-    omits items that would skip for ``TrackCase.skip_reason_by_es_version`` (ordered prefix
-    pairs; same rule as ``race_test.test_race_with_track``) at the active ES version when
+    ``N`` counts collected ``test_race`` items after other deselection, but
+    omits items that would skip for ``TrackCase.expect_failure`` (prefix match; same rule
+    as ``race_test.test_race``) at the active ES version when
     skip-xfail applies. If
     ``callspec`` cannot be read, the item still counts (conservative budget).
 
@@ -199,20 +205,23 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     ``pytest_configure_node``. Workers prefer ``workerinput['it_tracks_race_timeout_s']``
     when set so the timeout matches the controller's global ``N``.
     """
-    race_items = [i for i in session.items if "test_race_with_track" in i.nodeid]
+    race_items = [i for i in session.items if "test_race" in i.nodeid]
     skip_xfail_applies = helpers.it_skip_xfail_applies(session.config)
     n = 0
     for item in race_items:
         try:
-            params = item.callspec.params
+            callspec = getattr(item, "callspec", None)
+            if callspec is None:
+                raise AttributeError("no callspec")
+            params = callspec.params
             case = params["case"]
-            es_version = params["elasticsearch"]
+            es_version = params["elasticsearch_version"]
         except (AttributeError, KeyError, ValueError):
             n += 1
             continue
         if helpers.race_item_counts_toward_timeout_budget(
             skip_xfail_applies=skip_xfail_applies,
-            skip_reason_by_es_version=case.skip_reason_by_es_version,
+            expect_failure=case.expect_failure,
             es_version=es_version,
         ):
             n += 1
@@ -257,8 +266,8 @@ _LOG_FOLLOW_KILL_TIMEOUT_S = 5.0
 
 
 @pytest.fixture(autouse=True)
-def it_tracks_compose_logs_follow(request: pytest.FixtureRequest, elasticsearch: object) -> Generator[None, None, None]:
-    """Background ``docker compose logs -f`` into ``containers.log``; stopped before ``elasticsearch`` teardown."""
+def it_tracks_compose_logs_follow(request: pytest.FixtureRequest, elasticsearch_version: object) -> Generator[None, None, None]:
+    """Background ``docker compose logs -f`` into ``containers.log``; stopped before ``elasticsearch_version`` teardown."""
     dest = helpers.host_log_dir_for_nodeid(helpers.log_root(), request.node.nodeid) / "containers.log"
     proc, log_f = compose.spawn_compose_logs_follow(dest, cfg=compose.ComposeConfig())
     try:
@@ -304,7 +313,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     Under pytest-xdist, only **workers** run ``docker compose down`` here; the controller must not run it
     while workers still hold containers. Each test sets ``COMPOSE_PROJECT_NAME`` from its nodeid; this hook
     tears down the **last** project name left in the worker env (per-test teardown also runs
-    ``teardown_project`` in the ``elasticsearch`` fixture).
+    ``teardown_project`` in the ``elasticsearch_version`` fixture).
     """
     wi = getattr(session.config, "workerinput", None)
     opt = getattr(session.config, "option", None)
@@ -319,5 +328,5 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
 
 @pytest.fixture(scope="session")
 def race_timeout_s(request: pytest.FixtureRequest) -> float:
-    """Per ``test_race_with_track`` subprocess timeout (seconds), from stash after collection."""
+    """Per ``test_race`` subprocess timeout (seconds), from stash after collection."""
     return request.config.stash[_IT_TRACKS_RACE_TIMEOUT_S_KEY]

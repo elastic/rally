@@ -1,6 +1,6 @@
 # Track race integration test — execution findings
 
-This note records **issues observed** while running the Docker-based track races (`test_race_with_track` in [`race_test.py`](race_test.py), often shown in logs as `it/tracks_test.py` depending on layout). Each item is tied to **track name** and **Elasticsearch distribution version** (`ES_VERSION` / `es_version_*` in pytest ids).
+This note records **issues observed** while running the Docker-based track races (`test_race` in [`race_test.py`](race_test.py), often shown in logs as `it/tracks_test.py` depending on layout). Each item is tied to **track name** and **Elasticsearch distribution version** (`ES_VERSION` / `es_version_*` in pytest ids).
 
 **Elasticsearch versions under test** (defaults: [`helpers.DEFAULT_IT_TRACKS_ES_VERSIONS`](helpers.py), used by `race_test.py`): **8.19.14**, **9.3.3**. Older captures in this file reference **8.19.13** / **9.2.7**.
 
@@ -188,6 +188,10 @@ Compose stack uses **basic** license and **ML disabled** in image config; the tr
 | **Image** | IT races: [`it/tracks/Dockerfile`](Dockerfile) (track-dep build flags + venv **`pytrec_eval` / `numpy`**). Upstream dev image: [`docker/Dockerfiles/dev/Dockerfile`](../../docker/Dockerfiles/dev/Dockerfile). |
 | **Command** | Typical local invocation: `make test ARGS='it/tracks/... -o log_cli=true --log-cli-level=DEBUG'` (or equivalent `pytest` on `it/tracks/`). |
 
+### Expected failures in `race_test.py` (`ExpectCommandFailure`)
+
+Known-broken track/version combinations are recorded in [`race_test.py`](race_test.py) by setting `TrackCase.expect_failure` to `helpers.ExpectCommandFailure(...)` (`returncode`, `stdout`, `reason`, optional `es_version_prefix` defaulting to `""`) when the parametrized ES version matches the prefix; other tracks keep the default `expect_failure` of `None` in `race_test.py`. Default CI/local runs use **skip-xfail on**, so those nodes `pytest.skip` before `rally race`. With **skip-xfail off** (`IT_SKIP_XFAIL=0` or `--it-skip-xfail`), the race runs and a matching subprocess failure becomes `pytest.xfail`. If a `stdout` pattern is too weak or the return code wrong, run **serially** (`pytest it/tracks/ … -n 0`) with skip-xfail off, read the real exit code and logs, then tighten the spec (see [`README.md`](README.md)).
+
 ---
 
 ## Revision history
@@ -196,3 +200,4 @@ Compose stack uses **basic** license and **ML disabled** in image config; the tr
 - **Update (mid-run):** Partial log: extra **9.2.7** failures on MSMARCO tracks (pip), timeouts on **`big5` / `openai_vector` / `k8s_metrics`**, etc.
 - **Update (run completed):** Final **`pytest`** result **14 failed, 62 passed** in **~4103 s**; full **FAILED** matrix added; new **§7** for **`has_privileges*`** (Netty `worker_count`) and **§8** for other exit-64 cases (**`wiki_en_cohere_vector_int8`**, **`esql`**, **`big5` @ 8.19.13**).
 - **Update (2026-04-10):** After terminal **`make it_tracks`** with `IT_TRACKS_NAME='msmarco-passage-ranking,msmarco-v2-vector,search/mteb/dbpedia'` finished (**6 passed**, **~1239 s**, exit **0**), added **Recent focused run** table and aligned default ES wording with [`helpers.py`](helpers.py) (**8.19.14** / **9.3.3**).
+- **Update (2026-04-10):** Documented **`ExpectCommandFailure`** / **`expect_failure`** (replace prior skip-only list); serial discovery workflow for `returncode` / `stdout` when tightening specs.

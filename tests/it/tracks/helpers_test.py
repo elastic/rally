@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 import re
 import stat
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -121,26 +122,52 @@ def test_it_skip_xfail_applies_invalid_env_raises(case: ItSkipXfailInvalidEnvCas
         helpers.it_skip_xfail_applies(cfg)
 
 
+def _xfail_spec(prefix: str, reason: str) -> helpers.ExpectCommandFailure:
+    return helpers.ExpectCommandFailure(
+        returncode=64,
+        stdout="msg",
+        reason=reason,
+        es_version_prefix=prefix,
+    )
+
+
 @pytest.mark.parametrize(
-    ("entries", "es_version", "expect_reason"),
+    ("spec", "es_version", "expect_reason"),
     [
         (None, "8.19.14", None),
-        ([], "9.3.3", None),
-        ([("8.", "eight")], "8.19.14", "eight"),
-        ([("8.", "eight")], "9.3.3", None),
-        ([("9.", "nine")], "9.3.3", "nine"),
-        ([("", "all")], "8.19.14", "all"),
-        ([("8.", "specific"), ("", "fallback")], "8.19.14", "specific"),
-        ([("8.", "specific"), ("", "fallback")], "9.3.3", "fallback"),
-        ([("", "fallback"), ("8.", "specific")], "8.19.14", "fallback"),
+        (_xfail_spec("8.", "eight"), "8.19.14", "eight"),
+        (_xfail_spec("8.", "eight"), "9.3.3", None),
+        (_xfail_spec("9.", "nine"), "9.3.3", "nine"),
+        (_xfail_spec("", "all"), "8.19.14", "all"),
+        (_xfail_spec("", "all"), "9.3.3", "all"),
     ],
 )
-def test_it_tracks_skip_reason_for_entries(
-    entries: list[tuple[str, str]] | None,
+def test_expected_xfail_for_es_version(
+    spec: helpers.ExpectCommandFailure | None,
     es_version: str,
     expect_reason: str | None,
 ) -> None:
-    assert helpers.skip_reason_for_entries(entries, es_version) == expect_reason
+    got = helpers.expected_xfail_for_es_version(spec, es_version)
+    if expect_reason is None:
+        assert got is None
+    else:
+        assert got is not None
+        assert got.reason == expect_reason
+
+
+def test_expect_command_failure_fields_and_version_prefix() -> None:
+    spec = helpers.ExpectCommandFailure(
+        returncode=3,
+        stdout="needle",
+        reason="because",
+        es_version_prefix="9.",
+    )
+    assert spec.returncode == 3
+    assert spec.stdout == "needle"
+    assert spec.reason == "because"
+    assert spec.es_version_prefix == "9."
+    assert helpers.expected_xfail_for_es_version(spec, "9.3.3") is spec
+    assert helpers.expected_xfail_for_es_version(spec, "8.0.0") is None
 
 
 def test_total_timeout_minutes_cli_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -281,44 +308,49 @@ def test_it_tracks_es_version_worker_count_without_getoption_uses_env(
     assert helpers.es_version_worker_count(SimpleNamespace()) == _LEN_DEFAULT_ES_VERSIONS
 
 
+def _budget_spec(prefix: str, reason: str = "r") -> helpers.ExpectCommandFailure:
+    return helpers.ExpectCommandFailure(
+        returncode=64,
+        stdout="m",
+        reason=reason,
+        es_version_prefix=prefix,
+    )
+
+
 @pytest.mark.parametrize(
-    ("skip_xfail_applies", "skip_entries", "es_version", "expect"),
+    ("skip_xfail_applies", "failure_spec", "es_version", "expect"),
     [
-        (False, [("8", "broken")], "8.19.14", True),
+        (False, _budget_spec("8"), "8.19.14", True),
         (False, None, "8.19.14", True),
         (True, None, "8.19.14", True),
-        (True, [], "8.19.14", True),
-        (True, [("8", "skip me")], "8.19.14", False),
-        (True, [("8", "")], "8.19.14", False),
-        (True, [("8", "skip me")], "9.3.3", True),
-        (True, [("9", "other")], "8.19.14", True),
-        (True, [("8.", "skip eight")], "8.19.14", False),
-        (True, [("8.", "skip eight")], "9.3.3", True),
-        (True, [("9.", "nine")], "9.3.3", False),
-        (True, [("", "all")], "8.19.14", False),
-        (True, [("", "all")], "9.3.3", False),
-        (True, [("8.", "specific"), ("", "fallback")], "8.19.14", False),
-        (True, [("8.", "specific"), ("", "fallback")], "9.3.3", False),
-        (True, [("", "fallback"), ("8.", "specific")], "8.19.14", False),
+        (True, _budget_spec("8", "skip me"), "8.19.14", False),
+        (True, _budget_spec("8", ""), "8.19.14", False),
+        (True, _budget_spec("8", "skip me"), "9.3.3", True),
+        (True, _budget_spec("9", "other"), "8.19.14", True),
+        (True, _budget_spec("8.", "skip eight"), "8.19.14", False),
+        (True, _budget_spec("8.", "skip eight"), "9.3.3", True),
+        (True, _budget_spec("9.", "nine"), "9.3.3", False),
+        (True, _budget_spec("", "all"), "8.19.14", False),
+        (True, _budget_spec("", "all"), "9.3.3", False),
     ],
 )
 def test_race_item_counts_toward_timeout_budget(
     skip_xfail_applies: bool,
-    skip_entries: list[tuple[str, str]] | None,
+    failure_spec: helpers.ExpectCommandFailure | None,
     es_version: str,
     expect: bool,
 ) -> None:
     assert (
         helpers.race_item_counts_toward_timeout_budget(
             skip_xfail_applies=skip_xfail_applies,
-            skip_reason_by_es_version=skip_entries,
+            expect_failure=failure_spec,
             es_version=es_version,
         )
         is expect
     )
 
 
-def test_it_tracks_log_root_from_env(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_it_tracks_log_root_from_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = tmp_path / "lr"
     base.mkdir()
     monkeypatch.setenv("IT_TRACKS_LOG_ROOT", str(base))
@@ -330,29 +362,29 @@ def test_it_tracks_log_root_default_name_is_logs(monkeypatch: pytest.MonkeyPatch
     assert helpers.log_root().name == "logs"
 
 
-def test_it_tracks_host_log_dir_for_nodeid_mirrors_pytest_nodeid(tmp_path) -> None:
+def test_it_tracks_host_log_dir_for_nodeid_mirrors_pytest_nodeid(tmp_path: Path) -> None:
     root = tmp_path / "logs"
     root.mkdir()
-    nodeid = "it/tracks/race_test.py::test_race_with_track[es_8.19.14-elastic_logs]"
+    nodeid = "it/tracks/race_test.py::test_race[es_8.19.14-elastic_logs]"
     got = helpers.host_log_dir_for_nodeid(root, nodeid)
-    assert got == root / "it" / "tracks" / "race_test.py" / "test_race_with_track[es_8.19.14-elastic_logs]"
+    assert got == root / "it" / "tracks" / "race_test.py" / "test_race[es_8.19.14-elastic_logs]"
 
 
-def test_it_tracks_host_log_dir_short_nodeid_gets_it_tracks_prefix(tmp_path) -> None:
+def test_it_tracks_host_log_dir_short_nodeid_gets_it_tracks_prefix(tmp_path: Path) -> None:
     root = tmp_path / "logs"
     root.mkdir()
-    nodeid = "race_test.py::test_race_with_track[es_9.3.3-geonames]"
+    nodeid = "race_test.py::test_race[es_9.3.3-geonames]"
     got = helpers.host_log_dir_for_nodeid(root, nodeid)
-    assert got == root / "it" / "tracks" / "race_test.py" / "test_race_with_track[es_9.3.3-geonames]"
+    assert got == root / "it" / "tracks" / "race_test.py" / "test_race[es_9.3.3-geonames]"
 
 
-def test_it_tracks_host_log_dir_without_double_colon(tmp_path) -> None:
+def test_it_tracks_host_log_dir_without_double_colon(tmp_path: Path) -> None:
     root = tmp_path / "logs"
     root.mkdir()
     assert helpers.host_log_dir_for_nodeid(root, "single/id") == root / "single" / "id"
 
 
-def test_prepare_it_tracks_compose_bind_mount_dirs(tmp_path) -> None:
+def test_prepare_it_tracks_compose_bind_mount_dirs(tmp_path: Path) -> None:
     helpers.prepare_compose_bind_mount_dirs(tmp_path)
     for name in ("es01", "rally"):
         d = tmp_path / name
@@ -361,7 +393,7 @@ def test_prepare_it_tracks_compose_bind_mount_dirs(tmp_path) -> None:
 
 
 def test_compose_project_name_for_nodeid_stable_slug() -> None:
-    nodeid = "it/tracks/race_test.py::test_race_with_track[es_8.19.14-elastic_logs]"
+    nodeid = "it/tracks/race_test.py::test_race[es_8.19.14-elastic_logs]"
     a = helpers.compose_project_name_for_nodeid(nodeid)
     b = helpers.compose_project_name_for_nodeid(nodeid)
     assert a == b

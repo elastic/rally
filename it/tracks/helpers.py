@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""Pure helpers for ``it/tracks`` pytest options (no pytest imports)."""
+"""Helpers for ``it/tracks`` pytest options and race-test failure handling."""
 
 from __future__ import annotations
 
@@ -23,14 +23,27 @@ import hashlib
 import os
 import re
 import stat
+import subprocess
+from collections.abc import Generator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
+
+import pytest
 
 from esrally.paths import rally_root
-from esrally.utils import convert
+from esrally.utils import compose, convert
 
 # Default Elasticsearch distribution versions for track race IT (Docker compose es01 image tag).
 # Keep in sync with the es-version matrix in .github/workflows/ci.yml (job it-tracks-race).
 DEFAULT_IT_TRACKS_ES_VERSIONS: list[str] = ["8.19.14", "9.3.3"]
+
+
+class PytestConfig(Protocol):
+    """Narrow config surface for helpers (``pytest.Config`` satisfies this structurally)."""
+
+    def getoption(self, name: str, default: object = None) -> object: ...
 
 
 def parse_es_versions_csv(raw: str | None) -> list[str]:
@@ -65,8 +78,24 @@ def resolve_track_name_patterns(cli_value: str | None, env_value: str | None) ->
     return patterns or None
 
 
-def it_skip_xfail_applies(config: object) -> bool:
-    """True when ``TrackCase`` per-version ``pytest.skip`` reasons apply for this run.
+@dataclass(frozen=True)
+class ExpectCommandFailure:
+    """Expected command failure for a track race when the ES version matches ``es_version_prefix``.
+
+    ``es_version_prefix`` defaults to ``""`` (match every version).
+
+    When skip-xfail is off, ``stdout`` is matched as a substring of the **decoded**
+    combined stdout from the race subprocess (see ``esrally.utils.compose.decode``).
+    """
+
+    returncode: int
+    stdout: str
+    reason: str
+    es_version_prefix: str = ""
+
+
+def it_skip_xfail_applies(config: PytestConfig) -> bool:
+    """True when a matching ``TrackCase.expect_failure`` policy triggers ``pytest.skip`` before the race.
 
     **Default:** skip-xfail behavior is **on** (omit ``--it-skip-xfail`` and leave ``IT_SKIP_XFAIL``
     unset or empty).
@@ -88,17 +117,57 @@ def it_skip_xfail_applies(config: object) -> bool:
     return convert.to_bool(raw)
 
 
-def skip_reason_for_entries(
-    entries: list[tuple[str, str]] | None,
+def expected_xfail_for_es_version(
+    spec: ExpectCommandFailure | None,
     es_version: str,
-) -> str | None:
-    """First skip message whose prefix matches ``es_version``, or ``None`` if the node would run."""
-    if not entries:
+) -> ExpectCommandFailure | None:
+    """Return ``spec`` when its ``es_version_prefix`` matches ``es_version``, else ``None``."""
+    if spec is None:
         return None
-    for prefix, reason in entries:
-        if es_version.startswith(prefix):
-            return reason
+    if es_version.startswith(spec.es_version_prefix):
+        return spec
     return None
+
+
+@contextmanager
+def expect_command_failure(
+    policy: ExpectCommandFailure | None,
+    es_version: str,
+    config: PytestConfig,
+) -> Generator[None, None, None]:
+    """Context manager around ``rally race``: no-op when ``policy`` is ``None``.
+
+    Otherwise skip / xfail-on-match for ``policy`` at ``es_version``:
+    uses ``expected_xfail_for_es_version`` and ``it_skip_xfail_applies`` for the skip decision;
+    subprocess matching uses decoded combined stdout (``esrally.utils.compose.decode``).
+    """
+    # Case 1: no expected failure for this track — run the race with no skip/xfail handling.
+    if policy is None:
+        yield
+        return
+    # Policy applies only when ``es_version`` matches ``policy.es_version_prefix`` (empty prefix = all versions).
+    spec = expected_xfail_for_es_version(policy, es_version)
+    skip_xfail_applies = it_skip_xfail_applies(config)
+
+    # Case 2: default "skip-xfail" mode — skip the test before ``rally race`` when this version matches the policy.
+    if skip_xfail_applies and spec is not None:
+        pytest.skip(spec.reason)
+
+    # When skip-xfail is on, we never translate failures (only skip above). When it is off, we may xfail on match.
+    xfail_spec = spec if not skip_xfail_applies else None
+    # Case 3: run the race with no xfail translation — either the policy does not apply to this ``es_version``
+    # (``spec`` is None), or skip-xfail is on (xfail is only armed when skip-xfail is off).
+    if xfail_spec is None:
+        yield
+        return
+    # Case 4: skip-xfail off and version matches — run the race; a matching ``CalledProcessError`` becomes xfail, else re-raise.
+    try:
+        yield
+    except subprocess.CalledProcessError as e:
+        decoded = compose.decode(e.stdout)
+        if e.returncode == xfail_spec.returncode and xfail_spec.stdout in decoded:
+            pytest.xfail(xfail_spec.reason)
+        raise
 
 
 def total_timeout_minutes(cli_minutes: int | None, env_name: str = "IT_TRACKS_TIMEOUT_MINUTES", default: int = 120) -> int:
@@ -114,19 +183,19 @@ def total_timeout_minutes(cli_minutes: int | None, env_name: str = "IT_TRACKS_TI
 def race_item_counts_toward_timeout_budget(
     *,
     skip_xfail_applies: bool,
-    skip_reason_by_es_version: list[tuple[str, str]] | None,
+    expect_failure: ExpectCommandFailure | None,
     es_version: str,
 ) -> bool:
-    """Whether a parametrized ``test_race_with_track`` node counts toward timeout divisor ``N``.
+    """Whether a parametrized ``test_race`` node counts toward timeout divisor ``N``.
 
     When ``skip_xfail_applies`` is false (``--it-skip-xfail`` passed, or ``IT_SKIP_XFAIL`` parsed
     as false), every collected race node counts. Otherwise, nodes that would ``pytest.skip`` for
-    the active ES version do not count—matching ``race_test.test_race_with_track`` (ordered
-    ``(prefix, reason)`` pairs; first ``es_version.startswith(prefix)`` wins).
+    the active ES version (``expect_failure`` is set and its prefix matches) do not count—matching
+    ``race_test.test_race``.
     """
     if not skip_xfail_applies:
         return True
-    return skip_reason_for_entries(skip_reason_by_es_version, es_version) is None
+    return expected_xfail_for_es_version(expect_failure, es_version) is None
 
 
 def es_version_worker_count(config: object) -> int:
@@ -217,9 +286,9 @@ def host_log_dir_for_nodeid(log_root: Path, nodeid: str) -> Path:
     volume specs.
 
     When the file segment is only a basename (typical under ``it/tracks/pytest.ini`` confcutdir),
-    e.g. ``race_test.py::test_race_with_track[…]``, the directory is normalized under
+    e.g. ``race_test.py::test_race[…]``, the directory is normalized under
     ``…/logs/it/tracks/race_test.py/…``. A full path such as
-    ``it/tracks/race_test.py::test_race_with_track[…]`` is left as-is under ``log_root``.
+    ``it/tracks/race_test.py::test_race[…]`` is left as-is under ``log_root``.
     """
     if "::" not in nodeid:
         return (log_root / nodeid).resolve()
