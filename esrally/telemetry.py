@@ -2172,6 +2172,9 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
                     },
                 },
             )
+        except elasticsearch.AuthorizationException:
+            self.logger.warning("Not authorized to retrieve ML bucket processing time (insufficient index privileges).")
+            return
         except elasticsearch.TransportError:
             self.logger.exception("Could not retrieve ML bucket processing time.")
             return
