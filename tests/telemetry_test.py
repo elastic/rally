@@ -4269,6 +4269,19 @@ class TestMlBucketProcessingTime:
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     @mock.patch("elasticsearch.Elasticsearch.search")
+    def test_authorization_error_does_not_store_metrics(self, search, metrics_store_put_doc):
+        search.side_effect = elasticsearch.AuthorizationException(meta=None, body=None, message="unit test error")  # type: ignore[arg-type]
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.MlBucketProcessingTime(elasticsearch.Elasticsearch, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        t.on_benchmark_stop()
+
+        assert metrics_store_put_doc.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    @mock.patch("elasticsearch.Elasticsearch.search")
     def test_empty_result_does_not_store_metrics(self, search, metrics_store_put_doc):
         search.return_value = {
             "aggregations": {
