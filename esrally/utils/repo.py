@@ -17,6 +17,7 @@
 
 import logging
 import os
+import string
 import sys
 
 from esrally import exceptions
@@ -137,6 +138,6 @@ class RallyRepository:
         # Full 40-char SHAs and non-hex strings (tags, etc.) use exact comparison.
         full_sha_length = 40
         min_short_sha_length = 7
-        if min_short_sha_length <= len(revision) < full_sha_length and all(c in "0123456789abcdef" for c in revision):
+        if min_short_sha_length <= len(revision) < full_sha_length and all(c in string.hexdigits for c in revision):
             return current_revision.startswith(revision)
         return current_revision == revision
