@@ -193,8 +193,14 @@ class BenchmarkCoordinator:
         # but there are rare cases (external pipeline and user did not specify the distribution version) where we need
         # to derive it ourselves. For source builds we always assume "main"
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
-            hosts = self.cfg.opts("client", "hosts").default
-            client_options = self.cfg.opts("client", "options").default
+            hosts_cfg = self.cfg.opts("client", "hosts")
+            options_cfg = self.cfg.opts("client", "options")
+            all_h = hosts_cfg.all_hosts
+            all_o = options_cfg.all_client_options if hasattr(options_cfg, "all_client_options") else {k: options_cfg[k] for k in all_h}
+            # Use "default" cluster if present, else first cluster (e.g. multi-cluster pipeline with named clusters)
+            first_key = next(iter(all_h)) if all_h else "default"
+            hosts = all_h.get("default", all_h[first_key])
+            client_options = all_o.get("default", all_o[first_key])
             (
                 distribution_flavor,
                 distribution_version,
@@ -275,7 +281,7 @@ class BenchmarkCoordinator:
         self.metrics_store.bulk_add(new_metrics)
         self.metrics_store.flush()
         if not self.cancelled and not self.error:
-            final_results = metrics.calculate_results(self.metrics_store, self.race)
+            final_results = metrics.calculate_results(self.metrics_store, self.race, self.cfg)
             self.race.add_results(final_results)
             self.race_store.store_race(self.race)
             metrics.results_store(self.cfg).store_results(self.race)
@@ -344,6 +350,32 @@ def benchmark_only(cfg: types.Config):
     return race(cfg, external=True)
 
 
+def multi_cluster(cfg: types.Config):
+    """
+    Runs one benchmark; each task/step runs against every cluster in
+    --target-hosts before advancing to the next task. Requires multiple
+    named clusters in --target-hosts (JSON format) with matching keys
+    in --client-options. Uses a single Rally process and actor system.
+    """
+    logger = logging.getLogger(__name__)
+    target_hosts = cfg.opts("client", "hosts")
+    cluster_names = list(target_hosts.all_hosts.keys())
+    if len(cluster_names) <= 1:
+        raise exceptions.SystemSetupError(
+            "The multi-cluster pipeline requires multiple named clusters in --target-hosts. "
+            "Specify a JSON object with more than one cluster (e.g. "
+            '--target-hosts=\'{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}\') '
+            "with matching keys in --client-options."
+        )
+    logger.info(
+        "Multi-cluster mode: each task will run against all clusters [%s] before the next task.",
+        ", ".join(cluster_names),
+    )
+    # Same as benchmark-only: no provisioning, external car. One race with full multi-cluster config.
+    cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
+    race(cfg, external=True)
+
+
 def docker(cfg: types.Config):
     set_default_hosts(cfg)
     return race(cfg, docker=True)
@@ -356,6 +388,12 @@ Pipeline(
 )
 
 Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results", benchmark_only)
+
+Pipeline(
+    "multi-cluster",
+    "Runs the benchmark against each cluster in --target-hosts (one full run per cluster).",
+    multi_cluster,
+)
 
 # Very experimental Docker pipeline. Should only be used with great care and is also not supported on all platforms.
 Pipeline("docker", "Runs a benchmark against the official Elasticsearch Docker container and reports results", docker, stable=False)
@@ -388,11 +426,11 @@ def run(cfg: types.Config):
 
     if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE":
         # in this case only benchmarking remote Elasticsearch clusters makes sense
-        if name != "benchmark-only":
+        if name not in ("benchmark-only", "multi-cluster"):
             raise exceptions.SystemSetupError(
-                "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
-                "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
-                "For more details read the docs for the benchmark-only pipeline in {}\n".format(doc_link("pipelines.html#benchmark-only"))
+                "Only the [benchmark-only] and [multi-cluster] pipelines are supported by the Rally Docker image.\n"
+                "Add --pipeline=benchmark-only or --pipeline=multi-cluster in your Rally arguments and try again.\n"
+                "For more details read the docs at {}\n".format(doc_link("pipelines.html"))
             )
 
     try:

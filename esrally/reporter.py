@@ -148,18 +148,35 @@ class SummaryReporter:
 
         metrics_table.extend(self._report_disk_usage_per_field(stats))
 
-        for record in stats.op_metrics:
-            task = record["task"]
-            metrics_table.extend(self._report_throughput(record, task))
-            metrics_table.extend(self._report_latency(record, task))
-            metrics_table.extend(self._report_service_time(record, task))
-            # this is mostly needed for debugging purposes but not so relevant to end users
-            if self.show_processing_time:
-                metrics_table.extend(self._report_processing_time(record, task))
-            metrics_table.extend(self._report_error_rate(record, task))
-            self.add_warnings(warnings, record, task)
+        cluster_names = getattr(stats, "cluster_names", None) or []
+        op_metrics_by_cluster = getattr(stats, "op_metrics_by_cluster", None) or {}
+        multi_cluster = bool(cluster_names and op_metrics_by_cluster)
 
-        self.write_report(metrics_table)
+        if multi_cluster:
+            metrics_table.extend(self._report_op_metrics_multi_cluster(stats, cluster_names, op_metrics_by_cluster, warnings))
+            # Pad 4-column rows (totals, gc, disk, etc.) to multi-cluster width
+            padded = []
+            for row in metrics_table:
+                if len(row) == 4:
+                    # [Metric, Task, Value, Unit] -> [Metric, Task, Value, "", "", ..., Unit]
+                    padded.append([row[0], row[1], row[2]] + [""] * (len(cluster_names) - 1) + [row[3]])
+                else:
+                    padded.append(row)
+            metrics_table = padded
+            headers = ["Metric", "Task"] + list(cluster_names) + ["Unit"]
+        else:
+            for record in stats.op_metrics:
+                task = record["task"]
+                metrics_table.extend(self._report_throughput(record, task))
+                metrics_table.extend(self._report_latency(record, task))
+                metrics_table.extend(self._report_service_time(record, task))
+                if self.show_processing_time:
+                    metrics_table.extend(self._report_processing_time(record, task))
+                metrics_table.extend(self._report_error_rate(record, task))
+                self.add_warnings(warnings, record, task)
+            headers = ["Metric", "Task", "Value", "Unit"]
+
+        self.write_report(metrics_table, headers=headers)
 
         if warnings:
             for warning in warnings:
@@ -178,16 +195,97 @@ class SummaryReporter:
             else:
                 warnings.append("No throughput metrics available for [%s]. Likely cause: The benchmark ended already during warmup." % op)
 
-    def write_report(self, metrics_table):
+    def write_report(self, metrics_table, headers=None):
+        if headers is None:
+            headers = ["Metric", "Task", "Value", "Unit"]
         write_single_report(
             self.report_file,
             self.report_format,
             self.cwd,
             self.numbers_align,
-            headers=["Metric", "Task", "Value", "Unit"],
+            headers=headers,
             data_plain=metrics_table,
             data_rich=metrics_table,
         )
+
+    def _report_op_metrics_multi_cluster(self, stats, cluster_names, op_metrics_by_cluster, warnings):
+        """Build op_metrics table rows with one column per cluster."""
+        # Collect task -> list of records (one per cluster, same index)
+        task_to_records = {}
+        for cn in cluster_names:
+            for record in op_metrics_by_cluster.get(cn, []):
+                task = record["task"]
+                if task not in task_to_records:
+                    task_to_records[task] = {c: None for c in cluster_names}
+                task_to_records[task][cn] = record
+        lines = []
+        for task, by_cluster in task_to_records.items():
+            # Throughput
+            for label, key in [
+                ("Min Throughput", "min"),
+                ("Mean Throughput", "mean"),
+                ("Median Throughput", "median"),
+                ("Max Throughput", "max"),
+            ]:
+
+                def _throughput(rec, k):
+                    return (rec.get("throughput") or {}).get(k) if rec else None
+
+                row = self._line_multi(
+                    label,
+                    task,
+                    [_throughput(by_cluster.get(cn), key) for cn in cluster_names],
+                    _throughput(by_cluster.get(cluster_names[0]), "unit") or "",
+                    lambda v: "%.2f" % v if v is not None else None,
+                )
+                if row:
+                    lines.append(row)
+            # Latency percentiles
+            for p in metrics.percentiles_for_sample_size(sys.maxsize):
+                pk = metrics.encode_float_key(p)
+                row = self._line_multi(
+                    "%sth percentile latency" % p,
+                    task,
+                    [(rec.get("latency") or {}).get(pk) if rec else None for rec in [by_cluster.get(cn) for cn in cluster_names]],
+                    "ms",
+                    lambda v: "%.2f" % v if v is not None else None,
+                )
+                if row:
+                    lines.append(row)
+            # Service time percentiles
+            for p in metrics.percentiles_for_sample_size(sys.maxsize):
+                pk = metrics.encode_float_key(p)
+                row = self._line_multi(
+                    "%sth percentile service time" % p,
+                    task,
+                    [(rec.get("service_time") or {}).get(pk) if rec else None for rec in [by_cluster.get(cn) for cn in cluster_names]],
+                    "ms",
+                    lambda v: "%.2f" % v if v is not None else None,
+                )
+                if row:
+                    lines.append(row)
+            # Error rate
+            row = self._line_multi(
+                "error rate",
+                task,
+                [rec.get("error_rate") if rec else None for rec in [by_cluster.get(cn) for cn in cluster_names]],
+                "%",
+                lambda v: "%.2f" % (v * 100.0) if v is not None else None,
+            )
+            if row:
+                lines.append(row)
+            # Warnings from first cluster
+            rec = by_cluster.get(cluster_names[0])
+            if rec:
+                self.add_warnings(warnings, rec, task)
+        return lines
+
+    def _line_multi(self, k, task, values_per_cluster, unit, converter=lambda x: x):
+        """One row: [Metric, Task, val_1, val_2, ..., Unit] for multi-cluster table."""
+        if not any(v is not None for v in values_per_cluster):
+            return []
+        converted = [converter(v) if v is not None else None for v in values_per_cluster]
+        return [k, task] + converted + [unit]
 
     def _report_throughput(self, values, task):
         throughput = values["throughput"]
