@@ -12,12 +12,16 @@ RUN for i in 1 2 3; do \
     done
 
 # pbzip2 doesn't have a package for wolfi, so we build it from source
-RUN cd /tmp && \
-  wget -q https://launchpad.net/pbzip2/1.1/1.1.13/+download/pbzip2-1.1.13.tar.gz && \
-  tar -xzf pbzip2-1.1.13.tar.gz && \
-  cd pbzip2-1.1.13/ && \
-  make install && \
-  rm -r /tmp/pbzip2-1.1.13/
+RUN for i in 1 2 3; do \
+      cd /tmp && \
+      rm -f pbzip2-1.1.13.tar.gz && \
+      wget -q https://launchpad.net/pbzip2/1.1/1.1.13/+download/pbzip2-1.1.13.tar.gz && \
+      tar -xzf pbzip2-1.1.13.tar.gz && \
+      cd pbzip2-1.1.13/ && \
+      make install && \
+      rm -r /tmp/pbzip2-1.1.13/ && \
+      break || sleep 5; \
+    done
 
 RUN addgroup --gid 1000 rally && \
     adduser --system --home /rally --ingroup rally --no-create-home --uid 1000 --shell /bin/bash rally

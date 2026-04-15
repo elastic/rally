@@ -114,6 +114,21 @@ class StaticStopWatch:
         return 0
 
 
+class TestTrackParamsForReporting:
+    def test_empty(self):
+        assert metrics.track_params_for_reporting({}) == {}
+        assert metrics.track_params_for_reporting(None) == {}
+
+    def test_redacts_secret_prefix_values(self):
+        params = {"clients": 8, "secret_api_key": "x", "secret_": "edge", "SECRET_not_filtered": 1}
+        assert metrics.track_params_for_reporting(params) == {
+            "clients": 8,
+            "secret_api_key": metrics.SECRET_TRACK_PARAM_PLACEHOLDER,
+            "secret_": metrics.SECRET_TRACK_PARAM_PLACEHOLDER,
+            "SECRET_not_filtered": 1,
+        }
+
+
 class TestEsClient:
     class NodeMock:
         def __init__(self, host, port):
@@ -1091,6 +1106,39 @@ class TestEsMetricsStore:
         self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(create=False, race_timestamp=self.RACE_TIMESTAMP)
         self.es_mock.exists.assert_called_once_with(index="rally-metrics-2016-01.new")
         self.es_mock.refresh.assert_called_once_with(index="rally-metrics-2016-01.new")
+  
+    def test_put_value_redacts_secret_prefixed_track_param_values(self):
+        self.cfg.add(config.Scope.application, "track", "params", {"shard-count": 3, "secret_token": "nope"})
+        self.metrics_store = metrics.EsMetricsStore(
+            self.cfg, client_factory_class=MockClientFactory, index_template_provider_class=DummyIndexTemplateProvider, clock=StaticClock
+        )
+        self.es_mock = self.metrics_store._client
+        self.es_mock.exists.return_value = False
+        self.es_mock.template_exists.return_value = False
+        self.es_mock.get_template.return_value = mock.create_autospec(elastic_transport.ObjectApiResponse, body={"index_templates": []})
+        self.metrics_store.logger = mock.create_autospec(logging.Logger)
+
+        throughput = 5000
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+        self.metrics_store.put_value_cluster_level("indexing_throughput", throughput, "docs/s")
+        expected_doc = {
+            "@timestamp": StaticClock.NOW * 1000,
+            "race-id": self.RACE_ID,
+            "race-timestamp": "20160131T000000Z",
+            "relative-time": 0,
+            "environment": "unittest",
+            "sample-type": "normal",
+            "track": "test",
+            "track-params": {"shard-count": 3, "secret_token": metrics.SECRET_TRACK_PARAM_PLACEHOLDER},
+            "challenge": "append",
+            "car": "defaults",
+            "name": "indexing_throughput",
+            "value": throughput,
+            "unit": "docs/s",
+            "meta": {},
+        }
+        self.metrics_store.close()
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_put_value_without_meta_info(self, use_data_streams):
@@ -1963,6 +2011,45 @@ class TestEsRaceStore:
         )
         # index should still have been called only once (from the first store_race)
         es_mock.index.assert_called_once()
+
+    def test_store_race_redacts_secret_prefixed_track_param_values(self):
+        schedule = [track.Task("index #1", track.Operation("index", track.OperationType.Bulk))]
+
+        t = track.Track(
+            name="unittest",
+            indices=[track.Index(name="tests", types=["_doc"])],
+            challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
+        )
+
+        race = metrics.Race(
+            rally_version="0.4.4",
+            rally_revision="123abc",
+            environment_name="unittest",
+            race_id=self.RACE_ID,
+            race_timestamp=self.RACE_TIMESTAMP,
+            pipeline="from-sources",
+            user_tags={},
+            track=t,
+            track_params={"shard-count": 3, "secret_token": "hidden"},
+            challenge=t.default_challenge,
+            car="defaults",
+            car_params=None,
+            plugin_params=None,
+            track_revision=None,
+            team_revision=None,
+            distribution_version=None,
+            distribution_flavor=None,
+            revision=None,
+            results={},
+        )
+
+        self.race_store.store_race(race)
+
+        indexed = self.es_mock.index.call_args.kwargs["item"]
+        assert indexed["track-params"] == {
+            "shard-count": 3,
+            "secret_token": metrics.SECRET_TRACK_PARAM_PLACEHOLDER,
+        }
 
     @mock.patch("esrally.utils.console.println")
     def test_delete_race(self, console):
