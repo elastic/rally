@@ -319,7 +319,8 @@ class EsClientFactory:
 class EsStoreType(Enum):
     metric_name: str
     index_prefix: str
-    index_template_name: str
+    data_stream_template_name: str
+    date_based_template_name: str
     index_template_resource: str
     ilm_default_name: str
     ilm_default_resource: str
@@ -333,10 +334,11 @@ class EsStoreType(Enum):
         obj = object.__new__(cls)
         obj.metric_name = metric_name
         obj.index_prefix = f"rally-{obj.metric_name}-"
-        obj.index_template_name = f"rally-{obj.metric_name}-template-{version}"
         obj.index_template_resource = f"{obj.metric_name}-template"
         obj.ilm_default_name = f"{obj.index_prefix}ilm-default"
         obj.ilm_default_resource = "ilm-default"
+        obj.data_stream_template_name = f"rally-{obj.metric_name}-template-{version}"
+        obj.date_based_template_name = f"rally-{obj.metric_name}"
         obj.data_stream_version = version
         return obj
 
@@ -521,9 +523,9 @@ class IndexHandler:
         ), "Expected IndexTemplateProvider for date-based indices but got [%s]" % type(self._index_template_provider)
 
         _index_template = self._index_template_provider.get_template(self._es_store_type)
-        if create and self._client.index_template_exists(self._es_store_type.index_template_name):
+        if create and self._client.index_template_exists(self._es_store_type.date_based_template_name):
             old_template = None
-            for existing in self._client.get_template(self._es_store_type.index_template_name).body.get("index_templates", []):
+            for existing in self._client.get_template(self._es_store_type.date_based_template_name).body.get("index_templates", []):
                 old_template = existing.get("index_template", {}).get("template", {})
                 break
             new_template = json.loads(_index_template)["template"]
@@ -531,7 +533,7 @@ class IndexHandler:
             if not self._should_apply_update("index template", old_template, new_template):
                 return
 
-        self._client.put_template(self._es_store_type.index_template_name, _index_template)
+        self._client.put_template(self._es_store_type.date_based_template_name, _index_template)
 
     def _ensure_data_stream_template(self):
         assert isinstance(
@@ -550,15 +552,15 @@ class IndexHandler:
 
         new_template = json.loads(self._data_stream_template(component_names))
         old_template = None
-        if self._client.index_template_exists(self._es_store_type.index_template_name):
-            for existing in self._client.get_template(self._es_store_type.index_template_name).body.get("index_templates", []):
+        if self._client.index_template_exists(self._es_store_type.data_stream_template_name):
+            for existing in self._client.get_template(self._es_store_type.data_stream_template_name).body.get("index_templates", []):
                 old_template = existing.get("index_template", {})
                 break
 
         if not self._should_apply_update("index template", old_template, new_template):
             return
 
-        self._client.put_template(self._es_store_type.index_template_name, self._data_stream_template(component_names))
+        self._client.put_template(self._es_store_type.data_stream_template_name, self._data_stream_template(component_names))
 
     def _ensure_lifecycle_policy(self, name, policy):
         new_policy_body = json.loads(policy).get("policy", {})
@@ -1174,11 +1176,11 @@ class EsMetricsStore(MetricsStore):
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
         MetricsStore.open(self, race_id, race_timestamp, track_name, challenge_name, car_name, ctx, create)
-        self._index_handler.ensure_index_template(create=create, race_timestamp=race_timestamp)
+        self._index_handler.ensure_index_template(create=create, race_timestamp=self._race_timestamp)
 
         # Skip refresh when creating with data streams - the data stream won't exist until first write
         if not self._index_handler.use_data_streams:
-            index_name = self._index_handler.index_name(race_timestamp)
+            index_name = self._index_handler.index_name(self._race_timestamp)
             if create:
                 if not self._client.exists(index=index_name):
                     # Create the concrete index when writing to a date-based store, even if the template already existed.

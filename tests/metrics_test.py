@@ -852,8 +852,11 @@ class TestIndexHandler:
         expect_put_template: bool = True
         expect_get_template: bool = False
 
-    def _assert_index_template_calls(self, es_store_type, expect_get_template, expect_put_template):
-        index_template_name = es_store_type.index_template_name
+    def _assert_index_template_calls(self, use_data_streams, es_store_type, expect_get_template, expect_put_template):
+        if use_data_streams:
+            index_template_name = es_store_type.data_stream_template_name
+        else:
+            index_template_name = es_store_type.date_based_template_name
         self.client.index_template_exists.assert_called_once_with(index_template_name)
         if expect_get_template:
             self.client.get_template.assert_called_with(index_template_name)
@@ -952,6 +955,7 @@ class TestIndexHandler:
             self.client.put_component_template.assert_not_called()
 
         self._assert_index_template_calls(
+            True,
             case.es_store_type,
             expect_get_template=case.expect_get_template,
             expect_put_template=case.expect_put_template,
@@ -1000,6 +1004,7 @@ class TestIndexHandler:
         handler.ensure_index_template(create=case.create, race_timestamp=time.to_iso8601(self.RACE_TIMESTAMP))
 
         self._assert_index_template_calls(
+            False,
             case.es_store_type,
             expect_get_template=case.expect_get_template,
             expect_put_template=case.expect_put_template,
