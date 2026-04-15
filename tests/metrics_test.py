@@ -1066,7 +1066,7 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         self.metrics_store, self.es_mock = self._make_metrics_store(case.use_data_streams)
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=case.create)
         self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(
-            create=case.create, race_timestamp=self.RACE_TIMESTAMP
+            create=case.create, race_timestamp=time.to_iso8601(self.RACE_TIMESTAMP)
         )
         expected_index = self.metrics_store._index_handler.index_name(self.RACE_TIMESTAMP)
         if case.prefer_new_index_suffix:
@@ -1085,7 +1085,9 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
 
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=False)
 
-        self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(create=False, race_timestamp=self.RACE_TIMESTAMP)
+        self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(
+            create=False, race_timestamp=time.to_iso8601(self.RACE_TIMESTAMP)
+        )
         self.es_mock.exists.assert_called_once_with(index="rally-metrics-2016-01.new")
         self.es_mock.refresh.assert_called_once_with(index="rally-metrics-2016-01.new")
 
