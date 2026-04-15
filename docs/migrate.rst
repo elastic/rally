@@ -31,7 +31,7 @@ If you have existing ``rally-metrics-YYYY-MM``, ``rally-races-YYYY-MM``, or ``ra
 
 If your old `race` and `results` indices contain documents without ``@timestamp`` indexed by older Rally versions, you can populate it from the existing ``race-timestamp`` field using an update-by-query. The ``race-timestamp`` field is stored as ``basic_date_time_no_millis`` (e.g. ``20160421T042749Z``), while ``@timestamp`` expects ``epoch_millis``, so the script must parse and convert::
 
-    POST rally-races-*/_update_by_query
+    POST rally-races-2*/_update_by_query
     {
       "query": {
         "bool": {
@@ -57,7 +57,7 @@ Reindex the old indices into the target data stream. The ``op_type`` must be ``c
     POST _reindex
     {
       "source": {
-        "index": "rally-metrics-*"
+        "index": "rally-metrics-2*"
       },
       "dest": {
         "index": "rally-metrics-v1",
@@ -69,22 +69,22 @@ Repeat for races and results::
 
     POST _reindex
     {
-      "source": { "index": "rally-races-*" },
+      "source": { "index": "rally-races-2*" },
       "dest": { "index": "rally-races-v1", "op_type": "create" }
     }
 
     POST _reindex
     {
-      "source": { "index": "rally-results-*" },
+      "source": { "index": "rally-results-2*" },
       "dest": { "index": "rally-results-v1", "op_type": "create" }
     }
 
 **Step 3 — Verify and clean up**
 
-After reindexing, verify that the document counts match::
+After reindexing, verify that the data stream contains at least as many documents as the old indices::
 
     GET _cat/count/rally-metrics-v1
-    GET _cat/count/rally-metrics-*
+    GET _cat/count/rally-metrics-2*
 
 Once you are satisfied the data has been migrated, you can delete the old date-based indices::
 

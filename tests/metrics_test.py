@@ -712,38 +712,17 @@ class TestComponentTemplateProvider:
         custom_tmpl = json.loads(components[custom_key])
         assert custom_tmpl["template"] == {}
 
-    @dataclass
-    class ShardSettingsCase:
-        store_names: list[str]
-        number_of_shards: int | None = None
-        number_of_replicas: int | None = None
+    def test_shard_settings_ignored_for_component_templates(self):
+        provider = self._make_provider(number_of_shards=3, number_of_replicas=2)
 
-    @cases.cases(
-        both_specified=ShardSettingsCase(
-            store_names=["metrics", "races", "results"],
-            number_of_shards=random.randint(1, 100),
-            number_of_replicas=random.randint(0, 100),
-        ),
-        shards_only=ShardSettingsCase(store_names=["metrics", "races", "results"], number_of_shards=random.randint(1, 100)),
-        replicas_only=ShardSettingsCase(store_names=["metrics", "races", "results"], number_of_replicas=random.randint(0, 100)),
-    )
-    def test_shard_settings_propagate_to_component(self, case: ShardSettingsCase):
-        provider = self._make_provider(number_of_shards=case.number_of_shards, number_of_replicas=case.number_of_replicas)
-
-        for store_name in case.store_names:
+        for store_name in ["metrics", "races", "results"]:
             es_store_type = metrics.EsStoreType[store_name]
-            components = json.loads(getattr(provider, "get_template")(es_store_type))
+            components = json.loads(provider.get_template(es_store_type))
             versioned_name = f"{es_store_type.index_prefix}{es_store_type.data_stream_version}"
             idx_settings = json.loads(components[versioned_name])["template"]["settings"]["index"]
 
-            if case.number_of_shards is not None:
-                assert idx_settings["number_of_shards"] == case.number_of_shards
-            else:
-                assert "number_of_shards" not in idx_settings
-            if case.number_of_replicas is not None:
-                assert idx_settings["number_of_replicas"] == case.number_of_replicas
-            else:
-                assert "number_of_replicas" not in idx_settings
+            assert "number_of_shards" not in idx_settings
+            assert "number_of_replicas" not in idx_settings
 
     def test_annotations_template_is_inherited_from_base(self):
         provider = self._make_provider()
@@ -873,8 +852,8 @@ class TestIndexHandler:
         expect_put_template: bool = True
         expect_get_template: bool = False
 
-    def _assert_index_template_calls(self, es_store_type, use_data_streams, expect_get_template, expect_put_template):
-        index_template_name = f"{es_store_type.index_template_name}-ds" if use_data_streams else es_store_type.index_template_name
+    def _assert_index_template_calls(self, es_store_type, expect_get_template, expect_put_template):
+        index_template_name = es_store_type.index_template_name
         self.client.index_template_exists.assert_called_once_with(index_template_name)
         if expect_get_template:
             self.client.get_template.assert_called_with(index_template_name)
@@ -974,7 +953,6 @@ class TestIndexHandler:
 
         self._assert_index_template_calls(
             case.es_store_type,
-            use_data_streams=True,
             expect_get_template=case.expect_get_template,
             expect_put_template=case.expect_put_template,
         )
@@ -1023,13 +1001,12 @@ class TestIndexHandler:
 
         self._assert_index_template_calls(
             case.es_store_type,
-            use_data_streams=False,
             expect_get_template=case.expect_get_template,
             expect_put_template=case.expect_put_template,
         )
 
 
-class TestEsMetricsStore:
+class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
     RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
@@ -1106,17 +1083,10 @@ class TestEsMetricsStore:
         self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(create=False, race_timestamp=self.RACE_TIMESTAMP)
         self.es_mock.exists.assert_called_once_with(index="rally-metrics-2016-01.new")
         self.es_mock.refresh.assert_called_once_with(index="rally-metrics-2016-01.new")
-  
+
     def test_put_value_redacts_secret_prefixed_track_param_values(self):
         self.cfg.add(config.Scope.application, "track", "params", {"shard-count": 3, "secret_token": "nope"})
-        self.metrics_store = metrics.EsMetricsStore(
-            self.cfg, client_factory_class=MockClientFactory, index_template_provider_class=DummyIndexTemplateProvider, clock=StaticClock
-        )
-        self.es_mock = self.metrics_store._client
-        self.es_mock.exists.return_value = False
-        self.es_mock.template_exists.return_value = False
-        self.es_mock.get_template.return_value = mock.create_autospec(elastic_transport.ObjectApiResponse, body={"index_templates": []})
-        self.metrics_store.logger = mock.create_autospec(logging.Logger)
+        self.metrics_store, self.es_mock = self._make_metrics_store(use_data_streams=False)
 
         throughput = 5000
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
@@ -1138,7 +1108,7 @@ class TestEsMetricsStore:
             "meta": {},
         }
         self.metrics_store.close()
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc])
+        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc], use_data_streams=False)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_put_value_without_meta_info(self, use_data_streams):

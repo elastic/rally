@@ -333,7 +333,7 @@ class EsStoreType(Enum):
         obj = object.__new__(cls)
         obj.metric_name = metric_name
         obj.index_prefix = f"rally-{obj.metric_name}-"
-        obj.index_template_name = f"rally-{obj.metric_name}"
+        obj.index_template_name = f"rally-{obj.metric_name}-template-{version}"
         obj.index_template_resource = f"{obj.metric_name}-template"
         obj.ilm_default_name = f"{obj.index_prefix}ilm-default"
         obj.ilm_default_resource = "ilm-default"
@@ -379,6 +379,15 @@ class ComponentTemplateProvider(IndexTemplateProvider):
     """
 
     COMPONENT_TEMPLATE_CUSTOM_SUFFIX = "@custom"
+
+    def _read(self, template_name):
+        """Read template without applying number_of_shards/number_of_replicas.
+
+        Data streams should rely on ES administrator to provide shard/replica
+        settings via @custom component templates.
+        """
+        with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
+            return json.load(f)
 
     def _get_component_templates(self, name, template_name, lifecycle_policy_name):
         template = self._read(template_name)["template"]
@@ -541,15 +550,15 @@ class IndexHandler:
 
         new_template = json.loads(self._data_stream_template(component_names))
         old_template = None
-        if self._client.index_template_exists(f"{self._es_store_type.index_template_name}-ds"):
-            for existing in self._client.get_template(f"{self._es_store_type.index_template_name}-ds").body.get("index_templates", []):
+        if self._client.index_template_exists(self._es_store_type.index_template_name):
+            for existing in self._client.get_template(self._es_store_type.index_template_name).body.get("index_templates", []):
                 old_template = existing.get("index_template", {})
                 break
 
         if not self._should_apply_update("index template", old_template, new_template):
             return
 
-        self._client.put_template(f"{self._es_store_type.index_template_name}-ds", self._data_stream_template(component_names))
+        self._client.put_template(self._es_store_type.index_template_name, self._data_stream_template(component_names))
 
     def _ensure_lifecycle_policy(self, name, policy):
         new_policy_body = json.loads(policy).get("policy", {})
