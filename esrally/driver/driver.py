@@ -134,10 +134,13 @@ class WorkerIdle:
 
 
 class PreparationComplete:
-    def __init__(self, distribution_flavor, distribution_version, revision):
+    def __init__(self, distribution_flavor, distribution_version, revision, target_id=None, target_platform=None, target_auth_type=None):
         self.distribution_flavor = distribution_flavor
         self.distribution_version = distribution_version
         self.revision = revision
+        self.target_id = target_id
+        self.target_platform = target_platform
+        self.target_auth_type = target_auth_type
 
 
 class StartWorker:
@@ -235,6 +238,8 @@ class DriverActor(actor.RallyActor):
         self.status = "init"
         self.post_process_timer = 0
         self.cluster_details = {}
+        self.target_platform = None
+        self.target_auth_type = None
 
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
@@ -359,6 +364,9 @@ class DriverActor(actor.RallyActor):
         build_version = cluster_version.get("number", build_flavor)
         build_hash = cluster_version.get("build_hash", build_flavor)
 
+        # Determine target_id (cluster_name from GET /)
+        target_id = self.cluster_details.get("cluster_name") if self.cluster_details else None
+
         for child in self.children:
             self.send(child, thespian.actors.ActorExitRequest())
         self.children = []
@@ -368,6 +376,9 @@ class DriverActor(actor.RallyActor):
                 build_flavor,
                 build_version,
                 build_hash,
+                target_id=target_id,
+                target_platform=self.target_platform,
+                target_auth_type=self.target_auth_type,
             ),
         )
 
@@ -631,12 +642,14 @@ class Driver:
         log_root = paths.race_root(self.config)
 
         es_default = es["default"]
+        all_client_options = self.config.opts("client", "options").all_client_options
+        default_client_options = all_client_options.get("default", {})
 
         if enable:
             devices = [
                 telemetry.NodeStats(telemetry_params, es, self.metrics_store),
                 telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
-                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store, build_hash),
+                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store, build_hash, default_client_options),
                 telemetry.JvmStatsSummary(es_default, self.metrics_store),
                 telemetry.IndexStats(es_default, self.metrics_store),
                 telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
@@ -738,6 +751,27 @@ class Driver:
                     build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
                     self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
                     self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
+
+            # Determine target_platform while we still have the API response object (with response headers)
+            if serverless_mode:
+                self.driver_actor.target_platform = "serverless"
+            else:
+                target_platform = "on-prem"
+                try:
+                    cluster_details = self.driver_actor.cluster_details
+                    meta = getattr(cluster_details, "meta", None)
+                    if meta is not None and "x-found-handling-cluster" in getattr(meta, "headers", {}):
+                        target_platform = "hosted"
+                except Exception:
+                    pass
+                self.driver_actor.target_platform = target_platform
+
+            # Determine target_auth_type from default client options
+            default_client_options = self.config.opts("client", "options").all_client_options.get("default", {})
+            if default_client_options.get("api_key"):
+                self.driver_actor.target_auth_type = "api_key"
+            elif default_client_options.get("basic_auth_user") or default_client_options.get("basic_auth"):
+                self.driver_actor.target_auth_type = "basic"
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
