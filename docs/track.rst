@@ -3228,6 +3228,64 @@ The following metrics are included when profile data is present:
 * ``<driver>.<operator>.processed_slices``: Cumulative processed slices for an operator across all driver instances.
 * ``<plan>.<optimization>.took_ms``: Time spent on a plan optimization step (``logical_optimization``, ``physical_optimization``, or ``reduction``), in milliseconds.
 
+
+enrich-policy
+~~~~~~~~~~~~~
+
+The operation ``enrich-policy`` can delete, create or execute enrich policies.
+
+All operations can occurr on different policies.
+If the same policy is specified within multiple operations, it will follow the execution order: ``delete -> create -> execute``.
+
+A refresh of all indices is performed after deletion and creation of policies and before execution.
+
+Properties
+""""""""""
+
+* ``delete`` (optional): A list of strings specifying which policies to delete if they exists, it will ignore any non-existing policy.
+* ``create`` (optional): An object containing the name of the policy to be created as its keys and the definition of the policy as its value following the request body of `Create an enrich policy API <https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-enrich-put-policy>`_.
+* ``execute`` (optional): A list of strings specifying which policies to be executed.
+
+**Examples**
+
+The following snippet will attempt to delete, create and then execute the ``nyc_rate_codes`` enrich policy defined in the ``create`` section.
+
+It will also attempt to delete another policy ``nyc_trip_types`` but will **not** re-create it or execute it.
+
+Lastly, it will execute the ``nyc_vendors`` policy but will **not** delete it or create it beforehand.::
+
+    {
+      "name": "enrich-policy",
+      "operation": {
+        "operation-type": "enrich-policy",
+        "delete": ["nyc_rate_codes", "nyc_trip_types"],
+        "create": {
+          "nyc_rate_codes": {
+            "match": {
+              "indices": "nyc_rate_codes",
+              "match_field": "id",
+              "enrich_fields": [
+                "name"
+              ]
+            }
+          }
+        },
+        "execute": ["nyc_rate_codes", "nyc_vendors"]
+      }
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+
+Meta-data
+"""""""""
+
+* ``weight``: The number of policies deleted, created and executed.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
+
 .. _track_dependencies:
 
 dependencies
