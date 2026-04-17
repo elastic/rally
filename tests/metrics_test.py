@@ -849,15 +849,26 @@ class TestIndexHandler:
         index_template_exists: bool = False
         identical: bool = False
         overwrite_templates: bool = False
+        expect_index_template_exists: bool = True
         expect_put_template: bool = True
         expect_get_template: bool = False
 
-    def _assert_index_template_calls(self, use_data_streams, es_store_type, expect_get_template, expect_put_template):
+    def _assert_index_template_calls(
+        self,
+        use_data_streams,
+        es_store_type,
+        expect_get_template,
+        expect_put_template,
+        expect_index_template_exists=True,
+    ):
         if use_data_streams:
             index_template_name = es_store_type.data_stream_template_name
         else:
             index_template_name = es_store_type.date_based_template_name
-        self.client.index_template_exists.assert_called_once_with(index_template_name)
+        if expect_index_template_exists:
+            self.client.index_template_exists.assert_called_once_with(index_template_name)
+        else:
+            self.client.index_template_exists.assert_not_called()
         if expect_get_template:
             self.client.get_template.assert_called_with(index_template_name)
         if expect_put_template:
@@ -984,6 +995,12 @@ class TestIndexHandler:
             overwrite_templates=True,
             expect_get_template=True,
         ),
+        read_only_open_does_not_touch_templates=DateBasedEnsureTemplateCase(
+            create=False,
+            expect_index_template_exists=False,
+            expect_put_template=False,
+            expect_get_template=False,
+        ),
     )
     def test_ensure_index_template_date_based(self, case: DateBasedEnsureTemplateCase):
         self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", False)
@@ -1008,6 +1025,7 @@ class TestIndexHandler:
             case.es_store_type,
             expect_get_template=case.expect_get_template,
             expect_put_template=case.expect_put_template,
+            expect_index_template_exists=case.expect_index_template_exists,
         )
 
 

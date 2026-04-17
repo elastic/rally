@@ -508,10 +508,10 @@ class IndexHandler:
 
         diff = pretty.diff(old_resource, new_resource, pretty.Flag.FLAT_DICT)
         if diff == "":
-            self.logger.debug("Keep existing %s (it is identical)", resource_label)
+            self.logger.info("Keep existing %s (it is identical)", resource_label)
             return False
         if not self.overwrite_templates:
-            self.logger.debug("Keep existing %s (datastore.overwrite_existing_templates = false):\n%s", resource_label, diff)
+            self.logger.info("Keep existing %s (datastore.overwrite_existing_templates = false):\n%s", resource_label, diff)
             return False
 
         self.logger.warning("Overwrite existing %s (datastore.overwrite_existing_templates = true):\n%s", resource_label, diff)
@@ -522,8 +522,11 @@ class IndexHandler:
             self._index_template_provider, IndexTemplateProvider
         ), "Expected IndexTemplateProvider for date-based indices but got [%s]" % type(self._index_template_provider)
 
+        if not create:
+            return
+
         _index_template = self._index_template_provider.get_template(self._es_store_type)
-        if create and self._client.index_template_exists(self._es_store_type.date_based_template_name):
+        if self._client.index_template_exists(self._es_store_type.date_based_template_name):
             old_template = None
             for existing in self._client.get_template(self._es_store_type.date_based_template_name).body.get("index_templates", []):
                 old_template = existing.get("index_template", {}).get("template", {})
