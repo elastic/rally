@@ -8,6 +8,47 @@ At the end of a race, Rally stores all metrics records in its metrics store. Met
 
 By default, Rally stores metrics in the ``rally-metrics-v1`` data stream. When ``datastore.use_data_streams`` is set to false, Rally falls back to monthly indices named ``rally-metrics-YYYY-MM``.
 
+Metrics Records — Field Descriptions
+=====================================
+
+Sample metrics record::
+
+    {
+          "environment": "nightly",
+          "race-timestamp": "20160421T042749Z",
+          "race-id": "6ebc6e53-ee20-4b0c-99b4-09697987e9f4",
+          "@timestamp": 1461213093093,
+          "relative-time": 10507.328,
+          "track": "geonames",
+          "track-params": {
+            "shard-count": 3
+          },
+          "challenge": "append-no-conflicts",
+          "car": "defaults",
+          "sample-type": "normal",
+          "name": "throughput",
+          "value": 27385,
+          "unit": "docs/s",
+          "task": "index-append-no-conflicts",
+          "operation": "index-append-no-conflicts",
+          "operation-type": "Index",
+          "meta": {
+            "cpu_physical_cores": 36,
+            "cpu_logical_cores": 72,
+            "cpu_model": "Intel(R) Xeon(R) CPU E5-2699 v3 @ 2.30GHz",
+            "os_name": "Linux",
+            "os_version": "3.19.0-21-generic",
+            "host_name": "beast2",
+            "node_name": "rally-node0",
+            "source_revision": "a6c0a81",
+            "distribution_version": "8.0.0-SNAPSHOT",
+            "tag_reference": "Github ticket 1234"
+          }
+        }
+
+As you can see, we do not only store the metrics name and its value but lots of meta-information. This allows you to create different visualizations and reports in Kibana.
+
+Below we describe each field in more detail.
 
 environment
 ~~~~~~~~~~~
@@ -183,45 +224,3 @@ Because the ``@custom`` component is listed last in the ``composed_of`` order, i
 .. note::
 
    The ``datastore.number_of_shards`` and ``datastore.number_of_replicas`` settings in ``rally.ini`` are **not** applied to data streams. Use the ``@custom`` component template to configure shard and replica counts for data streams.
-
-Metrics Records — Field Descriptions
-=====================================
-
-Sample metrics record::
-
-    {
-          "environment": "nightly",
-          "race-timestamp": "20160421T042749Z",
-          "race-id": "6ebc6e53-ee20-4b0c-99b4-09697987e9f4",
-          "@timestamp": 1461213093093,
-          "relative-time": 10507.328,
-          "track": "geonames",
-          "track-params": {
-            "shard-count": 3
-          },
-          "challenge": "append-no-conflicts",
-          "car": "defaults",
-          "sample-type": "normal",
-          "name": "throughput",
-          "value": 27385,
-          "unit": "docs/s",
-          "task": "index-append-no-conflicts",
-          "operation": "index-append-no-conflicts",
-          "operation-type": "Index",
-          "meta": {
-            "cpu_physical_cores": 36,
-            "cpu_logical_cores": 72,
-            "cpu_model": "Intel(R) Xeon(R) CPU E5-2699 v3 @ 2.30GHz",
-            "os_name": "Linux",
-            "os_version": "3.19.0-21-generic",
-            "host_name": "beast2",
-            "node_name": "rally-node0",
-            "source_revision": "a6c0a81",
-            "distribution_version": "8.0.0-SNAPSHOT",
-            "tag_reference": "Github ticket 1234"
-          }
-        }
-
-As you can see, we do not only store the metrics name and its value but lots of meta-information. This allows you to create different visualizations and reports in Kibana.
-
-Below we describe each field in more detail.
