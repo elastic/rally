@@ -471,14 +471,14 @@ class IndexHandler:
             ts = time.from_iso8601(race_timestamp) if isinstance(race_timestamp, str) else race_timestamp
             return f"{self._es_store_type.index_prefix}{ts.year:04d}-{ts.month:02d}"
 
-    def ensure_index_template(self, create=False, race_timestamp=None):
+    def ensure_index_template(self, create=False):
         if self.use_data_streams:
             self._ensure_lifecycle_policy(
                 self._es_store_type.ilm_default_name, self._ilm_default_template(self._es_store_type.ilm_default_resource)
             )
             self._ensure_data_stream_template()
         else:
-            self._ensure_date_based_template(create, race_timestamp)
+            self._ensure_date_based_template(create)
 
     def annotations_template(self):
         return self._index_template_provider.annotations_template()
@@ -517,7 +517,7 @@ class IndexHandler:
         self.logger.warning("Overwrite existing %s (datastore.overwrite_existing_templates = true):\n%s", resource_label, diff)
         return True
 
-    def _ensure_date_based_template(self, create, race_timestamp):
+    def _ensure_date_based_template(self, create):
         assert isinstance(
             self._index_template_provider, IndexTemplateProvider
         ), "Expected IndexTemplateProvider for date-based indices but got [%s]" % type(self._index_template_provider)
@@ -1179,7 +1179,7 @@ class EsMetricsStore(MetricsStore):
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
         MetricsStore.open(self, race_id, race_timestamp, track_name, challenge_name, car_name, ctx, create)
-        self._index_handler.ensure_index_template(create=create, race_timestamp=self._race_timestamp)
+        self._index_handler.ensure_index_template(create=create)
 
         # Skip refresh when creating with data streams - the data stream won't exist until first write
         if not self._index_handler.use_data_streams:
@@ -2059,7 +2059,7 @@ class EsRaceStore(RaceStore):
     def store_race(self, race):
         assert race.race_timestamp is not None, "Attempted to store race with race_timestamp=None"
 
-        self._index_handler.ensure_index_template(create=True, race_timestamp=race.race_timestamp)
+        self._index_handler.ensure_index_template(create=True)
         index = self._index_handler.index_name(race.race_timestamp)
 
         if self._index_handler.use_data_streams and self._race_stored:
@@ -2316,7 +2316,7 @@ class EsResultsStore:
     def store_results(self, race):
         assert race.race_timestamp is not None, "Attempted to store race with race_timestamp=None"
 
-        self._index_handler.ensure_index_template(create=True, race_timestamp=race.race_timestamp)
+        self._index_handler.ensure_index_template(create=True)
         self.client.bulk_index(
             index=self._index_handler.index_name(race.race_timestamp),
             items=race.to_result_dicts(),
