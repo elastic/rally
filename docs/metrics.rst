@@ -2,17 +2,22 @@ Metrics
 =======
 
 Metrics Records
----------------
+===============
 
 At the end of a race, Rally stores all metrics records in its metrics store. Metrics can be kept in memory or written to a dedicated Elasticsearch cluster (not the cluster where Rally ran its benchmarks). This can be configured in the `[reporting] section <https://esrally.readthedocs.io/en/stable/configuration.html#reporting>`_.
 
 By default, Rally stores metrics in the ``rally-metrics-v1`` data stream. When ``datastore.use_data_streams`` is set to false, Rally falls back to monthly indices named ``rally-metrics-YYYY-MM``.
 
 
-.. _metrics_data_streams:
+Data Stream Storage
+===================
+
+When ``datastore.use_data_streams`` is ``true`` (the default), Rally uses `Elasticsearch data streams <https://www.elastic.co/guide/en/elasticsearch/reference/current/data-streams.html>`_ for metrics, races, and results. Data streams simplify time-series data management by automatically handling index creation, rollover, and retention.
 
 Data Stream Storage
--------------------
+===================
+
+.. _metrics_data_streams:
 
 When ``datastore.use_data_streams`` is ``true`` (the default), Rally uses `Elasticsearch data streams <https://www.elastic.co/guide/en/elasticsearch/reference/current/data-streams.html>`_ for metrics, races, and results. Data streams simplify time-series data management by automatically handling index creation, rollover, and retention.
 
@@ -73,6 +78,9 @@ Because the ``@custom`` component is listed last in the ``composed_of`` order, i
 .. note::
 
    The ``datastore.number_of_shards`` and ``datastore.number_of_replicas`` settings in ``rally.ini`` are **not** applied to data streams. Use the ``@custom`` component template to configure shard and replica counts for data streams.
+
+Metrics Records — Field Descriptions
+=====================================
 
 Sample metrics record::
 
@@ -181,7 +189,7 @@ Rally captures also some meta information for each metric record:
 Note that depending on the "level" of a metric record, certain meta information might be missing. It makes no sense to record host level meta info for a cluster wide metric record, like a query latency (as it cannot be attributed to a single node).
 
 Metric Keys
------------
+===========
 
 Rally stores the following metrics:
 

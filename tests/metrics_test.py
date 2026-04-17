@@ -951,7 +951,7 @@ class TestIndexHandler:
                 real_ds_template = {}
             self.client.get_template.return_value = mock.MagicMock(body={"index_templates": [{"index_template": real_ds_template}]})
 
-        handler.ensure_index_template(create=case.create, race_timestamp=self.RACE_TIMESTAMP)
+        handler.ensure_index_template(create=case.create)
 
         self.client.get_lifecycle.assert_called_with(case.es_store_type.ilm_default_name)
         if case.expect_put_lifecycle:
@@ -1018,7 +1018,7 @@ class TestIndexHandler:
                 body={"index_templates": [{"index_template": {"template": real_template}}]}
             )
 
-        handler.ensure_index_template(create=case.create, race_timestamp=time.to_iso8601(self.RACE_TIMESTAMP))
+        handler.ensure_index_template(create=case.create)
 
         self._assert_index_template_calls(
             False,
@@ -1033,7 +1033,7 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
     RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
-    def setup_method(self, method):
+    def setup_method(self):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
         self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
@@ -1083,9 +1083,7 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
     def test_open(self, case: OpenCase):
         self.metrics_store, self.es_mock = self._make_metrics_store(case.use_data_streams)
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=case.create)
-        self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(
-            create=case.create, race_timestamp=time.to_iso8601(self.RACE_TIMESTAMP)
-        )
+        self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(create=case.create)
         expected_index = self.metrics_store._index_handler.index_name(self.RACE_TIMESTAMP)
         if case.prefer_new_index_suffix:
             expected_index = self.metrics_store._index_handler.migrated_index_name(expected_index)
@@ -1103,9 +1101,7 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
 
         self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=False)
 
-        self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(
-            create=False, race_timestamp=time.to_iso8601(self.RACE_TIMESTAMP)
-        )
+        self.metrics_store._index_handler.ensure_index_template.assert_called_once_with(create=False)
         self.es_mock.exists.assert_called_once_with(index="rally-metrics-2016-01.new")
         self.es_mock.refresh.assert_called_once_with(index="rally-metrics-2016-01.new")
 
@@ -1935,7 +1931,7 @@ class TestEsRaceStore:
                 item=expected_doc,
                 use_data_streams=False,
             )
-        rs._index_handler.ensure_index_template.assert_called_once_with(create=True, race_timestamp=self.RACE_TIMESTAMP)
+        rs._index_handler.ensure_index_template.assert_called_once_with(create=True)
 
     def test_store_race_update_with_data_streams(self):
         rs, es_mock = self._make_race_store(use_data_streams=True)
@@ -2339,7 +2335,7 @@ class TestEsResultsStore:
         ]
         expected_index = rs._index_handler.index_name(self.RACE_TIMESTAMP)
         es_mock.bulk_index.assert_called_with(index=expected_index, items=expected_docs, use_data_streams=use_data_streams)
-        rs._index_handler.ensure_index_template.assert_called_once_with(create=True, race_timestamp=self.RACE_TIMESTAMP)
+        rs._index_handler.ensure_index_template.assert_called_once_with(create=True)
         es_mock.index.assert_not_called()
         es_mock.refresh.assert_not_called()
 
@@ -2482,7 +2478,7 @@ class TestEsResultsStore:
         ]
         expected_index = rs._index_handler.index_name(self.RACE_TIMESTAMP)
         es_mock.bulk_index.assert_called_with(index=expected_index, items=expected_docs, use_data_streams=use_data_streams)
-        rs._index_handler.ensure_index_template.assert_called_once_with(create=True, race_timestamp=self.RACE_TIMESTAMP)
+        rs._index_handler.ensure_index_template.assert_called_once_with(create=True)
         es_mock.index.assert_not_called()
         es_mock.refresh.assert_not_called()
 
