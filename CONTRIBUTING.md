@@ -38,13 +38,20 @@ If you want to get started in the project, a good idea is to check issues labele
 You will need to fork the Rally repository and clone it to your local machine. See 
 the [Github help page](https://help.github.com/articles/fork-a-repo) for help.
 
-### Importing the project into IntelliJ IDEA
+### Prepare your changes
 
-Rally builds using virtualenv. When importing into IntelliJ you will need to define an appropriate Python SDK, which is provided by virtualenv.
-For more details on defining a Python SDK in IntelliJ please refer to their documentation. We recommend using the Python SDK that `make prereq` creates.
-This is typically created via `Virtualenv Environment` / `Existing Environment` and pointing to `.venv/bin/python3` within the Rally source directory.
+When working on your changes, keep the following in mind.
 
-In order to run tests within the IDE, ensure the `Python Integrated Tools` / `Testing` / `Default Test Runner` is set to `pytest`.
+* Testing and Tooling
+  * All changes should include automated tests.
+  * For non-trivial PRs, provide a dedicated test plan in the description to guide the reviewer through manual verification steps.
+* PR Structure and Size
+  * Each PR should be its own self-contained change.
+  * Try to stay below 500 lines of code when possible. This number is based on research suggesting that reviewing more than 400 lines in one sitting significantly decreases efficiency.
+  * One way to achieve the previous goals is to submit refactorings and other pre-requisites as their own pull requests.
+* Documentation and Context
+  * All user-facing changes should include documentation changes.
+  * Describe clearly the intent behind your pull request (the problem it solves), rather than just listing implementation details that AI can already generate.
 
 ### Submitting your changes
 
@@ -58,7 +65,7 @@ Once your changes and tests are ready to submit for review:
 
 2. Test your changes
 
-    Ensure that all tests pass by running `make check-all`. This runs sequentially lint checks, unit tests and integration tests. These can be executed in isolation using `make lint`, `make test` and `make it` respectively, in case you need to iterate over a subset of tests.
+    Ensure that all tests pass by running `make lint test`. This runs sequentially lint checks and unit tests, not integration tests that are long enough to only run in CI. These can be executed in isolation using `make lint`, `make test` and `make it` respectively, in case you need to iterate over a subset of tests.
 
     Note: Integration tests are much slower than unit tests.
 
