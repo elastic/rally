@@ -687,9 +687,9 @@ class TestComponentTemplateProvider:
         lifecycle_policy: str
 
     @cases.cases(
-        metrics=StoreTypeCase(store_name="metrics", lifecycle_policy="rally-metrics-ilm-default"),
-        races=StoreTypeCase(store_name="races", lifecycle_policy="rally-races-ilm-default"),
-        results=StoreTypeCase(store_name="results", lifecycle_policy="rally-results-ilm-default"),
+        metrics=StoreTypeCase(store_name="metrics", lifecycle_policy="rally-metrics-default"),
+        races=StoreTypeCase(store_name="races", lifecycle_policy="rally-races-default"),
+        results=StoreTypeCase(store_name="results", lifecycle_policy="rally-results-default"),
     )
     def test_component_template_structure(self, case: StoreTypeCase):
         provider = self._make_provider()
@@ -1027,6 +1027,42 @@ class TestIndexHandler:
             expect_put_template=case.expect_put_template,
             expect_index_template_exists=case.expect_index_template_exists,
         )
+
+    # Custom component templates are only touched manually, they do not get overwritten at any point.
+    def test_ensure_component_template_does_not_overwrite_existing_custom_template(self):
+        self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", True)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.overwrite_existing_templates", True)
+
+        handler = metrics.IndexHandler(self.cfg, self.client, metrics.EsStoreType.metrics)
+        custom_name = (
+            f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}"
+            f"{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}"
+        )
+
+        self.client.component_template_exists.return_value = True
+
+        handler._ensure_component_template(custom_name, json.dumps({"template": {"settings": {"index": {"number_of_replicas": 0}}}}))
+
+        self.client.component_template_exists.assert_called_once_with(custom_name)
+        self.client.get_component_template.assert_not_called()
+        self.client.put_component_template.assert_not_called()
+
+    def test_ensure_component_template_creates_custom_template_if_missing(self):
+        self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", True)
+
+        handler = metrics.IndexHandler(self.cfg, self.client, metrics.EsStoreType.metrics)
+        custom_name = (
+            f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}"
+            f"{metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}"
+        )
+        custom_template = json.dumps({"template": {}})
+
+        self.client.component_template_exists.return_value = False
+
+        handler._ensure_component_template(custom_name, custom_template)
+
+        self.client.component_template_exists.assert_called_once_with(custom_name)
+        self.client.put_component_template.assert_called_once_with(custom_name, custom_template)
 
 
 class TestEsMetricsStore:  # pylint: disable=too-many-public-methods

@@ -335,9 +335,9 @@ class EsStoreType(Enum):
         obj.metric_name = metric_name
         obj.index_prefix = f"rally-{obj.metric_name}-"
         obj.index_template_resource = f"{obj.metric_name}-template"
-        obj.ilm_default_name = f"{obj.index_prefix}ilm-default"
+        obj.ilm_default_name = f"{obj.index_prefix}default"
         obj.ilm_default_resource = "ilm-default"
-        obj.data_stream_template_name = f"rally-{obj.metric_name}-template-{version}"
+        obj.data_stream_template_name = f"{obj.index_prefix}{version}"
         obj.date_based_template_name = f"rally-{obj.metric_name}"
         obj.data_stream_version = version
         return obj
@@ -503,15 +503,15 @@ class IndexHandler:
     def _should_apply_update(self, resource_label, old_resource, new_resource):
         """Returns True if the resource should be written, False to skip."""
         if old_resource is None:
-            self.logger.info("Create %s:\n%s", resource_label, pretty.dump(new_resource, pretty.Flag.FLAT_DICT))
+            self.logger.debug("Create %s:\n%s", resource_label, pretty.dump(new_resource, pretty.Flag.FLAT_DICT))
             return True
 
         diff = pretty.diff(old_resource, new_resource, pretty.Flag.FLAT_DICT)
         if diff == "":
-            self.logger.info("Keep existing %s (it is identical)", resource_label)
+            self.logger.debug("Keep existing %s (it is identical)", resource_label)
             return False
         if not self.overwrite_templates:
-            self.logger.info("Keep existing %s (datastore.overwrite_existing_templates = false):\n%s", resource_label, diff)
+            self.logger.debug("Keep existing %s (datastore.overwrite_existing_templates = false):\n%s", resource_label, diff)
             return False
 
         self.logger.warning("Overwrite existing %s (datastore.overwrite_existing_templates = true):\n%s", resource_label, diff)
@@ -533,7 +533,9 @@ class IndexHandler:
                 break
             new_template = json.loads(_index_template)["template"]
 
-            if not self._should_apply_update("index template", old_template, new_template):
+            if not self._should_apply_update(
+                f"index template [{self._es_store_type.date_based_template_name}]", old_template, new_template
+            ):
                 return
 
         self._client.put_template(self._es_store_type.date_based_template_name, _index_template)
@@ -560,7 +562,7 @@ class IndexHandler:
                 old_template = existing.get("index_template", {})
                 break
 
-        if not self._should_apply_update("index template", old_template, new_template):
+        if not self._should_apply_update(f"index template [{self._es_store_type.data_stream_template_name}]", old_template, new_template):
             return
 
         self._client.put_template(self._es_store_type.data_stream_template_name, self._data_stream_template(component_names))
@@ -581,6 +583,8 @@ class IndexHandler:
 
         old_template_body = None
         if self._client.component_template_exists(name):
+            if ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX in name:
+                return
             for existing in self._client.get_component_template(name).body.get("component_templates", []):
                 old_template_body = existing.get("component_template", {}).get("template", {})
                 break
