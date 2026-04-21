@@ -913,7 +913,9 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None) -> dict:
+def parse(
+    text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None, stop_after: str = None
+) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
@@ -925,6 +927,9 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
     :param lists: An optional list of property paths to JSON lists in the provided text.
     :param objects: An optional list of property paths to flat JSON objects in the provided text.
+    :param stop_after: An optional property path that triggers early termination once encountered, regardless of
+                       whether all props have been found. Useful when optional properties may not exist and all
+                       desired properties appear before this path in the JSON structure.
     :return: A dict containing all properties, lists, and flat objects that have been found in the provided text.
     """
     text.seek(0)
@@ -955,6 +960,9 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
                 current_object = {}
             elif in_object and event in ["boolean", "integer", "double", "number", "string"]:
                 current_object[prefix[len(in_object) + 1 :]] = value
+            # stop if we've reached the designated stop point (e.g., hits.hits which contains bulk data)
+            if stop_after is not None and prefix == stop_after and event == "start_array":
+                break
             # found all necessary properties
             if (
                 len(parsed) == len(props)
@@ -972,43 +980,25 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     return parsed
 
 
-def parse_optional_props(text: BytesIO, props: list[str]) -> dict:
+def extract_cluster_details(response: BytesIO) -> list:
     """
-    Parse the provided text as JSON and extract whichever of the given property paths are present.
-    Does not require all props to be found; iterates until the stream is exhausted.
+    Extract _clusters.details from a search response as a list of cluster detail objects.
+    Each detail contains name, status, indices, took, timed_out, and _shards (when present).
 
-    :param text: A text to parse (will be seek(0) at start).
-    :param props: List of dot-separated property paths to extract.
-    :return: A dict containing only the properties that were found.
-    """
-    text.seek(0)
-    parser = ijson.parse(text)
-    parsed = {}
-    try:
-        for prefix, _, value in parser:
-            if prefix in props:
-                parsed[prefix] = value
-    except ijson.IncompleteJSONError:
-        pass
-    return parsed
-
-
-def extract_cluster_details(response: BytesIO) -> dict:
-    """
-    Extract _clusters.details from a search response as a dict of cluster name -> detail object.
-    Each detail contains status, indices, took, timed_out, and _shards (when present).
+    Returns a list instead of a dict to avoid field explosion in Elasticsearch when storing
+    metrics for cross-cluster searches with many clusters.
 
     :param response: Response body (BytesIO or file-like with seek/read).
-    :return: Dict mapping cluster name to {status, indices, took, timed_out, _shards}.
-             Empty dict if _clusters.details is absent or on parse error.
+    :return: List of dicts, each containing {name, status, indices, took, timed_out, _shards}.
+             Empty list if _clusters.details is absent or on parse error.
     """
     response.seek(0)
-    details = {}
+    details = []
     try:
         for cluster_name, detail in ijson.kvitems(response, "_clusters.details"):
             if not isinstance(detail, dict):
                 continue
-            entry = {}
+            entry = {"name": cluster_name}
             if "status" in detail:
                 entry["status"] = detail["status"]
             if "indices" in detail:
@@ -1019,7 +1009,7 @@ def extract_cluster_details(response: BytesIO) -> dict:
                 entry["timed_out"] = detail["timed_out"]
             if "_shards" in detail and isinstance(detail["_shards"], dict):
                 entry["_shards"] = detail["_shards"]
-            details[cluster_name] = entry
+            details.append(entry)
     except (ijson.IncompleteJSONError, KeyError, TypeError):
         pass
     return details
@@ -1270,7 +1260,15 @@ class Query(Runner):
                         "_shards.successful",
                         "_shards.skipped",
                         "_shards.failed",
+                        "num_reduce_phases",
+                        "_clusters.total",
+                        "_clusters.successful",
+                        "_clusters.skipped",
+                        "_clusters.running",
+                        "_clusters.partial",
+                        "_clusters.failed",
                     ],
+                    stop_after="hits.hits",
                 )
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
@@ -1299,30 +1297,21 @@ class Query(Runner):
                 }
 
                 # Optional fields (cross-cluster search, num_reduce_phases)
-                optional_props = [
-                    "num_reduce_phases",
-                    "_clusters.total",
-                    "_clusters.successful",
-                    "_clusters.skipped",
-                    "_clusters.running",
-                    "_clusters.partial",
-                    "_clusters.failed",
-                ]
-                optional = parse_optional_props(r, optional_props)
-                if "num_reduce_phases" in optional and optional["num_reduce_phases"] is not None:
-                    result["num_reduce_phases"] = optional["num_reduce_phases"]
-                if "_clusters.total" in optional or "_clusters.successful" in optional:
-                    result["clusters"] = {}
-                    for key, dest in [
-                        ("_clusters.total", "total"),
-                        ("_clusters.successful", "successful"),
-                        ("_clusters.skipped", "skipped"),
-                        ("_clusters.running", "running"),
-                        ("_clusters.partial", "partial"),
-                        ("_clusters.failed", "failed"),
-                    ]:
-                        if key in optional and optional[key] is not None:
-                            result["clusters"][dest] = optional[key]
+                if props.get("num_reduce_phases") is not None:
+                    result["num_reduce_phases"] = props["num_reduce_phases"]
+                if props.get("_clusters.total") is not None or props.get("_clusters.successful") is not None:
+                    result["clusters"] = {
+                        dest: props[key]
+                        for key, dest in [
+                            ("_clusters.total", "total"),
+                            ("_clusters.successful", "successful"),
+                            ("_clusters.skipped", "skipped"),
+                            ("_clusters.running", "running"),
+                            ("_clusters.partial", "partial"),
+                            ("_clusters.failed", "failed"),
+                        ]
+                        if props.get(key) is not None
+                    }
                     cluster_details = extract_cluster_details(r)
                     if cluster_details:
                         result["clusters"]["details"] = cluster_details

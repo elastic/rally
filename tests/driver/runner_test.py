@@ -403,7 +403,7 @@ class TestSelectiveJsonParser:
             "supporters": True,
         }
 
-    def test_parse_optional_props_returns_only_found(self):
+    def test_parse_returns_only_found_props(self):
         doc = io.BytesIO(
             json.dumps(
                 {
@@ -413,21 +413,24 @@ class TestSelectiveJsonParser:
                 }
             ).encode()
         )
-        found = runner.parse_optional_props(
+        found = runner.parse(
             doc,
-            ["num_reduce_phases", "_clusters.total", "_clusters.successful", "nonexistent"],
+            ["hits.total.value", "num_reduce_phases", "_clusters.total", "_clusters.successful", "nonexistent"],
         )
         assert found == {
+            "hits.total.value": 10,
             "num_reduce_phases": 3,
             "_clusters.total": 2,
             "_clusters.successful": 2,
         }
         assert "nonexistent" not in found
 
-    def test_parse_optional_props_empty_when_none_match(self):
+    def test_parse_missing_props_not_in_result(self):
         doc = io.BytesIO(json.dumps({"a": 1, "b": 2}).encode())
-        found = runner.parse_optional_props(doc, ["x", "y.z"])
-        assert found == {}
+        found = runner.parse(doc, ["a", "x", "y.z"])
+        assert found == {"a": 1}
+        assert "x" not in found
+        assert "y.z" not in found
 
     def test_extract_cluster_details_returns_per_cluster_took(self):
         doc = io.BytesIO(
@@ -454,15 +457,19 @@ class TestSelectiveJsonParser:
             ).encode()
         )
         details = runner.extract_cluster_details(doc)
-        assert details["c1"]["took"] == 5
-        assert details["c1"]["_shards"] == {"total": 1, "successful": 1, "skipped": 0, "failed": 0}
-        assert details["c2"]["took"] == 10
-        assert "_shards" not in details["c2"]
+        assert isinstance(details, list)
+        assert len(details) == 2
+        c1 = next(d for d in details if d["name"] == "c1")
+        c2 = next(d for d in details if d["name"] == "c2")
+        assert c1["took"] == 5
+        assert c1["_shards"] == {"total": 1, "successful": 1, "skipped": 0, "failed": 0}
+        assert c2["took"] == 10
+        assert "_shards" not in c2
 
     def test_extract_cluster_details_empty_when_absent(self):
         doc = io.BytesIO(json.dumps({"hits": {"total": {"value": 0}}}).encode())
         details = runner.extract_cluster_details(doc)
-        assert details == {}
+        assert details == []
 
 
 def _build_bulk_body(*lines):
@@ -2713,29 +2720,31 @@ class TestQueryRunner:
             result = await query_runner(es, params)
 
         assert result["num_reduce_phases"] == 22
-        assert result["clusters"] == {
-            "total": 21,
-            "successful": 21,
-            "skipped": 0,
-            "running": 0,
-            "partial": 0,
-            "failed": 0,
-            "details": {
-                "_origin": {
-                    "status": "successful",
-                    "indices": "cps_scaling_test_origin_2026-01-25-1",
-                    "took": 31,
-                    "timed_out": False,
-                    "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
-                },
-                "remote_cluster_1": {
-                    "status": "successful",
-                    "indices": "cps_scaling_test_*_2026-01-25-1",
-                    "took": 1,
-                    "timed_out": False,
-                    "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
-                },
-            },
+        assert result["clusters"]["total"] == 21
+        assert result["clusters"]["successful"] == 21
+        assert result["clusters"]["skipped"] == 0
+        assert result["clusters"]["running"] == 0
+        assert result["clusters"]["partial"] == 0
+        assert result["clusters"]["failed"] == 0
+        assert isinstance(result["clusters"]["details"], list)
+        assert len(result["clusters"]["details"]) == 2
+        origin = next(d for d in result["clusters"]["details"] if d["name"] == "_origin")
+        remote = next(d for d in result["clusters"]["details"] if d["name"] == "remote_cluster_1")
+        assert origin == {
+            "name": "_origin",
+            "status": "successful",
+            "indices": "cps_scaling_test_origin_2026-01-25-1",
+            "took": 31,
+            "timed_out": False,
+            "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+        }
+        assert remote == {
+            "name": "remote_cluster_1",
+            "status": "successful",
+            "indices": "cps_scaling_test_*_2026-01-25-1",
+            "took": 1,
+            "timed_out": False,
+            "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
         }
         assert result["hits"] == 10000
         assert result["took"] == 38
