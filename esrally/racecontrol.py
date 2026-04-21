@@ -137,7 +137,14 @@ class BenchmarkActor(actor.RallyActor):
 
     @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PreparationComplete(self, msg, sender):
-        self.coordinator.on_preparation_complete(msg.distribution_flavor, msg.distribution_version, msg.revision)
+        self.coordinator.on_preparation_complete(
+            msg.distribution_flavor,
+            msg.distribution_version,
+            msg.revision,
+            target_id=msg.target_id,
+            target_platform=msg.target_platform,
+            target_auth_type=msg.target_auth_type,
+        )
         self.logger.info("Telling driver to start benchmark.")
         self.send(self.main_driver, driver.StartBenchmark())
 
@@ -246,10 +253,18 @@ class BenchmarkCoordinator:
         )
         self.race_store = metrics.race_store(self.cfg)
 
-    def on_preparation_complete(self, distribution_flavor, distribution_version, revision):
+    def on_preparation_complete(
+        self, distribution_flavor, distribution_version, revision, target_id=None, target_platform=None, target_auth_type=None
+    ):
         self.race.distribution_flavor = distribution_flavor
         self.race.distribution_version = distribution_version
         self.race.revision = revision
+        if target_id is not None:
+            self.race.target_id = target_id
+        if target_platform is not None:
+            self.race.target_platform = target_platform
+        if target_auth_type is not None:
+            self.race.target_auth_type = target_auth_type
         # store race initially (without any results) so other components can retrieve full metadata
         self.race_store.store_race(self.race)
         if self.race.challenge.auto_generated:
