@@ -3463,6 +3463,7 @@ class TestClusterEnvironmentInfo:
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "6.0.0-alpha1"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "oss"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "target_platform", "on-prem"),
         ]
 
         metrics_store_add_meta_info.assert_has_calls(calls)
@@ -3498,6 +3499,7 @@ class TestClusterEnvironmentInfo:
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "00000000"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "serverless"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "serverless"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "target_platform", "serverless"),
         ]
 
         metrics_store_add_meta_info.assert_has_calls(calls)
@@ -3522,9 +3524,152 @@ class TestClusterEnvironmentInfo:
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "serverless"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "serverless"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "target_platform", "serverless"),
         ]
 
         metrics_store_add_meta_info.assert_has_calls(calls)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_stores_cluster_name(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "cluster_name": "my-benchmark-cluster",
+            "version": {
+                "build_hash": "abc123",
+                "number": "8.0.0",
+                "build_flavor": "default",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+        calls = [
+            mock.call(metrics.MetaInfoScope.cluster, None, "target_id", "my-benchmark-cluster"),
+            mock.call(metrics.MetaInfoScope.cluster, None, "target_platform", "on-prem"),
+        ]
+
+        metrics_store_add_meta_info.assert_has_calls(calls)
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_detects_hosted_platform_from_response_headers(self, metrics_store_add_meta_info):
+        class ApiResponseMeta:
+            def __init__(self, headers):
+                self.headers = headers
+
+        class ApiResponse:
+            def __init__(self, data, headers):
+                self._data = data
+                self.meta = ApiResponseMeta(headers)
+
+            def __getitem__(self, key):
+                return self._data[key]
+
+            def get(self, key, default=None):
+                return self._data.get(key, default)
+
+        cluster_info = ApiResponse(
+            {
+                "cluster_name": "my-ech-cluster",
+                "version": {
+                    "build_hash": "abc123",
+                    "number": "8.0.0",
+                    "build_flavor": "default",
+                },
+            },
+            headers={"x-found-handling-cluster": "abc123def456"},
+        )
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+
+        metrics_store_add_meta_info.assert_any_call(metrics.MetaInfoScope.cluster, None, "target_platform", "hosted")
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_stores_api_key_auth_type(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "version": {
+                "build_hash": "abc123",
+                "number": "8.0.0",
+                "build_flavor": "default",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client_options = {"api_key": "my-api-key", "timeout": 60}
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None, client_options)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+
+        metrics_store_add_meta_info.assert_any_call(metrics.MetaInfoScope.cluster, None, "target_auth_type", "api_key")
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_stores_basic_auth_type(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "version": {
+                "build_hash": "abc123",
+                "number": "8.0.0",
+                "build_flavor": "default",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client_options = {"basic_auth_user": "elastic", "basic_auth_password": "changeme", "timeout": 60}
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None, client_options)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+
+        metrics_store_add_meta_info.assert_any_call(metrics.MetaInfoScope.cluster, None, "target_auth_type", "basic")
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_stores_basic_auth_type_from_combined_tuple(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "version": {
+                "build_hash": "abc123",
+                "number": "8.0.0",
+                "build_flavor": "default",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        client_options = {"basic_auth": ("elastic", "changeme"), "timeout": 60}
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None, client_options)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+
+        metrics_store_add_meta_info.assert_any_call(metrics.MetaInfoScope.cluster, None, "target_auth_type", "basic")
+
+    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
+    def test_no_auth_type_stored_when_no_auth_options(self, metrics_store_add_meta_info):
+        cluster_info = {
+            "version": {
+                "build_hash": "abc123",
+                "number": "8.0.0",
+                "build_flavor": "default",
+            },
+        }
+
+        cfg = create_config()
+        client = Client(info=cluster_info)
+        metrics_store = metrics.EsMetricsStore(cfg)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        t = telemetry.Telemetry(cfg, devices=[env_device])
+        t.on_benchmark_start()
+
+        auth_type_calls = [c for c in metrics_store_add_meta_info.call_args_list if len(c[0]) >= 3 and c[0][2] == "target_auth_type"]
+        assert len(auth_type_calls) == 0
 
 
 class TestNodeEnvironmentInfo:
@@ -4258,6 +4403,19 @@ class TestMlBucketProcessingTime:
     @mock.patch("elasticsearch.Elasticsearch.search")
     def test_error_on_retrieval_does_not_store_metrics(self, search, metrics_store_put_doc):
         search.side_effect = elasticsearch.TransportError("unit test error")
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.MlBucketProcessingTime(elasticsearch.Elasticsearch, metrics_store)
+        t = telemetry.Telemetry(cfg, devices=[device])
+        t.on_benchmark_stop()
+
+        assert metrics_store_put_doc.call_count == 0
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    @mock.patch("elasticsearch.Elasticsearch.search")
+    def test_authorization_error_does_not_store_metrics(self, search, metrics_store_put_doc):
+        search.side_effect = elasticsearch.AuthorizationException(meta=None, body=None, message="unit test error")  # type: ignore[arg-type]
 
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)

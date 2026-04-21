@@ -389,6 +389,20 @@ class SampleType(IntEnum):
     Normal = 1
 
 
+SECRET_TRACK_PARAM_PLACEHOLDER = "<hidden>"
+
+
+def track_params_for_reporting(track_params):
+    """
+    Track parameters whose names start with ``secret_`` are included in metrics documents,
+    race records, and other persisted reporting, but their values are replaced with
+    ``SECRET_TRACK_PARAM_PLACEHOLDER`` (``"<hidden>"``). Actual values remain only in configuration for track loading.
+    """
+    if not track_params:
+        return {}
+    return {k: (SECRET_TRACK_PARAM_PLACEHOLDER if str(k).startswith("secret_") else v) for k, v in track_params.items()}
+
+
 class MetricsStore:
     """
     Abstract metrics store
@@ -406,7 +420,7 @@ class MetricsStore:
         self._race_id = None
         self._race_timestamp = None
         self._track = None
-        self._track_params = cfg.opts("track", "params", default_value={}, mandatory=False)
+        self._track_params = track_params_for_reporting(cfg.opts("track", "params", default_value={}, mandatory=False))
         self._challenge = None
         self._car = None
         self._car_name = None
@@ -1462,6 +1476,9 @@ class Race:
         revision=None,
         results=None,
         meta_data=None,
+        target_id=None,
+        target_platform=None,
+        target_auth_type=None,
     ):
         if results is None:
             results = {}
@@ -1492,6 +1509,9 @@ class Race:
         self.revision = revision
         self.results = results
         self.meta_data = meta_data
+        self.target_id = target_id
+        self.target_platform = target_platform
+        self.target_auth_type = target_auth_type
 
     @property
     def track_name(self):
@@ -1539,8 +1559,9 @@ class Race:
         if self.challenge:
             if not hasattr(self.challenge, "auto_generated") or not self.challenge.auto_generated:
                 d["challenge"] = self.challenge_name
-        if self.track_params:
-            d["track-params"] = self.track_params
+        reporting_params = track_params_for_reporting(self.track_params)
+        if reporting_params:
+            d["track-params"] = reporting_params
         if self.car_params:
             d["car-params"] = self.car_params
         if self.plugin_params:
@@ -1572,12 +1593,19 @@ class Race:
             result_template["team-revision"] = self.team_revision
         if self.track_revision:
             result_template["track-revision"] = self.track_revision
-        if self.track_params:
-            result_template["track-params"] = self.track_params
+        reporting_params = track_params_for_reporting(self.track_params)
+        if reporting_params:
+            result_template["track-params"] = reporting_params
         if self.car_params:
             result_template["car-params"] = self.car_params
         if self.plugin_params:
             result_template["plugin-params"] = self.plugin_params
+        if self.target_id:
+            result_template["target-id"] = self.target_id
+        if self.target_platform:
+            result_template["target-platform"] = self.target_platform
+        if self.target_auth_type:
+            result_template["target-auth-type"] = self.target_auth_type
         if self.meta_data:
             result_template["meta"] = self.meta_data
 
