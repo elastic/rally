@@ -1132,6 +1132,7 @@ class TrackFileReader:
         self.build_flavor = cfg.opts("mechanic", "distribution.flavor", default_value="default", mandatory=False)
         self.serverless_operator = cfg.opts("driver", "serverless.operator", default_value=False, mandatory=False)
         self.track_params = cfg.opts("track", "params", mandatory=False)
+        self.ignore_unused_params = cfg.opts("track", "params.ignore_unused", mandatory=False)
         self.complete_track_params = CompleteTrackParams(user_specified_track_params=self.track_params)
         self.read_track = TrackSpecificationReader(
             track_params=self.track_params,
@@ -1256,10 +1257,13 @@ class TrackFileReader:
                 )
             )
 
-            LOG.critical(err_msg)
-            # also dump the message on the console
-            console.println(err_msg)
-            raise exceptions.TrackConfigError(f"Unused track parameters {sorted(unused_user_defined_track_params)}.")
+            if self.ignore_unused_params:
+                LOG.warning(err_msg)
+                console.warn(err_msg)
+            else:
+                LOG.critical(err_msg)
+                console.error(err_msg)
+                raise exceptions.TrackConfigError(f"Unused track parameters {sorted(unused_user_defined_track_params)}.")
         return current_track
 
 

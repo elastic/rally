@@ -280,6 +280,11 @@ Track parameters whose names start with ``secret_`` (for example ``secret_api_ke
 
 Note that the default values are not recorded or shown (Rally does not know about them).
 
+``ignore-unused-track-params``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, Rally mandates that all provided track-parameters be used by the target track. Adding this flag suppresses that behavior; instead, Rally will write a warning to the log-file, then proceed as normal.
+
 ``challenge``
 ~~~~~~~~~~~~~
 
