@@ -913,9 +913,7 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(
-    text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None, stop_after: str = None
-) -> dict:
+def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None, stop_after: str = None) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
