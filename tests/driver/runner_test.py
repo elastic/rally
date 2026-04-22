@@ -432,11 +432,12 @@ class TestSelectiveJsonParser:
         assert "x" not in found
         assert "y.z" not in found
 
-    def test_extract_cluster_details_returns_per_cluster_took(self):
+    def test_parse_with_cluster_details(self):
         doc = io.BytesIO(
             json.dumps(
                 {
                     "_clusters": {
+                        "total": 2,
                         "details": {
                             "c1": {
                                 "status": "successful",
@@ -451,12 +452,14 @@ class TestSelectiveJsonParser:
                                 "took": 10,
                                 "timed_out": False,
                             },
-                        }
+                        },
                     }
                 }
             ).encode()
         )
-        details = runner.extract_cluster_details(doc)
+        result = runner.parse(doc, ["_clusters.total"], with_cluster_details=True)
+        assert result["_clusters.total"] == 2
+        details = result["_clusters.details"]
         assert isinstance(details, list)
         assert len(details) == 2
         c1 = next(d for d in details if d["name"] == "c1")
@@ -466,10 +469,11 @@ class TestSelectiveJsonParser:
         assert c2["took"] == 10
         assert "_shards" not in c2
 
-    def test_extract_cluster_details_empty_when_absent(self):
+    def test_parse_with_cluster_details_empty_when_absent(self):
         doc = io.BytesIO(json.dumps({"hits": {"total": {"value": 0}}}).encode())
-        details = runner.extract_cluster_details(doc)
-        assert details == []
+        result = runner.parse(doc, ["hits.total.value"], with_cluster_details=True)
+        assert result == {"hits.total.value": 0}
+        assert "_clusters.details" not in result
 
 
 def _build_bulk_body(*lines):

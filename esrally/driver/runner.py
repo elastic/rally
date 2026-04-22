@@ -913,7 +913,14 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None, stop_after: str = None) -> dict:
+def parse(
+    text: BytesIO,
+    props: list[str],
+    lists: list[str] = None,
+    objects: list[str] = None,
+    stop_after: str = None,
+    with_cluster_details: bool = False,
+) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
@@ -928,6 +935,7 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     :param stop_after: An optional property path that triggers early termination once encountered, regardless of
                        whether all props have been found. Useful when optional properties may not exist and all
                        desired properties appear before this path in the JSON structure.
+    :param with_cluster_details: If True, extracts _clusters.details as a list under the key "_clusters.details".
     :return: A dict containing all properties, lists, and flat objects that have been found in the provided text.
     """
     text.seek(0)
@@ -939,6 +947,12 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     expect_end_array = False
     parsed_objects = {}
     in_object = None
+    # cluster details extraction state
+    cluster_details = []
+    in_cluster_detail = None
+    current_cluster_entry = {}
+    in_shards = False
+    current_shards = {}
     try:
         for prefix, event, value in parser:
             if expect_end_array:
@@ -958,12 +972,37 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
                 current_object = {}
             elif in_object and event in ["boolean", "integer", "double", "number", "string"]:
                 current_object[prefix[len(in_object) + 1 :]] = value
+            # cluster details extraction
+            elif with_cluster_details:
+                if prefix.startswith("_clusters.details.") and event == "start_map" and prefix.count(".") == 2:
+                    # starting a new cluster detail object like "_clusters.details.cluster_name"
+                    in_cluster_detail = prefix.split(".")[-1]
+                    current_cluster_entry = {"name": in_cluster_detail}
+                elif in_cluster_detail:
+                    cluster_prefix = f"_clusters.details.{in_cluster_detail}"
+                    if prefix == f"{cluster_prefix}._shards" and event == "start_map":
+                        in_shards = True
+                        current_shards = {}
+                    elif in_shards:
+                        if event == "end_map" and prefix == f"{cluster_prefix}._shards":
+                            current_cluster_entry["_shards"] = current_shards
+                            in_shards = False
+                        elif event in ["boolean", "integer", "double", "number", "string"]:
+                            key = prefix.split(".")[-1]
+                            current_shards[key] = value
+                    elif event == "end_map" and prefix == cluster_prefix:
+                        cluster_details.append(current_cluster_entry)
+                        in_cluster_detail = None
+                    elif event in ["boolean", "integer", "double", "number", "string"]:
+                        key = prefix.split(".")[-1]
+                        current_cluster_entry[key] = value
             # stop if we've reached the designated stop point (e.g., hits.hits which contains bulk data)
             if stop_after is not None and prefix == stop_after and event == "start_array":
                 break
-            # found all necessary properties
+            # found all necessary properties (skip early termination if extracting cluster details)
             if (
-                len(parsed) == len(props)
+                not with_cluster_details
+                and len(parsed) == len(props)
                 and (lists is None or len(parsed_lists) == len(lists))
                 and (objects is None or len(parsed_objects) == len(objects))
             ):
@@ -975,42 +1014,9 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
 
     parsed.update(parsed_lists)
     parsed.update(parsed_objects)
+    if with_cluster_details and cluster_details:
+        parsed["_clusters.details"] = cluster_details
     return parsed
-
-
-def extract_cluster_details(response: BytesIO) -> list:
-    """
-    Extract _clusters.details from a search response as a list of cluster detail objects.
-    Each detail contains name, status, indices, took, timed_out, and _shards (when present).
-
-    Returns a list instead of a dict to avoid field explosion in Elasticsearch when storing
-    metrics for cross-cluster searches with many clusters.
-
-    :param response: Response body (BytesIO or file-like with seek/read).
-    :return: List of dicts, each containing {name, status, indices, took, timed_out, _shards}.
-             Empty list if _clusters.details is absent or on parse error.
-    """
-    response.seek(0)
-    details = []
-    try:
-        for cluster_name, detail in ijson.kvitems(response, "_clusters.details"):
-            if not isinstance(detail, dict):
-                continue
-            entry = {"name": cluster_name}
-            if "status" in detail:
-                entry["status"] = detail["status"]
-            if "indices" in detail:
-                entry["indices"] = detail["indices"]
-            if "took" in detail:
-                entry["took"] = detail["took"]
-            if "timed_out" in detail:
-                entry["timed_out"] = detail["timed_out"]
-            if "_shards" in detail and isinstance(detail["_shards"], dict):
-                entry["_shards"] = detail["_shards"]
-            details.append(entry)
-    except (ijson.IncompleteJSONError, KeyError, TypeError):
-        pass
-    return details
 
 
 class Query(Runner):
@@ -1267,6 +1273,7 @@ class Query(Runner):
                         "_clusters.failed",
                     ],
                     stop_after="hits.hits",
+                    with_cluster_details=True,
                 )
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
@@ -1310,9 +1317,8 @@ class Query(Runner):
                         ]
                         if props.get(key) is not None
                     }
-                    cluster_details = extract_cluster_details(r)
-                    if cluster_details:
-                        result["clusters"]["details"] = cluster_details
+                    if props.get("_clusters.details"):
+                        result["clusters"]["details"] = props["_clusters.details"]
 
                 return result
             else:
