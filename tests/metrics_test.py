@@ -766,6 +766,15 @@ class TestComponentTemplateProvider:
         custom_tmpl = json.loads(components[custom_key])
         assert custom_tmpl["template"] == {}
 
+    def test_component_template_structure_serverless(self):
+        provider = self._make_provider()
+        for store_name in ["metrics", "races", "results"]:
+            es_store_type = metrics.EsStoreType[store_name]
+            components = json.loads(provider.get_template(es_store_type, include_ilm=False))
+            versioned_name = f"{es_store_type.index_prefix}{es_store_type.data_stream_version}"
+            main_tmpl = json.loads(components[versioned_name])
+            assert "lifecycle" not in main_tmpl["template"]["settings"]["index"]
+
     def test_shard_settings_ignored_for_component_templates(self):
         provider = self._make_provider(number_of_shards=3, number_of_replicas=2)
 
@@ -804,6 +813,7 @@ class TestIndexHandler:
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
         self.client = mock.create_autospec(metrics.EsClient)
+        self.client.is_serverless = False
 
     def test_data_stream_template(self):
         self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", True)
@@ -1025,6 +1035,30 @@ class TestIndexHandler:
             expect_get_template=case.expect_get_template,
             expect_put_template=case.expect_put_template,
         )
+
+    def test_ensure_index_template_data_stream_serverless(self):
+        self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", True)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.overwrite_existing_templates", False)
+        self.client.is_serverless = True
+
+        handler = metrics.IndexHandler(self.cfg, self.client, metrics.EsStoreType.metrics)
+        self.client.component_template_exists.return_value = False
+        self.client.index_template_exists.return_value = False
+
+        handler.ensure_index_template(create=True)
+
+        self.client.get_lifecycle.assert_not_called()
+        self.client.put_lifecycle.assert_not_called()
+
+        # component template should be created without lifecycle settings
+        assert self.client.put_component_template.call_count == 2
+        for call_args in self.client.put_component_template.call_args_list:
+            name, tmpl = call_args.args
+            if metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX not in name:
+                tmpl_body = json.loads(tmpl)
+                assert "lifecycle" not in tmpl_body["template"]["settings"]["index"]
+
+        self._assert_index_template_calls(True, metrics.EsStoreType.metrics, expect_get_template=False, expect_put_template=True)
 
     @cases.cases(
         fresh_create=DateBasedEnsureTemplateCase(),

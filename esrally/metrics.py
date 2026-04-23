@@ -67,6 +67,10 @@ class EsClient:
     def component_template_exists(self, name):
         return self.guarded(self._client.cluster.exists_component_template, name=name)
 
+    @property
+    def is_serverless(self):
+        return getattr(self._client, "is_serverless", False)
+
     def get_lifecycle(self, name):
         return self.guarded(self._client.ilm.get_lifecycle, name=name)
 
@@ -393,32 +397,31 @@ class ComponentTemplateProvider(IndexTemplateProvider):
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
             return json.load(f)
 
-    def _get_component_templates(self, name, template_name, lifecycle_policy_name):
+    def _get_component_templates(self, name, template_name, lifecycle_policy_name, include_ilm=True):
         template = self._read(template_name)["template"]
+        index_settings = {**template.get("settings", {}).get("index", {})}
+        if include_ilm:
+            index_settings["lifecycle"] = {"name": lifecycle_policy_name}
 
         return {
             name: json.dumps(
                 {
                     "template": {
                         "mappings": template["mappings"],
-                        "settings": {
-                            "index": {
-                                **template.get("settings", {}).get("index", {}),
-                                "lifecycle": {"name": lifecycle_policy_name},
-                            }
-                        },
+                        "settings": {"index": index_settings},
                     }
                 }
             ),
             f"{name}{self.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}": json.dumps({"template": {}}),
         }
 
-    def get_template(self, es_store_type: EsStoreType):
+    def get_template(self, es_store_type: EsStoreType, include_ilm=True):
         return json.dumps(
             self._get_component_templates(
                 f"{es_store_type.index_prefix}{es_store_type.data_stream_version}",
                 es_store_type.index_template_resource,
                 es_store_type.ilm_default_name,
+                include_ilm=include_ilm,
             )
         )
 
@@ -461,6 +464,10 @@ class IndexHandler:
         return convert.to_bool(self._config.opts("reporting", "datastore.use_data_streams", default_value=True, mandatory=False))
 
     @property
+    def is_serverless(self):
+        return getattr(self._client, "is_serverless", False)
+
+    @property
     def overwrite_templates(self):
         return convert.to_bool(
             self._config.opts(section="reporting", key="datastore.overwrite_existing_templates", default_value=False, mandatory=False)
@@ -475,9 +482,10 @@ class IndexHandler:
 
     def ensure_index_template(self, create=False):
         if self.use_data_streams:
-            self._ensure_lifecycle_policy(
-                self._es_store_type.ilm_default_name, self._ilm_default_template(self._es_store_type.ilm_default_resource)
-            )
+            if not self.is_serverless:
+                self._ensure_lifecycle_policy(
+                    self._es_store_type.ilm_default_name, self._ilm_default_template(self._es_store_type.ilm_default_resource)
+                )
             self._ensure_data_stream_template()
         else:
             self._ensure_date_based_template(create)
@@ -547,7 +555,7 @@ class IndexHandler:
             self._index_template_provider, ComponentTemplateProvider
         ), "Expected ComponentTemplateProvider for data streams but got [%s]" % type(self._index_template_provider)
 
-        _index_template = json.loads(self._index_template_provider.get_template(self._es_store_type))
+        _index_template = json.loads(self._index_template_provider.get_template(self._es_store_type, include_ilm=not self.is_serverless))
 
         # The index template is composed of multiple component templates.
         # We need to ensure that all component templates exist and are up to date
