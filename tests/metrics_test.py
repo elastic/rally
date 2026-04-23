@@ -1790,6 +1790,27 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
             use_data_streams=True,
         )
 
+    def test_flush_requeues_docs_on_bulk_index_failure(self):
+        # If bulk_index raises, docs_to_flush must be prepended back to self._docs so
+        # the next flush can retry them. Docs added during the failed attempt come after.
+        ms, es_mock = self._make_metrics_store(use_data_streams=True)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        doc_before = {"name": "before"}
+        doc_during = {"name": "during"}
+        ms._add(doc_before)
+
+        def failing_bulk_index(*, index, items, use_data_streams):
+            ms._add(doc_during)
+            raise exceptions.RallyError("bulk failed")
+
+        es_mock.bulk_index.side_effect = failing_bulk_index
+        with pytest.raises(exceptions.RallyError):
+            ms.flush(refresh=False)
+
+        # doc_before must be re-queued ahead of doc_during.
+        assert ms._docs == [doc_before, doc_during]
+
 
 class TestEsRaceStore:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)

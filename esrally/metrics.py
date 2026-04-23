@@ -1209,11 +1209,17 @@ class EsMetricsStore(MetricsStore):
         if docs_to_flush:
             sw = time.StopWatch()
             sw.start()
-            self._client.bulk_index(
-                index=self._index_handler.index_name(self._race_timestamp),
-                items=docs_to_flush,
-                use_data_streams=self._index_handler.use_data_streams,
-            )
+            try:
+                self._client.bulk_index(
+                    index=self._index_handler.index_name(self._race_timestamp),
+                    items=docs_to_flush,
+                    use_data_streams=self._index_handler.use_data_streams,
+                )
+            except Exception:
+                # Re-queue at the front so the next flush retries these docs in order,
+                # ahead of any docs added to self._docs during the failed attempt.
+                self._docs = docs_to_flush + self._docs
+                raise
             sw.stop()
             self.logger.info(
                 "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
