@@ -1754,6 +1754,42 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         )
         return actual_error_rate
 
+    def test_flush_snapshots_docs_before_bulk_index(self):
+        # Docs appended to _docs between the for-loop in bulk_index (which sets _op_type)
+        # and helpers.bulk's iteration must not slip through without _op_type="create".
+        # The fix captures self._docs and resets it before calling bulk_index so that
+        # concurrent _add calls land in the new buffer and never reach this flush.
+        ms, es_mock = self._make_metrics_store(use_data_streams=True)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        doc_before = {"name": "before"}
+        doc_during = {"name": "during"}
+        ms._add(doc_before)
+
+        captured_items = []
+
+        def bulk_index_side_effect(*, index, items, use_data_streams):
+            # Simulate a background thread appending during bulk_index.
+            ms._add(doc_during)
+            captured_items.extend(items)
+
+        es_mock.bulk_index.side_effect = bulk_index_side_effect
+        ms.flush(refresh=False)
+
+        # Only doc_before should have been sent in this flush.
+        assert captured_items == [doc_before]
+        # doc_during must be buffered for the next flush, not lost.
+        assert ms._docs == [doc_during]
+
+        # A second flush sends doc_during.
+        es_mock.bulk_index.side_effect = None
+        ms.flush(refresh=False)
+        es_mock.bulk_index.assert_called_with(
+            index=ms._index_handler.index_name(self.RACE_TIMESTAMP),
+            items=[doc_during],
+            use_data_streams=True,
+        )
+
 
 class TestEsRaceStore:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
