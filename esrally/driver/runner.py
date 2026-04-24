@@ -932,9 +932,9 @@ def parse(
     :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
     :param lists: An optional list of property paths to JSON lists in the provided text.
     :param objects: An optional list of property paths to flat JSON objects in the provided text.
-    :param stop_after: An optional property path that triggers early termination once encountered, regardless of
-                       whether all props have been found. Useful when optional properties may not exist and all
-                       desired properties appear before this path in the JSON structure.
+    :param stop_after: An optional property path to an array that triggers early termination when the array starts,
+                       regardless of whether all props have been found. Useful when optional properties may not exist
+                       and all desired properties appear before this array in the JSON structure (e.g., "hits.hits").
     :param with_cluster_details: If True, extracts _clusters.details as a list under the key "_clusters.details".
     :return: A dict containing all properties, lists, and flat objects that have been found in the provided text.
     """
