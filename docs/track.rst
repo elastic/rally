@@ -1043,7 +1043,7 @@ If ``detailed-results`` is ``true`` the following meta-data are returned in addi
 The following meta-data are only present when returned by Elasticsearch (e.g. cross-cluster search or reduce phases):
 
 * ``num_reduce_phases``: Number of reduce phases executed (when applicable).
-* ``clusters``: Cross-cluster search summary and per-cluster details when the response includes ``_clusters``. The ``clusters`` object may contain ``total``, ``successful``, ``skipped``, ``running``, ``partial``, ``failed``, and ``details``. The ``details`` key maps each cluster name to an object with ``status``, ``indices``, ``took``, ``timed_out``, and ``_shards``.
+* ``clusters``: Cross-cluster search summary and per-cluster details when the response includes ``_clusters``. The ``clusters`` object may contain ``total``, ``successful``, ``skipped``, ``running``, ``partial``, ``failed``, and ``details``. The ``details`` key is a list of objects, where each object contains ``name`` (the cluster name), ``status``, ``indices``, ``took``, ``timed_out``, and ``_shards``.
 
 paginated-search
 ~~~~~~~~~~~~~~~~
