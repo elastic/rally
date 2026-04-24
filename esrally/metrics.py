@@ -25,6 +25,7 @@ import pickle
 import random
 import statistics
 import sys
+import threading
 import uuid
 import zlib
 from enum import Enum, IntEnum
@@ -1179,6 +1180,7 @@ class EsMetricsStore(MetricsStore):
         self._client = client_factory_class(cfg).create()
         self._index_handler = IndexHandler(self._config, self._client, EsStoreType.metrics)
         self._docs = None
+        self._docs_lock = threading.Lock()
 
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
@@ -1204,8 +1206,9 @@ class EsMetricsStore(MetricsStore):
             self._client.refresh(index=index_name)
 
     def flush(self, refresh=True):
-        docs_to_flush = self._docs
-        self._docs = []
+        with self._docs_lock:
+            docs_to_flush = self._docs
+            self._docs = []
         if docs_to_flush:
             sw = time.StopWatch()
             sw.start()
@@ -1218,7 +1221,8 @@ class EsMetricsStore(MetricsStore):
             except Exception:
                 # Re-queue at the front so the next flush retries these docs in order,
                 # ahead of any docs added to self._docs during the failed attempt.
-                self._docs = docs_to_flush + self._docs
+                with self._docs_lock:
+                    self._docs = docs_to_flush + self._docs
                 raise
             sw.stop()
             self.logger.info(
@@ -1235,7 +1239,8 @@ class EsMetricsStore(MetricsStore):
             self._client.refresh(index=self._index_handler.index_name(self._race_timestamp))
 
     def _add(self, doc):
-        self._docs.append(doc)
+        with self._docs_lock:
+            self._docs.append(doc)
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         query = {
@@ -1434,6 +1439,7 @@ class InMemoryMetricsStore(MetricsStore):
         """
         super().__init__(cfg=cfg, clock=clock, meta_info=meta_info)
         self.docs = []
+        self._docs_lock = threading.Lock()
 
     def __del__(self):
         """
@@ -1442,15 +1448,18 @@ class InMemoryMetricsStore(MetricsStore):
         del self.docs
 
     def _add(self, doc):
-        self.docs.append(doc)
+        with self._docs_lock:
+            self.docs.append(doc)
 
     def flush(self, refresh=True):
         pass
 
     def to_externalizable(self, clear=False):
-        docs = self.docs
-        if clear:
-            self.docs = []
+        with self._docs_lock:
+            if clear:
+                docs, self.docs = self.docs, []
+            else:
+                docs = list(self.docs)
         compressed = zlib.compress(pickle.dumps(docs))
         self.logger.debug(
             "Compression changed size of metric store from [%d] bytes to [%d] bytes", sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1)
