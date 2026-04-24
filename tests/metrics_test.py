@@ -566,6 +566,55 @@ class TestEsClient:
         ):
             client.guarded(raise_bulk_index_error)
 
+    def test_bulk_index_error_retryable_via_create_key(self):
+        # When data streams are in use, Elasticsearch structures bulk errors under "create",
+        # not "index". A retryable status (429) must still be retried, not treated as fatal.
+        bulk_index_errors = [
+            {
+                "create": {
+                    "_index": "rally-metrics-v1",
+                    "_id": None,
+                    "status": 429,
+                    "error": {"type": "circuit_breaking_exception", "reason": "Data too large"},
+                }
+            }
+        ]
+
+        call_count = 0
+
+        def raise_then_succeed():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise elasticsearch.helpers.BulkIndexError("1 document(s) failed to index", bulk_index_errors)
+
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        client.guarded(raise_then_succeed)
+        assert call_count == 2
+
+    def test_bulk_index_error_unretryable_via_create_key(self):
+        # An unretryable error under "create" must raise RallyError immediately.
+        bulk_index_errors = [
+            {
+                "create": {
+                    "_index": "rally-metrics-v1",
+                    "_id": None,
+                    "status": 409,
+                    "error": {"type": "version_conflict_engine_exception"},
+                }
+            }
+        ]
+
+        def raise_bulk_index_error():
+            raise elasticsearch.helpers.BulkIndexError("1 document(s) failed to index", bulk_index_errors)
+
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        with pytest.raises(
+            exceptions.RallyError,
+            match=r"Unretryable error encountered when sending metrics to remote metrics store: \[version_conflict_engine_exception\]",
+        ):
+            client.guarded(raise_bulk_index_error)
+
 
 class TestIndexTemplateProvider:
     def setup_method(self, method):

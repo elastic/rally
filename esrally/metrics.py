@@ -189,8 +189,9 @@ class EsClient:
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.helpers.BulkIndexError as e:
                 for err in e.errors:
-                    err_type = err.get("index", {}).get("error", {}).get("type", None)
-                    if err.get("index", {}).get("status", None) not in self.retryable_status_codes:
+                    op = err.get("create") or err.get("index") or {}
+                    err_type = op.get("error", {}).get("type", None)
+                    if op.get("status", None) not in self.retryable_status_codes:
                         msg = f"Unretryable error encountered when sending metrics to remote metrics store: [{err_type}]"
                         self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
                         raise exceptions.RallyError(msg)
