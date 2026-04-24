@@ -1804,10 +1804,9 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         return actual_error_rate
 
     def test_flush_snapshots_docs_before_bulk_index(self):
-        # Docs appended to _docs between the for-loop in bulk_index (which sets _op_type)
-        # and helpers.bulk's iteration must not slip through without _op_type="create".
-        # The fix captures self._docs and resets it before calling bulk_index so that
-        # concurrent _add calls land in the new buffer and never reach this flush.
+        # flush() must snapshot and reset self._docs before calling bulk_index so that
+        # docs added concurrently by background sampler threads land in the next flush,
+        # not in the current one where they would be sent without _op_type="create".
         ms, es_mock = self._make_metrics_store(use_data_streams=True)
         ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
 
