@@ -972,30 +972,29 @@ def parse(
                 current_object = {}
             elif in_object and event in ["boolean", "integer", "double", "number", "string"]:
                 current_object[prefix[len(in_object) + 1 :]] = value
-            # cluster details extraction
-            elif with_cluster_details:
-                if prefix.startswith("_clusters.details.") and event == "start_map" and prefix.count(".") == 2:
-                    # starting a new cluster detail object like "_clusters.details.cluster_name"
-                    in_cluster_detail = prefix.split(".")[-1]
-                    current_cluster_entry = {"name": in_cluster_detail}
-                elif in_cluster_detail:
-                    cluster_prefix = f"_clusters.details.{in_cluster_detail}"
-                    if prefix == f"{cluster_prefix}._shards" and event == "start_map":
-                        in_shards = True
-                        current_shards = {}
-                    elif in_shards:
-                        if event == "end_map" and prefix == f"{cluster_prefix}._shards":
-                            current_cluster_entry["_shards"] = current_shards
-                            in_shards = False
-                        elif event in ["boolean", "integer", "double", "number", "string"]:
-                            key = prefix.split(".")[-1]
-                            current_shards[key] = value
-                    elif event == "end_map" and prefix == cluster_prefix:
-                        cluster_details.append(current_cluster_entry)
-                        in_cluster_detail = None
-                    elif event in ["boolean", "integer", "double", "number", "string"]:
-                        key = prefix.split(".")[-1]
-                        current_cluster_entry[key] = value
+            # cluster details extraction - handle _shards nested object first
+            elif with_cluster_details and in_shards:
+                cluster_prefix = f"_clusters.details.{in_cluster_detail}"
+                if event == "end_map" and prefix == f"{cluster_prefix}._shards":
+                    current_cluster_entry["_shards"] = current_shards
+                    in_shards = False
+                elif event in ["boolean", "integer", "double", "number", "string"]:
+                    current_shards[prefix.split(".")[-1]] = value
+            # cluster details extraction - handle cluster entry
+            elif with_cluster_details and in_cluster_detail:
+                cluster_prefix = f"_clusters.details.{in_cluster_detail}"
+                if prefix == f"{cluster_prefix}._shards" and event == "start_map":
+                    in_shards = True
+                    current_shards = {}
+                elif event == "end_map" and prefix == cluster_prefix:
+                    cluster_details.append(current_cluster_entry)
+                    in_cluster_detail = None
+                elif event in ["boolean", "integer", "double", "number", "string"]:
+                    current_cluster_entry[prefix.split(".")[-1]] = value
+            # cluster details extraction - detect new cluster entry
+            elif with_cluster_details and prefix.startswith("_clusters.details.") and event == "start_map" and prefix.count(".") == 2:
+                in_cluster_detail = prefix.split(".")[-1]
+                current_cluster_entry = {"name": in_cluster_detail}
             # stop if we've reached the designated stop point (e.g., hits.hits which contains bulk data)
             if stop_after is not None and prefix == stop_after and event == "start_array":
                 break
