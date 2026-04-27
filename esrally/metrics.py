@@ -702,6 +702,7 @@ class MetricsStore:
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
         self.logger = logging.getLogger(__name__)
+        self._docs_lock = threading.Lock()
 
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
@@ -1181,7 +1182,6 @@ class EsMetricsStore(MetricsStore):
         self._client = client_factory_class(cfg).create()
         self._index_handler = IndexHandler(self._config, self._client, EsStoreType.metrics)
         self._docs = None
-        self._docs_lock = threading.Lock()
 
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
@@ -1433,7 +1433,6 @@ class InMemoryMetricsStore(MetricsStore):
         """
         super().__init__(cfg=cfg, clock=clock, meta_info=meta_info)
         self.docs = []
-        self._docs_lock = threading.Lock()
 
     def __del__(self):
         """
