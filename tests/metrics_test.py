@@ -566,9 +566,13 @@ class TestEsClient:
         ):
             client.guarded(raise_bulk_index_error)
 
-    def test_bulk_index_error_retryable_via_create_key(self):
+    @mock.patch("random.random")
+    @mock.patch("esrally.time.sleep")
+    def test_bulk_index_error_retryable_via_create_key(self, mocked_sleep, mocked_random):
         # When data streams are in use, Elasticsearch structures bulk errors under "create",
         # not "index". A retryable status (429) must still be retried, not treated as fatal.
+        mocked_random.return_value = 0
+
         bulk_index_errors = [
             {
                 "create": {
@@ -591,6 +595,7 @@ class TestEsClient:
         client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
         client.guarded(raise_then_succeed)
         assert call_count == 2
+        mocked_sleep.assert_called_once_with(1)
 
     def test_bulk_index_error_unretryable_via_create_key(self):
         # An unretryable error under "create" must raise RallyError immediately.
