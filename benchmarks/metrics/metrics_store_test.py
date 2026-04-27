@@ -21,18 +21,20 @@ concurrent access between flush() and background sampler threads (_add()).
 
 Three scenarios are measured:
 
-  uncontended  – single thread calling _add() in a tight loop.  Represents
+  uncontended   single thread calling _add() in a tight loop.  Represents
                  worker processes (InMemoryMetricsStore) and the coordinator
                  between flushes.
 
-  contended    – N sampler threads continuously calling _add() while the
+  contended     N sampler threads continuously calling _add() while the
                  main thread calls _add() too.  Represents the coordinator
                  with active telemetry devices.
 
-  no_lock      – same single-threaded loop but with the lock replaced by a
+  no_lock       same single-threaded loop but with the lock replaced by a
                  no-op context manager.  Provides the baseline cost without
                  locking so the overhead can be quantified.
 """
+
+# pylint: disable=protected-access
 
 import datetime
 import threading
@@ -40,7 +42,6 @@ import threading
 import pytest
 
 from esrally import config, metrics, time
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
