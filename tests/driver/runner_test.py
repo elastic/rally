@@ -404,14 +404,12 @@ class TestSelectiveJsonParser:
         }
 
     def test_parse_returns_only_found_props(self):
-        doc = io.BytesIO(
-            json.dumps(
-                {
-                    "num_reduce_phases": 3,
-                    "hits": {"total": {"value": 10}},
-                    "_clusters": {"total": 2, "successful": 2},
-                }
-            ).encode()
+        doc = self.doc_as_text(
+            {
+                "num_reduce_phases": 3,
+                "hits": {"total": {"value": 10}},
+                "_clusters": {"total": 2, "successful": 2},
+            }
         )
         found = runner.parse(
             doc,
@@ -426,36 +424,34 @@ class TestSelectiveJsonParser:
         assert "nonexistent" not in found
 
     def test_parse_missing_props_not_in_result(self):
-        doc = io.BytesIO(json.dumps({"a": 1, "b": 2}).encode())
+        doc = self.doc_as_text({"a": 1, "b": 2})
         found = runner.parse(doc, ["a", "x", "y.z"])
         assert found == {"a": 1}
         assert "x" not in found
         assert "y.z" not in found
 
     def test_parse_with_cluster_details(self):
-        doc = io.BytesIO(
-            json.dumps(
-                {
-                    "_clusters": {
-                        "total": 2,
-                        "details": {
-                            "c1": {
-                                "status": "successful",
-                                "indices": "idx1",
-                                "took": 5,
-                                "timed_out": False,
-                                "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
-                            },
-                            "c2": {
-                                "status": "successful",
-                                "indices": "idx2",
-                                "took": 10,
-                                "timed_out": False,
-                            },
+        doc = self.doc_as_text(
+            {
+                "_clusters": {
+                    "total": 2,
+                    "details": {
+                        "c1": {
+                            "status": "successful",
+                            "indices": "idx1",
+                            "took": 5,
+                            "timed_out": False,
+                            "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
                         },
-                    }
+                        "c2": {
+                            "status": "successful",
+                            "indices": "idx2",
+                            "took": 10,
+                            "timed_out": False,
+                        },
+                    },
                 }
-            ).encode()
+            }
         )
         result = runner.parse(doc, ["_clusters.total"], with_cluster_details=True)
         assert result["_clusters.total"] == 2
@@ -470,7 +466,7 @@ class TestSelectiveJsonParser:
         assert "_shards" not in c2
 
     def test_parse_with_cluster_details_empty_when_absent(self):
-        doc = io.BytesIO(json.dumps({"hits": {"total": {"value": 0}}}).encode())
+        doc = self.doc_as_text({"hits": {"total": {"value": 0}}})
         result = runner.parse(doc, ["hits.total.value"], with_cluster_details=True)
         assert result == {"hits.total.value": 0}
         assert "_clusters.details" not in result
