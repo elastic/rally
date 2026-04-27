@@ -997,6 +997,9 @@ def parse(
                 current_cluster_entry = {"name": in_cluster_detail}
             # stop if we've reached the designated stop point (e.g., hits.hits which contains bulk data)
             if stop_after is not None and prefix == stop_after and event == "start_array":
+                # if this array is also in lists, record it as non-empty since we won't see the next event
+                if lists is not None and prefix in lists:
+                    parsed_lists[prefix] = False
                 break
             # found all necessary properties (skip early termination if extracting cluster details)
             if (
