@@ -547,15 +547,8 @@ class FileOffsetTable:
             return False
 
         logger = logging.getLogger(__name__)
-        data_file_name = os.path.basename(self.data_file_path)
-        offset_file_name = f"{data_file_name}.offset"
-
-        # Construct the remote offset file URL
-        if corpus_base_url.endswith("/"):
-            separator = ""
-        else:
-            separator = "/"
-        remote_offset_url = f"{corpus_base_url}{separator}{offset_file_name}"
+        offset_file_name = os.path.basename(f"{self.data_file_path}.offset")
+        remote_offset_url = f"{corpus_base_url.rstrip('/')}/{offset_file_name}"
 
         logger.info("Attempting to download offset file from [%s]", remote_offset_url)
 
