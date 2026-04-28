@@ -134,6 +134,8 @@ class TestFileOffsetTable:
         offset_file = tmp_path / "docs.json.offset"
         if offset_content is not None:
             offset_file.write_text(offset_content)
+            data_mtime = os.path.getmtime(data_file)
+            os.utime(offset_file, (data_mtime + 1, data_mtime + 1))
         return io.FileOffsetTable(str(data_file), str(offset_file), "rt")
 
     def test_is_valid_with_well_formed_content(self, tmp_path):
@@ -146,7 +148,7 @@ class TestFileOffsetTable:
 
     def test_is_valid_rejects_empty_file(self, tmp_path):
         table = self._make_table(tmp_path, "line1\n", "")
-        assert table.is_valid() is True  # empty is valid: no entries yet, format loop exits immediately
+        assert table.is_valid() is False
 
     def test_is_valid_rejects_missing_offset_file(self, tmp_path):
         data_file = tmp_path / "docs.json"
