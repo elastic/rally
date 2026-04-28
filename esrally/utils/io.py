@@ -539,12 +539,11 @@ class FileOffsetTable:
         """
         Attempts to download a pre-computed offset file from the corpus location.
 
-        :param corpus_base_url: The base URL where the corpus data is hosted. If None, tries to infer from data file path.
+        :param corpus_base_url: The base URL where the corpus data is hosted. If None, no download is attempted.
         :return: True if download was successful, False otherwise.
         """
         if not corpus_base_url:
-            # Try to infer corpus URL from common Rally corpus locations
-            # This is a best-effort approach for common scenarios
+            # No corpus base URL was provided, so a download cannot be attempted.
             return False
 
         logger = logging.getLogger(__name__)
