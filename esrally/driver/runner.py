@@ -913,7 +913,14 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None) -> dict:
+def parse(
+    text: BytesIO,
+    props: list[str],
+    lists: list[str] = None,
+    objects: list[str] = None,
+    stop_after: str = None,
+    with_cluster_details: bool = False,
+) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
@@ -925,6 +932,10 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
     :param lists: An optional list of property paths to JSON lists in the provided text.
     :param objects: An optional list of property paths to flat JSON objects in the provided text.
+    :param stop_after: An optional property path to an array that triggers early termination when the array starts,
+                       regardless of whether all props have been found. Useful when optional properties may not exist
+                       and all desired properties appear before this array in the JSON structure (e.g., "hits.hits").
+    :param with_cluster_details: If True, extracts _clusters.details as a list under the key "_clusters.details".
     :return: A dict containing all properties, lists, and flat objects that have been found in the provided text.
     """
     text.seek(0)
@@ -936,6 +947,12 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     expect_end_array = False
     parsed_objects = {}
     in_object = None
+    # cluster details extraction state
+    cluster_details = []
+    in_cluster_detail = None
+    current_cluster_entry = {}
+    in_shards = False
+    current_shards = {}
     try:
         for prefix, event, value in parser:
             if expect_end_array:
@@ -955,9 +972,39 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
                 current_object = {}
             elif in_object and event in ["boolean", "integer", "double", "number", "string"]:
                 current_object[prefix[len(in_object) + 1 :]] = value
-            # found all necessary properties
+            # cluster details extraction - handle _shards nested object first
+            elif with_cluster_details and in_shards:
+                cluster_prefix = f"_clusters.details.{in_cluster_detail}"
+                if event == "end_map" and prefix == f"{cluster_prefix}._shards":
+                    current_cluster_entry["_shards"] = current_shards
+                    in_shards = False
+                elif event in ["boolean", "integer", "double", "number", "string"]:
+                    current_shards[prefix.split(".")[-1]] = value
+            # cluster details extraction - handle cluster entry
+            elif with_cluster_details and in_cluster_detail:
+                cluster_prefix = f"_clusters.details.{in_cluster_detail}"
+                if prefix == f"{cluster_prefix}._shards" and event == "start_map":
+                    in_shards = True
+                    current_shards = {}
+                elif event == "end_map" and prefix == cluster_prefix:
+                    cluster_details.append(current_cluster_entry)
+                    in_cluster_detail = None
+                elif event in ["boolean", "integer", "double", "number", "string"]:
+                    current_cluster_entry[prefix.split(".")[-1]] = value
+            # cluster details extraction - detect new cluster entry
+            elif with_cluster_details and prefix.startswith("_clusters.details.") and event == "start_map" and prefix.count(".") == 2:
+                in_cluster_detail = prefix.split(".")[-1]
+                current_cluster_entry = {"name": in_cluster_detail}
+            # stop if we've reached the designated stop point (e.g., hits.hits which contains bulk data)
+            if stop_after is not None and prefix == stop_after and event == "start_array":
+                # if this array is also in lists, record it as non-empty since we won't see the next event
+                if lists is not None and prefix in lists:
+                    parsed_lists[prefix] = False
+                break
+            # found all necessary properties (skip early termination if extracting cluster details)
             if (
-                len(parsed) == len(props)
+                not with_cluster_details
+                and len(parsed) == len(props)
                 and (lists is None or len(parsed_lists) == len(lists))
                 and (objects is None or len(parsed_objects) == len(objects))
             ):
@@ -969,6 +1016,8 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
 
     parsed.update(parsed_lists)
     parsed.update(parsed_objects)
+    if with_cluster_details and cluster_details:
+        parsed["_clusters.details"] = cluster_details
     return parsed
 
 
@@ -1217,7 +1266,16 @@ class Query(Runner):
                         "_shards.successful",
                         "_shards.skipped",
                         "_shards.failed",
+                        "num_reduce_phases",
+                        "_clusters.total",
+                        "_clusters.successful",
+                        "_clusters.skipped",
+                        "_clusters.running",
+                        "_clusters.partial",
+                        "_clusters.failed",
                     ],
+                    stop_after="hits.hits",
+                    with_cluster_details=True,
                 )
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
@@ -1229,7 +1287,7 @@ class Query(Runner):
                 shards_skipped = props.get("_shards.skipped", 0)
                 shards_failed = props.get("_shards.failed", 0)
 
-                return {
+                result = {
                     "weight": 1,
                     "unit": "ops",
                     "success": True,
@@ -1244,6 +1302,27 @@ class Query(Runner):
                         "failed": shards_failed,
                     },
                 }
+
+                # Optional fields (cross-cluster search, num_reduce_phases)
+                if props.get("num_reduce_phases") is not None:
+                    result["num_reduce_phases"] = props["num_reduce_phases"]
+                if props.get("_clusters.total") is not None or props.get("_clusters.successful") is not None:
+                    result["clusters"] = {
+                        dest: props[key]
+                        for key, dest in [
+                            ("_clusters.total", "total"),
+                            ("_clusters.successful", "successful"),
+                            ("_clusters.skipped", "skipped"),
+                            ("_clusters.running", "running"),
+                            ("_clusters.partial", "partial"),
+                            ("_clusters.failed", "failed"),
+                        ]
+                        if props.get(key) is not None
+                    }
+                    if props.get("_clusters.details"):
+                        result["clusters"]["details"] = props["_clusters.details"]
+
+                return result
             else:
                 return {
                     "weight": 1,
