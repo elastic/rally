@@ -144,7 +144,7 @@ def test_add_no_lock_with_sampler_threads(benchmark, in_memory_store):
     def sampler():
         while not stop.wait(timeout=0.1):
             for _ in range(SAMPLER_DOCS_PER_CALL):
-                in_memory_store._add(DOC)
+                in_memory_store._add_unlocked(DOC)
 
     threads = [threading.Thread(target=sampler, daemon=True) for _ in range(SAMPLER_THREADS)]
     for t in threads:
