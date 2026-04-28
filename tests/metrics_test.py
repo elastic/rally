@@ -566,6 +566,60 @@ class TestEsClient:
         ):
             client.guarded(raise_bulk_index_error)
 
+    @mock.patch("random.random")
+    @mock.patch("esrally.time.sleep")
+    def test_bulk_index_error_retryable_via_create_key(self, mocked_sleep, mocked_random):
+        # When data streams are in use, Elasticsearch structures bulk errors under "create",
+        # not "index". A retryable status (429) must still be retried, not treated as fatal.
+        mocked_random.return_value = 0
+
+        bulk_index_errors = [
+            {
+                "create": {
+                    "_index": "rally-metrics-v1",
+                    "_id": None,
+                    "status": 429,
+                    "error": {"type": "circuit_breaking_exception", "reason": "Data too large"},
+                }
+            }
+        ]
+
+        call_count = 0
+
+        def raise_then_succeed():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise elasticsearch.helpers.BulkIndexError("1 document(s) failed to index", bulk_index_errors)
+
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        client.guarded(raise_then_succeed)
+        assert call_count == 2
+        mocked_sleep.assert_called_once_with(1)
+
+    def test_bulk_index_error_unretryable_via_create_key(self):
+        # An unretryable error under "create" must raise RallyError immediately.
+        bulk_index_errors = [
+            {
+                "create": {
+                    "_index": "rally-metrics-v1",
+                    "_id": None,
+                    "status": 409,
+                    "error": {"type": "version_conflict_engine_exception"},
+                }
+            }
+        ]
+
+        def raise_bulk_index_error():
+            raise elasticsearch.helpers.BulkIndexError("1 document(s) failed to index", bulk_index_errors)
+
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        with pytest.raises(
+            exceptions.RallyError,
+            match=r"Unretryable error encountered when sending metrics to remote metrics store: \[version_conflict_engine_exception\]",
+        ):
+            client.guarded(raise_bulk_index_error)
+
 
 class TestIndexTemplateProvider:
     def setup_method(self, method):
@@ -1753,6 +1807,41 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
             index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}", body=expected_query
         )
         return actual_error_rate
+
+    def test_flush_snapshots_docs_before_bulk_index(self):
+        # flush() must snapshot and reset self._docs before calling bulk_index so that
+        # docs added concurrently by background sampler threads land in the next flush,
+        # not in the current one where they would be sent without _op_type="create".
+        ms, es_mock = self._make_metrics_store(use_data_streams=True)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        doc_before = {"name": "before"}
+        doc_during = {"name": "during"}
+        ms._add(doc_before)
+
+        captured_items = []
+
+        def bulk_index_side_effect(*, index, items, use_data_streams):
+            # Simulate a background thread appending during bulk_index.
+            ms._add(doc_during)
+            captured_items.extend(items)
+
+        es_mock.bulk_index.side_effect = bulk_index_side_effect
+        ms.flush(refresh=False)
+
+        # Only doc_before should have been sent in this flush.
+        assert captured_items == [doc_before]
+        # doc_during must be buffered for the next flush, not lost.
+        assert ms._docs == [doc_during]
+
+        # A second flush sends doc_during.
+        es_mock.bulk_index.side_effect = None
+        ms.flush(refresh=False)
+        es_mock.bulk_index.assert_called_with(
+            index=ms._index_handler.index_name(self.RACE_TIMESTAMP),
+            items=[doc_during],
+            use_data_streams=True,
+        )
 
 
 class TestEsRaceStore:

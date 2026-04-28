@@ -25,6 +25,7 @@ import pickle
 import random
 import statistics
 import sys
+import threading
 import uuid
 import zlib
 from enum import Enum, IntEnum
@@ -188,8 +189,9 @@ class EsClient:
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.helpers.BulkIndexError as e:
                 for err in e.errors:
-                    err_type = err.get("index", {}).get("error", {}).get("type", None)
-                    if err.get("index", {}).get("status", None) not in self.retryable_status_codes:
+                    op = err.get("create") or err.get("index") or {}
+                    err_type = op.get("error", {}).get("type", None)
+                    if op.get("status", None) not in self.retryable_status_codes:
                         msg = f"Unretryable error encountered when sending metrics to remote metrics store: [{err_type}]"
                         self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
                         raise exceptions.RallyError(msg)
@@ -700,6 +702,7 @@ class MetricsStore:
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
         self.logger = logging.getLogger(__name__)
+        self._docs_lock = threading.Lock()
 
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
@@ -1204,31 +1207,34 @@ class EsMetricsStore(MetricsStore):
             self._client.refresh(index=index_name)
 
     def flush(self, refresh=True):
-        if self._docs:
+        with self._docs_lock:
+            docs_to_flush = self._docs
+            self._docs = []
+        if docs_to_flush:
             sw = time.StopWatch()
             sw.start()
             self._client.bulk_index(
                 index=self._index_handler.index_name(self._race_timestamp),
-                items=self._docs,
+                items=docs_to_flush,
                 use_data_streams=self._index_handler.use_data_streams,
             )
             sw.stop()
             self.logger.info(
                 "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
-                len(self._docs),
+                len(docs_to_flush),
                 self._race_timestamp,
                 self._track,
                 self._challenge,
                 self._car,
                 sw.total_time(),
             )
-        self._docs = []
         # ensure we can search immediately after flushing
         if refresh:
             self._client.refresh(index=self._index_handler.index_name(self._race_timestamp))
 
     def _add(self, doc):
-        self._docs.append(doc)
+        with self._docs_lock:
+            self._docs.append(doc)
 
     def _get(self, name, task, operation_type, sample_type, node_name, mapper):
         query = {
@@ -1435,15 +1441,22 @@ class InMemoryMetricsStore(MetricsStore):
         del self.docs
 
     def _add(self, doc):
+        with self._docs_lock:
+            self.docs.append(doc)
+
+    # for testing purposes only
+    def _add_unlocked(self, doc):
         self.docs.append(doc)
 
     def flush(self, refresh=True):
         pass
 
     def to_externalizable(self, clear=False):
-        docs = self.docs
-        if clear:
-            self.docs = []
+        with self._docs_lock:
+            if clear:
+                docs, self.docs = self.docs, []
+            else:
+                docs = list(self.docs)
         compressed = zlib.compress(pickle.dumps(docs))
         self.logger.debug(
             "Compression changed size of metric store from [%d] bytes to [%d] bytes", sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1)
