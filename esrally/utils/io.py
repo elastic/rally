@@ -510,9 +510,29 @@ class FileOffsetTable:
 
     def is_valid(self) -> bool:
         """
-        :return: True iff the file offset table exists and it is up-to-date.
+        :return: True iff the file offset table exists, is up-to-date, and contains well-formed offset data.
         """
-        return self.exists() and os.path.getmtime(self.offset_table_path) >= os.path.getmtime(self.data_file_path)
+        if not self.exists():
+            return False
+        if os.path.getmtime(self.offset_table_path) < os.path.getmtime(self.data_file_path):
+            return False
+        return self._has_valid_format()
+
+    def _has_valid_format(self) -> bool:
+        try:
+            with open(self.offset_table_path, encoding="utf-8") as f:
+                for _ in range(3):
+                    line = f.readline()
+                    if not line:
+                        break
+                    parts = line.strip().split(";")
+                    if len(parts) != 2:
+                        return False
+                    int(parts[0])
+                    int(parts[1])
+            return True
+        except (OSError, ValueError):
+            return False
 
     def try_download_from_corpus_location(self, corpus_base_url: str | None) -> bool:
         """

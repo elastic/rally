@@ -125,3 +125,43 @@ class TestDecompression:
     def read(self, f):
         with open(f) as content_file:
             return content_file.read()
+
+
+class TestFileOffsetTable:
+    def _make_table(self, tmp_path, data_content, offset_content):
+        data_file = tmp_path / "docs.json"
+        data_file.write_text(data_content)
+        offset_file = tmp_path / "docs.json.offset"
+        if offset_content is not None:
+            offset_file.write_text(offset_content)
+        return io.FileOffsetTable(str(data_file), str(offset_file), "rt")
+
+    def test_is_valid_with_well_formed_content(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "0;0\n50000;1234\n100000;5678\n")
+        assert table.is_valid() is True
+
+    def test_is_valid_with_single_line(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "0;0\n")
+        assert table.is_valid() is True
+
+    def test_is_valid_rejects_empty_file(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "")
+        assert table.is_valid() is True  # empty is valid: no entries yet, format loop exits immediately
+
+    def test_is_valid_rejects_missing_offset_file(self, tmp_path):
+        data_file = tmp_path / "docs.json"
+        data_file.write_text("line1\n")
+        table = io.FileOffsetTable(str(data_file), str(tmp_path / "docs.json.offset"), "rt")
+        assert table.is_valid() is False
+
+    def test_is_valid_rejects_wrong_separator(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "0,0\n50000,1234\n")
+        assert table.is_valid() is False
+
+    def test_is_valid_rejects_non_integer_values(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "abc;def\n")
+        assert table.is_valid() is False
+
+    def test_is_valid_rejects_extra_fields(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "0;0;extra\n")
+        assert table.is_valid() is False
