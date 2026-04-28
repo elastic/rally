@@ -1444,6 +1444,10 @@ class InMemoryMetricsStore(MetricsStore):
         with self._docs_lock:
             self.docs.append(doc)
 
+    # for testing purposes only
+    def _add_unlocked(self, doc):
+        self.docs.append(doc)
+
     def flush(self, refresh=True):
         pass
 

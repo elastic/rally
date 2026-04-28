@@ -21,17 +21,16 @@ concurrent access between flush() and background sampler threads (_add()).
 
 Three scenarios are measured:
 
-  uncontended   single thread calling _add() in a tight loop.  Represents
-                 worker processes (InMemoryMetricsStore) and the coordinator
-                 between flushes.
+  uncontended   single thread calling _add() in a tight loop. Represents
+                worker processes (InMemoryMetricsStore) and the coordinator
+                between flushes.
 
-  contended     N sampler threads continuously calling _add() while the
-                 main thread calls _add() too.  Represents the coordinator
-                 with active telemetry devices.
+  contended     N sampler threads periodically calling _add() while the
+                main thread calls _add() too. Represents the coordinator
+                with active telemetry devices.
 
-  no_lock       same single-threaded loop but with the lock replaced by a
-                 no-op context manager.  Provides the baseline cost without
-                 locking so the overhead can be quantified.
+  no_lock       uses _add_unlocked() without lock. Provides the baseline
+                cost without locking so the overhead can be quantified.
 """
 
 # pylint: disable=protected-access
@@ -50,16 +49,7 @@ from esrally import config, metrics, time
 DOC = {"name": "indexing_throughput", "value": 5000, "unit": "docs/s"}
 SAMPLER_THREADS = 4  # used by the single contended test; sweep uses its own range
 DOCS_PER_CALL = 1000
-
-
-class _NoOpLock:
-    """Drop-in replacement for threading.Lock that acquires/releases nothing."""
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        pass
+SAMPLER_DOCS_PER_CALL = 10
 
 
 @pytest.fixture
@@ -95,18 +85,17 @@ def test_add_uncontended(benchmark, in_memory_store):
 
 
 # ---------------------------------------------------------------------------
-# Uncontended baseline: single thread, no-op lock
+# No lock: single thread
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.benchmark(group="metrics_store_add", warmup="on", warmup_iterations=1000, disable_gc=True)
-def test_add_no_lock_baseline(benchmark, in_memory_store):
-    """Baseline: same loop with the lock replaced by a no-op to isolate lock cost."""
-    in_memory_store._docs_lock = _NoOpLock()
+def test_add_no_lock(benchmark, in_memory_store):
+    """Baseline: same loop without lock."""
 
     def run():
         for _ in range(DOCS_PER_CALL):
-            in_memory_store._add(DOC)
+            in_memory_store._add_unlocked(DOC)
 
     benchmark(run)
 
@@ -116,14 +105,15 @@ def test_add_no_lock_baseline(benchmark, in_memory_store):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.benchmark(group="metrics_store_add", warmup="on", warmup_iterations=100, disable_gc=True)
+@pytest.mark.benchmark(group="metrics_store_add", warmup="on", warmup_iterations=100, disable_gc=True, max_time=10)
 def test_add_contended(benchmark, in_memory_store):
     """Cost of _add() while SAMPLER_THREADS background threads also call _add()."""
     stop = threading.Event()
 
     def sampler():
-        while not stop.is_set():
-            in_memory_store._add(DOC)
+        while not stop.wait(timeout=0.1):
+            for _ in range(SAMPLER_DOCS_PER_CALL):
+                in_memory_store._add(DOC)
 
     threads = [threading.Thread(target=sampler, daemon=True) for _ in range(SAMPLER_THREADS)]
     for t in threads:
@@ -142,6 +132,37 @@ def test_add_contended(benchmark, in_memory_store):
 
 
 # ---------------------------------------------------------------------------
+# No lock: background sampler threads together with the benchmark thread
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.benchmark(group="metrics_store_add", warmup="on", warmup_iterations=100, disable_gc=True, max_time=10)
+def test_add_no_lock_with_sampler_threads(benchmark, in_memory_store):
+    """Baseline: Cost of _add_unlocked() while SAMPLER_THREADS background threads also call _add_unlocked()."""
+    stop = threading.Event()
+
+    def sampler():
+        while not stop.wait(timeout=0.1):
+            for _ in range(SAMPLER_DOCS_PER_CALL):
+                in_memory_store._add(DOC)
+
+    threads = [threading.Thread(target=sampler, daemon=True) for _ in range(SAMPLER_THREADS)]
+    for t in threads:
+        t.start()
+
+    def run():
+        for _ in range(DOCS_PER_CALL):
+            in_memory_store._add_unlocked(DOC)
+
+    try:
+        benchmark(run)
+    finally:
+        stop.set()
+        for t in threads:
+            t.join()
+
+
+# ---------------------------------------------------------------------------
 # Thread-count sweep: 1 … 8 sampler threads (one per active telemetry device)
 # ---------------------------------------------------------------------------
 
@@ -150,8 +171,9 @@ def _contended_add(benchmark, store, n_samplers):
     stop = threading.Event()
 
     def sampler():
-        while not stop.is_set():
-            store._add(DOC)
+        while not stop.wait(timeout=0.1):
+            for _ in range(SAMPLER_DOCS_PER_CALL):
+                store._add(DOC)
 
     threads = [threading.Thread(target=sampler, daemon=True) for _ in range(n_samplers)]
     for t in threads:
@@ -169,21 +191,21 @@ def _contended_add(benchmark, store, n_samplers):
             t.join()
 
 
-@pytest.mark.benchmark(group="metrics_store_add_sweep", warmup="on", warmup_iterations=100, disable_gc=True)
+@pytest.mark.benchmark(group="metrics_store_add_sweep", warmup="on", warmup_iterations=100, disable_gc=True, max_time=10)
 def test_add_contended_1_sampler(benchmark, in_memory_store):
     _contended_add(benchmark, in_memory_store, 1)
 
 
-@pytest.mark.benchmark(group="metrics_store_add_sweep", warmup="on", warmup_iterations=100, disable_gc=True)
+@pytest.mark.benchmark(group="metrics_store_add_sweep", warmup="on", warmup_iterations=100, disable_gc=True, max_time=10)
 def test_add_contended_2_samplers(benchmark, in_memory_store):
     _contended_add(benchmark, in_memory_store, 2)
 
 
-@pytest.mark.benchmark(group="metrics_store_add_sweep", warmup="on", warmup_iterations=100, disable_gc=True)
+@pytest.mark.benchmark(group="metrics_store_add_sweep", warmup="on", warmup_iterations=100, disable_gc=True, max_time=10)
 def test_add_contended_4_samplers(benchmark, in_memory_store):
     _contended_add(benchmark, in_memory_store, 4)
 
 
-@pytest.mark.benchmark(group="metrics_store_add_sweep", warmup="on", warmup_iterations=100, disable_gc=True)
+@pytest.mark.benchmark(group="metrics_store_add_sweep", warmup="on", warmup_iterations=100, disable_gc=True, max_time=10)
 def test_add_contended_8_samplers(benchmark, in_memory_store):
     _contended_add(benchmark, in_memory_store, 8)
