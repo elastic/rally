@@ -521,7 +521,7 @@ class FileOffsetTable:
     def _has_valid_format(self) -> bool:
         valid_lines = 0
         try:
-            with open(self.offset_table_path, "rt", encoding="utf-8") as f:
+            with open(self.offset_table_path, encoding="utf-8") as f:
                 for line in f:
                     parts = line.strip().split(";")
                     if len(parts) != 2:
