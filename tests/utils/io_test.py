@@ -182,7 +182,8 @@ class TestFileOffsetTable:
         table = io.FileOffsetTable(str(data_file), str(offset_file), "rt")
 
         def fake_download(url, dest, **kwargs):
-            open(dest, "w").close()
+            with open(dest, "w"):
+                pass
 
         with mock.patch("esrally.utils.net.download", side_effect=fake_download) as mock_dl:
             result = table.try_download_from_corpus_location("http://example.com/corpora")
@@ -210,7 +211,8 @@ class TestFileOffsetTable:
         table = io.FileOffsetTable(str(data_file), str(offset_file), "rt")
 
         def fake_download(url, dest, **kwargs):
-            open(dest, "w").close()
+            with open(dest, "w"):
+                pass
 
         with mock.patch("esrally.utils.net.download", side_effect=fake_download) as mock_dl:
             table.try_download_from_corpus_location("http://example.com/corpora/")
