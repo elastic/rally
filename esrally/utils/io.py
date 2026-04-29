@@ -37,7 +37,7 @@ import zstandard
 # but they are treated the same by mypy, so I'm not going to use conditional imports here
 from typing_extensions import Self
 
-from esrally.utils import console
+from esrally.utils import console, net
 
 SUPPORTED_ARCHIVE_FORMATS = [".zip", ".bz2", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".zst"]
 
@@ -524,9 +524,57 @@ class FileOffsetTable:
 
     def is_valid(self) -> bool:
         """
-        :return: True iff the file offset table exists and it is up-to-date.
+        :return: True iff the file offset table exists, is up-to-date, and contains well-formed offset data.
         """
-        return self.exists() and os.path.getmtime(self.offset_table_path) >= os.path.getmtime(self.data_file_path)
+        if not self.exists():
+            return False
+        if os.path.getmtime(self.offset_table_path) < os.path.getmtime(self.data_file_path):
+            return False
+        return self._has_valid_format()
+
+    def _has_valid_format(self) -> bool:
+        valid_lines = 0
+        try:
+            with open(self.offset_table_path, encoding="utf-8") as f:
+                for line in f:
+                    parts = line.strip().split(";")
+                    if len(parts) != 2:
+                        return False
+                    int(parts[0])
+                    int(parts[1])
+                    valid_lines += 1
+            if valid_lines == 0:
+                return False
+            return True
+        except (OSError, ValueError):
+            return False
+
+    def try_download_from_corpus_location(self, corpus_base_url: str | None) -> bool:
+        """
+        Attempts to download a pre-computed offset file from the corpus location.
+
+        :param corpus_base_url: The base URL where the corpus data is hosted. If None, no download is attempted.
+        :return: True if download was successful, False otherwise.
+        """
+        if not corpus_base_url:
+            # No corpus base URL was provided, so a download cannot be attempted.
+            return False
+
+        logger = logging.getLogger(__name__)
+        offset_file_name = os.path.basename(f"{self.data_file_path}.offset")
+        remote_offset_url = f"{corpus_base_url.rstrip('/')}/{offset_file_name}"
+
+        logger.info("Attempting to download offset file from [%s]", remote_offset_url)
+
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(self.offset_table_path), exist_ok=True)
+        try:
+            net.download(remote_offset_url, self.offset_table_path)
+            logger.info("Successfully downloaded offset file from [%s]", remote_offset_url)
+            return True
+        except Exception as e:
+            logger.debug("Download failed: %s", str(e))
+            return False
 
     def __enter__(self) -> Self:
         self.offset_file = open(self.offset_table_path, self.mode)
@@ -604,16 +652,32 @@ class FileOffsetTable:
         os.remove(f"{data_file_path}.offset")
 
 
-def prepare_file_offset_table(data_file_path: str) -> Optional[int]:
+def prepare_file_offset_table(data_file_path: str, corpus_base_url: str | None) -> int | None:
     """
     Creates a file that contains a mapping from line numbers to file offsets for the provided path. This file is used internally by
     #skip_lines(data_file_path, data_file) to speed up line skipping.
 
     :param data_file_path: The path to a text file that is readable by this process.
+    :param corpus_base_url: Optional base URL where the corpus data (and potentially offset files) are hosted.
+                           If provided, Rally will attempt to download a pre-computed .offset file before creating one locally.
     :return The number of lines read or ``None`` if it did not have to build the file offset table.
     """
     file_offset_table = FileOffsetTable.create_for_data_file(data_file_path)
     if not file_offset_table.is_valid():
+        # First, try to download the offset file from the corpus location
+        if corpus_base_url:
+            console.info("Attempting to download offset file for [%s] from corpus location ... " % data_file_path, end="", flush=True)
+            if file_offset_table.try_download_from_corpus_location(corpus_base_url):
+                console.println("[DOWNLOADED]")
+                # Verify the downloaded file is valid
+                if file_offset_table.is_valid():
+                    return None
+                else:
+                    console.println("[INVALID - will create locally]")
+            else:
+                console.println("[NOT FOUND - will create locally]")
+
+        # Fall back to creating the offset file locally
         console.info("Preparing file offset table for [%s] ... " % data_file_path, end="", flush=True)
         line_number = 0
         with file_offset_table:
