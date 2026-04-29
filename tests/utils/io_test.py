@@ -252,7 +252,7 @@ class TestPrepareFileOffsetTable:
         with mock.patch("esrally.utils.net.download", side_effect=Exception("404 Not Found")):
             result = io.prepare_file_offset_table(data_file_path, "http://example.com/corpora")
 
-        assert result is not None
+        assert result == 100
 
     def test_falls_back_to_local_when_downloaded_file_is_invalid(self, tmp_path):
         data_file_path = self._write_data_file(tmp_path)
@@ -267,7 +267,7 @@ class TestPrepareFileOffsetTable:
         with mock.patch("esrally.utils.net.download", side_effect=fake_download_invalid):
             result = io.prepare_file_offset_table(data_file_path, "http://example.com/corpora")
 
-        assert result is not None
+        assert result == 100
         assert os.path.exists(offset_file_path)
 
     def test_skips_download_when_no_base_url(self, tmp_path):
@@ -277,7 +277,7 @@ class TestPrepareFileOffsetTable:
             result = io.prepare_file_offset_table(data_file_path, None)
 
         mock_dl.assert_not_called()
-        assert result is not None
+        assert result == 100
 
     def test_returns_none_when_valid_offset_already_exists(self, tmp_path):
         data_file_path = self._write_data_file(tmp_path)
