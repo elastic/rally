@@ -40,14 +40,14 @@ steps:
     retry:
       automatic:
         - limit: 1
-    timeout_in_minutes: 20
+    timeout_in_minutes: 40
   - label: ":docker: Build Docker Artifacts for Rally arm64"
     command: bash .buildkite/dev-docker/run.sh build arm64
     key: "arm64"
     retry:
       automatic:
         - limit: 1
-    timeout_in_minutes: 20
+    timeout_in_minutes: 40
     agents:
       machineType: "n4a-standard-4"
       image: family/core-ubuntu-2204-aarch64
