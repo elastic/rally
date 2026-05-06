@@ -163,7 +163,7 @@ class EsClientFactory:
         self.max_connections = max(256, self.client_options.pop("max_connections", 0))
         self.static_responses = self.client_options.pop("static_responses", None)
 
-        if self._is_set(self.client_options, "timeout"):
+        if "timeout" in self.client_options:
             self.client_options["request_timeout"] = self.client_options.pop("timeout")
 
     @staticmethod
