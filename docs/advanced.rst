@@ -307,38 +307,28 @@ Creating Your Own Operations With Custom Runners
 
 Runners execute an operation against Elasticsearch. Rally supports many operations out of the box already, see the :doc:`track reference </track>` for a complete list. If you want to call any other Elasticsearch API, define a custom runner.
 
-Consider we want to use the percolate API with an older version of Elasticsearch which is not supported by Rally. To achieve this, we implement a custom runner in the following steps.
+Consider we want to use an API which is not currently supported by Rally. We'll use the ES|QL API as an example. To achieve this, we implement a custom runner in the following steps.
 
-In ``track.json`` set the ``operation-type`` to "percolate" (you can choose this name freely)::
+In ``track.json`` set the ``operation-type`` to "esql" (you can choose this name freely)::
 
 
     {
-      "name": "percolator_with_content_google",
-      "operation-type": "percolate",
-      "body": {
-        "doc": {
-          "body": "google"
-        },
-        "track_scores": true
-      }
+      "name": "esql_example",
+      "operation-type": "esql",
+      "query": "FROM logs-* | STATS count=count(*) BY agent.hostname"
     }
-
 
 Then create a file ``track.py`` next to ``track.json`` and implement the following two functions::
 
-    async def percolate(es, params):
-        await es.percolate(
-                index="queries",
-                doc_type="content",
-                body=params["body"]
-              )
+    async def esql(es, params):
+        await es.esql.query(query=params["query"])
 
     def register(registry):
-        registry.register_runner("percolate", percolate, async_runner=True)
+        registry.register_runner("esql", esql, async_runner=True)
 
-The function ``percolate`` is the actual runner and takes the following parameters:
+The function ``esql`` is the actual runner and takes the following parameters:
 
-* ``es``, is an instance of the Elasticsearch Python client
+* ``es``, is an instance of the Elasticsearch Python client. See `Elasticsearch Python client querying documentation <https://www.elastic.co/docs/reference/elasticsearch/clients/python/querying/>`_ for more details on querying, including when you need to use a parameter that is not yet supported by the Elasticsearch Python client used by Rally.
 * ``params`` is a ``dict`` of parameters provided by its corresponding parameter source. Treat this parameter as read-only.
 
 This function can return:
@@ -349,7 +339,7 @@ This function can return:
 
 Similar to a parameter source you also need to bind the name of your operation type to the function within ``register``.
 
-To illustrate how to use custom return values, suppose we want to implement a custom runner that calls the `pending tasks API <https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-pending.html>`_ and returns the number of pending tasks as additional meta-data::
+To illustrate how to use custom return values, suppose we want to implement a custom runner that calls the `pending tasks API <https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-cluster-pending-tasks>`_ and returns the number of pending tasks as additional meta-data::
 
     async def pending_tasks(es, params):
         response = await es.cluster.pending_tasks()
@@ -365,19 +355,15 @@ To illustrate how to use custom return values, suppose we want to implement a cu
 
 If you need more control, you can also implement a runner class. The example above, implemented as a class looks as follows::
 
-    class PercolateRunner:
+    class EsqlRunner:
         async def __call__(self, es, params):
-            await es.percolate(
-                index="queries",
-                doc_type="content",
-                body=params["body"]
-            )
+            await es.esql.query(query=params["query"])
 
         def __repr__(self, *args, **kwargs):
-            return "percolate"
+            return "esql"
 
     def register(registry):
-        registry.register_runner("percolate", PercolateRunner(), async_runner=True)
+        registry.register_runner("esql", EsqlRunner(), async_runner=True)
 
 
 The actual runner is implemented in the method ``__call__`` and the same return value conventions apply as for functions. For debugging purposes you should also implement ``__repr__`` and provide a human-readable name for your runner. Finally, you need to register your runner in the ``register`` function.
