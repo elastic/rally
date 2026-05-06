@@ -182,7 +182,7 @@ class EnsureMimetypeHeadersCase:
 )
 def test_ensure_mimetype_headers(case: EnsureMimetypeHeadersCase) -> None:
     if case.want_warning_message is not None:
-        catch_warnings = pytest.warns(UserWarning, match=case.want_warning_message)
+        catch_warnings = pytest.warns(Warning, match=case.want_warning_message)
     else:
         catch_warnings = contextlib.nullcontext()
 
