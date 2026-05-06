@@ -161,7 +161,7 @@ class EnsureMimetypeHeadersCase:
         body=None,
         version="7.0.0",
         want_accept="application/vnd.elasticsearch+json; compatible-with=8",
-        want_warning_message=r"Invalid compatibility mode '7.0.0',.*",
+        want_warning_message=r"Invalid compatibility mode '7\.0\.0',.*",
     ),
     valid_version_no_warning=EnsureMimetypeHeadersCase(
         headers={"content-type": "application/json"},
