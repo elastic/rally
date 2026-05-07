@@ -348,8 +348,8 @@ class TestEsClientFactory:
     def test_timeout_is_translated_to_request_timeout(self):
         hosts = [{"host": "localhost", "port": 9200}]
         client_options = {"timeout": 60}
-        # make a copy so we can verify later that the factory did not modify it
-        original_client_options = dict(client_options)
+        # used to verify later that the factory did not modify it
+        original_client_options = client_options.copy()
 
         f = client.EsClientFactory(hosts, client_options)
 
