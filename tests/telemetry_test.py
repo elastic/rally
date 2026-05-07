@@ -5019,8 +5019,8 @@ class TestDiskUsageStats:
         t.on_benchmark_stop()
         es.options.return_value.indices.disk_usage.assert_has_calls(
             [
-                call(index="foo", run_expensive_tasks=True),
-                call(index="bar", run_expensive_tasks=True),
+                call(index="foo", run_expensive_tasks=True, flush=True),
+                call(index="bar", run_expensive_tasks=True, flush=True),
             ]
         )
 
@@ -5035,8 +5035,8 @@ class TestDiskUsageStats:
         t.on_benchmark_stop()
         es.options.return_value.indices.disk_usage.assert_has_calls(
             [
-                call(index="foo", run_expensive_tasks=True),
-                call(index="bar", run_expensive_tasks=True),
+                call(index="foo", run_expensive_tasks=True, flush=True),
+                call(index="bar", run_expensive_tasks=True, flush=True),
             ]
         )
 
@@ -5053,8 +5053,8 @@ class TestDiskUsageStats:
         t.on_benchmark_stop()
         es.options.return_value.indices.disk_usage.assert_has_calls(
             [
-                call(index="foo", run_expensive_tasks=True),
-                call(index="bar", run_expensive_tasks=True),
+                call(index="foo", run_expensive_tasks=True, flush=True),
+                call(index="bar", run_expensive_tasks=True, flush=True),
             ]
         )
 
@@ -5071,8 +5071,8 @@ class TestDiskUsageStats:
         t.on_benchmark_stop()
         es.options.return_value.indices.disk_usage.assert_has_calls(
             [
-                call(index="foo", run_expensive_tasks=True),
-                call(index="bar", run_expensive_tasks=True),
+                call(index="foo", run_expensive_tasks=True, flush=True),
+                call(index="bar", run_expensive_tasks=True, flush=True),
             ]
         )
 
@@ -5089,10 +5089,23 @@ class TestDiskUsageStats:
         t.on_benchmark_stop()
         es.options.return_value.indices.disk_usage.assert_has_calls(
             [
-                call(index="foo", run_expensive_tasks=True),
-                call(index="bar", run_expensive_tasks=True),
+                call(index="foo", run_expensive_tasks=True, flush=True),
+                call(index="bar", run_expensive_tasks=True, flush=True),
             ]
         )
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    def test_passes_flush_false_when_param_set(self, es):
+        cfg = create_config()
+        es.options.return_value.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
+        metrics_store = metrics.EsMetricsStore(cfg)
+        device = telemetry.DiskUsageStats(
+            {"disk-usage-stats-flush": False}, es, metrics_store, index_names=["foo"], data_stream_names=[]
+        )
+        t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
+        t.on_benchmark_start()
+        t.on_benchmark_stop()
+        es.options.return_value.indices.disk_usage.assert_called_once_with(index="foo", run_expensive_tasks=True, flush=False)
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("elasticsearch.Elasticsearch")
