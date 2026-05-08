@@ -359,14 +359,8 @@ def calculate_results(store, race, cfg=None):
             pass
     if not cluster_names:
         return calc()
-    # Multi-cluster: compute stats per cluster and attach to a single GlobalStats
-    result = calc(cluster_name=cluster_names[0])
-    result.cluster_names = cluster_names
-    result.op_metrics_by_cluster = {}
-    for cn in cluster_names:
-        cluster_stats = calc(cluster_name=cn)
-        result.op_metrics_by_cluster[cn] = cluster_stats.op_metrics
-    return result
+    # Multi-cluster: return one GlobalStats per cluster, each stamped with its name.
+    return [calc(cluster_name=cn) for cn in cluster_names]
 
 
 def calculate_system_results(store, node_name):
@@ -1598,7 +1592,9 @@ class Race:
             },
         }
         if self.results:
-            if hasattr(self.results, "as_dict"):
+            if isinstance(self.results, list):
+                d["results"] = [r.as_dict() if hasattr(r, "as_dict") else r for r in self.results]
+            elif hasattr(self.results, "as_dict"):
                 d["results"] = self.results.as_dict()
             else:
                 d["results"] = self.results
@@ -1651,10 +1647,12 @@ class Race:
 
         all_results = []
 
-        for item in self.results.as_flat_list():
-            result = result_template.copy()
-            result.update(item)
-            all_results.append(result)
+        results_list = self.results if isinstance(self.results, list) else [self.results]
+        for stats in results_list:
+            for item in stats.as_flat_list():
+                result = result_template.copy()
+                result.update(item)
+                all_results.append(result)
 
         return all_results
 
@@ -2161,7 +2159,7 @@ class GlobalStatsCalculator:
         self.challenge = challenge
 
     def __call__(self, cluster_name=None):
-        result = GlobalStats()
+        result = GlobalStats(cluster_name=cluster_name)
 
         for tasks in self.challenge.schedule:
             for task in tasks:
@@ -2416,10 +2414,9 @@ class GlobalStatsCalculator:
 
 
 class GlobalStats:
-    def __init__(self, d=None):
+    def __init__(self, d=None, cluster_name=None):
+        self.cluster_name = cluster_name
         self.op_metrics = self.v(d, "op_metrics", default=[])
-        self.cluster_names = self.v(d, "cluster_names", default=[])
-        self.op_metrics_by_cluster = self.v(d, "op_metrics_by_cluster", default={})
         self.total_time = self.v(d, "total_time")
         self.total_time_per_shard = self.v(d, "total_time_per_shard", default={})
         self.indexing_throttle_time = self.v(d, "indexing_throttle_time")
@@ -2486,11 +2483,15 @@ class GlobalStats:
                 doc["value"] = op_item[key]
             if "meta" in op_item:
                 doc["meta"] = op_item["meta"]
+            if self.cluster_name is not None:
+                doc["cluster"] = self.cluster_name
             return doc
 
         all_results = []
         for metric, value in self.as_dict().items():
-            if metric == "op_metrics":
+            if metric == "cluster_name":
+                pass
+            elif metric == "op_metrics":
                 for item in value:
                     if "throughput" in item:
                         all_results.append(op_metrics(item, "throughput"))

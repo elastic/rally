@@ -39,7 +39,8 @@ FINAL_SCORE = r"""
 
 
 def summarize(results, cfg: types.Config):
-    SummaryReporter(results, cfg).report()
+    first = results[0] if isinstance(results, list) else results
+    SummaryReporter(first, cfg).report()
 
 
 def compare(cfg: types.Config, baseline_id, contender_id):

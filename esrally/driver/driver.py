@@ -1840,16 +1840,16 @@ class AsyncIoAdapter:
         run_start = time.perf_counter()
 
         if len(all_hosts) > 1:
-            # Multi-cluster: run this step against each cluster, then move on to next step
+            # Multi-cluster: run all clusters in parallel for this step
+            self.logger.info(
+                "Worker[%s] executing tasks %s against clusters [%s] in parallel",
+                self.parent_worker_id,
+                task_names,
+                ", ".join(all_hosts),
+            )
+            awaitables = []
             for cluster_name in all_hosts:
-                self.logger.info(
-                    "Worker[%s] executing tasks %s against cluster [%s]",
-                    self.parent_worker_id,
-                    task_names,
-                    cluster_name,
-                )
                 params_per_task = {}
-                awaitables = []
                 for (client_id, task_allocation), es in zip(self.task_allocations, clients):
                     task = task_allocation.task
                     if task not in params_per_task:
@@ -1870,7 +1870,7 @@ class AsyncIoAdapter:
                     )
                     final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                     awaitables.append(final_executor())
-                await asyncio.gather(*awaitables)
+            await asyncio.gather(*awaitables)
         else:
             # Single cluster: current behavior
             params_per_task = {}
