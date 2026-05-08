@@ -230,6 +230,12 @@ def create_arg_parser():
         default="",
     )
     info_parser.add_argument(
+        "--ignore-unused-track-params",
+        help="Only warn (instead of failing) when track parameters are given that are not used by the track.",
+        action="store_true",
+        default=False,
+    )
+    info_parser.add_argument(
         "--challenge",
         help=f"Define the challenge to use. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`.",
     )
@@ -253,6 +259,12 @@ def create_arg_parser():
         "--track-params",
         help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
         default="",
+    )
+    render_track_parser.add_argument(
+        "--ignore-unused-track-params",
+        help="Only warn (instead of failing) when track parameters are given that are not used by the track.",
+        action="store_true",
+        default=False,
     )
     render_track_parser.add_argument(
         "--build-flavor",
@@ -686,6 +698,12 @@ def create_arg_parser():
         default="",
     )
     race_parser.add_argument(
+        "--ignore-unused-track-params",
+        help="Only warn (instead of failing) when track parameters are given that are not used by the track.",
+        action="store_true",
+        default=False,
+    )
+    race_parser.add_argument(
         "--challenge",
         help=f"Define the challenge to use. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`.",
     )
@@ -1115,6 +1133,7 @@ def configure_track_params(arg_parser, args, cfg: types.Config, command_requires
 
     if command_requires_track_details:
         cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
+        cfg.add(config.Scope.applicationOverride, "track", "params.ignore_unused", args.ignore_unused_track_params)
         cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
         cfg.add(config.Scope.applicationOverride, "track", "include.tasks", opts.csv_to_list(args.include_tasks))
         cfg.add(config.Scope.applicationOverride, "track", "exclude.tasks", opts.csv_to_list(args.exclude_tasks))
