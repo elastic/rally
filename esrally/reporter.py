@@ -39,8 +39,7 @@ FINAL_SCORE = r"""
 
 
 def summarize(results, cfg: types.Config):
-    first = results[0] if isinstance(results, list) else results
-    SummaryReporter(first, cfg).report()
+    SummaryReporter(results, cfg).report()
 
 
 def compare(cfg: types.Config, baseline_id, contender_id):
@@ -130,41 +129,34 @@ class SummaryReporter:
     def report(self):
         print_header(FINAL_SCORE)
 
-        stats = self.results
+        results_list = self.results if isinstance(self.results, list) else [self.results]
+        stats = results_list[0]
 
         warnings = []
         metrics_table = []
         metrics_table.extend(self._report_totals(stats))
         metrics_table.extend(self._report_ml_processing_times(stats))
-
         metrics_table.extend(self._report_gc_metrics(stats))
-
         metrics_table.extend(self._report_disk_usage(stats))
         metrics_table.extend(self._report_segment_memory(stats))
         metrics_table.extend(self._report_segment_counts(stats))
-
         metrics_table.extend(self._report_transform_stats(stats))
-
         metrics_table.extend(self._report_ingest_pipeline_stats(stats))
-
         metrics_table.extend(self._report_disk_usage_per_field(stats))
 
-        cluster_names = getattr(stats, "cluster_names", None) or []
-        op_metrics_by_cluster = getattr(stats, "op_metrics_by_cluster", None) or {}
-        multi_cluster = bool(cluster_names and op_metrics_by_cluster)
-
-        if multi_cluster:
+        if len(results_list) > 1:
+            cluster_names = [s.cluster_name for s in results_list]
+            op_metrics_by_cluster = {s.cluster_name: s.op_metrics for s in results_list}
             metrics_table.extend(self._report_op_metrics_multi_cluster(stats, cluster_names, op_metrics_by_cluster, warnings))
             # Pad 4-column rows (totals, gc, disk, etc.) to multi-cluster width
             padded = []
             for row in metrics_table:
                 if len(row) == 4:
-                    # [Metric, Task, Value, Unit] -> [Metric, Task, Value, "", "", ..., Unit]
                     padded.append([row[0], row[1], row[2]] + [""] * (len(cluster_names) - 1) + [row[3]])
                 else:
                     padded.append(row)
             metrics_table = padded
-            headers = ["Metric", "Task"] + list(cluster_names) + ["Unit"]
+            headers = ["Metric", "Task"] + cluster_names + ["Unit"]
         else:
             for record in stats.op_metrics:
                 task = record["task"]
