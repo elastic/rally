@@ -1,0 +1,44 @@
+# Posts the benchmark comparison comment on PRs from forks.
+# The main Benchmarks workflow runs on pull_request (restricted token) and cannot
+# comment on fork PRs. This workflow runs on workflow_run with full token and
+# only posts the comment; it does not run any code from the fork.
+name: Benchmarks Comment
+
+on:
+  workflow_run:
+    workflows: [Benchmarks]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  comment:
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name != github.event.workflow_run.repository.full_name
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Download comment body
+        uses: actions/download-artifact@v4
+        with:
+          name: comment-body
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Post or update PR comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR="${{ github.event.workflow_run.pull_requests[0].number }}"
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR}/comments" \
+            --jq '.[] | select(.body | startswith("<!-- benchmark-comparison -->")) | .id' \
+            | tail -1)
+          if [ -n "$COMMENT_ID" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" \
+              -X PATCH -F body=@comment-body.md
+          else
+            gh pr comment "${PR}" --body-file comment-body.md
+          fi
