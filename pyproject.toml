@@ -46,7 +46,7 @@ dependencies = [
     # License: Apache 2.0
     "elastic-transport==9.2.1",
     # License: MIT
-    "urllib3==2.6.3",
+    "urllib3==2.7.0",
     # License: Apache 2.0
     "aiohttp==3.13.4",
     # License: Apache 2.0
