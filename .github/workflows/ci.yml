@@ -133,6 +133,73 @@ jobs:
             /home/runner/.rally/benchmarks/races/**/*.log
           if-no-files-found: error
 
+  it-tracks-race:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Must match DEFAULT_IT_TRACKS_ES_VERSIONS in it/tracks/helpers.py
+        es-version: ["8.19.14", "9.3.3"]
+
+    runs-on: ubuntu-22.04
+    name: it/tracks ES ${{ matrix.es-version }}
+
+    steps:
+      - name: Check public IP address
+        run: curl -4s ifconfig.me
+        continue-on-error: true
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.22"
+      - name: Free Disk Space
+        continue-on-error: true
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+          tool-cache: false
+      - name: Check disk space before
+        run: df -h
+      - name: Run tests
+        run: make it_tracks ARGS='-n 1'
+        timeout-minutes: 160
+        env:
+          IT_TRACKS_ES_VERSIONS: ${{ matrix.es-version }}
+          ASSETS_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Zip it/tracks host logs
+        if: failure()
+        run: |
+          cd "${{ github.workspace }}"
+          if [ -d logs ]; then
+            zip -r "it-tracks-logs-${{ matrix.es-version }}.zip" logs
+          fi
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: it-tracks-logs-${{ matrix.es-version }}
+          path: it-tracks-logs-${{ matrix.es-version }}.zip
+          if-no-files-found: ignore
+      - name: Check disk space after
+        run: df -h
+      - uses: elastic/es-perf-github-status@v2
+        if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
+        with:
+          slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack_channel: ${{ secrets.SLACK_CHANNEL }}
+          status: FAILED
+          persist-credentials: false
+
   install-with-pyenv:
     runs-on: ubuntu-22.04
 

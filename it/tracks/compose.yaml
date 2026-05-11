@@ -1,0 +1,59 @@
+# Project name: resources (containers, networks, volumes) are prefixed and isolated
+# from other Compose stacks. Do not add `ports:` — Elasticsearch and Rally are only
+# reachable on the internal Docker network (service DNS names, e.g. es01:9200).
+#
+# IT_TRACKS_HOST_LOG_DIR: pytest sets an absolute path per test. Default below avoids
+# "variable is not set" when running e.g. `docker compose build` without env; path is
+# relative to this file's directory (it/tracks/) → checkout logs/_compose_default/.
+name: rally_it_tracks
+
+services:
+
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-9.3.3}
+    networks:
+      - elastic-net
+    environment:
+      - node.name=es01
+      - discovery.type=single-node
+      - xpack.security.enabled=false # Disabled for simpler benchmarking setup
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - ES_LOG_STYLE=file
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch-${ES_VERSION:-latest}/data
+      - ${IT_TRACKS_HOST_LOG_DIR:-../../logs/_compose_default}/es01:/usr/share/elasticsearch/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rally:
+    # Fixed tag so every compose project (per-test COMPOSE_PROJECT_NAME from pytest nodeid) shares one image.
+    image: rally-it-tracks-rally:it
+    build:
+      # Relative to this file: ../.. is the Rally checkout root.
+      context: ${RALLY_DOCKER_DIR:-../..}
+      dockerfile: ${RALLY_DOCKER_FILE:-it/tracks/Dockerfile}
+      args:
+        RALLY_TRACKS_REF: ${RALLY_TRACKS_REF:-master}
+    depends_on:
+      es01:
+        condition: service_healthy
+    volumes:
+      - rally_data:/rally/.rally
+      - ${IT_TRACKS_HOST_LOG_DIR:-../../logs/_compose_default}/rally:/rally/.rally/logs
+    networks:
+      - elastic-net
+
+networks:
+  elastic-net:
+    driver: bridge
+
+volumes:
+  es_data:
+  rally_data:

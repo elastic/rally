@@ -171,7 +171,7 @@ class Config(types.Config):
         if isinstance(cfg, cls):
             return cfg
         if isinstance(cfg, types.Config):
-            return cls(opts_from=cfg)
+            return cls(copy_from=cfg)
         raise TypeError(f"unexpected cfg: got type {type(cfg).__name__}, expected types.Config")
 
     def __init__(self, config_name: str | None = None, config_file_class=ConfigFile, copy_from: types.Config | None = None, **kwargs):
