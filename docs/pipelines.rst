@@ -14,7 +14,7 @@ You can get a list of all pipelines with ``esrally list pipelines``::
     from-sources             Builds and provisions Elasticsearch, runs a benchmark and reports results.
     from-distribution        Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.
     benchmark-only           Assumes an already running Elasticsearch instance, runs a benchmark and reports results
-    multi-cluster            Runs the benchmark against each cluster in --target-hosts (one full run per cluster).
+    multi-cluster            Runs a benchmark where each task is run against every cluster in --target-hosts.
 
 benchmark-only
 ~~~~~~~~~~~~~~
