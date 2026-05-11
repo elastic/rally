@@ -14,7 +14,7 @@ You can get a list of all pipelines with ``esrally list pipelines``::
     from-sources             Builds and provisions Elasticsearch, runs a benchmark and reports results.
     from-distribution        Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.
     benchmark-only           Assumes an already running Elasticsearch instance, runs a benchmark and reports results
-    multi-cluster            Runs a benchmark where each task is run against every cluster in --target-hosts.
+    multi-cluster            Runs the benchmark against all clusters in --target-hosts in parallel and reports results side-by-side.
 
 benchmark-only
 ~~~~~~~~~~~~~~
@@ -28,9 +28,9 @@ To benchmark a cluster, you also have to specify the hosts to connect to. An exa
 multi-cluster
 ~~~~~~~~~~~~~
 
-Use this pipeline when you want to run the same benchmark against multiple Elasticsearch clusters. Rally runs **one** benchmark; for each task (e.g. create-index, index-append, search), that task runs against **every** cluster before the benchmark moves on to the next task. So the order is: create-index on cluster A, create-index on cluster B, then index-append on cluster A, index-append on cluster B, and so on. Existing runners work unchanged (each sees one cluster as ``default`` per run). A single Rally process and actor system is used.
+Use this pipeline when you want to run the same benchmark against multiple Elasticsearch clusters simultaneously. For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task. Results are stored in a single race with a ``cluster`` field on each result document, and the terminal summary shows a side-by-side table with one column per cluster.
 
-You must specify multiple named clusters in ``--target-hosts`` using JSON format, with matching keys in ``--client-options``. You can use any cluster names (e.g. ``cluster-a``, ``cluster-b``); a ``default`` key is optional and used only for deriving distribution version if not set.
+You must specify two or more named clusters in ``--target-hosts`` using JSON format, with matching keys in ``--client-options``. Cluster names can be anything (e.g. ``cluster-a``, ``cluster-b``); a ``default`` key is used for deriving distribution version if ``--distribution-version`` is not set explicitly.
 
 **Example**
 
