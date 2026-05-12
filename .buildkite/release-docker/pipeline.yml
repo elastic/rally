@@ -30,7 +30,7 @@ steps:
     retry:
       automatic:
         - limit: 1
-    timeout_in_minutes: 40
+    timeout_in_minutes: 20
   - label: "Release Docker Artifacts for Rally"
     command: bash .buildkite/release-docker/run.sh build arm64
     # Run on GCP to use `docker`
@@ -38,7 +38,7 @@ steps:
     retry:
       automatic:
         - limit: 1
-    timeout_in_minutes: 40
+    timeout_in_minutes: 20
     agents:
       machineType: "n4a-standard-4"
       image: family/core-ubuntu-2204-aarch64
