@@ -305,46 +305,42 @@ Creating Your Own Operations With Custom Runners
 
     Your runner is on a performance-critical code-path. Double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
 
-Runners execute an operation against Elasticsearch. Rally supports many operations out of the box already, see the :doc:`track reference </track>` for a complete list. If you want to call any other Elasticsearch API, define a custom runner.
+Runners execute an operation against Elasticsearch. Rally supports many operations out of the box already, see the :doc:`track reference </track>` for a complete list. If you want to call any other Elasticsearch API or use any other feature of the Elasticsearch Python client, define a custom runner.
 
-Consider we want to use the percolate API with an older version of Elasticsearch which is not supported by Rally. To achieve this, we implement a custom runner in the following steps.
+Consider we want to use the reindex API, which is not currently supported by Rally. To achieve this, we implement a custom runner in the following steps.
 
-In ``track.json`` set the ``operation-type`` to "percolate" (you can choose this name freely)::
-
+In ``track.json`` set the ``operation-type`` to "reindex" (you can choose this name freely)::
 
     {
-      "name": "percolator_with_content_google",
-      "operation-type": "percolate",
-      "body": {
-        "doc": {
-          "body": "google"
-        },
-        "track_scores": true
-      }
+      "name": "reindex_example",
+      "operation-type": "reindex",
+      "source": "logs-*",
+      "dest": "reindexed-logs"
     }
 
 
 Then create a file ``track.py`` next to ``track.json`` and implement the following two functions::
 
-    async def percolate(es, params):
-        await es.percolate(
-                index="queries",
-                doc_type="content",
-                body=params["body"]
-              )
+    async def reindex(es, params):
+        response = await es.reindex(
+            source={"index": params["source"]},
+            dest={"index": params["dest"]},
+            request_timeout=params.get("request_timeout", 7200)
+        )
+        return response["total"], "docs"
 
     def register(registry):
-        registry.register_runner("percolate", percolate, async_runner=True)
+        registry.register_runner("reindex", reindex, async_runner=True)
 
-The function ``percolate`` is the actual runner and takes the following parameters:
+The function ``reindex`` is the actual runner and takes the following parameters:
 
-* ``es``, is an instance of the Elasticsearch Python client
+* ``es``, is an instance of the Elasticsearch Python client. See `Elasticsearch Python client querying documentation <https://www.elastic.co/docs/reference/elasticsearch/clients/python/querying/>`_ for more details on querying, including when you need to use an API or parameter that is not yet supported by the Elasticsearch Python client used by Rally.
 * ``params`` is a ``dict`` of parameters provided by its corresponding parameter source. Treat this parameter as read-only.
 
 This function can return:
 
 * Nothing at all. Then Rally will assume by default ``1`` and ``"ops"`` (see below).
-* A tuple of ``weight`` and a ``unit``, which is usually ``1`` and ``"ops"``. If you run a bulk operation you might return the bulk size here, for example in number of documents or in MB. Then you'd return for example ``(5000, "docs")`` Rally will use these values to store throughput metrics.
+* A tuple of ``weight`` and a ``unit``. If you run a bulk operation you might return the bulk size here, for example in number of documents or in MB. Then you'd return for example ``(5000, "docs")`` Rally will use these values to store throughput metrics.
 * A ``dict`` with arbitrary keys. If the ``dict`` contains the key ``weight`` it is assumed to be numeric and chosen as weight as defined above. The key ``unit`` is treated similarly. All other keys are added to the ``meta`` section of the corresponding service time and latency metrics records.
 
 Similar to a parameter source you also need to bind the name of your operation type to the function within ``register``.
@@ -365,19 +361,20 @@ To illustrate how to use custom return values, suppose we want to implement a cu
 
 If you need more control, you can also implement a runner class. The example above, implemented as a class looks as follows::
 
-    class PercolateRunner:
+    class PendingTasksRunner:
         async def __call__(self, es, params):
-            await es.percolate(
-                index="queries",
-                doc_type="content",
-                body=params["body"]
-            )
+            response = await es.cluster.pending_tasks()
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "pending-tasks-count": len(response["tasks"])
+            }
 
         def __repr__(self, *args, **kwargs):
-            return "percolate"
+            return "pending-tasks"
 
     def register(registry):
-        registry.register_runner("percolate", PercolateRunner(), async_runner=True)
+        registry.register_runner("pending-tasks", PendingTasksRunner(), async_runner=True)
 
 
 The actual runner is implemented in the method ``__call__`` and the same return value conventions apply as for functions. For debugging purposes you should also implement ``__repr__`` and provide a human-readable name for your runner. Finally, you need to register your runner in the ``register`` function.
