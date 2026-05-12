@@ -15,7 +15,7 @@ RUN for i in 1 2 3; do \
 RUN for i in 1 2 3; do \
       cd /tmp && \
       rm -f pbzip2-1.1.13.tar.gz && \
-      wget -q https://launchpad.net/pbzip2/1.1/1.1.13/+download/pbzip2-1.1.13.tar.gz && \
+      wget --timeout=60 -q https://launchpad.net/pbzip2/1.1/1.1.13/+download/pbzip2-1.1.13.tar.gz && \
       tar -xzf pbzip2-1.1.13.tar.gz && \
       cd pbzip2-1.1.13/ && \
       make install && \
