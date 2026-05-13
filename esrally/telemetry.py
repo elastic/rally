@@ -2359,12 +2359,8 @@ class DiskUsageStats(TelemetryDevice):
                 usage to fetch. Default is all indices in the track.
             ``disk-usage-stats-timeout``: Timeout in seconds for the disk usage API call. Default is 600s.
             ``disk-usage-stats-flush``: Whether to pass ``flush=true`` to the disk
-                usage API. Default is ``True`` (matches the API default). Set to
-                ``False`` on serverless, where the search-tier engine rejects
-                ``flush=true`` because the data lives on the index tier; with
-                ``flush=false`` the response may not include uncommitted data,
-                which is acceptable when telemetry runs after writes have
-                settled (e.g. post ``force-merge`` + ``wait-until-merges-finish``).
+                usage API. Default is ``True`` (matches the API default). When
+                ``False``, the response may not include uncommitted data.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         :param index_names: Names of indices defined by this track
