@@ -5099,9 +5099,7 @@ class TestDiskUsageStats:
         cfg = create_config()
         es.options.return_value.indices.disk_usage.return_value = {"_shards": {"failed": 0}}
         metrics_store = metrics.EsMetricsStore(cfg)
-        device = telemetry.DiskUsageStats(
-            {"disk-usage-stats-flush": False}, es, metrics_store, index_names=["foo"], data_stream_names=[]
-        )
+        device = telemetry.DiskUsageStats({"disk-usage-stats-flush": False}, es, metrics_store, index_names=["foo"], data_stream_names=[])
         t = telemetry.Telemetry(enabled_devices=[device.command], devices=[device])
         t.on_benchmark_start()
         t.on_benchmark_stop()
