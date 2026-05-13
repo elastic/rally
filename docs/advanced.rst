@@ -25,7 +25,6 @@ You can find an example in the ``http_logs`` track::
     {
       "name": "range",
         "index": "logs-*",
-        "type": "type",
         "body": {
           "query": {
             "range": {
@@ -171,19 +170,13 @@ Rally recognizes the parameter source and looks for a file ``track.py`` next to 
 
     def random_profession(track, params, **kwargs):
         # choose a suitable index: if there is only one defined for this track
-        # choose that one, but let the user always override index and type.
+        # choose that one, but let the user always override the index.
         if len(track.indices) == 1:
             default_index = track.indices[0].name
-            if len(track.indices[0].types) == 1:
-                default_type = track.indices[0].types[0].name
-            else:
-                default_type = None
         else:
             default_index = "_all"
-            default_type = None
 
         index_name = params.get("index", default_index)
-        type_name = params.get("type", default_type)
 
         # you must provide all parameters that the runner expects
         return {
@@ -195,7 +188,6 @@ Rally recognizes the parameter source and looks for a file ``track.py`` next to 
                 }
             },
             "index": index_name,
-            "type": type_name,
             "cache": params.get("cache", False)
         }
 
@@ -208,20 +200,15 @@ The function ``random_profession`` is the actual parameter source. Rally will bi
 
 The parameter source function needs to declare the parameters ``track``, ``params`` and ``**kwargs``. ``track`` contains a structured representation of the current track and ``params`` contains all parameters that have been defined in the operation definition in ``track.json``. We use it in the example to read the professions to choose. The third parameter is there to ensure a more stable API as Rally evolves.
 
-We also derive an appropriate index and document type from the track's index definitions but allow the user to override this choice with the ``index`` or ``type`` parameters::
+We also derive an appropriate index from the track's index definitions but allow the user to override this choice with the ``index`` parameter::
 
     {
       "name": "term",
       "operation-type": "search",
       "param-source": "my-custom-term-param-source"
       "professions": ["mechanic", "physician", "nurse"],
-      "index": "employee*",
-      "type": "docs"
+      "index": "employee*"
     }
-
-.. note::
-
-    Please remember about index and mapping types usage in ``index.json`` and ``track.json`` in Elasticsearch prior to 7.0.0 as specified in notes above.
 
 
 If you need more control, you need to implement a class. Below is the implementation of the same parameter source as a class::
@@ -232,20 +219,14 @@ If you need more control, you need to implement a class. Below is the implementa
     class TermParamSource:
         def __init__(self, track, params, **kwargs):
             # choose a suitable index: if there is only one defined for this track
-            # choose that one, but let the user always override index and type.
+            # choose that one, but let the user always override the index.
             if len(track.indices) == 1:
                 default_index = track.indices[0].name
-                if len(track.indices[0].types) == 1:
-                    default_type = track.indices[0].types[0].name
-                else:
-                    default_type = None
             else:
                 default_index = "_all"
-                default_type = None
 
             # we can eagerly resolve these parameters already in the constructor...
             self._index_name = params.get("index", default_index)
-            self._type_name = params.get("type", default_type)
             self._cache = params.get("cache", False)
             # ... but we need to resolve "profession" lazily on each invocation later
             self._params = params
@@ -267,7 +248,6 @@ If you need more control, you need to implement a class. Below is the implementa
                     }
                 },
                 "index": self._index_name,
-                "type": self._type_name,
                 "cache": self._cache
             }
 

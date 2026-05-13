@@ -625,7 +625,6 @@ class TestBulkIndexRunner:
                 "index_line",
             ),
             "action-metadata-present": False,
-            "type": "_doc",
             "index": "test1",
             "request-timeout": 3.0,
             "headers": {"x-test-id": "1234"},
@@ -649,7 +648,6 @@ class TestBulkIndexRunner:
         }
 
         es.bulk.assert_awaited_with(
-            doc_type="_doc",
             params={},
             body="index_line\nindex_line\nindex_line\n",
             headers={"x-test-id": "1234"},
@@ -660,48 +658,7 @@ class TestBulkIndexRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_bulk_index_success_without_metadata_with_doc_type(self, es):
-        bulk_response = {
-            "errors": False,
-            "took": 8,
-        }
-        es.bulk = mock.AsyncMock(
-            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
-        )
-        bulk = runner.BulkIndex()
-
-        bulk_params = {
-            "body": _build_bulk_body(
-                "index_line",
-                "index_line",
-                "index_line",
-            ),
-            "action-metadata-present": False,
-            "bulk-size": 3,
-            "unit": "docs",
-            "index": "test-index",
-            "type": "_doc",
-        }
-
-        result = await bulk(es, bulk_params)
-
-        assert result == {
-            "request-status": 200,
-            "max-doc-status": 200,
-            "took": 8,
-            "index": "test-index",
-            "weight": 3,
-            "unit": "docs",
-            "success": True,
-            "success-count": 3,
-            "error-count": 0,
-        }
-
-        es.bulk.assert_awaited_with(body=bulk_params["body"], index="test-index", doc_type="_doc", params={})
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @pytest.mark.asyncio
-    async def test_bulk_index_success_without_metadata_and_without_doc_type(self, es):
+    async def test_bulk_index_success_without_metadata(self, es):
         bulk_response = {
             "errors": False,
             "took": 8,
@@ -737,7 +694,7 @@ class TestBulkIndexRunner:
             "error-count": 0,
         }
 
-        es.bulk.assert_awaited_with(body=bulk_params["body"], index="test-index", doc_type=None, params={})
+        es.bulk.assert_awaited_with(body=bulk_params["body"], index="test-index", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -1537,7 +1494,6 @@ class TestBulkIndexRunner:
             "body": _build_bulk_body("index_line"),
             "index": "test",
             "action-metadata-present": False,
-            "type": "_doc",
             "bulk-size": 1,
             "unit": "docs",
             "detailed-results": True,
@@ -1562,7 +1518,7 @@ class TestBulkIndexRunner:
             "total-document-size-bytes": 10,
         }
 
-        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "false"})
+        es.bulk.assert_awaited_with(index="test", body=bulk_params["body"], params={"refresh": "false"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -1580,7 +1536,6 @@ class TestBulkIndexRunner:
             "body": _build_bulk_body("index_line"),
             "index": "test",
             "action-metadata-present": False,
-            "type": "_doc",
             "bulk-size": 1,
             "unit": "docs",
             "detailed-results": True,
@@ -1605,7 +1560,7 @@ class TestBulkIndexRunner:
             "total-document-size-bytes": 10,
         }
 
-        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "true"})
+        es.bulk.assert_awaited_with(index="test", body=bulk_params["body"], params={"refresh": "true"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -1624,7 +1579,6 @@ class TestBulkIndexRunner:
             "body": _build_bulk_body("index_line"),
             "index": "test",
             "action-metadata-present": False,
-            "type": "_doc",
             "bulk-size": 1,
             "unit": "docs",
             "refresh": "wait_for",
@@ -1644,7 +1598,7 @@ class TestBulkIndexRunner:
             "error-count": 0,
         }
 
-        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "wait_for"})
+        es.bulk.assert_awaited_with(index="test", body=bulk_params["body"], params={"refresh": "wait_for"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -1653,7 +1607,6 @@ class TestBulkIndexRunner:
             "body": _build_bulk_body("index_line"),
             "index": "test",
             "action-metadata-present": False,
-            "type": "_doc",
             "bulk-size": 1,
             "unit": "docs",
             "detailed-results": True,
@@ -2609,63 +2562,6 @@ class TestQueryRunner:
             headers={
                 "Accept-Encoding": "identity",
             },
-        )
-        es.clear_scroll.assert_not_called()
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @pytest.mark.asyncio
-    async def test_query_match_all_doc_type_fallback(self, es):
-        es.options.return_value = es
-        search_response = {
-            "timed_out": False,
-            "took": 5,
-            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
-            "hits": {
-                "total": {"value": 2, "relation": "eq"},
-                "hits": [
-                    {"title": "some-doc-1"},
-                    {"title": "some-doc-2"},
-                ],
-            },
-        }
-
-        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
-
-        query_runner = runner.Query()
-
-        params = {
-            "operation-type": "search",
-            "index": "unittest",
-            "type": "type",
-            "detailed-results": True,
-            "cache": None,
-            "body": {
-                "query": {
-                    "match_all": {},
-                },
-            },
-        }
-
-        async with query_runner:
-            result = await query_runner(es, params)
-
-        assert result == {
-            "weight": 1,
-            "unit": "ops",
-            "success": True,
-            "hits": 2,
-            "hits_relation": "eq",
-            "timed_out": False,
-            "took": 5,
-            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
-        }
-
-        es.perform_request.assert_awaited_once_with(
-            method="GET",
-            path="/unittest/type/_search",
-            body=params["body"],
-            params={},
-            headers=None,
         )
         es.clear_scroll.assert_not_called()
 

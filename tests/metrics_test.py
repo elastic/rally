@@ -1998,7 +1998,7 @@ class TestEsRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2098,7 +2098,7 @@ class TestEsRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2167,7 +2167,7 @@ class TestEsRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2356,7 +2356,7 @@ class TestEsResultsStore:
 
         t = track.Track(
             name="unittest-track",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
             meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"},
         )
@@ -2505,7 +2505,7 @@ class TestEsResultsStore:
 
         t = track.Track(
             name="unittest-track",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
             meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"},
         )
@@ -2932,7 +2932,7 @@ class TestFileRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2985,7 +2985,7 @@ class TestFileRaceStore:
     def test_filter_race(self):
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True)],
         )
 

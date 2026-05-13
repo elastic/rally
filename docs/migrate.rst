@@ -4,6 +4,11 @@ Migration Guide
 Migrating to Rally 2.14.0 (unreleased)
 --------------------------------------
 
+Document type fields are no longer supported
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Track fields ``types`` (on indices), ``target-type`` (on corpora and per-document sets), and the ``type`` parameter on ``search``/``scroll-search`` operations are no longer accepted by Rally. Mapping types were removed in Elasticsearch 7.0 and are rejected by Elasticsearch 8.0, which is Rally's minimum supported version. Tracks that still specify any of these fields will fail to load with a ``TrackSyntaxError``. Remove the fields from your track to fix the error.
+
 Migrate rally indices to data streams
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -468,7 +473,6 @@ A custom runner prior to Rally 2.0.0::
     def percolate(es, params):
         es.percolate(
            index="queries",
-           doc_type="content",
            body=params["body"]
         )
 
@@ -480,7 +484,6 @@ With Rally 2.0.0, the implementation changes as follows::
     async def percolate(es, params):
         await es.percolate(
                 index="queries",
-                doc_type="content",
                 body=params["body"]
               )
 

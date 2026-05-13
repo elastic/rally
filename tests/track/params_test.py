@@ -26,9 +26,8 @@ from esrally.utils import io
 
 
 class StaticBulkReader:
-    def __init__(self, index_name, type_name, bulks):
+    def __init__(self, index_name, bulks):
         self.index_name = index_name
-        self.type_name = type_name
         self.bulks = iter(bulks)
 
     def __enter__(self):
@@ -41,7 +40,7 @@ class StaticBulkReader:
         batch = []
         bulk = next(self.bulks)
         batch.append((len(bulk), bulk))
-        return self.index_name, self.type_name, batch
+        return self.index_name, batch
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         return False
@@ -134,34 +133,28 @@ class TestConflictingIdsBuilder:
 
 class TestActionMetaData:
     def test_generate_action_meta_data_without_id_conflicts(self):
-        assert next(params.GenerateActionMetaData("test_index", "test_type")) == (
+        assert next(params.GenerateActionMetaData("test_index")) == (
             "index",
-            '{"index": {"_index": "test_index", "_type": "test_type"}}\n',
+            '{"index": {"_index": "test_index"}}\n',
         )
 
     def test_generate_action_meta_data_create(self):
-        assert next(params.GenerateActionMetaData("test_index", None, use_create=True)) == (
+        assert next(params.GenerateActionMetaData("test_index", use_create=True)) == (
             "create",
             '{"create": {"_index": "test_index"}}\n',
         )
 
     def test_generate_action_meta_data_create_with_conflicts(self):
         with pytest.raises(exceptions.RallyError) as exc:
-            params.GenerateActionMetaData("test_index", None, conflicting_ids=[100, 200, 300, 400], use_create=True)
+            params.GenerateActionMetaData("test_index", conflicting_ids=[100, 200, 300, 400], use_create=True)
         assert exc.value.args[0] == "Index mode '_create' cannot be used with conflicting ids"
-
-    def test_generate_action_meta_data_typeless(self):
-        assert next(params.GenerateActionMetaData("test_index", type_name=None)) == (
-            "index",
-            '{"index": {"_index": "test_index"}}\n',
-        )
 
     def test_generate_action_meta_data_with_id_conflicts(self):
         def idx(id):
-            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % id
+            return "index", '{"index": {"_index": "test_index", "_id": "%s"}}\n' % id
 
         def conflict(action, id):
-            return action, f'{{"{action}": {{"_index": "test_index", "_type": "test_type", "_id": "{id}"}}}}\n'
+            return action, f'{{"{action}": {{"_index": "test_index", "_id": "{id}"}}}}\n'
 
         pseudo_random_conflicts = iter(
             [
@@ -190,7 +183,6 @@ class TestActionMetaData:
 
         generator = params.GenerateActionMetaData(
             "test_index",
-            "test_type",
             conflicting_ids=[100, 200, 300, 400],
             conflict_probability=25,
             on_conflict=conflict_action,
@@ -210,17 +202,11 @@ class TestActionMetaData:
         assert next(generator) == conflict(conflict_action, "100")
 
     def test_generate_action_meta_data_with_id_conflicts_and_recency_bias(self):
-        def idx(type_name, id):
-            if type_name:
-                return "index", f'{{"index": {{"_index": "test_index", "_type": "{type_name}", "_id": "{id}"}}}}\n'
-            else:
-                return "index", '{"index": {"_index": "test_index", "_id": "%s"}}\n' % id
+        def idx(id):
+            return "index", '{"index": {"_index": "test_index", "_id": "%s"}}\n' % id
 
-        def conflict(action, type_name, id):
-            if type_name:
-                return action, f'{{"{action}": {{"_index": "test_index", "_type": "{type_name}", "_id": "{id}"}}}}\n'
-            else:
-                return action, f'{{"{action}": {{"_index": "test_index", "_id": "{id}"}}}}\n'
+        def conflict(action, id):
+            return action, f'{{"{action}": {{"_index": "test_index", "_id": "{id}"}}}}\n'
 
         pseudo_random_conflicts = iter(
             [
@@ -259,11 +245,9 @@ class TestActionMetaData:
         )
 
         conflict_action = random.choice(["index", "update"])
-        type_name = random.choice([None, "test_type"])
 
         generator = params.GenerateActionMetaData(
             "test_index",
-            type_name=type_name,
             conflicting_ids=[100, 200, 300, 400, 500, 600],
             conflict_probability=25,
             # heavily biased towards recent ids
@@ -276,26 +260,26 @@ class TestActionMetaData:
         )
 
         # first one is always *not* drawn from a random index
-        assert next(generator) == idx(type_name, "100")
+        assert next(generator) == idx("100")
         # now we start using random ids
-        assert next(generator) == conflict(conflict_action, type_name, "100")
-        assert next(generator) == conflict(conflict_action, type_name, "100")
-        assert next(generator) == conflict(conflict_action, type_name, "100")
+        assert next(generator) == conflict(conflict_action, "100")
+        assert next(generator) == conflict(conflict_action, "100")
+        assert next(generator) == conflict(conflict_action, "100")
         # no conflict
-        assert next(generator) == idx(type_name, "200")
-        assert next(generator) == idx(type_name, "300")
-        assert next(generator) == idx(type_name, "400")
+        assert next(generator) == idx("200")
+        assert next(generator) == idx("300")
+        assert next(generator) == idx("400")
         # conflict
-        assert next(generator) == conflict(conflict_action, type_name, "400")
-        assert next(generator) == conflict(conflict_action, type_name, "300")
+        assert next(generator) == conflict(conflict_action, "400")
+        assert next(generator) == conflict(conflict_action, "300")
 
     def test_generate_action_meta_data_with_id_and_zero_conflict_probability(self):
         def idx(id):
-            return "index", '{"index": {"_index": "test_index", "_type": "test_type", "_id": "%s"}}\n' % id
+            return "index", '{"index": {"_index": "test_index", "_id": "%s"}}\n' % id
 
         test_ids = [100, 200, 300, 400]
 
-        generator = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=test_ids, conflict_probability=0)
+        generator = params.GenerateActionMetaData("test_index", conflicting_ids=test_ids, conflict_probability=0)
 
         assert list(generator) == [idx(id) for id in test_ids]
 
@@ -306,7 +290,7 @@ class TestIndexDataReader:
         bulk_size = 50
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
-        am_handler = params.GenerateActionMetaData("test_index", "test_type")
+        am_handler = params.GenerateActionMetaData("test_index")
 
         reader = params.MetadataIndexDataReader(
             data,
@@ -315,7 +299,6 @@ class TestIndexDataReader:
             file_source=source,
             action_metadata=am_handler,
             index_name="test_index",
-            type_name="test_type",
         )
 
         expected_bulk_sizes = [len(data)]
@@ -328,7 +311,7 @@ class TestIndexDataReader:
         bulk_size = 50
 
         source = params.Slice(io.StringAsFileSource, 3, len(data))
-        am_handler = params.GenerateActionMetaData("test_index", "test_type")
+        am_handler = params.GenerateActionMetaData("test_index")
 
         reader = params.MetadataIndexDataReader(
             data,
@@ -337,7 +320,6 @@ class TestIndexDataReader:
             file_source=source,
             action_metadata=am_handler,
             index_name="test_index",
-            type_name="test_type",
         )
 
         expected_bulk_sizes = [len(data) - 3]
@@ -358,7 +340,7 @@ class TestIndexDataReader:
         bulk_size = 3
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
-        am_handler = params.GenerateActionMetaData("test_index", "test_type")
+        am_handler = params.GenerateActionMetaData("test_index")
 
         reader = params.MetadataIndexDataReader(
             data,
@@ -367,7 +349,6 @@ class TestIndexDataReader:
             file_source=source,
             action_metadata=am_handler,
             index_name="test_index",
-            type_name="test_type",
         )
 
         expected_bulk_sizes = [3, 3, 1]
@@ -389,7 +370,7 @@ class TestIndexDataReader:
 
         # only 5 documents to index for this client
         source = params.Slice(io.StringAsFileSource, 0, 5)
-        am_handler = params.GenerateActionMetaData("test_index", "test_type")
+        am_handler = params.GenerateActionMetaData("test_index")
 
         reader = params.MetadataIndexDataReader(
             data,
@@ -398,7 +379,6 @@ class TestIndexDataReader:
             file_source=source,
             action_metadata=am_handler,
             index_name="test_index",
-            type_name="test_type",
         )
 
         expected_bulk_sizes = [3, 2]
@@ -408,19 +388,19 @@ class TestIndexDataReader:
 
     def test_read_bulks_and_assume_metadata_line_in_source_file(self):
         data = [
-            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"index": {"_index": "test_index"}\n',
             b'{"key": "value1"}\n',
-            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"index": {"_index": "test_index"}\n',
             b'{"key": "value2"}\n',
-            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"index": {"_index": "test_index"}\n',
             b'{"key": "value3"}\n',
-            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"index": {"_index": "test_index"}\n',
             b'{"key": "value4"}\n',
-            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"index": {"_index": "test_index"}\n',
             b'{"key": "value5"}\n',
-            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"index": {"_index": "test_index"}\n',
             b'{"key": "value6"}\n',
-            b'{"index": {"_index": "test_index", "_type": "test_type"}\n',
+            b'{"index": {"_index": "test_index"}\n',
             b'{"key": "value7"}\n',
         ]
         bulk_size = 3
@@ -428,7 +408,7 @@ class TestIndexDataReader:
         source = params.Slice(io.StringAsFileSource, 0, len(data))
 
         reader = params.SourceOnlyIndexDataReader(
-            data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, index_name="test_index", type_name="test_type"
+            data, batch_size=bulk_size, bulk_size=bulk_size, file_source=source, index_name="test_index"
         )
 
         expected_bulk_sizes = [3, 3, 1]
@@ -463,7 +443,6 @@ class TestIndexDataReader:
         source = params.Slice(io.StringAsFileSource, 0, len(data))
         am_handler = params.GenerateActionMetaData(
             "test_index",
-            "test_type",
             conflicting_ids=[100, 200, 300, 400],
             conflict_probability=25,
             on_conflict="update",
@@ -478,26 +457,25 @@ class TestIndexDataReader:
             file_source=source,
             action_metadata=am_handler,
             index_name="test_index",
-            type_name="test_type",
         )
 
         # consume all bulks
         bulks = []
         with reader:
-            for _, _, batch in reader:
+            for _, batch in reader:
                 for bulk_size, bulk in batch:
                     bulks.append(bulk)
 
         assert bulks == [
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n'
+            b'{"index": {"_index": "test_index", "_id": "100"}}\n'
             + b'{"key": "value1"}\n'
-            + b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n'
+            + b'{"update": {"_index": "test_index", "_id": "200"}}\n'
             + b'{"doc":{"key": "value2"}}\n',
-            b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n'
+            b'{"update": {"_index": "test_index", "_id": "400"}}\n'
             + b'{"doc":{"key": "value3"}}\n'
-            + b'{"update": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n'
+            + b'{"update": {"_index": "test_index", "_id": "300"}}\n'
             + b'{"doc":{"key": "value4"}}\n',
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n' + b'{"key": "value5"}\n',
+            b'{"index": {"_index": "test_index", "_id": "200"}}\n' + b'{"key": "value5"}\n',
         ]
 
     def test_read_bulk_with_external_id_and_zero_conflict_probability(self):
@@ -505,7 +483,7 @@ class TestIndexDataReader:
         bulk_size = 2
 
         source = params.Slice(io.StringAsFileSource, 0, len(data))
-        am_handler = params.GenerateActionMetaData("test_index", "test_type", conflicting_ids=[100, 200, 300, 400], conflict_probability=0)
+        am_handler = params.GenerateActionMetaData("test_index", conflicting_ids=[100, 200, 300, 400], conflict_probability=0)
 
         reader = params.MetadataIndexDataReader(
             data,
@@ -514,24 +492,23 @@ class TestIndexDataReader:
             file_source=source,
             action_metadata=am_handler,
             index_name="test_index",
-            type_name="test_type",
         )
 
         # consume all bulks
         bulks = []
         with reader:
-            for _, _, batch in reader:
+            for _, batch in reader:
                 for bulk_size, bulk in batch:
                     bulks.append(bulk)
 
         assert bulks == [
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "100"}}\n'
+            b'{"index": {"_index": "test_index", "_id": "100"}}\n'
             + b'{"key": "value1"}\n'
-            + b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "200"}}\n'
+            + b'{"index": {"_index": "test_index", "_id": "200"}}\n'
             + b'{"key": "value2"}\n',
-            b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "300"}}\n'
+            b'{"index": {"_index": "test_index", "_id": "300"}}\n'
             + b'{"key": "value3"}\n'
-            + b'{"index": {"_index": "test_index", "_type": "test_type", "_id": "400"}}\n'
+            + b'{"index": {"_index": "test_index", "_id": "400"}}\n'
             + b'{"key": "value4"}\n',
         ]
 
@@ -539,7 +516,7 @@ class TestIndexDataReader:
         assert len(expected_bulk_sizes) == len(expected_line_sizes), "Bulk sizes and line sizes must be equal"
         with reader:
             bulk_index = 0
-            for _, _, batch in reader:
+            for _, batch in reader:
                 for bulk_size, bulk in batch:
                     assert bulk_size == expected_bulk_sizes[bulk_index]
                     assert bulk.count(b"\n") == expected_line_sizes[bulk_index]
@@ -744,7 +721,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -777,7 +753,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -800,7 +775,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -823,7 +797,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -847,7 +820,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -933,7 +905,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -957,7 +928,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -981,7 +951,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1005,7 +974,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1029,7 +997,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1053,7 +1020,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1077,7 +1043,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1102,7 +1067,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=100000,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1126,7 +1090,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1154,7 +1117,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=10,
                         target_index="test-idx",
-                        target_type="test-type",
                     )
                 ],
             ),
@@ -1165,7 +1127,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=100,
                         target_index="test-idx2",
-                        target_type="type",
                     )
                 ],
             ),
@@ -1193,7 +1154,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=10,
                         target_index="test-idx",
-                        target_type="test-type",
                     )
                 ],
             ),
@@ -1204,7 +1164,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=100,
                         target_index="test-idx2",
-                        target_type="type",
                     )
                 ],
             ),
@@ -1241,7 +1200,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=100,
                         target_index="test-idx2",
-                        target_type="type",
                     )
                 ],
             ),
@@ -1276,7 +1234,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1304,7 +1261,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=300000,
                         target_index="test-idx",
-                        target_type="test-type",
                     )
                 ],
             ),
@@ -1315,7 +1271,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=700000,
                         target_index="test-idx2",
-                        target_type="type",
                     )
                 ],
             ),
@@ -1337,7 +1292,6 @@ class TestBulkIndexParamSource:
         def create_unit_test_reader(*args):
             return StaticBulkReader(
                 "idx",
-                "doc",
                 bulks=[
                     ['{"location" : [-0.1485188, 51.5250666]}'],
                     ['{"location" : [-0.1479949, 51.5252071]}'],
@@ -1367,7 +1321,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=300000,
                         target_index="test-idx",
-                        target_type="test-type",
                     )
                 ],
             ),
@@ -1378,7 +1331,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=700000,
                         target_index="test-idx2",
-                        target_type="type",
                     )
                 ],
             ),
@@ -1403,7 +1355,6 @@ class TestBulkIndexParamSource:
         def create_unit_test_reader(*args):
             return StaticBulkReader(
                 "idx",
-                "doc",
                 bulks=[
                     ['{"location" : [-0.1485188, 51.5250666]}'],
                     ['{"location" : [-0.1479949, 51.5252071]}'],
@@ -1433,7 +1384,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=100000,
                         target_index="test-idx",
-                        target_type="test-type",
                     )
                 ],
             ),
@@ -1462,7 +1412,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=50000,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1485,7 +1434,6 @@ class TestBulkIndexParamSource:
         def create_unit_test_reader(*args):
             return StaticBulkReader(
                 "idx",
-                "doc",
                 bulks=[
                     ['{"location" : [-0.1485188, 51.5250666]}'],
                     ['{"location" : [-0.1479949, 51.5252071]}'],
@@ -1502,37 +1450,31 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=3000000,
                         target_index="test-idx",
-                        target_type="test-type",
                     ),
                     track.Documents(
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=3000000,
                         target_index="test-idx",
-                        target_type="test-type",
                     ),
                     track.Documents(
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=3000000,
                         target_index="test-idx",
-                        target_type="test-type",
                     ),
                     track.Documents(
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=3000000,
                         target_index="test-idx",
-                        target_type="test-type",
                     ),
                     track.Documents(
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=3000000,
                         target_index="test-idx",
-                        target_type="test-type",
                     ),
                     track.Documents(
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=3000000,
                         target_index="test-idx",
-                        target_type="test-type",
                     ),
                 ],
             ),
@@ -1571,7 +1513,6 @@ class TestBulkIndexParamSource:
         def create_unit_test_reader(*args):
             return StaticBulkReader(
                 "idx",
-                "doc",
                 bulks=[
                     ['{"location" : [-0.1485188, 51.5250666]}'],
                     ['{"location" : [-0.1479949, 51.5252071]}'],
@@ -1588,7 +1529,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=120000,
                         target_index="test-idx",
-                        target_type="test-type",
                     )
                 ],
             ),
@@ -1618,7 +1558,6 @@ class TestBulkIndexParamSource:
         def create_unit_test_reader(*args):
             return StaticBulkReader(
                 "idx",
-                "doc",
                 bulks=[
                     ['{"location" : [-0.1485188, 51.5250666]}'],
                     ['{"location" : [-0.1479949, 51.5252071]}'],
@@ -1635,7 +1574,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=160000,
                         target_index="test-idx",
-                        target_type="test-type",
                     )
                 ],
             ),
@@ -1690,7 +1628,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=120000,
                         target_index="test-idx",
-                        target_type="test-type",
                     )
                 ],
             ),
@@ -1717,7 +1654,6 @@ class TestBulkIndexParamSource:
         def create_unit_test_reader(*args):
             return StaticBulkReader(
                 "idx",
-                "doc",
                 bulks=[
                     ['{"location" : [-0.1485188, 51.5250666]}'],
                     ['{"location" : [-0.1479949, 51.5252071]}'],
@@ -1732,7 +1668,6 @@ class TestBulkIndexParamSource:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=2,
                         target_index="test-idx",
-                        target_type="test-type",
                     )
                 ],
             ),
@@ -1766,7 +1701,6 @@ class TestBulkIndexParamSource:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1806,7 +1740,7 @@ class TestBulkDataGenerator:
     @classmethod
     def create_test_reader(cls, batches):
         def inner_create_test_reader(docs, *args):
-            return StaticBulkReader(docs.target_index, docs.target_type, batches)
+            return StaticBulkReader(docs.target_index, batches)
 
         return inner_create_test_reader
 
@@ -1818,7 +1752,6 @@ class TestBulkDataGenerator:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=10,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -1845,7 +1778,6 @@ class TestBulkDataGenerator:
                 "bulk-size": 5,
                 "unit": "docs",
                 "index": "test-idx",
-                "type": "test-type",
                 "my-custom-parameter": "foo",
                 "my-custom-parameter-2": True,
             },
@@ -1855,7 +1787,6 @@ class TestBulkDataGenerator:
                 "bulk-size": 3,
                 "unit": "docs",
                 "index": "test-idx",
-                "type": "test-type",
                 "my-custom-parameter": "foo",
                 "my-custom-parameter-2": True,
             },
@@ -1870,13 +1801,11 @@ class TestBulkDataGenerator:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=5,
                         target_index="logs-2017-01",
-                        target_type="docs",
                     ),
                     track.Documents(
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=0,
                         target_index="logs-2017-02",
-                        target_type="docs",
                     ),
                 ],
             ),
@@ -1887,13 +1816,11 @@ class TestBulkDataGenerator:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=5,
                         target_index="logs-2018-01",
-                        target_type="docs",
                     ),
                     track.Documents(
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=5,
                         target_index="logs-2018-02",
-                        target_type="docs",
                     ),
                 ],
             ),
@@ -1921,7 +1848,6 @@ class TestBulkDataGenerator:
                 "bulk-size": 5,
                 "unit": "docs",
                 "index": "logs-2017-01",
-                "type": "docs",
                 "my-custom-parameter": "foo",
                 "my-custom-parameter-2": True,
             },
@@ -1931,7 +1857,6 @@ class TestBulkDataGenerator:
                 "bulk-size": 5,
                 "unit": "docs",
                 "index": "logs-2018-01",
-                "type": "docs",
                 "my-custom-parameter": "foo",
                 "my-custom-parameter-2": True,
             },
@@ -1941,7 +1866,6 @@ class TestBulkDataGenerator:
                 "bulk-size": 5,
                 "unit": "docs",
                 "index": "logs-2018-02",
-                "type": "docs",
                 "my-custom-parameter": "foo",
                 "my-custom-parameter-2": True,
             },
@@ -1956,7 +1880,6 @@ class TestBulkDataGenerator:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=5,
                         target_index="logs-2017-01",
-                        target_type="docs",
                     ),
                 ],
             ),
@@ -1967,7 +1890,6 @@ class TestBulkDataGenerator:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=5,
                         target_index="logs-2018-01",
-                        target_type="docs",
                     ),
                 ],
             ),
@@ -1978,7 +1900,6 @@ class TestBulkDataGenerator:
                         source_format=track.Documents.SOURCE_FORMAT_BULK,
                         number_of_documents=5,
                         target_index="logs-2019-01",
-                        target_type="docs",
                     ),
                 ],
             ),
@@ -2016,7 +1937,6 @@ class TestBulkDataGenerator:
                     source_format=track.Documents.SOURCE_FORMAT_BULK,
                     number_of_documents=3,
                     target_index="test-idx",
-                    target_type="test-type",
                 )
             ],
         )
@@ -2044,7 +1964,6 @@ class TestBulkDataGenerator:
                 "bulk-size": 3,
                 "unit": "docs",
                 "index": "test-idx",
-                "type": "test-type",
                 "custom-param": "bar",
             }
         ]
@@ -2197,10 +2116,9 @@ class TestCreateIndexParamSource:
         assert p["request-params"] == {"wait_for_active_shards": True}
 
     def test_create_index_from_track_with_settings(self):
-        index1 = track.Index(name="index1", types=["type1"])
+        index1 = track.Index(name="index1")
         index2 = track.Index(
             name="index2",
-            types=["type1"],
             body={
                 "settings": {
                     "index.number_of_replicas": 0,
@@ -2257,10 +2175,9 @@ class TestCreateIndexParamSource:
         }
 
     def test_create_index_from_track_without_settings(self):
-        index1 = track.Index(name="index1", types=["type1"])
+        index1 = track.Index(name="index1")
         index2 = track.Index(
             name="index2",
-            types=["type1"],
             body={
                 "settings": {
                     "index.number_of_replicas": 0,
@@ -2311,9 +2228,9 @@ class TestCreateIndexParamSource:
         }
 
     def test_filter_index(self):
-        index1 = track.Index(name="index1", types=["type1"])
-        index2 = track.Index(name="index2", types=["type1"])
-        index3 = track.Index(name="index3", types=["type1"])
+        index1 = track.Index(name="index1")
+        index2 = track.Index(name="index2")
+        index3 = track.Index(name="index3")
 
         source = params.CreateIndexParamSource(
             track.Track(name="unit-test", indices=[index1, index2, index3]),
@@ -3072,7 +2989,7 @@ class TestDeleteComposableTemplateParamSource:
 
 class TestSearchParamSource:
     def test_passes_cache(self):
-        index1 = track.Index(name="index1", types=["type1"])
+        index1 = track.Index(name="index1")
 
         source = params.SearchParamSource(
             track=track.Track(name="unit-test", indices=[index1]),
@@ -3089,7 +3006,6 @@ class TestSearchParamSource:
 
         assert source.params() == {
             "index": "index1",
-            "type": None,
             "request-timeout": None,
             "opaque-id": None,
             "headers": {"header1": "value1"},
@@ -3124,7 +3040,6 @@ class TestSearchParamSource:
 
         assert source.params() == {
             "index": "data-stream-1",
-            "type": None,
             "request-timeout": 1.0,
             "headers": {"header1": "value1", "header2": "value2"},
             "opaque-id": "12345abcde",
@@ -3144,7 +3059,6 @@ class TestSearchParamSource:
             params.SearchParamSource(
                 track=track.Track(name="unit-test"),
                 params={
-                    "type": "type1",
                     "body": {
                         "query": {
                             "match_all": {},
@@ -3157,7 +3071,7 @@ class TestSearchParamSource:
         assert exc.value.args[0] == "'index' or 'data-stream' is mandatory and is missing for operation 'test_operation'"
 
     def test_passes_request_parameters(self):
-        index1 = track.Index(name="index1", types=["type1"])
+        index1 = track.Index(name="index1")
 
         source = params.SearchParamSource(
             track=track.Track(name="unit-test", indices=[index1]),
@@ -3173,7 +3087,6 @@ class TestSearchParamSource:
 
         assert source.params() == {
             "index": "index1",
-            "type": None,
             "request-timeout": None,
             "opaque-id": None,
             "headers": None,
@@ -3189,13 +3102,12 @@ class TestSearchParamSource:
         }
 
     def test_user_specified_index_overrides_defaults(self):
-        index1 = track.Index(name="index1", types=["type1"])
+        index1 = track.Index(name="index1")
 
         source = params.SearchParamSource(
             track=track.Track(name="unit-test", indices=[index1]),
             params={
                 "index": "_all",
-                "type": "type1",
                 "cache": False,
                 "response-compression-enabled": False,
                 "detailed-results": True,
@@ -3210,7 +3122,6 @@ class TestSearchParamSource:
 
         assert source.params() == {
             "index": "_all",
-            "type": "type1",
             "request-timeout": None,
             "opaque-id": "12345abcde",
             "headers": None,
@@ -3245,7 +3156,6 @@ class TestSearchParamSource:
 
         assert source.params() == {
             "index": "data-stream-2",
-            "type": None,
             "request-timeout": 1.0,
             "opaque-id": None,
             "headers": None,
@@ -3260,14 +3170,14 @@ class TestSearchParamSource:
             },
         }
 
-    def test_invalid_data_stream_with_type(self):
-        with pytest.raises(exceptions.InvalidSyntax) as exc:
-            ds1 = track.DataStream(name="data-stream-1")
+    def test_rejects_type_parameter(self):
+        ds1 = track.DataStream(name="data-stream-1")
 
+        with pytest.raises(exceptions.InvalidSyntax, match=r"Operation 'test_operation' specifies 'type'"):
             params.SearchParamSource(
                 track=track.Track(name="unit-test", data_streams=[ds1]),
                 params={
-                    "data-stream": "data-stream-2",
+                    "data-stream": "data-stream-1",
                     "type": "_doc",
                     "cache": False,
                     "response-compression-enabled": False,
@@ -3280,10 +3190,8 @@ class TestSearchParamSource:
                 operation_name="test_operation",
             )
 
-        assert exc.value.args[0] == "'type' not supported with 'data-stream' for operation 'test_operation'"
-
     def test_assertions_without_detailed_results_are_invalid(self):
-        index1 = track.Index(name="index1", types=["type1"])
+        index1 = track.Index(name="index1")
         with pytest.raises(exceptions.InvalidSyntax, match=r"The property \[detailed-results\] must be \[true\] if assertions are defined"):
             params.SearchParamSource(
                 track=track.Track(name="unit-test", indices=[index1]),
