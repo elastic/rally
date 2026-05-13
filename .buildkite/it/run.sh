@@ -7,6 +7,8 @@ source .buildkite/retry.sh
 function upload_logs {
     echo "--- Upload artifacts"
     buildkite-agent artifact upload "${RALLY_HOME}/.rally/logs/*.log"
+    tar zcf "${HOME}/race-files.tar.gz" "${RALLY_HOME}/.rally/benchmarks/races"
+    buildkite-agent artifact upload "${HOME}/race-files.tar.gz"
 }
 
 export TERM=dumb
