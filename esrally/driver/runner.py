@@ -63,6 +63,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
     register_runner(track.OperationType.Esql, Esql(), async_runner=True)
+    register_runner(track.OperationType.EsqlProfile, EsqlProfile(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -107,6 +108,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.RunUntil, Retry(RunUntil()), async_runner=True)
+    register_runner(track.OperationType.EnrichPolicy, Retry(EnrichPolicy()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -912,7 +914,14 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None) -> dict:
+def parse(
+    text: BytesIO,
+    props: list[str],
+    lists: list[str] = None,
+    objects: list[str] = None,
+    stop_after: str = None,
+    with_cluster_details: bool = False,
+) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
@@ -924,6 +933,10 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
     :param lists: An optional list of property paths to JSON lists in the provided text.
     :param objects: An optional list of property paths to flat JSON objects in the provided text.
+    :param stop_after: An optional property path to an array that triggers early termination when the array starts,
+                       regardless of whether all props have been found. Useful when optional properties may not exist
+                       and all desired properties appear before this array in the JSON structure (e.g., "hits.hits").
+    :param with_cluster_details: If True, extracts _clusters.details as a list under the key "_clusters.details".
     :return: A dict containing all properties, lists, and flat objects that have been found in the provided text.
     """
     text.seek(0)
@@ -935,6 +948,12 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     expect_end_array = False
     parsed_objects = {}
     in_object = None
+    # cluster details extraction state
+    cluster_details = []
+    in_cluster_detail = None
+    current_cluster_entry = {}
+    in_shards = False
+    current_shards = {}
     try:
         for prefix, event, value in parser:
             if expect_end_array:
@@ -954,9 +973,39 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
                 current_object = {}
             elif in_object and event in ["boolean", "integer", "double", "number", "string"]:
                 current_object[prefix[len(in_object) + 1 :]] = value
-            # found all necessary properties
+            # cluster details extraction - handle _shards nested object first
+            elif with_cluster_details and in_shards:
+                cluster_prefix = f"_clusters.details.{in_cluster_detail}"
+                if event == "end_map" and prefix == f"{cluster_prefix}._shards":
+                    current_cluster_entry["_shards"] = current_shards
+                    in_shards = False
+                elif event in ["boolean", "integer", "double", "number", "string"]:
+                    current_shards[prefix.split(".")[-1]] = value
+            # cluster details extraction - handle cluster entry
+            elif with_cluster_details and in_cluster_detail:
+                cluster_prefix = f"_clusters.details.{in_cluster_detail}"
+                if prefix == f"{cluster_prefix}._shards" and event == "start_map":
+                    in_shards = True
+                    current_shards = {}
+                elif event == "end_map" and prefix == cluster_prefix:
+                    cluster_details.append(current_cluster_entry)
+                    in_cluster_detail = None
+                elif event in ["boolean", "integer", "double", "number", "string"]:
+                    current_cluster_entry[prefix.split(".")[-1]] = value
+            # cluster details extraction - detect new cluster entry
+            elif with_cluster_details and prefix.startswith("_clusters.details.") and event == "start_map" and prefix.count(".") == 2:
+                in_cluster_detail = prefix.split(".")[-1]
+                current_cluster_entry = {"name": in_cluster_detail}
+            # stop if we've reached the designated stop point (e.g., hits.hits which contains bulk data)
+            if stop_after is not None and prefix == stop_after and event == "start_array":
+                # if this array is also in lists, record it as non-empty since we won't see the next event
+                if lists is not None and prefix in lists:
+                    parsed_lists[prefix] = False
+                break
+            # found all necessary properties (skip early termination if extracting cluster details)
             if (
-                len(parsed) == len(props)
+                not with_cluster_details
+                and len(parsed) == len(props)
                 and (lists is None or len(parsed_lists) == len(lists))
                 and (objects is None or len(parsed_objects) == len(objects))
             ):
@@ -968,6 +1017,8 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
 
     parsed.update(parsed_lists)
     parsed.update(parsed_objects)
+    if with_cluster_details and cluster_details:
+        parsed["_clusters.details"] = cluster_details
     return parsed
 
 
@@ -1216,7 +1267,16 @@ class Query(Runner):
                         "_shards.successful",
                         "_shards.skipped",
                         "_shards.failed",
+                        "num_reduce_phases",
+                        "_clusters.total",
+                        "_clusters.successful",
+                        "_clusters.skipped",
+                        "_clusters.running",
+                        "_clusters.partial",
+                        "_clusters.failed",
                     ],
+                    stop_after="hits.hits",
+                    with_cluster_details=True,
                 )
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
@@ -1228,7 +1288,7 @@ class Query(Runner):
                 shards_skipped = props.get("_shards.skipped", 0)
                 shards_failed = props.get("_shards.failed", 0)
 
-                return {
+                result = {
                     "weight": 1,
                     "unit": "ops",
                     "success": True,
@@ -1243,6 +1303,27 @@ class Query(Runner):
                         "failed": shards_failed,
                     },
                 }
+
+                # Optional fields (cross-cluster search, num_reduce_phases)
+                if props.get("num_reduce_phases") is not None:
+                    result["num_reduce_phases"] = props["num_reduce_phases"]
+                if props.get("_clusters.total") is not None or props.get("_clusters.successful") is not None:
+                    result["clusters"] = {
+                        dest: props[key]
+                        for key, dest in [
+                            ("_clusters.total", "total"),
+                            ("_clusters.successful", "successful"),
+                            ("_clusters.skipped", "skipped"),
+                            ("_clusters.running", "running"),
+                            ("_clusters.partial", "partial"),
+                            ("_clusters.failed", "failed"),
+                        ]
+                        if props.get(key) is not None
+                    }
+                    if props.get("_clusters.details"):
+                        result["clusters"]["details"] = props["_clusters.details"]
+
+                return result
             else:
                 return {
                     "weight": 1,
@@ -3018,6 +3099,25 @@ class FieldCaps(Runner):
 
 
 class Esql(Runner):
+    """
+    Runs an ES|QL query against Elasticsearch.
+
+    It expects at least the following keys in the `params` hash:
+
+    * `query`: The ES|QL query string to execute.
+
+    The following parameters are optional:
+
+    * `body`: Additional body parameters to include in the request.
+    * `filter`: A filter to apply to the query.
+    * `detailed-results` (default: ``False``): Records more detailed meta-data about queries. As it analyzes the
+                                               corresponding response in more detail, this might incur additional
+                                               overhead which can skew measurement results.
+
+    If the response contains ``is_partial: true``, the operation is marked as failed. This will cause the benchmark
+    to abort if ``--on-error=abort`` is specified, or record an error and continue otherwise.
+    """
+
     async def __call__(self, es, params):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
@@ -3030,13 +3130,132 @@ class Esql(Runner):
         if not bool(headers):
             # counter-intuitive, but preserves prior behavior
             headers = None
+        detailed_results = params.get("detailed-results", False)
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
-        await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
-        return {"success": True, "unit": "ops", "weight": 1}
+        r = await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
+
+        if detailed_results:
+            props = parse(
+                r,
+                [
+                    "took",
+                    "is_partial",
+                    "documents_found",
+                    "values_loaded",
+                    "completion_time_in_millis",
+                    "start_time_in_millis",
+                    "expiration_time_in_millis",
+                ],
+            )
+            is_partial = props.get("is_partial", False)
+            result = {
+                "weight": 1,
+                "unit": "ops",
+                "success": not is_partial,
+                "is_partial": is_partial,
+                "took": props.get("took"),
+                "documents_found": props.get("documents_found"),
+                "values_loaded": props.get("values_loaded"),
+                "completion_time_in_millis": props.get("completion_time_in_millis"),
+                "start_time_in_millis": props.get("start_time_in_millis"),
+                "expiration_time_in_millis": props.get("expiration_time_in_millis"),
+            }
+            if is_partial:
+                result["error-type"] = "esql"
+                result["error-description"] = "ES|QL query returned partial results"
+            return result
+        else:
+            props = parse(r, ["is_partial"])
+            is_partial = props.get("is_partial", False)
+            result = {
+                "weight": 1,
+                "unit": "ops",
+                "success": not is_partial,
+                "is_partial": is_partial,
+            }
+            if is_partial:
+                result["error-type"] = "esql"
+                result["error-description"] = "ES|QL query returned partial results"
+            return result
 
     def __repr__(self, *args, **kwargs):
         return "esql"
+
+
+class EsqlProfile(Runner):
+    """
+    Runs an ES|QL query using profile: true, and adds the profile information to the result:
+
+    - query.took_ms: Total query time
+    - planning.took_ms: Planning time (includes parsing, preanalysis, analysis)
+    - parsing.took_ms: Time to parse the ES|QL query
+    - preanalysis.took_ms: Preanalysis time (field_caps, enrich policies, lookup indices)
+    - analysis.took_ms: Analysis time before optimizations
+    - <driver>.number: Count of driver instances
+    - <driver>.took_ms: Maximum took time across all driver instances
+    - <driver>.cpu_ms: Maximum CPU time across all driver instances
+    - <driver>.took_total_ms: Sum of took times across all driver instances
+    - <driver>.cpu_total_ms: Sum of CPU times across all driver instances
+    - <driver>.<operator>.process_ms: Processing time for each operator
+    - <driver>.<operator>.processed_slices: Processed slices per operator
+    - <plan>.<optimization>.took_ms: Plan optimization timing
+    """
+
+    async def __call__(self, es, params):
+        params, request_params, transport_params, headers = self._transport_request_params(params)
+        es = es.options(**transport_params)
+        query = mandatory(params, "query", self)
+        body = params.get("body", {})
+        body["query"] = query
+        body["profile"] = True
+        query_filter = params.get("filter")
+        if query_filter:
+            body["filter"] = query_filter
+        if not bool(headers):
+            headers = None
+        response = await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
+        profile = response["profile"]
+        result = {"weight": 1, "unit": "ops", "success": True}
+        if profile:
+            for phase_name in ["query", "planning", "parsing", "preanalysis", "dependency_resolution", "analysis"]:
+                if phase_name in profile:
+                    took_nanos = profile.get(phase_name, {}).get("took_nanos", 0)
+                    if took_nanos > 0:
+                        result[f"{phase_name}.took_ms"] = took_nanos / 1_000_000
+            for driver in profile.get("drivers", []):
+                driver_name = driver.get("description", "unknown")
+                took_ms = driver.get("took_nanos", 0) / 1_000_000
+                cpu_ms = driver.get("cpu_nanos", 0) / 1_000_000
+                result[f"{driver_name}.number"] = result.get(f"{driver_name}.number", 0) + 1
+                result[f"{driver_name}.took_ms"] = max(result.get(f"{driver_name}.took_ms", 0), took_ms)
+                result[f"{driver_name}.cpu_ms"] = max(result.get(f"{driver_name}.cpu_ms", 0), cpu_ms)
+                result[f"{driver_name}.took_total_ms"] = result.get(f"{driver_name}.took_total_ms", 0) + took_ms
+                result[f"{driver_name}.cpu_total_ms"] = result.get(f"{driver_name}.cpu_total_ms", 0) + cpu_ms
+                for idx, operator in enumerate(driver.get("operators", [])):
+                    operator_name = operator.get("operator", f"operator_{idx}")
+                    safe_operator_name = operator_name.split("[")[0] if "[" in operator_name else operator_name
+                    status = operator.get("status", {})
+                    process_nanos = status.get("process_nanos", 0) + status.get("receive_nanos", 0) + status.get("emit_nanos", 0)
+                    if process_nanos > 0:
+                        key = f"{driver_name}.{safe_operator_name}.process_ms"
+                        result[key] = result.get(key, 0) + process_nanos / 1_000_000
+                    processed_slices = status.get("processed_slices", 0)
+                    if processed_slices > 0:
+                        key = f"{driver_name}.{safe_operator_name}.processed_slices"
+                        result[key] = result.get(key, 0) + processed_slices
+            for plan in profile.get("plans", []):
+                plan_name = plan.get("description", "unknown")
+                for optimization in ["logical_optimization_nanos", "physical_optimization_nanos", "reduction_nanos"]:
+                    nanos = plan.get(optimization, 0)
+                    if nanos > 0:
+                        metric_name = optimization.replace("_nanos", "")
+                        key = f"{plan_name}.{metric_name}.took_ms"
+                        result[key] = result.get(key, 0) + nanos / 1_000_000
+        return result
+
+    def __repr__(self, *args, **kwargs):
+        return "esql-profile"
 
 
 class RequestTiming(Runner, Delegator):
@@ -3246,3 +3465,50 @@ class RunUntil(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "run-until"
+
+
+class EnrichPolicy(Runner):
+
+    async def _delete_enrich_policy(self, es, policy_data):
+        reqs = []
+        for policy in policy_data.keys():
+            reqs.append(es.enrich.delete_policy(name=policy, ignore=[404]))
+        res = await asyncio.gather(*reqs)
+        self.logger.debug("Deleted %s enrich policies: %s", len(res), [r.body for r in res])
+
+    async def _create_enrich_policy(self, es, policy_data):
+        reqs = []
+        for p, req_body in policy_data.items():
+            reqs.append(es.enrich.put_policy(name=p, **req_body))
+        res = await asyncio.gather(*reqs)
+        self.logger.debug("Created %s enrich policies: %s", len(res), [r.body for r in res])
+
+    async def _refresh_indices(self, es):
+        res = await es.indices.refresh(index="_all")
+        self.logger.debug("Refreshed all indices: %s", res.body)
+
+    async def _execute_enrich_policy(self, es, policy_data):
+        reqs = []
+        for policy_name in policy_data:
+            reqs.append(es.enrich.execute_policy(name=policy_name, wait_for_completion=True))
+        res = await asyncio.gather(*reqs)
+        self.logger.debug("Executed %s enrich policies: %s", len(res), [r.body for r in res])
+
+    async def __call__(self, es, params):
+        enrich_policies = mandatory(params, "policies", self)
+
+        if params.get("delete", True):
+            await self._delete_enrich_policy(es, enrich_policies)
+
+        await self._create_enrich_policy(es, enrich_policies)
+        await self._refresh_indices(es)
+        await self._execute_enrich_policy(es, enrich_policies)
+
+        return {
+            "weight": len(enrich_policies),
+            "unit": "ops",
+            "success": True,
+        }
+
+    def __str__(self) -> str:
+        return "enrich-policy"

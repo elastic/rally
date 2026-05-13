@@ -21,6 +21,7 @@ from .loader import (
     load_track,
     load_track_plugins,
     operation_parameters,
+    render_track,
     set_absolute_data_path,
     track_info,
     track_repo,

@@ -22,7 +22,9 @@ import io
 import json
 import math
 import random
+import typing
 from unittest import mock
+from uuid import uuid4
 
 import elastic_transport
 import elasticsearch
@@ -402,6 +404,74 @@ class TestSelectiveJsonParser:
             "readers": False,
             "supporters": True,
         }
+
+    def test_parse_returns_only_found_props(self):
+        doc = self.doc_as_text(
+            {
+                "num_reduce_phases": 3,
+                "hits": {"total": {"value": 10}},
+                "_clusters": {"total": 2, "successful": 2},
+            }
+        )
+        found = runner.parse(
+            doc,
+            ["hits.total.value", "num_reduce_phases", "_clusters.total", "_clusters.successful", "nonexistent"],
+        )
+        assert found == {
+            "hits.total.value": 10,
+            "num_reduce_phases": 3,
+            "_clusters.total": 2,
+            "_clusters.successful": 2,
+        }
+        assert "nonexistent" not in found
+
+    def test_parse_missing_props_not_in_result(self):
+        doc = self.doc_as_text({"a": 1, "b": 2})
+        found = runner.parse(doc, ["a", "x", "y.z"])
+        assert found == {"a": 1}
+        assert "x" not in found
+        assert "y.z" not in found
+
+    def test_parse_with_cluster_details(self):
+        doc = self.doc_as_text(
+            {
+                "_clusters": {
+                    "total": 2,
+                    "details": {
+                        "c1": {
+                            "status": "successful",
+                            "indices": "idx1",
+                            "took": 5,
+                            "timed_out": False,
+                            "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                        },
+                        "c2": {
+                            "status": "successful",
+                            "indices": "idx2",
+                            "took": 10,
+                            "timed_out": False,
+                        },
+                    },
+                }
+            }
+        )
+        result = runner.parse(doc, ["_clusters.total"], with_cluster_details=True)
+        assert result["_clusters.total"] == 2
+        details = result["_clusters.details"]
+        assert isinstance(details, list)
+        assert len(details) == 2
+        c1 = next(d for d in details if d["name"] == "c1")
+        c2 = next(d for d in details if d["name"] == "c2")
+        assert c1["took"] == 5
+        assert c1["_shards"] == {"total": 1, "successful": 1, "skipped": 0, "failed": 0}
+        assert c2["took"] == 10
+        assert "_shards" not in c2
+
+    def test_parse_with_cluster_details_empty_when_absent(self):
+        doc = self.doc_as_text({"hits": {"total": {"value": 0}}})
+        result = runner.parse(doc, ["hits.total.value"], with_cluster_details=True)
+        assert result == {"hits.total.value": 0}
+        assert "_clusters.details" not in result
 
 
 def _build_bulk_body(*lines):
@@ -2598,6 +2668,167 @@ class TestQueryRunner:
             headers=None,
         )
         es.clear_scroll.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_detailed_results_with_num_reduce_phases_and_clusters(self, es):
+        es.options.return_value = es
+        search_response = {
+            "took": 38,
+            "timed_out": False,
+            "num_reduce_phases": 22,
+            "_shards": {"total": 21, "successful": 21, "skipped": 0, "failed": 0},
+            "_clusters": {
+                "total": 21,
+                "successful": 21,
+                "skipped": 0,
+                "running": 0,
+                "partial": 0,
+                "failed": 0,
+                "details": {
+                    "_origin": {
+                        "status": "successful",
+                        "indices": "cps_scaling_test_origin_2026-01-25-1",
+                        "took": 31,
+                        "timed_out": False,
+                        "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                    },
+                    "remote_cluster_1": {
+                        "status": "successful",
+                        "indices": "cps_scaling_test_*_2026-01-25-1",
+                        "took": 1,
+                        "timed_out": False,
+                        "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                    },
+                },
+            },
+            "hits": {
+                "total": {"value": 10000, "relation": "gte"},
+                "max_score": None,
+                "hits": [],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        query_runner = runner.Query()
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert result["num_reduce_phases"] == 22
+        assert result["clusters"]["total"] == 21
+        assert result["clusters"]["successful"] == 21
+        assert result["clusters"]["skipped"] == 0
+        assert result["clusters"]["running"] == 0
+        assert result["clusters"]["partial"] == 0
+        assert result["clusters"]["failed"] == 0
+        assert isinstance(result["clusters"]["details"], list)
+        assert len(result["clusters"]["details"]) == 2
+        origin = next(d for d in result["clusters"]["details"] if d["name"] == "_origin")
+        remote = next(d for d in result["clusters"]["details"] if d["name"] == "remote_cluster_1")
+        assert origin == {
+            "name": "_origin",
+            "status": "successful",
+            "indices": "cps_scaling_test_origin_2026-01-25-1",
+            "took": 31,
+            "timed_out": False,
+            "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+        }
+        assert remote == {
+            "name": "remote_cluster_1",
+            "status": "successful",
+            "indices": "cps_scaling_test_*_2026-01-25-1",
+            "took": 1,
+            "timed_out": False,
+            "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+        }
+        assert result["hits"] == 10000
+        assert result["took"] == 38
+        assert result["shards"] == {"total": 21, "successful": 21, "skipped": 0, "failed": 0}
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_detailed_results_without_optional_fields(self, es):
+        """When response has no num_reduce_phases or _clusters, result must not include those keys."""
+        es.options.return_value = es
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "_shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+            "hits": {
+                "total": {"value": 2, "relation": "eq"},
+                "hits": [
+                    {"title": "some-doc-1"},
+                    {"title": "some-doc-2"},
+                ],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        query_runner = runner.Query()
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert "num_reduce_phases" not in result
+        assert "clusters" not in result
+        assert result["hits"] == 2
+        assert result["took"] == 5
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_detailed_results_clusters_summary_only(self, es):
+        """When _clusters is present but details is empty or missing, result has clusters summary only."""
+        es.options.return_value = es
+        search_response = {
+            "took": 10,
+            "timed_out": False,
+            "_shards": {"total": 2, "successful": 2, "skipped": 0, "failed": 0},
+            "_clusters": {
+                "total": 2,
+                "successful": 2,
+                "skipped": 0,
+                "running": 0,
+                "partial": 0,
+                "failed": 0,
+            },
+            "hits": {"total": {"value": 0, "relation": "eq"}, "hits": []},
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        query_runner = runner.Query()
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert "clusters" in result
+        assert result["clusters"] == {
+            "total": 2,
+            "successful": 2,
+            "skipped": 0,
+            "running": 0,
+            "partial": 0,
+            "failed": 0,
+        }
+        assert "details" not in result["clusters"]
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -6229,6 +6460,7 @@ class TestCreateIlmPolicyRunner:
 
     @mock.patch("esrally.client.asynchronous.IlmClient")
     @pytest.mark.asyncio
+    @typing.no_type_check
     async def test_RallyIlmClient_rewrites_kwargs(self, es_ilm):
         es = RallyAsyncElasticsearch(hosts=["http://localhost:9200"])
         es_ilm.put_lifecycle = mock.AsyncMock(return_value={})
@@ -8122,10 +8354,11 @@ class TestEsqlRunner:
     @pytest.mark.asyncio
     async def test_esql_without_query_filter(self, es):
         es.options.return_value = es
-        es.perform_request = mock.AsyncMock()
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
         esql = runner.Esql()
         result = await esql(es, params={"query": "from logs-* | stats c = count(*)"})
-        assert result == {"weight": 1, "unit": "ops", "success": True}
+        assert result == {"weight": 1, "unit": "ops", "success": True, "is_partial": False}
         expected_body = {"query": "from logs-* | stats c = count(*)"}
         es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
 
@@ -8133,11 +8366,12 @@ class TestEsqlRunner:
     @pytest.mark.asyncio
     async def test_esql_with_query_filter(self, es):
         es.options.return_value = es
-        es.perform_request = mock.AsyncMock()
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
         esql = runner.Esql()
         query_filter = {"range": {"@timestamp": {"gte": "2023"}}}
         result = await esql(es, params={"query": "from * | limit 1", "filter": query_filter})
-        assert result == {"weight": 1, "unit": "ops", "success": True}
+        assert result == {"weight": 1, "unit": "ops", "success": True, "is_partial": False}
         expected_body = {"query": "from * | limit 1", "filter": query_filter}
         es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
 
@@ -8145,11 +8379,282 @@ class TestEsqlRunner:
     @pytest.mark.asyncio
     async def test_esql_with_body(self, es):
         es.options.return_value = es
-        es.perform_request = mock.AsyncMock()
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
         esql = runner.Esql()
         pragma = {"data_partitioning": "doc"}
         result = await esql(es, params={"query": "from * | limit 1", "body": {"pragma": pragma}})
-        assert result == {"weight": 1, "unit": "ops", "success": True}
+        assert result == {"weight": 1, "unit": "ops", "success": True, "is_partial": False}
 
         expected_body = {"pragma": pragma, "query": "from * | limit 1"}
         es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_is_partial_false(self, es):
+        es.options.return_value = es
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1"})
+        assert result["success"] is True
+        assert result["is_partial"] is False
+        assert "error-type" not in result
+        assert "error-description" not in result
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_is_partial_true(self, es):
+        es.options.return_value = es
+        response = {"is_partial": True, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1"})
+        assert result["success"] is False
+        assert result["is_partial"] is True
+        assert result["error-type"] == "esql"
+        assert result["error-description"] == "ES|QL query returned partial results"
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_detailed_results(self, es):
+        es.options.return_value = es
+        response = {
+            "took": 14,
+            "is_partial": False,
+            "completion_time_in_millis": 1772217296434,
+            "documents_found": 1,
+            "values_loaded": 4,
+            "start_time_in_millis": 1772217296420,
+            "expiration_time_in_millis": 1772649296247,
+            "columns": [{"name": "@timestamp", "type": "date"}],
+            "values": [["2026-02-13T11:49:58.810Z"]],
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1", "detailed-results": True})
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "is_partial": False,
+            "took": 14,
+            "documents_found": 1,
+            "values_loaded": 4,
+            "completion_time_in_millis": 1772217296434,
+            "start_time_in_millis": 1772217296420,
+            "expiration_time_in_millis": 1772649296247,
+        }
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_detailed_results_with_partial(self, es):
+        es.options.return_value = es
+        response = {
+            "took": 14,
+            "is_partial": True,
+            "completion_time_in_millis": 1772217296434,
+            "documents_found": 1,
+            "values_loaded": 4,
+            "start_time_in_millis": 1772217296420,
+            "expiration_time_in_millis": 1772649296247,
+            "columns": [{"name": "@timestamp", "type": "date"}],
+            "values": [["2026-02-13T11:49:58.810Z"]],
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1", "detailed-results": True})
+        assert result["success"] is False
+        assert result["is_partial"] is True
+        assert result["took"] == 14
+        assert result["documents_found"] == 1
+        assert result["values_loaded"] == 4
+        assert result["completion_time_in_millis"] == 1772217296434
+        assert result["start_time_in_millis"] == 1772217296420
+        assert result["expiration_time_in_millis"] == 1772649296247
+        assert result["error-type"] == "esql"
+        assert result["error-description"] == "ES|QL query returned partial results"
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_detailed_results_missing_optional_fields(self, es):
+        es.options.return_value = es
+        response = {
+            "is_partial": False,
+            "columns": [],
+            "values": [],
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+        result = await esql(es, params={"query": "from * | limit 1", "detailed-results": True})
+        assert result["success"] is True
+        assert result["is_partial"] is False
+        assert result["took"] is None
+        assert result["documents_found"] is None
+        assert result["values_loaded"] is None
+        assert result["completion_time_in_millis"] is None
+        assert result["start_time_in_millis"] is None
+        assert result["expiration_time_in_millis"] is None
+
+
+class TestEsqlProfileRunner:
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_without_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value={"profile": {}})
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | stats c = count(*)"})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from logs-* | stats c = count(*)", "profile": True}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_with_filter(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value={"profile": {}})
+        esql_profile = runner.EsqlProfile()
+        query_filter = {"range": {"@timestamp": {"gte": "2023"}}}
+        result = await esql_profile(es, params={"query": "from * | limit 1", "filter": query_filter})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"query": "from * | limit 1", "profile": True, "filter": query_filter}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_with_body(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value={"profile": {}})
+        esql_profile = runner.EsqlProfile()
+        pragma = {"data_partitioning": "doc"}
+        result = await esql_profile(es, params={"query": "from * | limit 1", "body": {"pragma": pragma}})
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        expected_body = {"pragma": pragma, "query": "from * | limit 1", "profile": True}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_phase_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "query": {"took_nanos": 5_000_000},
+                "planning": {"took_nanos": 2_000_000},
+                "parsing": {"took_nanos": 500_000},
+                "drivers": [],
+                "plans": [],
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result["weight"] == 1
+        assert result["unit"] == "ops"
+        assert result["success"] is True
+        assert result["query.took_ms"] == 5.0
+        assert result["planning.took_ms"] == 2.0
+        assert result["parsing.took_ms"] == 0.5
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_driver_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "drivers": [
+                    {
+                        "description": "data",
+                        "took_nanos": 10_000_000,
+                        "cpu_nanos": 8_000_000,
+                        "operators": [
+                            {"operator": "LuceneSourceOperator[...]", "status": {"process_nanos": 3_000_000, "processed_slices": 5}},
+                            {"operator": "TopNOperator[...]", "status": {"emit_nanos": 1_000_000, "receive_nanos": 1_500_000}},
+                        ],
+                    },
+                    {
+                        "description": "data",
+                        "took_nanos": 12_000_000,
+                        "cpu_nanos": 6_000_000,
+                        "operators": [],
+                    },
+                ],
+                "plans": [],
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result["data.number"] == 2
+        assert result["data.took_ms"] == 12.0  # max
+        assert result["data.cpu_ms"] == 8.0  # max
+        assert result["data.took_total_ms"] == 22.0  # sum
+        assert result["data.cpu_total_ms"] == 14.0  # sum
+        assert result["data.LuceneSourceOperator.process_ms"] == 3.0
+        assert result["data.LuceneSourceOperator.processed_slices"] == 5
+        assert result["data.TopNOperator.process_ms"] == 2.5
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_plan_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "drivers": [],
+                "plans": [
+                    {
+                        "description": "node_reduction",
+                        "logical_optimization_nanos": 1_000_000,
+                        "physical_optimization_nanos": 2_000_000,
+                        "reduction_nanos": 500_000,
+                    }
+                ],
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result["node_reduction.logical_optimization.took_ms"] == 1.0
+        assert result["node_reduction.physical_optimization.took_ms"] == 2.0
+        assert result["node_reduction.reduction.took_ms"] == 0.5
+
+
+class TestEnrichPolicy:
+
+    @pytest.mark.asyncio
+    async def test_call(self):
+        policy_count = 5
+        policy_data = {uuid4().hex: mock.MagicMock() for _ in range(policy_count)}
+        params = {"policies": policy_data}
+        es = mock.AsyncMock()
+
+        await runner.EnrichPolicy()(es, params)
+
+        es.enrich.delete_policy.assert_has_awaits(
+            [mock.call(name=policy_name, ignore=[404]) for policy_name in policy_data], any_order=True
+        )
+        es.enrich.put_policy.assert_has_awaits(
+            [mock.call(name=policy, **req_params) for policy, req_params in policy_data.items()], any_order=True
+        )
+        es.indices.refresh.assert_awaited_once_with(index="_all")
+        es.enrich.execute_policy.assert_has_awaits(
+            [mock.call(name=policy_name, wait_for_completion=True) for policy_name in policy_data], any_order=True
+        )
+
+    @mock.patch("esrally.driver.runner.EnrichPolicy._execute_enrich_policy", new_callable=mock.AsyncMock)
+    @mock.patch("esrally.driver.runner.EnrichPolicy._refresh_indices", new_callable=mock.AsyncMock)
+    @mock.patch("esrally.driver.runner.EnrichPolicy._create_enrich_policy", new_callable=mock.AsyncMock)
+    @pytest.mark.asyncio
+    async def test_delete_is_false(self, create_mock, refresh_mock, exec_mock):
+        es = mock.AsyncMock()
+        params = {"policies": {uuid4().hex: {}}, "delete": False}
+
+        await runner.EnrichPolicy()(es, params)
+
+        es.enrich.delete_policy.assert_not_awaited()
+        create_mock.assert_awaited()
+        refresh_mock.assert_awaited()
+        exec_mock.assert_awaited()
+
+    def test_str(self):
+        assert str(runner.EnrichPolicy()) == "enrich-policy"

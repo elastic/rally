@@ -16,18 +16,22 @@
 # under the License.
 
 import copy
+import dataclasses
 import os
 import random
 import re
+import subprocess
+import sys
 import textwrap
 import urllib.error
 from unittest import mock
 
 import pytest
 
-from esrally import config, exceptions
+from esrally import config, exceptions, paths
 from esrally.track import loader, track
-from esrally.utils import io
+from esrally.utils import console, io
+from esrally.utils.cases import cases
 
 
 def strip_ws(s):
@@ -163,6 +167,61 @@ class TestGitRepository:
         assert repo.track_file("unittest") == "/tmp/tracks/default/unittest/track.json"
 
 
+class TestRenderTrack:
+    @mock.patch("esrally.track.loader.track_repo")
+    @mock.patch("esrally.track.loader.render_template_from_file")
+    def test_render_track_to_stdout(self, mock_render, mock_repo, capsys):
+        mock_repo.return_value.track_name = "unittest"
+        mock_repo.return_value.track_file.return_value = "/path/to/track/unittest/track.json"
+        mock_render.return_value = '{"short-description": "test", "indices": [{"name": "test"}]}'
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        loader.render_track(cfg)
+
+        mock_render.assert_called_once_with(
+            "/path/to/track/unittest/track.json",
+            {},
+            build_flavor=None,
+            serverless_operator=False,
+        )
+        captured = capsys.readouterr()
+        assert '"short-description": "test"' in captured.out
+        assert '"indices"' in captured.out
+
+    @mock.patch("esrally.track.loader.track_repo")
+    @mock.patch("esrally.track.loader.render_template_from_file")
+    def test_render_track_to_file(self, mock_render, mock_repo, tmp_path):
+        mock_repo.return_value.track_name = "unittest"
+        mock_repo.return_value.track_file.return_value = "/path/to/track/unittest/track.json"
+        mock_render.return_value = '{"short-description": "test"}'
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        output_file = tmp_path / "rendered.json"
+        loader.render_track(cfg, output_path=str(output_file))
+
+        assert output_file.exists()
+        contents = output_file.read_text()
+        assert '"short-description": "test"' in contents
+        assert contents.endswith("\n")
+
+    @mock.patch("esrally.track.loader.track_repo")
+    @mock.patch("esrally.track.loader.render_template_from_file")
+    def test_render_track_invalid_json_raises(self, mock_render, mock_repo):
+        mock_repo.return_value.track_name = "unittest"
+        mock_repo.return_value.track_file.return_value = "/path/to/track/unittest/track.json"
+        mock_render.return_value = "not valid json {{"
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "params", {})
+
+        with pytest.raises(Exception):
+            loader.render_track(cfg)
+
+
 class TestTrackPreparation:
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")
@@ -188,7 +247,7 @@ class TestTrackPreparation:
             data_root="/tmp",
         )
 
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", None)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")
@@ -214,7 +273,7 @@ class TestTrackPreparation:
             data_root="/tmp",
         )
 
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", None)
 
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("os.path.getsize")
@@ -329,7 +388,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json.bz2", "/tmp/docs.json.bz2", 200, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", "http://benchmarks.elasticsearch.org/corpora/unit-test")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -346,18 +405,18 @@ class TestTrackPreparation:
         is_file.side_effect = [False, True, True]
         # uncompressed file size is 2000
         get_size.return_value = 2000
-        scheme = random.choice(["http", "https", "s3", "gs"])
+        scheme = str(random.choice(["http", "https", "s3", "gs"]))
 
         prepare_file_offset_table.return_value = 5
 
         p = loader.DocumentSetPreparator(
             track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
         )
-
+        url = f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/"
         p.prepare_document_set(
             document_set=track.Documents(
                 source_format=track.Documents.SOURCE_FORMAT_BULK,
-                base_url=f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/",
+                base_url=url,
                 document_file="docs.json",
                 # --> We don't provide a document archive here <--
                 document_archive=None,
@@ -372,7 +431,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", url)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.net.download")
@@ -411,7 +470,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", "http://benchmarks.elasticsearch.org/corpora/unit-test")
 
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -608,7 +667,7 @@ class TestTrackPreparation:
             data_root=".",
         )
 
-        prepare_file_offset_table.assert_called_with("./docs.json")
+        prepare_file_offset_table.assert_called_with("./docs.json", None)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -795,7 +854,7 @@ class TestTrackPreparation:
             data_root=".",
         )
 
-        prepare_file_offset_table.assert_called_with("./docs.json")
+        prepare_file_offset_table.assert_called_with("./docs.json", None)
 
     @mock.patch("os.path.getsize")
     @mock.patch("os.path.isfile")
@@ -860,8 +919,7 @@ class TestTemplateSource:
     @mock.patch("esrally.utils.io.dirname")
     @mock.patch.object(loader.TemplateSource, "read_glob_files")
     def test_entrypoint_of_replace_includes(self, patched_read_glob, patched_dirname):
-        track = textwrap.dedent(
-            """
+        track = textwrap.dedent("""
         {% import "rally.helpers" as rally with context %}
         {
           "version": 2,
@@ -894,8 +952,7 @@ class TestTemplateSource:
             {{ rally.collect(parts="challenges/*.json") }}
           ]
         }
-        """
-        )
+        """)
 
         def dummy_read_glob(c):
             return f'{{"replaced {c}": "true"}}'
@@ -905,8 +962,7 @@ class TestTemplateSource:
         base_path = "~/.rally/benchmarks/tracks/default/geonames"
         template_file_name = "track.json"
         tmpl_src = loader.TemplateSource(base_path, template_file_name)
-        expected_response = textwrap.dedent(
-            """
+        expected_response = textwrap.dedent("""
             {% import "rally.helpers" as rally with context %}
             {
               "version": 2,
@@ -939,8 +995,7 @@ class TestTemplateSource:
                 {"replaced ~/.rally/benchmarks/tracks/default/geonames/challenges/*.json": "true"}
               ]
             }
-            """
-        )
+            """)
 
         assert tmpl_src.replace_includes(base_path, track) == expected_response
 
@@ -1109,15 +1164,13 @@ class TestTemplateRender:
 
 
 class TestCompleteTrackParams:
-    assembled_source = textwrap.dedent(
-        """{% import "rally.helpers" as rally with context %}
+    assembled_source = textwrap.dedent("""{% import "rally.helpers" as rally with context %}
         "key1": "value1",
         "key2": {{ value2 | default(3) }},
         "key3": {{ value3 | default("default_value3") }}
         "key4": {{ value2 | default(3) }}
         "key5": {{ build_flavor }}
-    """
-    )
+    """)
 
     def test_check_complete_track_params_contains_all_track_params(self):
         complete_track_params = loader.CompleteTrackParams()
@@ -1172,8 +1225,7 @@ class TestCompleteTrackParams:
 
 
 class TestTrackPostProcessing:
-    track_with_params_as_string = textwrap.dedent(
-        """{
+    track_with_params_as_string = textwrap.dedent("""{
         "indices": [
             {
                 "name": "test-index",
@@ -1247,8 +1299,7 @@ class TestTrackPostProcessing:
                 ]
             }
         ]
-    }"""
-    )
+    }""")
 
     def test_post_processes_track_spec(self):
         track_specification = {
@@ -4323,3 +4374,40 @@ class TestTrackProcessorRegistry:
         ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         assert len(expected_processors) == len(actual_processors)
+
+
+@dataclasses.dataclass
+class InstallDependenciesCase:
+    requirements: list[str]
+
+
+@cases(
+    empty=InstallDependenciesCase(requirements=[]),
+    simple=InstallDependenciesCase(requirements=["pyyaml"]),
+)
+def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest.MonkeyPatch, tmpdir) -> None:
+    # pylint: disable=protected-access
+    monkeypatch.chdir(str(tmpdir))
+    monkeypatch.setattr(paths, "logs", lambda: "./logs")
+    monkeypatch.setattr(paths, "libs", lambda: "./libs")
+    monkeypatch.setattr(console, "info", mock.create_autospec(console.info))
+    monkeypatch.setattr(subprocess, "check_call", mock.create_autospec(subprocess.check_call))
+    os.makedirs(os.path.join(str(tmpdir), "logs"), exist_ok=True)
+    loader._install_dependencies(case.requirements)
+
+    if not case.requirements:
+        subprocess.check_call.assert_not_called()
+        return
+
+    subprocess.check_call.assert_called_once()
+    assert subprocess.check_call.call_args[0][0] == [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        *case.requirements,
+        "--upgrade",
+        "--target",
+        "./libs",
+    ]
+    assert os.path.isfile("./logs/dependency.log")

@@ -175,6 +175,28 @@ def list_tracks(cfg: types.Config):
     console.println(tabulate.tabulate(tabular_data=data, headers=headers))
 
 
+def render_track(cfg: types.Config, build_flavor=None, serverless_operator=False, output_path=None):
+    repo = track_repo(cfg)
+    track_name = repo.track_name
+    track_spec_file = repo.track_file(track_name)
+    track_params = cfg.opts("track", "params", default_value={})
+
+    rendered = render_template_from_file(
+        track_spec_file,
+        track_params,
+        build_flavor=build_flavor,
+        serverless_operator=serverless_operator,
+    )
+    rendered_json = json.dumps(json.loads(rendered), indent=2)
+
+    if output_path:
+        with open(output_path, "w") as f:
+            print(rendered_json, file=f)
+        console.println(f"Rendered track [{track_name}] has been written to [{output_path}].")
+    else:
+        print(rendered_json)
+
+
 def track_info(cfg: types.Config):
     def format_task(t, indent="", num="", suffix=""):
         msg = f"{indent}{num}{str(t)}"
@@ -621,9 +643,9 @@ class DocumentSetPreparator:
     def has_expected_size(self, file_name, expected_size):
         return expected_size is None or os.path.getsize(file_name) == expected_size
 
-    def create_file_offset_table(self, document_file_path, expected_number_of_lines):
+    def create_file_offset_table(self, document_file_path, expected_number_of_lines, corpus_base_url=None):
         # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
-        lines_read = io.prepare_file_offset_table(document_file_path)
+        lines_read = io.prepare_file_offset_table(document_file_path, corpus_base_url)
         if lines_read and lines_read != expected_number_of_lines:
             io.remove_file_offset_table(document_file_path)
             raise exceptions.DataError(
@@ -680,7 +702,7 @@ class DocumentSetPreparator:
                         ) from None
                     raise
 
-        self.create_file_offset_table(doc_path, document_set.number_of_lines)
+        self.create_file_offset_table(doc_path, document_set.number_of_lines, document_set.base_url)
 
     def prepare_bundled_document_set(self, document_set, data_root):
         """
@@ -707,7 +729,7 @@ class DocumentSetPreparator:
         while True:
             if self.is_locally_available(doc_path):
                 if self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
-                    self.create_file_offset_table(doc_path, document_set.number_of_lines)
+                    self.create_file_offset_table(doc_path, document_set.number_of_lines, document_set.base_url)
                     return True
                 else:
                     raise exceptions.DataError(
@@ -1110,6 +1132,7 @@ class TrackFileReader:
         self.build_flavor = cfg.opts("mechanic", "distribution.flavor", default_value="default", mandatory=False)
         self.serverless_operator = cfg.opts("driver", "serverless.operator", default_value=False, mandatory=False)
         self.track_params = cfg.opts("track", "params", mandatory=False)
+        self.ignore_unused_params = cfg.opts("track", "params.ignore_unused", mandatory=False)
         self.complete_track_params = CompleteTrackParams(user_specified_track_params=self.track_params)
         self.read_track = TrackSpecificationReader(
             track_params=self.track_params,
@@ -1234,10 +1257,13 @@ class TrackFileReader:
                 )
             )
 
-            LOG.critical(err_msg)
-            # also dump the message on the console
-            console.println(err_msg)
-            raise exceptions.TrackConfigError(f"Unused track parameters {sorted(unused_user_defined_track_params)}.")
+            if self.ignore_unused_params:
+                LOG.warning(err_msg)
+                console.warn(err_msg)
+            else:
+                LOG.critical(err_msg)
+                console.error(err_msg)
+                raise exceptions.TrackConfigError(f"Unused track parameters {sorted(unused_user_defined_track_params)}.")
         return current_track
 
 

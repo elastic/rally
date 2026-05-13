@@ -170,7 +170,6 @@ def install_default_log_config():
     io.ensure_dir(paths.logs())
 
 
-# pylint: disable=unused-argument
 def configure_file_handler(*, filename: str, encoding: str = "UTF-8", delay: bool = False, **kwargs: Any) -> logging.Handler:
     """
     Configures the WatchedFileHandler supporting expansion of `~` and `${LOG_PATH}` to the user's home and the log path respectively.
