@@ -49,8 +49,8 @@ echo "--- Run IT test :pytest:"
 
 export RALLY_HOME=$HOME
 export THESPLOG_FILE="${THESPLOG_FILE:-${RALLY_HOME}/.rally/logs/actor-system-internal.log}"
-# this value is in bytes, the default is 50kB. We increase it to 200kiB.
-export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-204800}
+# this value is in bytes, the default is 50kB. We increase it to 10MiB.
+export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-10485760}
 # adjust the default log level from WARNING
 export THESPLOG_THRESHOLD="INFO"
 export TERM=dumb
