@@ -45,6 +45,7 @@ _CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
 # files assume this value. Switching to a free port would require threading it through every caller and external
 # reference, so we instead clear leftovers on this port before/after tests when teardown is incomplete.
 BENCHMARK_IT_HTTP_PORT = 19200
+BENCHMARK_IT_TRANSPORT_PORT = 19300
 # Default ``--cluster-name`` for ``esrally race`` / install; keep aligned with ``esrally/rally.py``.
 RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME = "rally-benchmark"
 # Only these cluster names may be torn down on `BENCHMARK_IT_HTTP_PORT` (metrics store uses 10200).
@@ -248,6 +249,7 @@ def _terminate_listeners_on_port(http_port: int) -> None:
         if pid == mypid:
             continue
         try:
+            LOG.info("Sending SIGTERM to process %d listening on %d port", pid, http_port)
             os.kill(pid, signal.SIGTERM)
         except (ProcessLookupError, PermissionError):
             pass
@@ -261,6 +263,7 @@ def _terminate_listeners_on_port(http_port: int) -> None:
         if pid == mypid:
             continue
         try:
+            LOG.info("Sending SIGKILL to process %d listening on %d port", pid, http_port)
             os.kill(pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
@@ -273,7 +276,7 @@ def stop_rally_provisioned_es_on_port(http_port: int = BENCHMARK_IT_HTTP_PORT) -
     Rally subprocess trees do not always exit cleanly when the test runner gets a signal (e.g. ES JVM can
     outlive the parent), and Docker can keep a published port busy briefly after ``docker stop``. That leaves
     ``BENCHMARK_IT_HTTP_PORT`` occupied and the next test fails with low-signal bind errors. This helper is a
-    best-effort cleanup for those cases without changing Rally's global process model in this PR.
+    best-effort cleanup for those cases without changing Rally's global process model.
 
     Docker-provisioned nodes are stopped via ``docker stop``; tar / host-JVM nodes via terminating the
     listener PIDs (after ``SIGTERM``, ``SIGKILL`` as last resort). Only clusters named
@@ -315,8 +318,28 @@ def ensure_benchmark_http_port_free(http_port: int = BENCHMARK_IT_HTTP_PORT, wai
     assert http_port is not None
     stop_rally_provisioned_es_on_port(http_port)
     wait_until_port_is_free(port_number=http_port, timeout=wait_timeout)
-    LOG.info("Port %d seems to be free", http_port)
+    LOG.info("HTTP port %d seems to be free", http_port)
     return http_port
+
+
+def stop_process_on_port(port: int) -> None:
+    """
+    Stops process listening on a port.
+    """
+    if not _tcp_port_has_listener(port):
+        return
+    _terminate_listeners_on_port(port)
+    return
+
+
+def ensure_benchmark_transport_port_free(transport_port: int = BENCHMARK_IT_TRANSPORT_PORT, wait_timeout: int = 120) -> int:
+    """
+    Stop any process on ``transport_port` and wait until the port is free.
+    """
+    stop_process_on_port(transport_port)
+    wait_until_port_is_free(port_number=transport_port, timeout=wait_timeout)
+    LOG.info("Transport port %d seems to be free", transport_port)
+    return transport_port
 
 
 class TestCluster:

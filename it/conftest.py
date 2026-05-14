@@ -25,7 +25,13 @@ import pytest
 
 from esrally import config, version
 from esrally.utils import process
-from it import CONFIG_NAMES, ROOT_DIR, TestCluster, ensure_benchmark_http_port_free
+from it import (
+    CONFIG_NAMES,
+    ROOT_DIR,
+    TestCluster,
+    ensure_benchmark_http_port_free,
+    ensure_benchmark_transport_port_free,
+)
 
 
 def check_prerequisites():
@@ -182,8 +188,11 @@ def free_benchmark_http_port() -> Generator[int]:
     See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
     port = ensure_benchmark_http_port_free()
+    # be paranoid, ES listens also on transport port
+    ensure_benchmark_transport_port_free()
     yield port
     ensure_benchmark_http_port_free(port)
+    ensure_benchmark_transport_port_free()
 
 
 @pytest.fixture(scope="module")
@@ -194,8 +203,11 @@ def free_benchmark_http_port_module() -> Generator[int]:
     See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
     port = ensure_benchmark_http_port_free()
+    # be paranoid, ES listens also on transport port
+    ensure_benchmark_transport_port_free()
     yield port
     ensure_benchmark_http_port_free(port)
+    ensure_benchmark_transport_port_free()
 
 
 # ensures that a fresh log file is available
