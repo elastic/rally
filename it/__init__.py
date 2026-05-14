@@ -37,7 +37,6 @@ DISTRIBUTIONS = ["8.19.13", "9.2.7"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-_LOG = logging.getLogger(__name__)
 _CLUSTER_PROBE_ATTEMPTS = 5
 _CLUSTER_PROBE_DELAY_SEC = 0.5
 _CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
@@ -176,7 +175,7 @@ def cluster_name_on_port(http_port: int) -> str | None:
             last_error = e
             if attempt < _CLUSTER_PROBE_ATTEMPTS - 1:
                 time.sleep(_CLUSTER_PROBE_DELAY_SEC)
-    _LOG.debug(
+    LOG.debug(
         "cluster_name_on_port: 127.0.0.1:%s did not return cluster info: %s",
         http_port,
         last_error,
@@ -196,7 +195,7 @@ def _stop_docker_publishers(http_port: int) -> None:
     try:
         lines = process.run_subprocess_with_output(f"docker ps -q -f publish={http_port}")
     except BaseException as e:
-        _LOG.debug("docker ps for publish=%s failed: %s", http_port, e)
+        LOG.debug("docker ps for publish=%s failed: %s", http_port, e)
         return
     seen: set[str] = set()
     for line in lines:
@@ -205,7 +204,7 @@ def _stop_docker_publishers(http_port: int) -> None:
             continue
         seen.add(cid)
         if process.run_subprocess_with_logging(f"docker stop -t 30 {cid}") != 0:
-            _LOG.warning("docker stop failed for container %s", cid)
+            LOG.warning("docker stop failed for container %s", cid)
 
 
 def _listener_pids_on_port(http_port: int) -> set[int]:
@@ -229,7 +228,7 @@ def _listener_pids_on_port(http_port: int) -> set[int]:
     try:
         lines = process.run_subprocess_with_output(f"lsof -nP -iTCP:{http_port} -sTCP:LISTEN -t")
     except BaseException as e:
-        _LOG.debug("lsof for port %s failed: %s", http_port, e)
+        LOG.debug("lsof for port %s failed: %s", http_port, e)
         return pids
     for line in lines:
         s = line.strip()
@@ -285,7 +284,7 @@ def stop_rally_provisioned_es_on_port(http_port: int = BENCHMARK_IT_HTTP_PORT) -
         return
     name = cluster_name_on_port(http_port)
     if name is None:
-        _LOG.debug(
+        LOG.info(
             "Port 127.0.0.1:%s has a listener but no Elasticsearch cluster name; skip teardown.",
             http_port,
         )
@@ -316,6 +315,7 @@ def ensure_benchmark_http_port_free(http_port: int = BENCHMARK_IT_HTTP_PORT, wai
     assert http_port is not None
     stop_rally_provisioned_es_on_port(http_port)
     wait_until_port_is_free(port_number=http_port, timeout=wait_timeout)
+    LOG.info("Port %d seems to be free", http_port)
     return http_port
 
 
