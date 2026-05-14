@@ -16,23 +16,28 @@
 # under the License.
 from __future__ import annotations
 
+import collections
+import dataclasses
 import json
 import os
 import random
-from collections import defaultdict
 from collections.abc import Iterator
-from dataclasses import dataclass
 from os import PathLike
-from unittest.mock import create_autospec
+from typing import Any
 
 import pytest
 
-from esrally.config import Config, Scope
-from esrally.storage._adapter import Head, Writable
-from esrally.storage._client import MAX_CONNECTIONS, Client
-from esrally.storage._range import NO_RANGE, RangeSet, rangeset
-from esrally.storage.testing import DummyAdapter
-from esrally.types import Key
+from esrally.config import Config
+from esrally.storage import (
+    NO_RANGE,
+    Client,
+    Head,
+    RangeSet,
+    StorageConfig,
+    _client,
+    dummy,
+    rangeset,
+)
 from esrally.utils.cases import cases
 
 BASE_URL = "https://example.com"
@@ -54,6 +59,7 @@ MIRRORED_NO_RANGE_URL = f"{MIRRORED_NO_RANGE_BASE_URL}/apm/span.json.bz2"
 MIRRORED_NO_RANGE_HEAD = Head(url=MIRRORED_NO_RANGE_URL, content_length=len(SOME_BODY), accept_ranges=False)
 
 NOT_FOUND_BASE_URL = "https://example.com/not-found"
+NOT_FOUND_URL = f"{NOT_FOUND_BASE_URL}/apm/span.json.bz2"
 
 HEADS = (
     SOME_HEAD,
@@ -78,9 +84,18 @@ MIRRORS = {
 }
 
 
-class StorageAdapter(DummyAdapter):
-    HEADS = HEADS
-    DATA: dict[str, bytes] = defaultdict(lambda: SOME_BODY)
+def default_heads() -> dict[str, Head]:
+    return {h.url: h for h in HEADS}
+
+
+def default_data() -> dict[str, bytes]:
+    return collections.defaultdict(lambda: SOME_BODY)
+
+
+@dataclasses.dataclass
+class StorageAdapter(dummy.DummyAdapter):
+    heads: dict[str, Head] = dataclasses.field(default_factory=default_heads)
+    data: dict[str, bytes] = dataclasses.field(default_factory=default_data)
 
 
 @pytest.fixture(scope="function")
@@ -95,10 +110,10 @@ def mirror_files(tmpdir: PathLike) -> Iterator[str]:
 
 @pytest.fixture
 def cfg(mirror_files: str) -> Config:
-    cfg = Config()
-    cfg.add(Scope.application, "storage", "storage.mirrors_files", mirror_files)
-    cfg.add(Scope.application, "storage", "storage.random_seed", 42)
-    cfg.add(Scope.application, "storage", "storage.adapters", f"{__name__}:StorageAdapter")
+    cfg = StorageConfig()
+    cfg.mirror_files = mirror_files
+    cfg.random_seed = 42
+    cfg.adapters = (f"{__name__}:StorageAdapter",)
     return cfg
 
 
@@ -107,98 +122,165 @@ def client(cfg: Config) -> Client:
     return Client.from_config(cfg)
 
 
-@dataclass()
-class HeadCase:
-    url: str
-    want: Head
-    ttl: float | None = None
+def storage_config(**kwargs: Any) -> StorageConfig:
+    cfg = StorageConfig()
+    for k, v in kwargs.items():
+        setattr(cfg, k, v)
+    return cfg
 
 
-@dataclass()
+@dataclasses.dataclass
 class FromConfigCase:
-    opts: dict[Key, str]
-    want_max_connections: int = MAX_CONNECTIONS
+    cfg: StorageConfig
+    want_max_connections: int = StorageConfig.DEFAULT_MAX_CONNECTIONS
     want_random: random.Random | None = None
 
 
 @cases(
-    default=FromConfigCase({}),
-    max_connections=FromConfigCase({"storage.max_connections": "2"}, want_max_connections=2),
-    random_seed=FromConfigCase({"storage.random_seed": "42"}, want_random=random.Random("42")),
+    default=FromConfigCase(storage_config()),
+    max_connections=FromConfigCase(storage_config(max_connections=42), want_max_connections=42),
+    random_seed=FromConfigCase(storage_config(random_seed="24"), want_random=random.Random("24")),
 )
 def test_from_config(case: FromConfigCase) -> None:
     # pylint: disable=protected-access
-    cfg = Config()
-    for k, v in case.opts.items():
-        cfg.add(Scope.application, "storage", k, v)
-    client = Client.from_config(cfg)
+    client = Client.from_config(case.cfg)
     assert isinstance(client, Client)
     assert client._connections["some"].max_count == case.want_max_connections
     if case.want_random is not None:
         assert client._random.random() == case.want_random.random()
 
 
-@cases(default=HeadCase(SOME_URL, SOME_HEAD), ttl=HeadCase(SOME_URL, SOME_HEAD, ttl=300.0))
+@dataclasses.dataclass
+class HeadCase:
+    url: str
+    want_head: Head | None = None
+    want_error: type[Exception] | None = None
+    cache_ttl: float | None = None
+    want_cached: bool | None = None
+
+
+@cases(
+    default=HeadCase(SOME_URL, SOME_HEAD),
+    cache_ttl=HeadCase(SOME_URL, SOME_HEAD, cache_ttl=300.0, want_cached=True),
+    no_cache_ttl=HeadCase(SOME_URL, SOME_HEAD, cache_ttl=0.0, want_cached=False),
+    negative_cache_ttl=HeadCase(SOME_URL, SOME_HEAD, cache_ttl=-1.0, want_cached=False),
+    error=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError),
+    error_cache_ttl=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError, cache_ttl=300.0, want_cached=True),
+    error_no_cache_ttl=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError, cache_ttl=0.0, want_cached=False),
+    error_negagive_cache_ttl=HeadCase(NOT_FOUND_BASE_URL, want_error=FileNotFoundError, cache_ttl=-1.0, want_cached=False),
+)
 def test_head(case: HeadCase, client: Client) -> None:
-    got = client.head(url=case.url, ttl=case.ttl)
-    assert got == case.want
-    if case.ttl is not None:
-        assert got is client.head(url=case.url, ttl=case.ttl)
+    # pylint: disable=catching-non-exception
+    err: Exception | None = None
+    want_error = tuple(filter(None, [case.want_error]))
+    try:
+        got = client.head(url=case.url, cache_ttl=case.cache_ttl)
+    except want_error as e:
+        got = None
+        err = e
+    else:
+        assert got == case.want_head
+    if case.want_cached is not None:
+        try:
+            assert (got is client.head(url=case.url, cache_ttl=case.cache_ttl)) == case.want_cached
+        except _client.CachedHeadError as ex:
+            assert case.want_cached
+            assert err is ex.__cause__
+        except want_error:
+            assert not case.want_cached
 
 
-@dataclass()
+@dataclasses.dataclass
 class ResolveCase:
     url: str
     want: list[Head]
     content_length: int | None = None
     accept_ranges: bool | None = None
-    ttl: float = 60.0
+    cache_ttl: float = 60.0
+    want_mirror_failures: list = dataclasses.field(default_factory=list)
 
 
 @cases(
     unmirrored=ResolveCase(url=SOME_URL, want=[SOME_HEAD]),
-    mirrored=ResolveCase(url=MIRRORING_URL, want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]),
-    document_length=ResolveCase(
-        url=MIRRORING_URL, content_length=len(SOME_BODY), want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD]
+    mirrored=ResolveCase(
+        url=MIRRORING_URL,
+        want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD],
+        want_mirror_failures=[_client.MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:")],
     ),
-    mismatching_document_length=ResolveCase(url=MIRRORING_URL, content_length=10, want=[]),
-    accept_ranges=ResolveCase(url=MIRRORING_URL, accept_ranges=True, want=[MIRRORING_HEAD, MIRRORED_HEAD]),
+    document_length=ResolveCase(
+        url=MIRRORING_URL,
+        content_length=len(SOME_BODY),
+        want=[MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD, MIRRORING_HEAD],
+        want_mirror_failures=[_client.MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:")],
+    ),
+    mismatching_document_length=ResolveCase(
+        url=MIRRORING_URL,
+        content_length=10,
+        want=[],
+        want_mirror_failures=[
+            _client.MirrorFailure(
+                url=MIRRORING_URL,
+                mirror_url=MIRRORED_NO_RANGE_URL,
+                error="ValueError:unexpected 'content_length': got 30, want 10",
+            ),
+            _client.MirrorFailure(
+                url=MIRRORING_URL, mirror_url=MIRRORED_URL, error="ValueError:unexpected 'content_length': got 30, want 10"
+            ),
+            _client.MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:"),
+        ],
+    ),
+    accept_ranges=ResolveCase(
+        url=MIRRORING_URL,
+        accept_ranges=True,
+        want=[MIRRORING_HEAD, MIRRORED_HEAD],
+        want_mirror_failures=[
+            _client.MirrorFailure(
+                url=MIRRORING_URL,
+                mirror_url=MIRRORED_NO_RANGE_URL,
+                error="ValueError:unexpected 'accept_ranges': got False, want True",
+            ),
+            _client.MirrorFailure(url=MIRRORING_URL, mirror_url=NOT_FOUND_URL, error="FileNotFoundError:"),
+        ],
+    ),
     reject_ranges=ResolveCase(url=NO_RANGES_URL, accept_ranges=True, want=[]),
-    zero_ttl=ResolveCase(url=SOME_URL, ttl=0.0, want=[SOME_HEAD]),
+    zero_ttl=ResolveCase(url=SOME_URL, cache_ttl=0.0, want=[SOME_HEAD]),
 )
-def test_resolve(case: ResolveCase, client: Client) -> None:
-    check = Head(content_length=case.content_length, accept_ranges=case.accept_ranges)
-    got = sorted(client.resolve(case.url, check=check, ttl=case.ttl), key=lambda h: str(h.url))
+def test_resolve(case: ResolveCase, client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
+    check_head = Head(content_length=case.content_length, accept_ranges=case.accept_ranges)
+    got = sorted(client.resolve(case.url, check_head=check_head, cache_ttl=case.cache_ttl), key=lambda h: str(h.url))
     want = sorted(case.want, key=lambda h: str(h.url))
     assert got == want, "unexpected resolve result"
     for g in got:
-        assert g.url is not None, "unexpected resolve result"
-        if case.ttl > 0.0:
-            assert g is client.head(url=g.url, ttl=case.ttl), "obtained head wasn't cached"
+        if case.cache_ttl > 0.0:
+            assert g is client.head(url=g.url, cache_ttl=case.cache_ttl), "obtained head wasn't cached"
         else:
-            assert g is not client.head(url=g.url, ttl=case.ttl), "obtained head was cached"
+            assert g is not client.head(url=g.url, cache_ttl=case.cache_ttl), "obtained head was cached"
+    got_mirror_failures = client.mirror_failures(case.url)
+    for f in got_mirror_failures:
+        f.timestamp = 0.0
+    assert sorted(client.mirror_failures(case.url), key=str) == case.want_mirror_failures
 
 
-@dataclass()
+@dataclasses.dataclass
 class GetCase:
     url: str
     want_any: list[Head]
     ranges: RangeSet = NO_RANGE
     document_length: int = None
-    want_data: bytes | None = None
+    want_chunks: list[bytes] = dataclasses.field(default_factory=list)
 
 
 @cases(
     regular=GetCase(
         SOME_URL,
         [Head(url=SOME_URL, content_length=len(SOME_BODY), document_length=len(SOME_BODY))],
-        want_data=SOME_BODY,
+        want_chunks=[SOME_BODY],
     ),
     range=GetCase(
         SOME_URL,
         [Head(SOME_URL, content_length=30, accept_ranges=True, ranges=rangeset("0-29"), document_length=len(SOME_BODY))],
         ranges=rangeset("0-29"),
-        want_data=SOME_BODY,
+        want_chunks=[SOME_BODY],
     ),
     mirrors=GetCase(
         MIRRORING_URL,
@@ -206,15 +288,13 @@ class GetCase:
             MIRRORED_HEAD,
             MIRRORED_NO_RANGE_HEAD,
         ],
-        want_data=SOME_BODY,
+        want_chunks=[SOME_BODY],
     ),
 )
 def test_get(case: GetCase, client: Client) -> None:
-    stream = create_autospec(Writable, spec_set=True, instance=True)
-    got = client.get(case.url, stream, head=Head(ranges=case.ranges, document_length=case.document_length))
-    assert [] != check_any(got, case.want_any)
-    if case.want_data is not None:
-        stream.write.assert_called_once_with(case.want_data)
+    with client.get(case.url, check_head=Head(ranges=case.ranges, document_length=case.document_length)) as got:
+        assert check_any(got.head, case.want_any) != []
+        assert list(got.chunks) == case.want_chunks
 
 
 def check_any(head: Head, any_head: list[Head]) -> list[Head]:

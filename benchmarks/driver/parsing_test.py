@@ -294,11 +294,7 @@ class TestParsingBenchmarks:
                 ]
             }
         }
-    """.replace(
-        "\n", ""
-    ).replace(
-        " ", ""
-    )  # assume client never calls ?pretty :)
+    """.replace("\n", "").replace(" ", "")  # assume client never calls ?pretty :)
 
     large_page = (
         (
@@ -315,8 +311,7 @@ class TestParsingBenchmarks:
                         "_id": "1",
                          "timestamp": 1609780186,
                          "sort": [1609780186, "1"]
-                    },"""
-            * 100
+                    },""" * 100
             + """
                     {
                         "_id": "2",

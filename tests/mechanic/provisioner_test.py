@@ -641,8 +641,7 @@ class TestDockerProvisioner:
 
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
-        assert docker_cfg == (
-            f'''version: '2.2'
+        assert docker_cfg == (f'''version: '2.2'
 services:
   elasticsearch1:
     cap_add:
@@ -671,8 +670,7 @@ services:
 networks:
   rally-es:
     driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"'''
-        )
+      com.docker.network.bridge.host_binding_ipv4: "{node_ip}"''')
 
     @mock.patch("uuid.uuid4")
     def test_provisioning_with_variables(self, uuid4):
@@ -709,9 +707,7 @@ networks:
 
         docker_cfg = docker._render_template_from_file(docker.docker_vars(mounts={}))
 
-        assert (
-            docker_cfg
-            == f'''version: '2.2'
+        assert docker_cfg == f'''version: '2.2'
 services:
   elasticsearch1:
     cap_add:
@@ -743,7 +739,6 @@ networks:
   rally-es:
     driver_opts:
       com.docker.network.bridge.host_binding_ipv4: "{node_ip}"'''
-        )
 
 
 class TestCleanup:

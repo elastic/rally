@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Any, Literal, Protocol, TypeVar
+from typing import Any, Literal, Protocol, runtime_checkable
 
 Section = Literal[
     "actor",
@@ -78,6 +78,7 @@ Key = Literal[
     "datastore.ssl.certificate_authorities",
     "datastore.ssl.verification_mode",
     "datastore.type",
+    "datastore.use_data_streams",
     "datastore.user",
     "delete.config.option",
     "delete.id",
@@ -122,6 +123,7 @@ Key = Literal[
     "output.path",
     "output.processingtime",
     "params",
+    "params.ignore_unused",
     "passenv",
     "pipeline",
     "plugin.community-plugin.src.dir",
@@ -158,12 +160,17 @@ Key = Literal[
     "src.root.dir",
     "storage.adapters",
     "storage.aws.profile",
-    "storage.http.chunk_size",
+    "storage.base_url",
+    "storage.cache_ttl",
+    "storage.chunk_size",
+    "storage.gc.auth_token",
+    "storage.http.connect_timeout",
     "storage.http.max_retries",
+    "storage.http.read_timeout",
     "storage.local_dir",
     "storage.max_connections",
     "storage.max_workers",
-    "storage.mirrors_files",
+    "storage.mirror_files",
     "storage.monitor_interval",
     "storage.multipart_size",
     "storage.random_seed",
@@ -173,21 +180,27 @@ Key = Literal[
     "team.repository.dir",
     "test.mode.enabled",
     "time.start",
+    "track.downloader.multipart_enabled",
     "track.name",
     "track.path",
     "track.repository.dir",
     "user.tags",
     "values",
 ]
-_Config = TypeVar("_Config", bound="Config")
 
 
+@runtime_checkable
 class Config(Protocol):
+
+    name: str | None = None
+
     def add(self, scope, section: Section, key: Key, value: Any) -> None: ...
 
-    def add_all(self, source: _Config, section: Section) -> None: ...
+    def add_all(self, source: "Config", section: Section) -> None: ...
 
     def opts(self, section: Section, key: Key, default_value=None, mandatory: bool = True) -> Any: ...
+
+    def all_sections(self) -> list[Section]: ...
 
     def all_opts(self, section: Section) -> dict: ...
 

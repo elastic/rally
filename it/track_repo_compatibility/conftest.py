@@ -31,8 +31,8 @@ def pytest_addoption(parser):
         "--track-repository-test-directory",
         action="store",
         dest="track_repo_test_dir",
-        default="it",
-        help="Name of the directory containing the track repo's integration tests\n(default: `it`)",
+        default="it_tracks",
+        help="Name of the directory containing the track repo's integration tests\n(default: `it_tracks`)",
     )
     group.addoption("--operator", action="store_true", help="run as operator (used in serverless testing)")
 

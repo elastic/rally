@@ -703,6 +703,7 @@ class OperationType(Enum):
     WaitForCurrentSnapshotsCreate = (19, AdminStatus.No, serverless.Status.Internal)
     Downsample = (20, AdminStatus.No, serverless.Status.Internal)
     Esql = (21, AdminStatus.No, serverless.Status.Public)
+    EsqlProfile = (59, AdminStatus.No, serverless.Status.Public)
 
     # administrative actions
     ForceMerge = (22, AdminStatus.Yes, serverless.Status.Internal)
@@ -741,6 +742,9 @@ class OperationType(Enum):
     TransformStats = (55, AdminStatus.Yes, serverless.Status.Public)
     CreateIlmPolicy = (56, AdminStatus.Yes, serverless.Status.Blocked)
     DeleteIlmPolicy = (57, AdminStatus.Yes, serverless.Status.Blocked)
+    # this is classed the same as RawRequest, but could potentially be used to call endpoints that are blocked
+    RunUntil = (58, AdminStatus.No, serverless.Status.Public)
+    EnrichPolicy = (59, AdminStatus.Yes, serverless.Status.Public)
 
     def __init__(self, id: int, admin_status: AdminStatus, serverless_status: serverless.Status):
         self.id = id
@@ -874,6 +878,12 @@ class OperationType(Enum):
             return OperationType.Downsample
         elif v == "esql":
             return OperationType.Esql
+        elif v == "esql-profile":
+            return OperationType.EsqlProfile
+        elif v == "run-until":
+            return OperationType.RunUntil
+        elif v == "enrich-policy":
+            return OperationType.EnrichPolicy
         else:
             raise KeyError(f"No enum value for [{v}]")
 

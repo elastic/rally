@@ -347,7 +347,7 @@ class TestDockerLauncher:
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     def test_starts_container_successfully(self, run_subprocess_with_output, run_subprocess_with_logging):
         run_subprocess_with_logging.return_value = 0
-        # Docker container id (from docker-compose ps), Docker container id (from docker ps --filter ...)
+        # Docker container id (from docker compose ps), Docker container id (from docker ps --filter ...)
         run_subprocess_with_output.side_effect = [["de604d0d"], ["de604d0d"]]
         cfg = config.Config()
         docker = launcher.DockerLauncher(cfg)
@@ -373,10 +373,10 @@ class TestDockerLauncher:
         assert node.node_name == "testnode"
         assert node.telemetry is not None
 
-        run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml up -d")
+        run_subprocess_with_logging.assert_called_once_with("docker compose -f /bin/docker-compose.yml up -d")
         run_subprocess_with_output.assert_has_calls(
             [
-                mock.call("docker-compose -f /bin/docker-compose.yml ps -q"),
+                mock.call("docker compose -f /bin/docker-compose.yml ps -q"),
                 mock.call('docker ps -a --filter "id=de604d0d" --filter "status=running" --filter "health=healthy" -q'),
             ]
         )
@@ -386,7 +386,7 @@ class TestDockerLauncher:
     @mock.patch("esrally.utils.process.run_subprocess_with_output")
     def test_container_not_started(self, run_subprocess_with_output, run_subprocess_with_logging, sleep):
         run_subprocess_with_logging.return_value = 0
-        # Docker container id (from docker-compose ps), but NO Docker container id (from docker ps --filter...) twice
+        # Docker container id (from docker compose ps), but NO Docker container id (from docker ps --filter...) twice
         run_subprocess_with_output.side_effect = [["de604d0d"], [], []]
         cfg = config.Config()
         # ensure we only check the status two times
@@ -422,7 +422,7 @@ class TestDockerLauncher:
 
         add_metadata_for_node.assert_called_once_with(metrics_store, "testnode", "127.0.0.1")
 
-        run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml down")
+        run_subprocess_with_logging.assert_called_once_with("docker compose -f /bin/docker-compose.yml down")
 
     @mock.patch("esrally.telemetry.add_metadata_for_node")
     @mock.patch("esrally.utils.process.run_subprocess_with_logging")
@@ -437,4 +437,4 @@ class TestDockerLauncher:
 
         assert add_metadata_for_node.call_count == 0
 
-        run_subprocess_with_logging.assert_called_once_with("docker-compose -f /bin/docker-compose.yml down")
+        run_subprocess_with_logging.assert_called_once_with("docker compose -f /bin/docker-compose.yml down")

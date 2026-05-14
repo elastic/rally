@@ -748,6 +748,7 @@ Properties
 
 * ``bulk-size`` (mandatory): Defines the bulk size in number of documents.
 * ``ingest-percentage`` (optional, defaults to 100): A number between (0, 100] that defines how much of the document corpus will be bulk-indexed.
+* ``ingest-doc-count`` (optional): An optional positive integer that defines the maximum number of documents to ingest. Mutually exclusive with ``ingest-percentage`` (when not 100%).
 * ``corpora`` (optional): A list of document corpus names that should be targeted by this bulk-index operation. Only needed if the ``corpora`` section contains more than one document corpus and you don't want to index all of them with this operation.
 * ``indices`` (optional): A list of index names that defines which indices should be used by this bulk-index operation. Rally will then only select the documents files that have a matching ``target-index`` specified.
 * ``batch-size`` (optional): Defines how many documents Rally will read at once. This is an expert setting and only meant to avoid accidental bottlenecks for very small bulk sizes (e.g. if you want to benchmark with a bulk-size of 1, you should set ``batch-size`` higher).
@@ -1038,6 +1039,11 @@ If ``detailed-results`` is ``true`` the following meta-data are returned in addi
 * ``hits_relation``: whether ``hits`` is accurate (``eq``) or a lower bound of the actual hit count (``gte``).
 * ``timed_out``: Whether the query has timed out. For scroll queries, this flag is ``true`` if the flag was ``true`` for any of the queries issued.
 * ``took``: Value of the the ``took`` property in the query response. For scroll queries, this value is the sum of all ``took`` values in query responses.
+
+The following meta-data are only present when returned by Elasticsearch (e.g. cross-cluster search or reduce phases):
+
+* ``num_reduce_phases``: Number of reduce phases executed (when applicable).
+* ``clusters``: Cross-cluster search summary and per-cluster details when the response includes ``_clusters``. The ``clusters`` object may contain ``total``, ``successful``, ``skipped``, ``running``, ``partial``, ``failed``, and ``details``. The ``details`` key is a list of objects, where each object contains ``name`` (the cluster name), ``status``, ``indices``, ``took``, ``timed_out``, and ``_shards``.
 
 paginated-search
 ~~~~~~~~~~~~~~~~
@@ -3077,11 +3083,12 @@ Properties
 * ``fixed_interval`` (optional, defaults to ``1h``): The aggregation interval key defined as in `https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-datehistogram-aggregation.html#fixed_intervals`.
 * ``source-index`` (optional): The index containing data to aggregate which includes a ``@timestamp`` field. Note that this index should be marked read-only prior to the execution of this operation. If there is only one index defined in the ``indices`` of the track definition, that will be used as the default.
 * ``target-index`` (optional, defaults to ``{source-index}-{fixed-interval}``): Tne new target index created by the downsampling operation and including aggregated data.
+* ``sampling-method`` (optional): The downsampling method used to aggregate metric data. It accepts values ``aggregate`` or ``last_value``, when the value is missing downsampling defaults to ``aggregate``.
 
 **Example**
 
 Executes a downsampling operation aggregating data in the source index (test-source-index) and creating a new target index (test-target-index) applying an aggregation
-interval of 1 minute on the @timestamp field::
+interval of 1 minute on the @timestamp field, keeping the last value of the metric fields::
 
     {
       "name": "downsample",
@@ -3089,7 +3096,8 @@ interval of 1 minute on the @timestamp field::
         "operation-type": "downsample",
         "fixed-interval": "1m",
         "source-index": "test-source-index",
-        "target-index": "tsdb-target-index"
+        "target-index": "tsdb-target-index",
+        "sampling-method": "last_value"
       }
     }
 
@@ -3144,6 +3152,7 @@ Properties
 * ``query`` (mandatory): An ES|QL query which starts with a source command followed by processing commands.
 * ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
 * ``body`` (optional): The query body.
+* ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results.
 
 Example::
 
@@ -3164,9 +3173,122 @@ Example::
 Meta-data
 """""""""
 
-* ``weight``: "weight" of an operation, in this case the number of retrieved pages.
-* ``unit``: The unit in which to interpret ``weight``, in this case ``pages``.
+The following meta-data are always returned:
+
+* ``weight``: The "weight" of an operation, always ``1`` for ES|QL queries.
+* ``unit``: The unit in which to interpret ``weight``, always ``ops``.
+* ``success``: A boolean indicating whether the query has succeeded. This will be ``false`` if the response contains ``is_partial: true``.
+* ``is_partial``: Whether the query returned partial results. If ``true``, the operation is marked as failed and will cause the benchmark to abort if ``--on-error=abort`` is specified.
+
+If ``detailed-results`` is ``true`` the following meta-data are returned in addition:
+
+* ``took``: Value of the ``took`` property in the query response (in milliseconds).
+* ``documents_found``: Number of documents found by the query.
+* ``values_loaded``: Number of values loaded by the query.
+* ``completion_time_in_millis``: Timestamp when the query completed.
+* ``start_time_in_millis``: Timestamp when the query started.
+* ``expiration_time_in_millis``: Timestamp when the query results expire.
+
+esql-profile
+~~~~~~~~~~~~~
+
+With the operation type ``esql-profile`` you can execute an `ES|QL query <https://www.elastic.co/guide/en/elasticsearch/reference/current/esql.html>`_ with profiling enabled (``profile: true``). This captures detailed timing information across all phases of query execution.
+
+Properties
+""""""""""
+
+* ``query`` (mandatory): An ES|QL query which starts with a source command followed by processing commands.
+* ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
+* ``body`` (optional): The query body.
+
+Example::
+
+    {
+      "name": "profile-query",
+      "operation-type": "esql-profile",
+      "query": "FROM logs-* | STATS count=count(*) BY agent.hostname | SORT count DESC | LIMIT 20"
+    }
+
+Meta-data
+"""""""""
+
+* ``weight``: Number of operations, always ``1``.
+* ``unit``: Always ``ops``.
 * ``success``: A boolean indicating whether the query has succeeded.
+
+The following metrics are included when profile data is present:
+
+* ``query.took_ms``: Total query execution time in milliseconds.
+* ``planning.took_ms``: Total planning time (includes parsing, preanalysis, and analysis).
+* ``parsing.took_ms``: Time to parse the ES|QL query.
+* ``preanalysis.took_ms``: Preanalysis time (field_caps, enrich policies, lookup indices).
+* ``dependency_resolution.took_ms``: Dependency resolution time.
+* ``analysis.took_ms``: Analysis time before optimizations.
+* ``<driver>.number``: Count of driver instances for the given driver.
+* ``<driver>.took_ms``: Maximum took time across all driver instances (milliseconds).
+* ``<driver>.cpu_ms``: Maximum CPU time across all driver instances (milliseconds).
+* ``<driver>.took_total_ms``: Sum of took times across all driver instances (milliseconds).
+* ``<driver>.cpu_total_ms``: Sum of CPU times across all driver instances (milliseconds).
+* ``<driver>.<operator>.process_ms``: Cumulative processing time for an operator across all driver instances (milliseconds).
+* ``<driver>.<operator>.processed_slices``: Cumulative processed slices for an operator across all driver instances.
+* ``<plan>.<optimization>.took_ms``: Time spent on a plan optimization step (``logical_optimization``, ``physical_optimization``, or ``reduction``), in milliseconds.
+
+
+enrich-policy
+~~~~~~~~~~~~~
+
+The operation ``enrich-policy`` will delete (if they exist), create and execute a list of enrich policies.
+
+Properties
+""""""""""
+
+* ``policies`` (mandatory): An object containing the name of the policy to be created as its keys and the definition of the policy as its value following the request body of `Create an enrich policy API <https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-enrich-put-policy>`_.
+* ``delete`` (optional): A boolean specifying if the operation should try to delete an existing policy with the same name before creating a new one. Defaults to ``true``.
+
+**Examples**
+
+The following snippet will create all enrich policies that have been defined in the ``policies`` section.
+It will attempt to delete them beforehand if any exist::
+
+    {
+      "name": "enrich-policy",
+      "operation": {
+        "operation-type": "enrich-policy",
+        "delete": true,
+        "policies": {
+          "nyc_rate_codes": {
+            "match": {
+              "indices": "nyc_rate_codes",
+              "match_field": "id",
+              "enrich_fields": [
+                "name"
+              ]
+            }
+          },
+          "nyc_payment_types": {
+            "match": {
+              "indices": "nyc_payment_types",
+              "match_field": "type",
+              "enrich_fields": [
+                "name"
+              ]
+            }
+          }
+        }
+      }
+    }
+
+This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
+
+This operation is :ref:`retryable <track_operations>`.
+
+
+Meta-data
+"""""""""
+
+* ``weight``: The number of policies that have been created.
+* ``unit``: Always "ops".
+* ``success``: A boolean indicating whether the operation has succeeded.
 
 .. _track_dependencies:
 

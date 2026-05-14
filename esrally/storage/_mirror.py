@@ -15,37 +15,42 @@
 # specific language governing permissions and limitations
 # under the License.
 import json
+import logging
 import os
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 
 from typing_extensions import Self
 
-from esrally.types import Config
+from esrally import types
+from esrally.storage._config import StorageConfig
+from esrally.utils import convert
 
-MIRRORS_FILES = ""
+LOG = logging.getLogger(__name__)
 
 
 class MirrorList:
 
     @classmethod
-    def from_config(cls, cfg: Config) -> Self:
-        mirror_files = []
-        for filename in cfg.opts(section="storage", key="storage.mirrors_files", default_value=MIRRORS_FILES, mandatory=False).split(","):
-            filename = filename.strip()
-            if filename:
-                mirror_files.append(filename)
-        return cls(mirror_files=mirror_files)
+    def from_config(cls, cfg: types.Config | StorageConfig | None = None) -> Self:
+        return cls(cfg=StorageConfig.from_config(cfg))
 
     def __init__(
         self,
+        cfg: StorageConfig | None = None,
+        mirror_files: Iterable[str] | None = None,
         urls: Mapping[str, Iterable[str]] | None = None,
-        mirror_files: Iterable[str] = tuple(),
     ):
+        self._cfg = cfg
         self._urls: dict[str, set] = defaultdict(set)
-        self._mirror_files = tuple(mirror_files or [])
-        for path in self._mirror_files:
-            self._update(_load_file(path))
+        mirror_files = set(convert.to_strings(mirror_files))
+        if cfg is not None:
+            mirror_files.update(cfg.mirror_files)
+        for path in mirror_files:
+            try:
+                self._update(_load_file(path))
+            except FileNotFoundError as ex:
+                LOG.warning("failed loading mirror file '%s': %s", path, ex)
         if urls is not None:
             self._update(urls)
 

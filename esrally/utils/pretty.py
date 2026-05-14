@@ -42,7 +42,7 @@ def dump(o: Any, flags: Flag = Flag.NONE) -> str:
     return "\n".join(lines)
 
 
-_HAS_DIFF = re.compile(r"^\+ ", flags=re.MULTILINE)
+_HAS_DIFF = re.compile(r"^[+\-] ", flags=re.MULTILINE)
 
 
 def diff(old: Any, new: Any, flags: Flag = Flag.NONE) -> str:
@@ -115,6 +115,12 @@ def size(x: int | float | None, unit: convert.Size.Unit = convert.Size.Unit.B) -
     if x is None:
         return "N/A"
     return str(convert.size(x, unit))
+
+
+def throughput(x: int | float | None, unit: convert.Size.Unit = convert.Size.Unit.B) -> str:
+    if x is None:
+        return "N/A"
+    return f"{convert.size(x, unit)}/s"
 
 
 def duration(x: int | float | None, unit: convert.Duration.Unit = convert.Duration.Unit.S) -> str:

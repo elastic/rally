@@ -73,6 +73,23 @@ This will print::
 
 It is also possible to use task filters (e.g. ``--include-tasks``) or to refer to a track via its path (``--track-path``) or use a different track repository (``--track-repository``).
 
+``render-track``
+~~~~~~~~~~~~~~~~
+
+The ``render-track`` subcommand renders a track's Jinja2 templates and outputs the resulting JSON. This is useful for debugging track templates or inspecting the final track definition after template variables have been substituted. Example::
+
+    esrally render-track --track=geonames
+
+This will print the fully rendered track JSON to stdout. To write the output to a file instead::
+
+    esrally render-track --track=geonames --output-path=rendered-track.json
+
+You can also pass track parameters to see how they affect the rendered output::
+
+    esrally render-track --track=geonames --track-params='bulk_indexing_clients:100'
+
+It is also possible to refer to a track via its path (``--track-path``) or use a different track repository (``--track-repository``).
+
 ``compare``
 ~~~~~~~~~~~
 
@@ -109,22 +126,12 @@ Because ``--quiet`` is specified, Rally will suppress all non-essential output (
 
 This subcommand can be used to download Elasticsearch distributions. Example::
 
-    esrally download --distribution-version=6.8.0 --quiet
+    esrally download --distribution-version={ES_CLIENT_VER} --quiet
 
-This will download the OSS distribution of Elasticsearch 6.8.0. Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has downloaded it::
-
-    {
-      "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-oss-6.8.0.tar.gz"
-    }
-
-To download the default distribution you need to specify a license (via ``--car``)::
-
-    esrally download --distribution-version=6.8.0 --car=basic-license --quiet
-
-This will show the path to the default distribution::
+This will download the distribution of Elasticsearch {ES_CLIENT_VER}. Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has downloaded it::
 
     {
-      "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-6.8.0.tar.gz"
+      "elasticsearch": "~/.rally/benchmarks/distributions/elasticsearch-{ES_CLIENT_VER}-darwin-aarch64.tar.gz"
     }
 
 ``delete``
@@ -143,7 +150,7 @@ The ``delete`` subcommand is used to delete records for different configuration 
 
 This subcommand can be used to install a single Elasticsearch node. Example::
 
-    esrally install --quiet --distribution-version=7.4.2 --node-name="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
 
 This will output the id of this installation::
 
@@ -263,7 +270,8 @@ Example JSON file::
       "clients": 16
    }
 
-All track parameters are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races``, it will show all track parameters::
+Track parameters whose names start with ``secret_`` (for example ``secret_api_key``) are written to the metrics store, race records, and results documents with their value replaced by ``<hidden>``; the real value is still available to the track (Jinja templates, parameter sources, and so on) and is not persisted. All track parameter keys are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races`` with JSON output, persisted ``track-params`` follow the same rule::
+
 
     Race Timestamp    Track    Track Parameters          Challenge            Car       User Tags
     ----------------  -------  ------------------------- -------------------  --------  ---------
@@ -271,6 +279,11 @@ All track parameters are recorded for each metrics record in the metrics store. 
     20160518T112341Z  pmc      bulk_size=2000,clients=16 append-no-conflicts  defaults
 
 Note that the default values are not recorded or shown (Rally does not know about them).
+
+``ignore-unused-track-params``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, Rally mandates that all provided track-parameters be used by the target track. Adding this flag suppresses that behavior; instead, Rally will write a warning to the log-file, then proceed as normal.
 
 ``challenge``
 ~~~~~~~~~~~~~
@@ -310,13 +323,13 @@ Used to specify the current node's name in the cluster when it is setup via the 
 This parameter is useful in benchmarks involved multiple Elasticsearch clusters. It's used to configure the cluster name of the current Elasticsearch node when it is setup via the ``install`` or ``race`` subcommand. The following example sets up two Elasticsearch clusters: ``cluster-1`` and ``cluster-2``, and each has two nodes::
 
     # install node-1 in cluster-1
-    esrally install --quiet --distribution-version=8.2.2 --node-name="node-1" --cluster-name=cluster-1 --network-host="192.168.1.1" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="node-1" --cluster-name=cluster-1 --network-host="192.168.1.1" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
     # install node-2 in cluster-1
-    esrally install --quiet --distribution-version=8.2.2 --node-name="node-2" --cluster-name=cluster-1 --network-host="192.168.1.2" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="node-2" --cluster-name=cluster-1 --network-host="192.168.1.2" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
     # install node-3 in cluster-2
-    esrally install --quiet --distribution-version=8.2.2 --node-name="node-3" --cluster-name=cluster-2 --network-host="192.168.1.3" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="node-3" --cluster-name=cluster-2 --network-host="192.168.1.3" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
     # install node-4 in cluster-2
-    esrally install --quiet --distribution-version=8.2.2 --node-name="node-4" --cluster-name=cluster-2 --network-host="192.168.1.4" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="node-4" --cluster-name=cluster-2 --network-host="192.168.1.4" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
 
 If the ``cluster-name`` parameter is not specified, Rally will use ``rally-benchmark`` as the default cluster name.
 
@@ -425,14 +438,14 @@ Example::
 
 Specifies the name of the target operating system for which an artifact should be downloaded. By default this value is automatically derived based on the operating system Rally is run. This command line flag is only applicable to the ``download`` subcommand and allows to download an artifact for a different operating system. Example::
 
-    esrally download --distribution-version=7.5.1 --target-os=linux
+    esrally download --distribution-version={ES_CLIENT_VER} --target-os=linux
 
 ``target-arch``
 ~~~~~~~~~~~~~~~
 
 Specifies the name of the target CPU architecture for which an artifact should be downloaded. By default this value is automatically derived based on the CPU architecture Rally is run. This command line flag is only applicable to the ``download`` subcommand and allows to download an artifact for a different CPU architecture. Example::
 
-    esrally download --distribution-version=7.5.1 --target-arch=x86_64
+    esrally download --distribution-version={ES_CLIENT_VER} --target-arch=x86_64
 
 
 ``car``
@@ -481,7 +494,7 @@ Allows to override variables of Elasticsearch plugins. It accepts a list of comm
 
 Example::
 
-    esrally race --track=geonames --distribution-version=6.1.1. --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'http',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
+    esrally race --track=geonames --distribution-version={ES_CLIENT_VER} --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'http',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
 
 This enables the HTTP exporter of `X-Pack Monitoring <https://www.elastic.co/products/x-pack/monitoring>`_ and exports the data to the configured monitoring host.
 
@@ -594,9 +607,9 @@ This command line parameter sets the major version of the JDK that Rally should 
 Example::
 
    # Run a benchmark with defaults
-   esrally race --track=geonames --distribution-version=7.0.0
+   esrally race --track=geonames --distribution-version={ES_CLIENT_VER}
    # Force to run with JDK 11
-   esrally race --track=geonames --distribution-version=7.0.0 --runtime-jdk=11
+   esrally race --track=geonames --distribution-version={ES_CLIENT_VER} --runtime-jdk=11
 
 It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/7.0/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
 
@@ -640,10 +653,10 @@ If you want Rally to launch and benchmark a cluster using a binary distribution,
 
  ::
 
-   esrally race --track=geonames --distribution-version=7.0.0
+   esrally race --track=geonames --distribution-version={ES_CLIENT_VER}
 
 
-Rally will then benchmark the official Elasticsearch 7.0.0 distribution. Please check our :doc:`version support page </versions>` to see which Elasticsearch versions are currently supported by Rally.
+Rally will then benchmark the official Elasticsearch {ES_CLIENT_VER} distribution. Please check our :doc:`version support page </versions>` to see which Elasticsearch versions are currently supported by Rally.
 
 ``distribution-repository``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -663,9 +676,9 @@ The ``url`` property defines the URL pattern for this repository. The ``cache`` 
 
 You can use this distribution repository with the name "in_house_snapshot" as follows::
 
-   esrally race --track=geonames --distribution-repository=in_house_snapshot --distribution-version=7.0.0-SNAPSHOT
+   esrally race --track=geonames --distribution-repository=in_house_snapshot --distribution-version={ES_CLIENT_VER}-SNAPSHOT
 
-This will benchmark the latest 7.0.0 snapshot build of Elasticsearch.
+This will benchmark the latest {ES_CLIENT_VER} snapshot build of Elasticsearch.
 
 ``source-build-method``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -21,6 +21,9 @@ import os
 import sys
 import time
 
+# the following import is needed for log.post_configure_actor_logging() to recover
+# all loggers from the old log manager
+from esrally import racecontrol  # pylint: disable=unused-import
 from esrally import (
     BANNER,
     PROGRAM_NAME,

@@ -18,9 +18,6 @@ import pytest
 
 import it
 
-# pylint: disable=unused-import
-from it import fresh_log_file
-
 
 @pytest.fixture(autouse=True)
 def setup_esrallyd():
@@ -31,7 +28,7 @@ def setup_esrallyd():
 
 
 @it.rally_in_mem
-def test_elastic_transport_module_does_not_log_at_info_level(cfg, fresh_log_file):
+def test_elastic_transport_module_does_not_log_at_info_level(cfg, fresh_log_file, free_benchmark_http_port):
     """
     The 'elastic_transport' module logs at 'INFO' by default and is _very_ noisy, so we explicitly set the threshold to
     'WARNING' to avoid perturbing benchmarking results due to the high volume of logging calls by the client itself.
@@ -45,12 +42,10 @@ def test_elastic_transport_module_does_not_log_at_info_level(cfg, fresh_log_file
 
     See https://github.com/elastic/rally/pull/1669#issuecomment-1442783985 for more details.
     """
-    port = 19200
-    it.wait_until_port_is_free(port_number=port)
     dist = it.DISTRIBUTIONS[-1]
     it.race(
         cfg,
         f'--distribution-version={dist} --track="geonames" --include-tasks=delete-index '
-        f"--test-mode --car=4gheap,trial-license --target-hosts=127.0.0.1:{port} ",
+        f"--test-mode --car=4gheap,trial-license --target-hosts=127.0.0.1:{free_benchmark_http_port} ",
     )
     assert it.find_log_line(fresh_log_file, "elastic_transport.transport INFO") is None

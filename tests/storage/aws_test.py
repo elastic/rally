@@ -14,22 +14,18 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable
-from dataclasses import dataclass
 from typing import Any
-from unittest.mock import call, create_autospec
+from unittest import mock
 
 import boto3
 import pytest
+from typing_extensions import Self
 
-from esrally.config import Config, Scope
-from esrally.storage._adapter import Head, Writable
-from esrally.storage._aws import S3Adapter, S3Client, head_from_response
-from esrally.storage._http import CHUNK_SIZE
-from esrally.storage._range import rangeset
-from esrally.types import Key
+from esrally.storage import Head, StorageConfig, rangeset
+from esrally.storage.aws import S3Adapter, S3Client, head_from_response
 from esrally.utils.cases import cases
 
 SOME_BUCKET = "some-example"
@@ -41,7 +37,7 @@ CONTENT_LENGTH_HEADERS = {"ContentLength": 512}
 CONTENT_RANGE_HEADERS = {"ContentRange": "bytes 3-20/128", "ContentLength": 18}
 
 
-@dataclass()
+@dataclasses.dataclass
 class HeadCase:
     response: dict[str, Any]
     want: Head
@@ -53,7 +49,7 @@ class HeadCase:
 @pytest.fixture
 def s3_client() -> S3Client:
     cls = type(boto3.Session().client("s3"))
-    return create_autospec(cls, instance=True)
+    return mock.create_autospec(cls, instance=True)
 
 
 @cases(
@@ -74,37 +70,49 @@ def test_head(case: HeadCase, s3_client) -> None:
 
 
 class DummyBody:
+
     def __init__(self, body: bytes) -> None:
         self.body = body
+        self.closed = False
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
 
     def iter_chunks(self, chunk_size: int) -> Iterable[bytes]:
         while self.body:
             yield self.body[:chunk_size]
             self.body = self.body[chunk_size:]
 
+    def close(self) -> None:
+        assert not self.closed, "already closed"
+        self.closed = True
+
 
 SOME_DATA = b"some-data"
 SOME_DATA_HEADERS = {"ContentLength": len(SOME_DATA), "Body": DummyBody(SOME_DATA)}
 
 
-@dataclass()
+@dataclasses.dataclass
 class GetCase:
     response: dict[str, Any]
-    want: Head
+    want_head: Head
     content_length: int | None = None
     ranges: str = ""
     url: str = SOME_URL
     want_bucket: str = SOME_BUCKET
     want_key: str = SOME_KEY
     want_range: str = ""
-    want_write_data: Iterable[bytes] = tuple()
+    want_data: list[bytes] = dataclasses.field(default_factory=list)
 
 
 @cases(
     empty=GetCase({}, Head(SOME_URL)),
     accept_ranges=GetCase(ACCEPT_RANGES_HEADERS, Head(SOME_URL, accept_ranges=True)),
     content_length=GetCase(CONTENT_LENGTH_HEADERS, Head(SOME_URL, content_length=512)),
-    read_data=GetCase(SOME_DATA_HEADERS, Head(SOME_URL, content_length=len(SOME_DATA)), want_write_data=[SOME_DATA]),
+    read_data=GetCase(SOME_DATA_HEADERS, Head(SOME_URL, content_length=len(SOME_DATA)), want_data=[SOME_DATA]),
     ranges=GetCase(
         CONTENT_RANGE_HEADERS,
         Head(SOME_URL, content_length=18, ranges=rangeset("3-20"), document_length=128),
@@ -116,17 +124,17 @@ def test_get(case: GetCase, s3_client) -> None:
     case.response.setdefault("Body", DummyBody(b""))
     s3_client.get_object.return_value = case.response
     adapter = S3Adapter(s3_client=s3_client)
-    stream = create_autospec(Writable, spec_set=True, instance=True)
-    head = adapter.get(case.url, stream, head=Head(content_length=case.content_length, ranges=rangeset(case.ranges)))
-    assert head == case.want
+    with adapter.get(case.url, check_head=Head(content_length=case.content_length, ranges=rangeset(case.ranges))) as got:
+        assert got.head == case.want_head
+        assert list(got.chunks) == case.want_data
+
     kwargs = {}
     if case.want_range:
         kwargs["Range"] = f"bytes={case.ranges}"
     s3_client.get_object.assert_called_once_with(Bucket=case.want_bucket, Key=case.want_key, **kwargs)
-    assert [call(data) for data in case.want_write_data] == stream.write.mock_calls
 
 
-@dataclass()
+@dataclasses.dataclass
 class HeadFromResponseCase:
     response: dict[str, Any]
     want_head: Head | None = None
@@ -151,23 +159,27 @@ def test_head_from_response(case: HeadFromResponseCase):
     assert got == case.want_head
 
 
-@dataclass()
+@dataclasses.dataclass
 class FromConfigCase:
-    opts: dict[Key, str]
-    want_aws_profile: str = None
-    want_chunk_size: int = CHUNK_SIZE
+    cfg: StorageConfig
+    want_aws_profile: str | None = None
+    want_chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE
+
+
+def storage_config(**kwargs: Any) -> StorageConfig:
+    cfg = StorageConfig()
+    for k, v in kwargs.items():
+        setattr(cfg, k, v)
+    return cfg
 
 
 @cases(
-    default=FromConfigCase({}),
-    chunk_size=FromConfigCase({"storage.http.chunk_size": "10"}, want_chunk_size=10),
-    aws_profile=FromConfigCase({"storage.aws.profile": "foo"}, want_aws_profile="foo"),
+    default=FromConfigCase(storage_config()),
+    chunk_size=FromConfigCase(storage_config(chunk_size=10), want_chunk_size=10),
+    aws_profile=FromConfigCase(storage_config(aws_profile="foo"), want_aws_profile="foo"),
 )
 def test_from_config(case: FromConfigCase) -> None:
-    cfg = Config()
-    for k, v in case.opts.items():
-        cfg.add(Scope.application, "storage", k, v)
-    adapter = S3Adapter.from_config(cfg)
+    adapter = S3Adapter.from_config(case.cfg)
     assert isinstance(adapter, S3Adapter)
     assert adapter.chunk_size == case.want_chunk_size
     assert adapter.aws_profile == case.want_aws_profile

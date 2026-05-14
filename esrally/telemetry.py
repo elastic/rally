@@ -1809,11 +1809,12 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
 
     serverless_status = serverless.Status.Public
 
-    def __init__(self, client, metrics_store, revision_override):
+    def __init__(self, client, metrics_store, revision_override, client_options=None):
         super().__init__()
         self.metrics_store = metrics_store
         self.client = client
         self.revision_override = revision_override
+        self.client_options = client_options if client_options is not None else {}
 
     def on_benchmark_start(self):
         # noinspection PyBroadException
@@ -1835,6 +1836,33 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "source_revision", revision)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_version", distribution_version)
         self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "distribution_flavor", distribution_flavor)
+
+        # Store target ID (project ID for serverless, cluster ID for ECH, cluster name for on-prem)
+        target_id = client_info.get("cluster_name")
+        if target_id:
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "target_id", target_id)
+
+        # Determine and store target platform
+        if versions.is_serverless(distribution_flavor):
+            target_platform = "serverless"
+        else:
+            # Check for ECH (Elastic Cloud Hosted) by looking for cloud-specific response headers
+            target_platform = "on-prem"
+            try:
+                meta = getattr(client_info, "meta", None)
+                if meta is not None:
+                    headers = getattr(meta, "headers", {})
+                    if "x-found-handling-cluster" in headers:
+                        target_platform = "hosted"
+            except Exception:
+                pass
+        self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "target_platform", target_platform)
+
+        # Determine and store auth type from client options
+        if self.client_options.get("api_key"):
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "target_auth_type", "api_key")
+        elif self.client_options.get("basic_auth_user") or self.client_options.get("basic_auth"):
+            self.metrics_store.add_meta_info(metrics.MetaInfoScope.cluster, None, "target_auth_type", "basic")
 
 
 def add_metadata_for_node(metrics_store, node_name, host_name):
@@ -2172,6 +2200,9 @@ class MlBucketProcessingTime(InternalTelemetryDevice):
                     },
                 },
             )
+        except elasticsearch.AuthorizationException:
+            self.logger.warning("Not authorized to retrieve ML bucket processing time (insufficient index privileges).")
+            return
         except elasticsearch.TransportError:
             self.logger.exception("Could not retrieve ML bucket processing time.")
             return
@@ -2326,6 +2357,10 @@ class DiskUsageStats(TelemetryDevice):
             May specify:
             ``disk-usage-stats-indices``: Comma separated list of indices who's disk
                 usage to fetch. Default is all indices in the track.
+            ``disk-usage-stats-timeout``: Timeout in seconds for the disk usage API call. Default is 600s.
+            ``disk-usage-stats-flush``: Whether to pass ``flush=true`` to the disk
+                usage API. Default is ``True`` (matches the API default). When
+                ``False``, the response may not include uncommitted data.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         :param index_names: Names of indices defined by this track
@@ -2340,6 +2375,8 @@ class DiskUsageStats(TelemetryDevice):
 
     def on_benchmark_start(self):
         self.indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names + self.data_stream_names))
+        self.timeout = self.telemetry_params.get("disk-usage-stats-timeout", 600)
+        self.flush = self.telemetry_params.get("disk-usage-stats-flush", True)
         if not self.indices:
             msg = (
                 "No indices defined for disk-usage-stats. Set disk-usage-stats-indices "
@@ -2358,13 +2395,19 @@ class DiskUsageStats(TelemetryDevice):
         for index in self.indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
-                response = self.client.indices.disk_usage(index=index, run_expensive_tasks=True)
+                response = self.client.options(request_timeout=self.timeout).indices.disk_usage(
+                    index=index, run_expensive_tasks=True, flush=self.flush
+                )
             except elasticsearch.RequestError:
                 msg = f"A transport error occurred while collecting disk usage for {index}"
                 self.logger.exception(msg)
                 raise exceptions.RallyError(msg)
             except elasticsearch.NotFoundError:
                 msg = f"Requested disk usage for missing index {index}"
+                self.logger.warning(msg)
+                continue
+            except elasticsearch.ConnectionTimeout:
+                msg = f"Timeout occurred while collecting disk usage for {index}"
                 self.logger.warning(msg)
                 continue
             found = True
