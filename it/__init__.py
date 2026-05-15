@@ -334,7 +334,7 @@ def stop_process_on_port(port: int) -> None:
 
 def ensure_benchmark_transport_port_free(transport_port: int = BENCHMARK_IT_TRANSPORT_PORT, wait_timeout: int = 120) -> int:
     """
-    Stop any process on ``transport_port` and wait until the port is free.
+    Stop any process on ``transport_port`` and wait until the port is free.
     """
     stop_process_on_port(transport_port)
     wait_until_port_is_free(port_number=transport_port, timeout=wait_timeout)

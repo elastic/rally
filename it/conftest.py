@@ -188,7 +188,7 @@ def free_benchmark_http_port() -> Generator[int]:
     See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
     port = ensure_benchmark_http_port_free()
-    # be paranoid, ES listens also on transport port
+    # ES also listens on transport port
     ensure_benchmark_transport_port_free()
     yield port
     ensure_benchmark_http_port_free(port)
@@ -203,7 +203,7 @@ def free_benchmark_http_port_module() -> Generator[int]:
     See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
     port = ensure_benchmark_http_port_free()
-    # be paranoid, ES listens also on transport port
+    # ES also listens on transport port
     ensure_benchmark_transport_port_free()
     yield port
     ensure_benchmark_http_port_free(port)
