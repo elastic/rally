@@ -17,7 +17,6 @@
 
 import os
 import shutil
-import socket
 import tempfile
 from collections.abc import Generator
 
@@ -25,7 +24,15 @@ import pytest
 
 from esrally import config, version
 from esrally.utils import process
-from it import CONFIG_NAMES, ROOT_DIR, TestCluster, ensure_benchmark_http_port_free
+from it import (
+    IT_CONFIG_NAMES,
+    ROOT_DIR,
+    TestCluster,
+    ensure_benchmark_http_port_free,
+    wait_until_port_is_free,
+)
+
+METRICS_STORE_CONFIG_NAME = "metrics-store-it"
 
 
 def check_prerequisites():
@@ -43,7 +50,7 @@ def install_integration_test_config():
         f.store_default_config(template_path=source_path)
 
     print("Installing integration test configs...")
-    for n in CONFIG_NAMES:
+    for n in IT_CONFIG_NAMES:
         copy_config(n)
 
 
@@ -70,7 +77,7 @@ def build_docker_image():
 
 
 def remove_integration_test_config():
-    for config_name in CONFIG_NAMES:
+    for config_name in [*IT_CONFIG_NAMES, METRICS_STORE_CONFIG_NAME]:
         os.remove(config.ConfigFile(config_name).location)
 
 
@@ -81,35 +88,13 @@ class EsMetricsStore:
     HTTP_PORT = 10200
 
     def __init__(self) -> None:
-        self.cluster = TestCluster("metrics-store")
+        self.cluster = TestCluster(METRICS_STORE_CONFIG_NAME)
 
     def start(self) -> None:
-        """Ensure metrics Elasticsearch is up on ``HTTP_PORT``, installing it if needed."""
-        port = self.HTTP_PORT
-        cluster = self.cluster
-        name = cluster.probe_cluster_on_port(port)
-        if name == cluster.cfg:
-            print("Elasticsearch metrics store already running; waiting for cluster health (yellow)...")
-            cluster.http_port = port
-            cluster.wait_for_cluster_health()
-            return
-        if name is not None:
-            raise AssertionError(
-                f"Port {port} answers Elasticsearch but reports cluster name {name!r}; "
-                f"integration tests expect {cluster.cfg!r} for the metrics store. "
-                f"Stop the other cluster or change EsMetricsStore.HTTP_PORT."
-            )
-        probe_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            if probe_sock.connect_ex(("127.0.0.1", port)) == 0:
-                raise AssertionError(
-                    f"Something is listening on 127.0.0.1:{port} but the Elasticsearch REST probe did not succeed "
-                    f"(expected cluster name {cluster.cfg!r} when reusing the metrics store). "
-                    f"Free the port or check firewall/proxy. If Elasticsearch is still starting, wait and retry."
-                )
-        finally:
-            probe_sock.close()
-        print("Starting Elasticsearch metrics store...")
+        """Installs metrics Elasticsearch cluster listening at ``HTTP_PORT``, and verifies if healthy."""
+        print(f"Verifying if Elasticsearch metrics store port {self.HTTP_PORT} is free...")
+        wait_until_port_is_free(port_number=self.HTTP_PORT)
+        print(f"Starting Elasticsearch metrics store at port {self.HTTP_PORT}...")
         self.cluster.install(
             distribution_version=EsMetricsStore.VERSION,
             node_name="metrics-store",

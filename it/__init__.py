@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import errno
 import functools
 import json
 import logging
@@ -29,10 +28,10 @@ import time
 import psutil
 import pytest
 
-from esrally import client, version
+from esrally import client
 from esrally.utils import process
 
-CONFIG_NAMES = ["in-memory-it", "es-it"]
+IT_CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["8.19.13", "9.2.7"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -45,12 +44,9 @@ _CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
 # files assume this value. Switching to a free port would require threading it through every caller and external
 # reference, so we instead clear leftovers on this port before/after tests when teardown is incomplete.
 BENCHMARK_IT_HTTP_PORT = 19200
-# Default ``--cluster-name`` for ``esrally race`` / install; keep aligned with ``esrally/rally.py``.
-RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME = "rally-benchmark"
-# Only these cluster names may be torn down on `BENCHMARK_IT_HTTP_PORT` (metrics store uses 10200).
-_BENCHMARK_CLUSTER_NAMES_ON_IT_PORT = frozenset({RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME, "in-memory-it"})
+
 _DOCKER_PUBLISH_STOP_ROUNDS = 3
-_LISTENER_SIGTERM_WAIT_SEC = 8.0
+_ES_SIGTERM_WAIT_SEC = 8.0
 
 
 LOG = logging.getLogger(__name__)
@@ -58,7 +54,7 @@ LOG = logging.getLogger(__name__)
 
 def all_rally_configs(t):
     @functools.wraps(t)
-    @pytest.mark.parametrize("cfg", CONFIG_NAMES)
+    @pytest.mark.parametrize("cfg", IT_CONFIG_NAMES)
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
 
@@ -67,7 +63,7 @@ def all_rally_configs(t):
 
 def random_rally_config(t):
     @functools.wraps(t)
-    @pytest.mark.parametrize("cfg", [random.choice(CONFIG_NAMES)])
+    @pytest.mark.parametrize("cfg", [random.choice(IT_CONFIG_NAMES)])
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
 
@@ -138,7 +134,7 @@ def command_in_docker(command_line, python_version):
     return subprocess.run(docker_command, shell=True, check=True).returncode
 
 
-def wait_until_port_is_free(port_number=39200, timeout=120):
+def wait_until_port_is_free(port_number=39200, timeout=10):
     start = time.perf_counter()
     end = start + timeout
     while time.perf_counter() < end:
@@ -217,7 +213,7 @@ def _is_rally_es_process(p: psutil.Process, metrics_store_install_id: str) -> bo
         return False
 
 
-def _kill_rally_es_processes(metrics_store_install_id: str | None, wait_timeout: float = _LISTENER_SIGTERM_WAIT_SEC) -> None:
+def _kill_rally_es_processes(metrics_store_install_id: str | None, wait_timeout: float = _ES_SIGTERM_WAIT_SEC) -> None:
     """
     Kill any host-JVM Elasticsearch provisioned by Rally that survived a previous test. Docker-provisioned ES is
     unaffected (handled by ``_stop_docker_publishers``).
@@ -272,8 +268,8 @@ def ensure_benchmark_http_port_free(
     see `BENCHMARK_IT_HTTP_PORT` for why the port is not chosen dynamically.
 
     ``metrics_store_install_id`` is the session metrics store's installation id, threaded through to
-    ``_kill_rally_it_es_processes`` so the metrics store JVM is excluded from the orphan-JVM scan.
-    See ``_kill_rally_it_es_processes`` for behaviour when it is None.
+    ``_kill_rally_es_processes`` so the metrics store JVM is excluded from the orphan-JVM scan.
+    See ``_kill_rally_es_processes`` for behaviour when it is None.
     """
     assert http_port is not None
     _kill_rally_es_processes(metrics_store_install_id)
