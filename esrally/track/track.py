@@ -30,22 +30,18 @@ class Index:
     Defines an index in Elasticsearch.
     """
 
-    def __init__(self, name, body=None, types=None):
+    def __init__(self, name, body=None):
         """
 
         Creates a new index.
 
         :param name: The index name. Mandatory.
         :param body: A dict representation of the index body. Optional.
-        :param types: A list of types. Should contain at least one type.
         """
-        if types is None:
-            types = []
         if body is None:
             body = {}
         self.name = name
         self.body = body
-        self.types = types
 
     def matches(self, pattern):
         if pattern is None:
@@ -194,7 +190,6 @@ class Documents:
         uncompressed_size_in_bytes=0,
         target_index=None,
         target_data_stream=None,
-        target_type=None,
         meta_data=None,
     ):
         """
@@ -216,8 +211,6 @@ class Documents:
         :param target_index: The index to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data`` is ``False``.
         :param target_data_stream: The data stream to target for bulk operations.
         Maybe be ``None`` if ``includes_action_and_meta_data`` is ``False``.
-        :param target_type: The document type to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data``
-                            is ``False``.
         :param meta_data: A dict containing key-value pairs with additional meta-data describing documents. Optional.
         """
 
@@ -231,7 +224,6 @@ class Documents:
         self._uncompressed_size_in_bytes = uncompressed_size_in_bytes
         self.target_index = target_index
         self.target_data_stream = target_data_stream
-        self.target_type = target_type
         self.meta_data = meta_data or {}
 
     def has_compressed_corpus(self):
@@ -296,7 +288,6 @@ class Documents:
             ^ hash(self.uncompressed_size_in_bytes)
             ^ hash(self.target_index)
             ^ hash(self.target_data_stream)
-            ^ hash(self.target_type)
             ^ hash(frozenset(self.meta_data.items()))
         )
 
@@ -310,9 +301,8 @@ class Documents:
             self.number_of_documents,
             self.compressed_size_in_bytes,
             self.uncompressed_size_in_bytes,
-            self.target_type,
+            self.target_index,
             self.target_data_stream,
-            self.target_type,
             self.meta_data,
         ) == (
             othr.source_format,
@@ -323,9 +313,8 @@ class Documents:
             othr.number_of_documents,
             othr.compressed_size_in_bytes,
             othr.uncompressed_size_in_bytes,
-            othr.target_type,
+            othr.target_index,
             othr.target_data_stream,
-            othr.target_type,
             othr.meta_data,
         )
 
