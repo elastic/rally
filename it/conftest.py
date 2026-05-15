@@ -25,13 +25,7 @@ import pytest
 
 from esrally import config, version
 from esrally.utils import process
-from it import (
-    CONFIG_NAMES,
-    ROOT_DIR,
-    TestCluster,
-    ensure_benchmark_http_port_free,
-    ensure_benchmark_transport_port_free,
-)
+from it import CONFIG_NAMES, ROOT_DIR, TestCluster, ensure_benchmark_http_port_free
 
 
 def check_prerequisites():
@@ -87,7 +81,7 @@ class EsMetricsStore:
     HTTP_PORT = 10200
 
     def __init__(self) -> None:
-        self.cluster = TestCluster("in-memory-it")
+        self.cluster = TestCluster("metrics-store")
 
     def start(self) -> None:
         """Ensure metrics Elasticsearch is up on ``HTTP_PORT``, installing it if needed."""
@@ -187,12 +181,10 @@ def free_benchmark_http_port() -> Generator[int]:
 
     See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
-    port = ensure_benchmark_http_port_free()
-    # ES also listens on transport port
-    ensure_benchmark_transport_port_free()
+    install_id = ES_METRICS_STORE.cluster.installation_id
+    port = ensure_benchmark_http_port_free(metrics_store_install_id=install_id)
     yield port
-    ensure_benchmark_http_port_free(port)
-    ensure_benchmark_transport_port_free()
+    ensure_benchmark_http_port_free(port, metrics_store_install_id=install_id)
 
 
 @pytest.fixture(scope="module")
@@ -202,12 +194,10 @@ def free_benchmark_http_port_module() -> Generator[int]:
 
     See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
-    port = ensure_benchmark_http_port_free()
-    # ES also listens on transport port
-    ensure_benchmark_transport_port_free()
+    install_id = ES_METRICS_STORE.cluster.installation_id
+    port = ensure_benchmark_http_port_free(metrics_store_install_id=install_id)
     yield port
-    ensure_benchmark_http_port_free(port)
-    ensure_benchmark_transport_port_free()
+    ensure_benchmark_http_port_free(port, metrics_store_install_id=install_id)
 
 
 # ensures that a fresh log file is available
