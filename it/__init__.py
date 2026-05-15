@@ -213,17 +213,13 @@ def _is_rally_es_process(p: psutil.Process, metrics_store_install_id: str) -> bo
         return False
 
 
-def _kill_rally_es_processes(metrics_store_install_id: str | None, wait_timeout: float = _ES_SIGTERM_WAIT_SEC) -> None:
+def _kill_rally_es_processes(metrics_store_install_id: str, wait_timeout: float = _ES_SIGTERM_WAIT_SEC) -> None:
     """
     Kill any host-JVM Elasticsearch provisioned by Rally that survived a previous test. Docker-provisioned ES is
     unaffected (handled by ``_stop_docker_publishers``).
 
-    Requires ``metrics_store_install_id`` to identify the session-scoped metrics store JVM so it is not killed. If it is
-    ``None`` (e.g. the metrics store was reused from a previous run and its install id was not recorded), this function
-    returns without scanning, since we cannot safely distinguish orphan benchmark JVMs from the reused metrics store.
+    Requires ``metrics_store_install_id`` to identify the session-scoped metrics store JVM so it is not killed.
     """
-    if metrics_store_install_id is None:
-        return
     mypid = os.getpid()
     pids: set[int] = set()
     for p in psutil.process_iter():
@@ -255,13 +251,12 @@ def _kill_rally_es_processes(metrics_store_install_id: str | None, wait_timeout:
 
 
 def ensure_benchmark_http_port_free(
+    metrics_store_install_id: str,
     http_port: int = BENCHMARK_IT_HTTP_PORT,
-    wait_timeout: int = 120,
-    *,
-    metrics_store_install_id: str | None = None,
+    wait_timeout: int = 10,
 ) -> int:
     """
-    Stops ES processes other than metric store, and Docker containers cluster on ``http_port``. Then waits until
+    Stops ES processes other than metrics store, and Docker containers listening at ``http_port``. Then waits until
     ``http_port`` is free.
 
     Used by pytest fixtures around benchmark tests so each run starts from a known state on the fixed IT port;

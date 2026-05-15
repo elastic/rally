@@ -167,9 +167,10 @@ def free_benchmark_http_port() -> Generator[int]:
     See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
     install_id = ES_METRICS_STORE.cluster.installation_id
-    port = ensure_benchmark_http_port_free(metrics_store_install_id=install_id)
+    assert install_id is not None, "Elasticsearch metrics store should have been installed earlier"
+    port = ensure_benchmark_http_port_free(install_id)
     yield port
-    ensure_benchmark_http_port_free(port, metrics_store_install_id=install_id)
+    ensure_benchmark_http_port_free(install_id, port)
 
 
 @pytest.fixture(scope="module")
@@ -180,9 +181,10 @@ def free_benchmark_http_port_module() -> Generator[int]:
     See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
     """
     install_id = ES_METRICS_STORE.cluster.installation_id
-    port = ensure_benchmark_http_port_free(metrics_store_install_id=install_id)
+    assert install_id is not None, "Elasticsearch metrics store should have been installed earlier"
+    port = ensure_benchmark_http_port_free(install_id)
     yield port
-    ensure_benchmark_http_port_free(port, metrics_store_install_id=install_id)
+    ensure_benchmark_http_port_free(install_id, port)
 
 
 # ensures that a fresh log file is available
