@@ -2847,6 +2847,7 @@ class Composite(Runner):
         # Since Composite is marked as serverless.Status.Public, only add public
         # operation types here.
         self.supported_op_types = [
+            "composite",
             "open-point-in-time",
             "close-point-in-time",
             "search",
@@ -2918,8 +2919,17 @@ class Composite(Runner):
     async def __call__(self, es, params):
         requests = mandatory(params, "requests", self)
         max_connections = params.get("max-connections", sys.maxsize)
-        async with CompositeContext():
+        try:
+            CompositeContext._ctx()
+            has_context = True
+        except exceptions.RallyAssertionError:
+            has_context = False
+
+        if has_context:
             response = await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+        else:
+            async with CompositeContext():
+                response = await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
         return {
             "weight": 1,
             "unit": "ops",

@@ -506,6 +506,82 @@ class TestSamplePostprocessor:
         ]
         metrics_store.put_value_cluster_level.assert_has_calls(calls)
 
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_multi_layer_dependent_samples(self, metrics_store):
+        post_process = driver.SamplePostprocessor(metrics_store, downsample_factor=1, track_meta_data={}, challenge_meta_data={})
+
+        task = track.Task("index", track.Operation("index-op", "bulk", param_source="driver-test-param-source"))
+        samples = [
+            driver.Sample(
+                0,
+                38598,
+                24,
+                0,
+                task,
+                metrics.SampleType.Normal,
+                None,
+                0.01,
+                0.007,
+                0.009,
+                None,
+                5000,
+                "docs",
+                1,
+                1 / 2,
+                dependent_timing=[
+                    {
+                        "meta_key_1": "meta_value_1",
+                        "dependent_timing": [
+                            {
+                                "meta_key_2": "meta_value_2",
+                                "dependent_timing": {
+                                    "absolute_time": 38601,
+                                    "request_start": 25,
+                                    "service_time": 0.05,
+                                    "operation": "index-op",
+                                    "operation-type": "bulk",
+                                },
+                            },
+                            {
+                                "meta_key_2": "meta_value_2",
+                                "dependent_timing": [
+                                    {
+                                        "meta_key_3": "meta_value_3",
+                                        "dependent_timing": {
+                                            "absolute_time": 38602,
+                                            "request_start": 26,
+                                            "service_time": 0.08,
+                                            "operation": "index-op",
+                                            "operation-type": "bulk",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            ),
+        ]
+
+        post_process(samples)
+        meta_data = {"client_id": 0}
+        first_meta_data = {"client_id": 0, "meta_key_1": "meta_value_1", "meta_key_2": "meta_value_2"}
+        second_meta_data = {
+            "client_id": 0,
+            "meta_key_1": "meta_value_1",
+            "meta_key_2": "meta_value_2",
+            "meta_key_3": "meta_value_3",
+        }
+        calls = [
+            self.latency(38598, 24, 10.0, meta_data),
+            self.service_time(38598, 24, 7.0, meta_data),
+            self.processing_time(38598, 24, 9.0, meta_data),
+            self.service_time(38601, 25, 50.0, first_meta_data),
+            self.service_time(38602, 26, 80.0, second_meta_data),
+            self.throughput(38598, 24, 5000),
+        ]
+        metrics_store.put_value_cluster_level.assert_has_calls(calls)
+
 
 class TestWorkerAssignment:
     def test_single_host_assignment_clients_matches_cores(self):

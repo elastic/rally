@@ -1104,15 +1104,6 @@ class SamplePostprocessor:
                 )
 
                 for timing in sample.dependent_timings:
-                    if isinstance(timing, dict) and "dependent_timings" in timing:
-                        for sub_timing in timing.get("dependent_timings", []):
-                            self.put_sample(
-                                sub_timing,
-                                "service_time",
-                                "ms",
-                                self.merge(sub_timing.request_meta_data, client_id_meta_data),
-                            )
-
                     self.put_sample(
                         timing,
                         "service_time",
@@ -1574,53 +1565,38 @@ class Sample:
     def dependent_timings(self):
         if self._dependent_timing:
             for t in self._dependent_timing:
-                timing = t.pop("dependent_timing")
-                meta_data = self._merge(self.request_meta_data, t)
-                if isinstance(timing, dict):
-                    yield Sample(
-                        self.client_id,
-                        timing["absolute_time"],
-                        timing["request_start"],
-                        self.task_start,
-                        self.task,
-                        self.sample_type,
-                        meta_data,
-                        0,
-                        timing["service_time"],
-                        0,
-                        0,
-                        self.total_ops,
-                        self.total_ops_unit,
-                        self.time_period,
-                        self.percent_completed,
-                        None,
-                        timing["operation"],
-                        timing["operation-type"],
-                    )
-                else:
-                    for sub_timing in timing:
-                        st = sub_timing.pop("dependent_timing", None)
-                        sub_meta_data = self._merge(meta_data, sub_timing)
-                        yield Sample(
-                            self.client_id,
-                            st["absolute_time"],
-                            st["request_start"],
-                            self.task_start,
-                            self.task,
-                            self.sample_type,
-                            sub_meta_data,
-                            0,
-                            st["service_time"],
-                            0,
-                            0,
-                            self.total_ops,
-                            self.total_ops_unit,
-                            self.time_period,
-                            self.percent_completed,
-                            None,
-                            st["operation"],
-                            st["operation-type"],
-                        )
+                if t:
+                    yield from self._dependent_sample(t, self.request_meta_data)
+
+    def _dependent_sample(self, dependent_timing, meta_data):
+        timing = dependent_timing.get("dependent_timing")
+        current_meta_data = self._merge(meta_data, {k: v for k, v in dependent_timing.items() if k != "dependent_timing"})
+
+        if isinstance(timing, dict):
+            yield Sample(
+                self.client_id,
+                timing["absolute_time"],
+                timing["request_start"],
+                self.task_start,
+                self.task,
+                self.sample_type,
+                current_meta_data,
+                0,
+                timing["service_time"],
+                0,
+                0,
+                self.total_ops,
+                self.total_ops_unit,
+                self.time_period,
+                self.percent_completed,
+                None,
+                timing["operation"],
+                timing["operation-type"],
+            )
+        elif timing:
+            for sub_timing in timing:
+                if sub_timing:
+                    yield from self._dependent_sample(sub_timing, current_meta_data)
 
     def __repr__(self, *args, **kwargs):
         return (

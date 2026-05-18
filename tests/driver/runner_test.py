@@ -7906,6 +7906,52 @@ class TestComposite:
             assert "request_end" in timing["dependent_timing"]
             assert timing["dependent_timing"]["request_end"] > timing["dependent_timing"]["request_start"]
 
+    @pytest.mark.asyncio
+    async def test_executes_nested_composite_with_shared_context(self):
+        class FixedRequestContext:
+            def __enter__(self):
+                self.request_start = 1.0
+                self.request_end = 1.1
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        es = mock.Mock()
+        es.new_request_context = mock.Mock(side_effect=FixedRequestContext)
+        es.open_point_in_time = mock.AsyncMock(return_value={"id": "pit-id"})
+        es.close_point_in_time = mock.AsyncMock()
+
+        params = {
+            "requests": [
+                {
+                    "name": "parent-pit",
+                    "operation-type": "open-point-in-time",
+                    "index": "test-index",
+                },
+                {
+                    "operation-type": "composite",
+                    "requests": [
+                        {
+                            "operation-type": "close-point-in-time",
+                            "with-point-in-time-from": "parent-pit",
+                        }
+                    ],
+                },
+            ]
+        }
+
+        r = runner.Composite()
+        response = await r(es, params)
+
+        assert len(response["dependent_timing"]) == 2
+        assert response["dependent_timing"][0]["dependent_timing"]["operation-type"] == "open-point-in-time"
+        nested_response = response["dependent_timing"][1]["dependent_timing"]
+        assert len(nested_response) == 1
+        assert nested_response[0]["dependent_timing"]["operation-type"] == "close-point-in-time"
+        es.open_point_in_time.assert_awaited_once_with(index="test-index", params=None, keep_alive="1m")
+        es.close_point_in_time.assert_awaited_once_with(body={"id": "pit-id"}, params={}, headers=None)
+
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_limits_connections(self, es):
@@ -7968,7 +8014,7 @@ class TestComposite:
             await r(es, params)
 
         assert exc.value.args[0] == (
-            "Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
+            "Unsupported operation-type [bulk]. Use one of [composite, open-point-in-time, close-point-in-time, "
             "search, paginated-search, composite-agg, raw-request, sleep, submit-async-search, get-async-search, "
             "delete-async-search, field-caps]."
         )
