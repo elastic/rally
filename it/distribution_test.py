@@ -30,7 +30,7 @@ import it
 
 @pytest.mark.parametrize("dist", it.DISTRIBUTIONS)
 @pytest.mark.parametrize("track", it.TRACKS)
-@pytest.mark.parametrize("cfg", [random.choice(it.CONFIG_NAMES)])
+@pytest.mark.parametrize("cfg", [random.choice(it.IT_CONFIG_NAMES)])
 def test_tar_distributions(cfg, dist, track, free_benchmark_http_port: int):
 
     enable_assertions = track != "http_logs"  # http_logs assertions fail in test mode
