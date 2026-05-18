@@ -4315,6 +4315,48 @@ class TestTrackSpecificationReader:
         with pytest.raises(loader.TrackSyntaxError, match=r"documents.json.bz2.*specifies 'target-type'"):
             reader("unittest", track_specification, "/mappings")
 
+    @pytest.mark.parametrize("operation_type", ["search", "scroll-search"])
+    def test_rejects_search_operation_document_type(self, operation_type):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [
+                {
+                    "name": "match-all",
+                    "operation-type": operation_type,
+                    "index": "test-index",
+                    "type": "docs",
+                    "body": {"query": {"match_all": {}}},
+                }
+            ],
+            "challenges": [],
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Operation 'match-all' specifies 'type'"):
+            reader("unittest", track_specification, "/mappings")
+
+    def test_rejects_inline_search_operation_document_type(self):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": {
+                            "name": "match-all",
+                            "operation-type": "search",
+                            "index": "test-index",
+                            "type": "docs",
+                            "body": {"query": {"match_all": {}}},
+                        },
+                    },
+                ],
+            },
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Operation 'match-all' specifies 'type'"):
+            reader("unittest", track_specification, "/mappings")
+
 
 class MyMockTrackProcessor(loader.TrackProcessor):
     pass

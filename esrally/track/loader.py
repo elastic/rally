@@ -1858,6 +1858,11 @@ class TrackSpecificationReader:
 
         try:
             op = track.OperationType.from_hyphenated_string(op_type_name)
+            if op in (track.OperationType.Search, track.OperationType.ScrollSearch) and "type" in params:
+                self._error(
+                    f"Operation '{op_name}' specifies 'type', which is no longer supported by Rally "
+                    "(document types were removed in Elasticsearch 7.0). Remove the 'type' parameter."
+                )
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
             LOG.debug("Using built-in operation type [%s] for operation [%s].", op_type_name, op_name)
