@@ -2836,6 +2836,14 @@ class CompositeContext:
         except LookupError:
             raise exceptions.RallyAssertionError("This operation is only allowed inside a composite operation.") from None
 
+    @staticmethod
+    def has_active_context():
+        try:
+            CompositeContext.ctx.get()
+            return True
+        except LookupError:
+            return False
+
 
 class Composite(Runner):
     """
@@ -2859,7 +2867,6 @@ class Composite(Runner):
             "get-async-search",
             "delete-async-search",
             "field-caps",
-            "composite",
         ]
         self.operations_without_request_timing = ["composite"]
 
@@ -2919,13 +2926,7 @@ class Composite(Runner):
     async def __call__(self, es, params):
         requests = mandatory(params, "requests", self)
         max_connections = params.get("max-connections", sys.maxsize)
-        try:
-            CompositeContext._ctx()
-            has_context = True
-        except exceptions.RallyAssertionError:
-            has_context = False
-
-        if has_context:
+        if CompositeContext.has_active_context():
             response = await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
         else:
             async with CompositeContext():

@@ -1569,8 +1569,11 @@ class Sample:
                     yield from self._dependent_sample(t, self.request_meta_data)
 
     def _dependent_sample(self, dependent_timing, meta_data):
+        """Recursively flatten dependent timings while accumulating parent-level metadata."""
+        if not isinstance(dependent_timing, dict):
+            return
         timing = dependent_timing.get("dependent_timing")
-        current_meta_data = self._merge(meta_data, {k: v for k, v in dependent_timing.items() if k != "dependent_timing"})
+        current_meta_data = self._merge(meta_data, self._metadata_without_dependent_timing(dependent_timing))
 
         if isinstance(timing, dict):
             yield Sample(
@@ -1597,6 +1600,10 @@ class Sample:
             for sub_timing in timing:
                 if sub_timing:
                     yield from self._dependent_sample(sub_timing, current_meta_data)
+
+    def _metadata_without_dependent_timing(self, dependent_timing):
+        """Extract metadata fields, excluding the nested dependent timing payload."""
+        return {k: v for k, v in dependent_timing.items() if k != "dependent_timing"}
 
     def __repr__(self, *args, **kwargs):
         return (

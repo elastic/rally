@@ -543,7 +543,7 @@ class TestSamplePostprocessor:
                                 },
                             },
                             {
-                                "meta_key_2": "meta_value_2",
+                                "meta_key_2": "meta_value_2_override",
                                 "dependent_timing": [
                                     {
                                         "meta_key_3": "meta_value_3",
@@ -569,7 +569,7 @@ class TestSamplePostprocessor:
         second_meta_data = {
             "client_id": 0,
             "meta_key_1": "meta_value_1",
-            "meta_key_2": "meta_value_2",
+            "meta_key_2": "meta_value_2_override",
             "meta_key_3": "meta_value_3",
         }
         calls = [
