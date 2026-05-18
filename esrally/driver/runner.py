@@ -2858,6 +2858,7 @@ class Composite(Runner):
             "get-async-search",
             "delete-async-search",
             "field-caps",
+            "composite",
         ]
         self.operations_without_request_timing = ["composite"]
 
