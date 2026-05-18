@@ -191,10 +191,12 @@ def _stop_docker_publishers(http_port: int) -> None:
             LOG.warning("docker stop failed for container %s", cid)
 
 
-def _is_rally_es_process(p: psutil.Process, metrics_store_install_id: str) -> bool:
+def _is_rally_es_process(p: psutil.Process, metrics_store_install_id: str | None = None) -> bool:
     """
     True if ``p`` is a host-JVM Elasticsearch provisioned by Rally, identified by the bootstrap main class in its
-    cmdline and the rally install path in its working directory. The session-scoped metrics store is excluded by
+    cmdline and the rally install path in its working directory.
+
+    If ``metrics_store_install_id`` is provided, the session-scoped metrics store is excluded by
     matching its installation id segment in the working directory: Rally lays out node working dirs as
     ``…/benchmarks/races/<install-id>/<node-name>/install/elasticsearch-X.Y.Z``.
     """
@@ -206,11 +208,23 @@ def _is_rally_es_process(p: psutil.Process, metrics_store_install_id: str) -> bo
         cwd = p.cwd()
         if "/benchmarks/races/" not in cwd:
             return False
-        if f"/benchmarks/races/{metrics_store_install_id}/" in cwd:
+        if metrics_store_install_id and f"/benchmarks/races/{metrics_store_install_id}/" in cwd:
             return False
         return True
     except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
         return False
+
+
+def find_rally_es_pids(metrics_store_install_id: str | None = None) -> set[int]:
+    mypid = os.getpid()
+    pids: set[int] = set()
+    for p in psutil.process_iter():
+        try:
+            if p.pid != mypid and _is_rally_es_process(p, metrics_store_install_id):
+                pids.add(p.pid)
+        except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+            pass
+    return pids
 
 
 def _kill_rally_es_processes(metrics_store_install_id: str, wait_timeout: float = _ES_SIGTERM_WAIT_SEC) -> None:
@@ -220,14 +234,7 @@ def _kill_rally_es_processes(metrics_store_install_id: str, wait_timeout: float 
 
     Requires ``metrics_store_install_id`` to identify the session-scoped metrics store JVM so it is not killed.
     """
-    mypid = os.getpid()
-    pids: set[int] = set()
-    for p in psutil.process_iter():
-        try:
-            if p.pid != mypid and _is_rally_es_process(p, metrics_store_install_id):
-                pids.add(p.pid)
-        except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
-            pass
+    pids = find_rally_es_pids(metrics_store_install_id)
     if not pids:
         return
     for pid in pids:
@@ -264,7 +271,6 @@ def ensure_benchmark_http_port_free(
 
     ``metrics_store_install_id`` is the session metrics store's installation id, threaded through to
     ``_kill_rally_es_processes`` so the metrics store JVM is excluded from the orphan-JVM scan.
-    See ``_kill_rally_es_processes`` for behaviour when it is None.
     """
     assert http_port is not None
     _kill_rally_es_processes(metrics_store_install_id)
@@ -323,7 +329,7 @@ class TestCluster:
                 )
             )
             self.installation_id = json.loads("".join(output))["installation-id"]
-            LOG.info("Cluster %s installed with %s ID", self.cfg, self.installation_id)
+            LOG.info("Elasticsearch cluster listening at port %d installed with %s ID", self.http_port, self.installation_id)
         except BaseException as e:
             raise AssertionError(f"Failed to install Elasticsearch {distribution_version}.", e)
 
