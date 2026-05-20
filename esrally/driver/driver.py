@@ -1647,9 +1647,10 @@ class ThroughputCalculator:
             self.has_samples_in_sample_type = False
             # start relative to the beginning of our (calculation) time slice.
             self.start_time = start_time
-            # snapshot of total_count and interval at the last bucket boundary, used for windowed throughput
-            self.prev_total_count = 0
-            self.prev_interval = 0
+            # used for windowed throughput: stored inside finish_bucket before snapshots are updated
+            self._prev_total_count = 0
+            self._prev_interval = 0
+            self._windowed_rate = None
 
         @property
         def throughput(self):
@@ -1658,11 +1659,7 @@ class ThroughputCalculator:
         @property
         def windowed_throughput(self):
             """Throughput based only on ops and time elapsed since the previous bucket boundary."""
-            delta_count = self.total_count - self.prev_total_count
-            delta_interval = self.interval - self.prev_interval
-            if delta_interval <= 0:
-                return self.throughput
-            return delta_count / delta_interval
+            return self._windowed_rate if self._windowed_rate is not None else self.throughput
 
         def maybe_update_sample_type(self, current_sample_type):
             if self.sample_type < current_sample_type:
@@ -1679,8 +1676,11 @@ class ThroughputCalculator:
             return self.interval > 0 and not self.has_samples_in_sample_type
 
         def finish_bucket(self, new_total):
-            self.prev_total_count = self.total_count
-            self.prev_interval = self.interval
+            delta_count = new_total - self.total_count
+            delta_interval = self.interval - self._prev_interval
+            self._windowed_rate = delta_count / delta_interval if delta_interval > 0 else None
+            self._prev_total_count = self.total_count
+            self._prev_interval = self.interval
             self.unprocessed = []
             self.total_count = new_total
             self.has_samples_in_sample_type = True
