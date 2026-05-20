@@ -719,7 +719,9 @@ class Driver:
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         downsample_factor = int(self.config.opts("reporting", "metrics.request.downsample.factor", mandatory=False, default_value=1))
-        windowed_throughput = self.config.opts("reporting", "metrics.request.throughput.window", mandatory=False, default_value=False)
+        windowed_throughput = convert.to_bool(
+            self.config.opts("reporting", "metrics.request.throughput.window", mandatory=False, default_value=False)
+        )
         self.metrics_store = metrics.metrics_store(cfg=self.config, track=self.track.name, challenge=self.challenge.name, read_only=False)
 
         self.sample_post_processor = SamplePostprocessor(
