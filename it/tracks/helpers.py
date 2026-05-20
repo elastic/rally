@@ -33,7 +33,8 @@ from typing import Protocol
 import pytest
 
 from esrally.paths import rally_root
-from esrally.utils import compose, convert
+from esrally.utils import convert
+from it.tracks import compose
 
 # Default Elasticsearch distribution versions for track race IT (Docker compose es01 image tag).
 # Keep in sync with the es-version matrix in .github/workflows/ci.yml (job it-tracks-race).
@@ -85,7 +86,7 @@ class ExpectCommandFailure:
     ``es_version_prefix`` defaults to ``""`` (match every version).
 
     When skip-xfail is off, ``stdout`` is matched as a substring of the **decoded**
-    combined stdout from the race subprocess (see ``esrally.utils.compose.decode``).
+    combined stdout from the race subprocess (see ``it.tracks.compose.decode``).
     """
 
     returncode: int
@@ -139,7 +140,7 @@ def expect_command_failure(
 
     Otherwise skip / xfail-on-match for ``policy`` at ``es_version``:
     uses ``expected_xfail_for_es_version`` and ``it_skip_xfail_applies`` for the skip decision;
-    subprocess matching uses decoded combined stdout (``esrally.utils.compose.decode``).
+    subprocess matching uses decoded combined stdout (``it.tracks.compose.decode``).
     """
     # Case 1: no expected failure for this track — run the race with no skip/xfail handling.
     if policy is None:

@@ -32,9 +32,8 @@ from collections.abc import Generator
 import pytest
 
 from esrally import config
-from esrally.utils import compose
 from esrally.utils.cases import cases
-from it.tracks import helpers
+from it.tracks import compose, helpers
 
 LOG = logging.getLogger(__name__)
 

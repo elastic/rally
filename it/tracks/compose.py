@@ -53,7 +53,7 @@ class ComposeConfig(config.Config):
     def _default_compose_file() -> str:
         return os.environ.get(
             "RALLY_COMPOSE_FILE",
-            os.path.join(os.path.dirname(__file__), "resources", "compose.yaml"),
+            os.path.join(os.path.dirname(__file__), "compose.yaml"),
         )
 
     @property

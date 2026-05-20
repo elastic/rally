@@ -1,6 +1,6 @@
 # Track race integration tests
 
-This directory holds integration tests that run **Rally `race` inside Docker** (via `esrally.utils.compose`) against an Elasticsearch node from the bundled Compose stack. They exercise many **official / default Rally tracks** across multiple Elasticsearch versions.
+This directory holds integration tests that run **Rally `race` inside Docker** (via `it.tracks.compose`) against an Elasticsearch node from the bundled Compose stack. They exercise many **official / default Rally tracks** across multiple Elasticsearch versions.
 
 ## Contents
 
@@ -84,7 +84,7 @@ If a race hits that subprocess timeout without another failure, the test treats 
 
 ### Tightening `ExpectCommandFailure` (`returncode` / `stdout`)
 
-Each `helpers.ExpectCommandFailure(...)` sets `returncode`, `stdout` (substring of **decoded** combined stdout from `docker compose run`, via `esrally.utils.compose.decode`), and `reason` (shown for both skip and xfail). To capture real values from a failing run, use a **serial** session (for example `pytest it/tracks/ … -n 0`) with **`IT_SKIP_XFAIL=0`** or **`--it-skip-xfail`**, inspect the `CalledProcessError` return code and logs, then choose a short stable substring. Tighten `returncode` / `stdout` from those runs; keep `reason` strings accurate for skip/xfail messages.
+Each `helpers.ExpectCommandFailure(...)` sets `returncode`, `stdout` (substring of **decoded** combined stdout from `docker compose run`, via `it.tracks.compose.decode`), and `reason` (shown for both skip and xfail). To capture real values from a failing run, use a **serial** session (for example `pytest it/tracks/ … -n 0`) with **`IT_SKIP_XFAIL=0`** or **`--it-skip-xfail`**, inspect the `CalledProcessError` return code and logs, then choose a short stable substring. Tighten `returncode` / `stdout` from those runs; keep `reason` strings accurate for skip/xfail messages.
 
 ## Track-name filter and pytest reporting
 
