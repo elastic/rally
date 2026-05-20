@@ -18,7 +18,6 @@ import base64
 import logging
 import os
 import posixpath
-import re
 import secrets
 import shlex
 import subprocess
@@ -53,42 +52,6 @@ def decode(output: bytes | None) -> str:
     if not output:
         return ""
     return "\n  " + "\n  ".join([line.rstrip() for line in output.decode("utf-8").splitlines()]) + "\n"
-
-
-def parse_tabulate_simple_table(text: str) -> list[dict[str, str]]:
-    """Parse stdout from Rally ``list tracks`` (tabulate *simple* layout) into one dict per data row.
-
-    Column keys are the header cell strings from the table header row.
-    """
-    lines = [ln.rstrip("\r\n") for ln in text.splitlines()]
-    sep_idx: int | None = None
-    for i, line in enumerate(lines):
-        s = line.strip()
-        if s and "-" in s and all(c in "- " for c in s):
-            sep_idx = i
-            break
-    if sep_idx is None or sep_idx < 1:
-        return []
-    header_line = lines[sep_idx - 1]
-    sep_line = lines[sep_idx]
-    ranges = [(m.start(), m.end()) for m in re.finditer(r"-+", sep_line)]
-    if not ranges:
-        return []
-    headers = [header_line[a:b].strip() for a, b in ranges]
-    rows: list[dict[str, str]] = []
-    for line in lines[sep_idx + 1 :]:
-        if not line.strip():
-            continue
-        ls = line.strip()
-        if ls and "-" in ls and all(c in "- " for c in ls):
-            break
-        cells = []
-        for a, b in ranges:
-            chunk = line[a:b] if a < len(line) else ""
-            cells.append(chunk.strip())
-        if any(cells):
-            rows.append(dict(zip(headers, cells)))
-    return rows
 
 
 def _compose_options_set_project_name(compose_options: list[str] | None) -> bool:
@@ -416,21 +379,12 @@ def run_rally(
         logger.info("Terminated rally.")
 
 
-def list_tracks(*, logger: logging.Logger = LOG, **kwargs: Any) -> list[dict[str, str]]:
-    logger.info("Listing rally tracks.")
-    result = run_rally("list", ["tracks"], stdout=subprocess.PIPE, logger=logger, **kwargs)
-    tracks = parse_tabulate_simple_table(result.stdout.decode("utf-8"))
-    logger.info("Listed %d rally track(s).", len(tracks))
-    return tracks
-
-
 def rally_race(
     track_name: str,
     *,
     test_mode: bool = False,
     target_hosts: list[str] | None = None,
     pipeline: str | None = "benchmark-only",
-    challenge: str | None = None,
     rally_options: list[str] | None = None,
     tracks_root: str | None = None,
     remove: bool = True,
@@ -459,8 +413,6 @@ def rally_race(
         rally_options += ["--target-hosts", ",".join(target_hosts)]
     if pipeline:
         rally_options += ["--pipeline", pipeline]
-    if challenge:
-        rally_options += ["--challenge", challenge]
     logger.info("Running rally race (options=%s, ES_VERSION=%s).", rally_options, os.environ["ES_VERSION"])
     run_rally(
         "race",

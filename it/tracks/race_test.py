@@ -46,7 +46,6 @@ class TrackCase:
     track_name: str
     description: str
     test_mode: bool = True
-    challenge: str | None = None
 
     # ``None``: no skip / no xfail translation around ``rally race``. Use
     # ``helpers.ExpectCommandFailure(...)`` for known subprocess failures; the test wraps the race with
@@ -301,8 +300,7 @@ def test_race(
 
     For each ``TrackCase`` (and each configured Elasticsearch version), starts ``es01`` with
     ``ES_VERSION`` set, then runs ``rally race`` targeting ``es01:9200``. ``TrackCase.test_mode``
-    controls ``--test-mode`` (off for tracks that do not support it). ``TrackCase.challenge``,
-    when set, is passed as ``--challenge``. ``TrackCase.expect_failure`` (``None`` or
+    controls ``--test-mode`` (off for tracks that do not support it). ``TrackCase.expect_failure`` (``None`` or
     ``helpers.ExpectCommandFailure(...)``) is applied via
     ``helpers.expect_command_failure``:
     ``pytest.skip`` before the race when skip-xfail is on (default), else ``pytest.xfail`` on a matching
@@ -323,7 +321,6 @@ def test_race(
                 track_name=case.track_name,
                 test_mode=case.test_mode,
                 target_hosts=["es01:9200"],
-                challenge=case.challenge,
                 timeout=race_timeout_s,
             )
     except subprocess.TimeoutExpired:
