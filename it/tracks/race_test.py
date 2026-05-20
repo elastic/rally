@@ -163,9 +163,7 @@ def elasticsearch_version(
         expect_failure=helpers.ExpectCommandFailure(
             returncode=64,
             stdout="http.netty.worker_count",
-            reason=(
-                "Fails in Docker IT against ES 8.x (passes on 9.3.3 in observed runs); " "see it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
-            ),
+            reason="Fails in Docker IT against ES 8.x (passes on 9.3.3 in observed runs).",
             es_version_prefix="8.",
         ),
     ),
@@ -178,10 +176,7 @@ def elasticsearch_version(
         expect_failure=helpers.ExpectCommandFailure(
             returncode=64,
             stdout="http.netty.worker_count",
-            reason=(
-                "Track requires http.netty.worker_count:1 on Elasticsearch; bundled compose es01 does not set it. "
-                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
-            ),
+            reason=("Track requires http.netty.worker_count:1 on Elasticsearch; bundled compose es01 does not set it."),
         ),
     ),
     geopoint=TrackCase(
@@ -199,10 +194,7 @@ def elasticsearch_version(
         expect_failure=helpers.ExpectCommandFailure(
             returncode=64,
             stdout="FAILURE (took",
-            reason=(
-                "Rally exits 64 during early setup in Docker IT (root cause not in captured logs). "
-                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
-            ),
+            reason="Rally exits 64 during early setup in Docker IT (root cause not in captured logs).",
         ),
     ),
     tsdb_k8s_queries=TrackCase(
@@ -236,10 +228,7 @@ def elasticsearch_version(
         expect_failure=helpers.ExpectCommandFailure(
             returncode=64,
             stdout="track.json",
-            reason=(
-                "Track load failed (track.json missing/incomplete) against ES 8.x in Docker IT. "
-                "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
-            ),
+            reason="Track load failed (track.json missing/incomplete) against ES 8.x in Docker IT.",
             es_version_prefix="8.",
         ),
     ),
@@ -266,7 +255,7 @@ def elasticsearch_version(
         expect_failure=helpers.ExpectCommandFailure(
             returncode=64,
             stdout="FAILURE (took",
-            reason="Rally exits 64 in Docker IT against ES 8.x. See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md",
+            reason="Rally exits 64 in Docker IT against ES 8.x.",
             es_version_prefix="8.",
         ),
     ),
@@ -289,9 +278,7 @@ def elasticsearch_version(
         expect_failure=helpers.ExpectCommandFailure(
             returncode=64,
             stdout="FAILURE (took",
-            reason=(
-                "Rally exits 64 against ES 8.x in Docker IT (not a subprocess timeout). " "See it/tracks/TRACK_RACE_EXECUTION_FINDINGS.md"
-            ),
+            reason="Rally exits 64 against ES 8.x in Docker IT (not a subprocess timeout).",
             es_version_prefix="8.",
         ),
     ),

@@ -4,11 +4,10 @@ This directory holds integration tests that run **Rally `race` inside Docker** (
 
 ## Contents
 
-- **`race_test.py`** — defines `TrackCase` entries and `test_race`, parametrized over tracks and over Elasticsearch versions. Module-scoped fixtures build the Rally image and configure Compose; each test starts `es01` with the requested `ES_VERSION`, runs `rally race` toward `es01:9200`, and tears Elasticsearch down afterward. Version list and timeouts are driven by `conftest.py` (see below).
+- **`race_test.py`** — defines `TrackCase` entries and `test_race`, parametrized over tracks and over Elasticsearch versions. Module-scoped fixtures build the Rally image and configure Compose; each test starts `es01` with the requested `ES_VERSION`, runs `rally race` toward `es01:9200`, and tears Elasticsearch down afterward. Version list and timeouts are driven by `conftest.py` (see below). `TrackCase.expect_failure` defaults to `None` (no skip / no xfail around `rally race`). Tracks with known subprocess failures set `expect_failure=helpers.ExpectCommandFailure(...)` (`returncode`, `stdout`, `reason`, optional `es_version_prefix` defaulting to `""`). With **skip-xfail on** (default), a matching policy causes `pytest.skip` before `rally race`; with **skip-xfail off**, the race runs and a matching subprocess failure becomes `pytest.xfail` (see below).
 - **`conftest.py`** — registers pytest options, parametrizes the `elasticsearch_version` fixture indirectly, optionally filters tests by track name, stashes per-race timeout after collection, and defines pytest-xdist hooks (`pytest-xdist` required).
 - **`helpers.py`** — small pure functions for parsing CLI/env (shared with unit tests).
 - **Unit tests** — [`tests/it/tracks/helpers_test.py`](../../tests/it/tracks/helpers_test.py) (pure helpers; no Docker). Included in the default **`make test`** / `pytest tests/` run.
-- **`TRACK_RACE_EXECUTION_FINDINGS.md`** — notes from Docker IT runs (failures, timeouts, environment). `TrackCase.expect_failure` defaults in [`race_test.py`](race_test.py) to `None` (no skip / no xfail translation around `rally race`). Tracks with known subprocess failures set `expect_failure=helpers.ExpectCommandFailure(...)` (`returncode`, `stdout`, `reason`, optional `es_version_prefix` defaulting to `""`). With **skip-xfail on** (default), a matching policy causes `pytest.skip` before `rally race`; with **skip-xfail off**, the race runs and a matching subprocess failure becomes `pytest.xfail` (see below).
 
 ## Prerequisites
 
@@ -85,7 +84,7 @@ If a race hits that subprocess timeout without another failure, the test treats 
 
 ### Tightening `ExpectCommandFailure` (`returncode` / `stdout`)
 
-Each `helpers.ExpectCommandFailure(...)` sets `returncode`, `stdout` (substring of **decoded** combined stdout from `docker compose run`, via `esrally.utils.compose.decode`), and `reason` (shown for both skip and xfail). To capture real values from a failing run, use a **serial** session (for example `pytest it/tracks/ … -n 0`) with **`IT_SKIP_XFAIL=0`** or **`--it-skip-xfail`**, inspect the `CalledProcessError` return code and logs, then choose a short stable substring. Document placeholders or weak matches in `TRACK_RACE_EXECUTION_FINDINGS.md` when logs are not in-repo.
+Each `helpers.ExpectCommandFailure(...)` sets `returncode`, `stdout` (substring of **decoded** combined stdout from `docker compose run`, via `esrally.utils.compose.decode`), and `reason` (shown for both skip and xfail). To capture real values from a failing run, use a **serial** session (for example `pytest it/tracks/ … -n 0`) with **`IT_SKIP_XFAIL=0`** or **`--it-skip-xfail`**, inspect the `CalledProcessError` return code and logs, then choose a short stable substring. Tighten `returncode` / `stdout` from those runs; keep `reason` strings accurate for skip/xfail messages.
 
 ## Track-name filter and pytest reporting
 
