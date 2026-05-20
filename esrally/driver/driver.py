@@ -1647,8 +1647,6 @@ class ThroughputCalculator:
             self.has_samples_in_sample_type = False
             # start relative to the beginning of our (calculation) time slice.
             self.start_time = start_time
-            # used for windowed throughput: stored inside finish_bucket before snapshots are updated
-            self._prev_total_count = 0
             self._prev_interval = 0
             self._windowed_rate = None
 
@@ -1679,7 +1677,6 @@ class ThroughputCalculator:
             delta_count = new_total - self.total_count
             delta_interval = self.interval - self._prev_interval
             self._windowed_rate = delta_count / delta_interval if delta_interval > 0 else None
-            self._prev_total_count = self.total_count
             self._prev_interval = self.interval
             self.unprocessed = []
             self.total_count = new_total
