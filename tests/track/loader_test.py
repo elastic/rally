@@ -247,7 +247,7 @@ class TestTrackPreparation:
             data_root="/tmp",
         )
 
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json", None)
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")
@@ -273,7 +273,7 @@ class TestTrackPreparation:
             data_root="/tmp",
         )
 
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json", None)
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("os.path.getsize")
@@ -388,7 +388,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json.bz2", "/tmp/docs.json.bz2", 200, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json", "http://benchmarks.elasticsearch.org/corpora/unit-test")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -405,18 +405,18 @@ class TestTrackPreparation:
         is_file.side_effect = [False, True, True]
         # uncompressed file size is 2000
         get_size.return_value = 2000
-        scheme = str(random.choice(["http", "https", "s3", "gs"]))
+        scheme = random.choice(["http", "https", "s3", "gs"])
 
         prepare_file_offset_table.return_value = 5
 
         p = loader.DocumentSetPreparator(
             track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
         )
-        url = f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/"
+
         p.prepare_document_set(
             document_set=track.Documents(
                 source_format=track.Documents.SOURCE_FORMAT_BULK,
-                base_url=url,
+                base_url=f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/",
                 document_file="docs.json",
                 # --> We don't provide a document archive here <--
                 document_archive=None,
@@ -431,7 +431,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json", url)
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.net.download")
@@ -470,7 +470,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json", "http://benchmarks.elasticsearch.org/corpora/unit-test")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
 
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -667,7 +667,7 @@ class TestTrackPreparation:
             data_root=".",
         )
 
-        prepare_file_offset_table.assert_called_with("./docs.json", None)
+        prepare_file_offset_table.assert_called_with("./docs.json")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -854,7 +854,7 @@ class TestTrackPreparation:
             data_root=".",
         )
 
-        prepare_file_offset_table.assert_called_with("./docs.json", None)
+        prepare_file_offset_table.assert_called_with("./docs.json")
 
     @mock.patch("os.path.getsize")
     @mock.patch("os.path.isfile")
@@ -4392,11 +4392,11 @@ def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest
     monkeypatch.setattr(paths, "libs", lambda: "./libs")
     monkeypatch.setattr(console, "info", mock.create_autospec(console.info))
     monkeypatch.setattr(subprocess, "check_call", mock.create_autospec(subprocess.check_call))
-    os.makedirs(os.path.join(str(tmpdir), "logs"), exist_ok=True)
     loader._install_dependencies(case.requirements)
 
     if not case.requirements:
         subprocess.check_call.assert_not_called()
+        assert not os.path.isdir("./logs")
         return
 
     subprocess.check_call.assert_called_once()

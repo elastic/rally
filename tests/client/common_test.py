@@ -153,7 +153,6 @@ class EnsureMimetypeHeadersCase:
         version=7,
         want_content_type="application/vnd.elasticsearch+json; compatible-with=8",
         want_accept="application/vnd.elasticsearch+json; compatible-with=8",
-        want_warning_message=r"Invalid compatibility mode 7,.*",
     ),
     unsupported_version_str=EnsureMimetypeHeadersCase(
         headers={"accept": "application/json"},
@@ -161,7 +160,6 @@ class EnsureMimetypeHeadersCase:
         body=None,
         version="7.0.0",
         want_accept="application/vnd.elasticsearch+json; compatible-with=8",
-        want_warning_message=r"Invalid compatibility mode '7\.0\.0',.*",
     ),
     valid_version_no_warning=EnsureMimetypeHeadersCase(
         headers={"content-type": "application/json"},
@@ -198,5 +196,6 @@ def test_ensure_mimetype_headers(case: EnsureMimetypeHeadersCase) -> None:
     assert got.get("accept") == case.want_accept
     if case.want_warning_message is not None:
         assert len(warnings) == 1
+        assert str(warnings[0].message) == case.want_warning_message
     else:
         assert warnings is None

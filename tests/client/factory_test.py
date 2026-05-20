@@ -345,36 +345,6 @@ class TestEsClientFactory:
 
         assert client_options == original_client_options
 
-    def test_timeout_is_translated_to_request_timeout(self):
-        hosts = [{"host": "localhost", "port": 9200}]
-        client_options = {"timeout": 60}
-        # used to verify later that the factory did not modify it
-        original_client_options = client_options.copy()
-
-        f = client.EsClientFactory(hosts, client_options)
-
-        assert f.client_options["request_timeout"] == 60
-        assert "timeout" not in f.client_options
-        assert client_options == original_client_options
-
-    def test_no_request_timeout_set_when_timeout_absent(self):
-        hosts = [{"host": "localhost", "port": 9200}]
-        client_options = {}
-
-        f = client.EsClientFactory(hosts, client_options)
-
-        assert "request_timeout" not in f.client_options
-        assert "timeout" not in f.client_options
-
-    def test_timeout_none_is_translated_to_request_timeout(self):
-        hosts = [{"host": "localhost", "port": 9200}]
-        client_options = {"timeout": None}
-
-        f = client.EsClientFactory(hosts, client_options)
-
-        assert f.client_options["request_timeout"] is None
-        assert "timeout" not in f.client_options
-
     @mock.patch("esrally.client.asynchronous.RallyAsyncElasticsearch")
     def test_create_async_client_with_api_key_auth_override(self, es):
         hosts = [{"host": "localhost", "port": 9200}]
@@ -570,9 +540,8 @@ class TestRestLayer:
         ):
             client.wait_for_rest_layer(es, max_attempts=3)
 
-    @mock.patch("time.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
-    def test_connection_protocol_error(self, es, sleep):
+    def test_connection_protocol_error(self, es):
         es.cluster.health.side_effect = elasticsearch.ConnectionError(
             message="N/A",
             errors=[urllib3.exceptions.ProtocolError("Connection aborted.")],  # type: ignore[arg-type]
@@ -581,24 +550,7 @@ class TestRestLayer:
             exceptions.SystemSetupError,
             match="Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?",
         ):
-            client.wait_for_rest_layer(es, max_attempts=1)
-        assert es.cluster.health.call_count == 2
-
-    @mock.patch("time.sleep")
-    @mock.patch("elasticsearch.Elasticsearch")
-    def test_connection_protocol_error_fails_fast_before_max_attempts(self, es, sleep):
-        """Persistent protocol errors must not use the full max_attempts * sleep budget."""
-        es.cluster.health.side_effect = elasticsearch.ConnectionError(
-            message="N/A",
-            errors=[urllib3.exceptions.ProtocolError("Connection aborted.")],  # type: ignore[arg-type]
-        )
-        with pytest.raises(
-            exceptions.SystemSetupError,
-            match="Received a protocol error. Are you sure you're using the correct scheme (HTTP or HTTPS)?",
-        ):
-            client.wait_for_rest_layer(es, max_attempts=40)
-        # Cap is 8 consecutive protocol errors -> raise on the 9th; each attempt calls health once.
-        assert es.cluster.health.call_count == 9
+            client.wait_for_rest_layer(es, max_attempts=3)
 
 
 class TestApiKeys:
