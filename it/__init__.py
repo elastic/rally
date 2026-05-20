@@ -15,25 +15,38 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import errno
 import functools
 import json
 import logging
 import os
 import random
+import signal
 import socket
 import subprocess
 import time
 
+import psutil
 import pytest
 
-from esrally import client, version
+from esrally import client
 from esrally.utils import process
 
-CONFIG_NAMES = ["in-memory-it", "es-it"]
+IT_CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["8.19.13", "9.2.7"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+_CLUSTER_PROBE_ATTEMPTS = 5
+_CLUSTER_PROBE_DELAY_SEC = 0.5
+_CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
+
+# Benchmark IT HTTP port is fixed (not an ephemeral port): race/install commands, track configs, and CI compose
+# files assume this value. Switching to a free port would require threading it through every caller and external
+# reference, so we instead clear leftovers on this port before/after tests when teardown is incomplete.
+BENCHMARK_IT_HTTP_PORT = 19200
+
+_DOCKER_PUBLISH_STOP_ROUNDS = 3
+_ES_SIGTERM_WAIT_SEC = 8.0
 
 
 LOG = logging.getLogger(__name__)
@@ -41,7 +54,7 @@ LOG = logging.getLogger(__name__)
 
 def all_rally_configs(t):
     @functools.wraps(t)
-    @pytest.mark.parametrize("cfg", CONFIG_NAMES)
+    @pytest.mark.parametrize("cfg", IT_CONFIG_NAMES)
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
 
@@ -50,7 +63,7 @@ def all_rally_configs(t):
 
 def random_rally_config(t):
     @functools.wraps(t)
-    @pytest.mark.parametrize("cfg", [random.choice(CONFIG_NAMES)])
+    @pytest.mark.parametrize("cfg", [random.choice(IT_CONFIG_NAMES)])
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
 
@@ -121,24 +134,152 @@ def command_in_docker(command_line, python_version):
     return subprocess.run(docker_command, shell=True, check=True).returncode
 
 
-def wait_until_port_is_free(port_number=39200, timeout=120):
+def wait_until_port_is_free(port_number=39200, timeout=10):
     start = time.perf_counter()
     end = start + timeout
     while time.perf_counter() < end:
-        c = socket.socket()
-        connect_result = c.connect_ex(("127.0.0.1", port_number))
-        # noinspection PyBroadException
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            if connect_result == errno.ECONNREFUSED:
-                c.close()
-                return
-            else:
-                c.close()
-                time.sleep(0.5)
-        except Exception:
+            s.bind(("127.0.0.1", port_number))
+            return
+        except OSError:
+            time.sleep(0.5)
+        finally:
+            s.close()
+    raise TimeoutError(f"Port [{port_number}] is occupied after [{timeout}] seconds")
+
+
+def cluster_name_on_port(http_port: int) -> str | None:
+    """
+    Return ``cluster_name`` from ``GET /`` on ``127.0.0.1:http_port``, or ``None`` if unreachable / not Elasticsearch.
+    """
+    last_error: BaseException | None = None
+    for attempt in range(_CLUSTER_PROBE_ATTEMPTS):
+        try:
+            es = client.EsClientFactory(
+                hosts=[{"host": "127.0.0.1", "port": http_port}],
+                client_options={},
+            ).create()
+            info = es.options(request_timeout=_CLUSTER_PROBE_REQUEST_TIMEOUT_SEC).info()
+            return info["cluster_name"]
+        except Exception as e:
+            last_error = e
+            if attempt < _CLUSTER_PROBE_ATTEMPTS - 1:
+                time.sleep(_CLUSTER_PROBE_DELAY_SEC)
+    LOG.debug(
+        "cluster_name_on_port: 127.0.0.1:%s did not return cluster info: %s",
+        http_port,
+        last_error,
+    )
+    return None
+
+
+def _stop_docker_publishers(http_port: int) -> None:
+    try:
+        lines = process.run_subprocess_with_output(f"docker ps -q -f publish={http_port}")
+    except BaseException as e:
+        LOG.debug("docker ps for publish=%s failed: %s", http_port, e)
+        return
+    seen: set[str] = set()
+    for line in lines:
+        cid = line.strip()
+        if not cid or cid in seen:
+            continue
+        seen.add(cid)
+        if process.run_subprocess_with_logging(f"docker stop -t 30 {cid}") != 0:
+            LOG.warning("docker stop failed for container %s", cid)
+
+
+def _is_rally_es_process(p: psutil.Process, metrics_store_install_id: str | None = None) -> bool:
+    """
+    True if ``p`` is a host-JVM Elasticsearch provisioned by Rally, identified by the bootstrap main class in its
+    cmdline and the rally install path in its working directory.
+
+    If ``metrics_store_install_id`` is provided, the session-scoped metrics store is excluded by
+    matching its installation id segment in the working directory: Rally lays out node working dirs as
+    ``…/benchmarks/races/<install-id>/<node-name>/install/elasticsearch-X.Y.Z``.
+    """
+    try:
+        if p.name().lower() != "java":
+            return False
+        if not any("org.elasticsearch.bootstrap.Elasticsearch" in arg for arg in p.cmdline()):
+            return False
+        cwd = p.cwd()
+        if "/benchmarks/races/" not in cwd:
+            return False
+        if metrics_store_install_id and f"/benchmarks/races/{metrics_store_install_id}/" in cwd:
+            return False
+        return True
+    except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+        return False
+
+
+def find_rally_es_pids(metrics_store_install_id: str | None = None) -> set[int]:
+    mypid = os.getpid()
+    pids: set[int] = set()
+    for p in psutil.process_iter():
+        try:
+            if p.pid != mypid and _is_rally_es_process(p, metrics_store_install_id):
+                pids.add(p.pid)
+        except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+            pass
+    return pids
+
+
+def _kill_rally_es_processes(metrics_store_install_id: str, wait_timeout: float = _ES_SIGTERM_WAIT_SEC) -> None:
+    """
+    Kill any host-JVM Elasticsearch provisioned by Rally that survived a previous test. Docker-provisioned ES is
+    unaffected (handled by ``_stop_docker_publishers``).
+
+    Requires ``metrics_store_install_id`` to identify the session-scoped metrics store JVM so it is not killed.
+    """
+    pids = find_rally_es_pids(metrics_store_install_id)
+    if not pids:
+        return
+    for pid in pids:
+        try:
+            LOG.info("Sending SIGTERM to orphaned rally IT ES JVM PID %d", pid)
+            os.kill(pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+    deadline = time.perf_counter() + wait_timeout
+    while time.perf_counter() < deadline:
+        if not any(psutil.pid_exists(pid) for pid in pids):
+            return
+        time.sleep(0.3)
+    for pid in pids:
+        try:
+            if psutil.pid_exists(pid):
+                LOG.info("Sending SIGKILL to orphaned rally IT ES JVM PID %d", pid)
+                os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
             pass
 
-    raise TimeoutError(f"Port [{port_number}] is occupied after [{timeout}] seconds")
+
+def ensure_benchmark_http_port_free(
+    metrics_store_install_id: str,
+    http_port: int = BENCHMARK_IT_HTTP_PORT,
+    wait_timeout: int = 10,
+) -> int:
+    """
+    Stops ES processes other than metrics store, and Docker containers listening at ``http_port``. Then waits until
+    ``http_port`` is free.
+
+    Used by pytest fixtures around benchmark tests so each run starts from a known state on the fixed IT port;
+    see `BENCHMARK_IT_HTTP_PORT` for why the port is not chosen dynamically.
+
+    ``metrics_store_install_id`` is the session metrics store's installation id, threaded through to
+    ``_kill_rally_es_processes`` so the metrics store JVM is excluded from the orphan-JVM scan.
+    """
+    assert http_port is not None
+    _kill_rally_es_processes(metrics_store_install_id)
+    for _ in range(_DOCKER_PUBLISH_STOP_ROUNDS):
+        _stop_docker_publishers(http_port)
+        time.sleep(0.5)
+    wait_until_port_is_free(port_number=http_port, timeout=wait_timeout)
+    LOG.info("HTTP port %d seems to be free", http_port)
+    return http_port
 
 
 class TestCluster:
@@ -146,6 +287,30 @@ class TestCluster:
         self.cfg = cfg
         self.installation_id = None
         self.http_port = None
+
+    def probe_cluster_on_port(self, http_port: int) -> str | None:
+        """
+        Call ``cluster.info`` on ``127.0.0.1:http_port`` and return ``cluster_name`` on success.
+
+        Retries only on exceptions (transient connection/protocol errors). A successful response
+        with any cluster name is returned immediately without further attempts.
+
+        :param http_port: HTTP port of the candidate cluster.
+        :return: The reported cluster name, or ``None`` if all probe attempts failed.
+        """
+        return cluster_name_on_port(http_port)
+
+    def is_cluster_running_on_port(self, http_port: int) -> bool:
+        """
+        Probe ``127.0.0.1:http_port`` and check whether the cluster name matches this harness config.
+
+        Used to reuse an Elasticsearch instance left running from a previous run (e.g. metrics store)
+        without failing on transient connection errors during startup.
+
+        :param http_port: HTTP port of the candidate cluster.
+        :return: True if ``cluster.info`` succeeds and ``cluster_name`` equals this harness's ``cfg``.
+        """
+        return self.probe_cluster_on_port(http_port) == self.cfg
 
     def install(self, distribution_version, node_name, car, http_port):
         self.http_port = http_port
@@ -164,6 +329,7 @@ class TestCluster:
                 )
             )
             self.installation_id = json.loads("".join(output))["installation-id"]
+            LOG.info("Elasticsearch cluster listening at port %d installed with %s ID", self.http_port, self.installation_id)
         except BaseException as e:
             raise AssertionError(f"Failed to install Elasticsearch {distribution_version}.", e)
 
@@ -173,6 +339,48 @@ class TestCluster:
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         client.wait_for_rest_layer(es)
         assert es.info()["cluster_name"] == self.cfg
+
+    def wait_for_cluster_health(self, *, wait_for_status: str = "yellow", timeout: float = 120) -> None:
+        """
+        Block until the cluster reaches at least the given health (server-side wait).
+
+        This is intentionally separate from ``esrally.client.factory.wait_for_rest_layer``, which the harness
+        already calls from ``start``: that function waits until enough nodes respond (``wait_for_nodes``) and
+        implements Rally-wide retry/backoff for connection and protocol errors. Session fixtures (metrics store)
+        also reuse a cluster that may already be running; they need an explicit status wait (``wait_for_status``)
+        and AssertionErrors that point at health/timeouts, with a client ``request_timeout`` derived from the same
+        server-side ``timeout`` so the transport does not abort first.
+
+        Calls ``cluster.health`` with ``wait_for_status`` and Elasticsearch's ``timeout`` query
+        parameter. The HTTP client's ``request_timeout`` is set longer than ``timeout`` so the
+        transport does not give up before the server finishes waiting.
+
+        Green satisfies ``wait_for_status="yellow"``. Requires ``http_port`` (after
+        ``install`` / ``start``, or when reusing a running cluster).
+
+        :param wait_for_status: Minimum cluster health to wait for (Elasticsearch API value).
+        :param timeout: Server-side wait budget in seconds.
+        :raises AssertionError: If ``http_port`` is unset, the request fails, or ``timed_out`` is true.
+        """
+        if self.http_port is None:
+            raise AssertionError("Cluster http_port must be set before waiting for health.")
+        es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
+        # Keep client alive longer than the cluster.health server-side wait (timeout query param).
+        try:
+            resp = es.options(request_timeout=timeout + 30.0).cluster.health(
+                wait_for_status=wait_for_status,
+                timeout=f"{timeout}s",
+            )
+        except Exception as e:
+            raise AssertionError(
+                f"Timed out or failed waiting for cluster health [{wait_for_status}] on 127.0.0.1:{self.http_port}: {e}"
+            ) from e
+        if resp.get("timed_out"):
+            raise AssertionError(
+                f"Cluster health wait timed out after {timeout}s (wanted at least [{wait_for_status}]) on "
+                f"127.0.0.1:{self.http_port}: status={resp.get('status')!r}, "
+                f"nodes={resp.get('number_of_nodes')!r}, relocating_shards={resp.get('relocating_shards')!r}"
+            )
 
     def stop(self):
         if self.installation_id:

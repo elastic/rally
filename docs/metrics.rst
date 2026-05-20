@@ -6,8 +6,12 @@ Metrics Records
 
 At the end of a race, Rally stores all metrics records in its metrics store. Metrics can be kept in memory or written to a dedicated Elasticsearch cluster (not the cluster where Rally ran its benchmarks). This can be configured in the `[reporting] section <https://esrally.readthedocs.io/en/stable/configuration.html#reporting>`_.
 
-Rally stores the metrics in the indices ``rally-metrics-*``. It will create a new index for each month. Here is a typical metrics record::
+By default, Rally stores metrics in the ``rally-metrics-v1`` data stream. When ``datastore.use_data_streams`` is set to false, Rally falls back to monthly indices named ``rally-metrics-YYYY-MM``.
 
+Metrics Records — Field Descriptions
+------------------------------------
+
+Sample metrics record::
 
     {
           "environment": "nightly",
@@ -154,3 +158,69 @@ Rally stores the following metrics:
 * ``store_size_in_bytes``: The size in bytes of the index (excluding the translog), as reported by the index stats API.
 * ``translog_size_in_bytes``: The size in bytes of the translog, as reported by the index stats API.
 * ``ml_processing_time``: A structure containing the minimum, mean, median and maximum bucket processing time in milliseconds per machine learning job. These metrics are only available if a machine learning job has been created in the respective benchmark.
+
+
+Data Stream Storage
+--------------------
+
+.. _metrics_data_streams:
+
+When ``datastore.use_data_streams`` is ``true`` (the default), Rally uses `Elasticsearch data streams <https://www.elastic.co/guide/en/elasticsearch/reference/current/data-streams.html>`_ for metrics, races, and results. Data streams simplify time-series data management by automatically handling index creation, rollover, and retention.
+
+Rally creates three versioned data streams:
+
+* ``rally-metrics-v1`` — benchmark metric samples (throughput, latency, etc.)
+* ``rally-races-v1`` — race metadata (track, challenge, car, timestamps)
+* ``rally-results-v1`` — aggregated race results for Kibana reporting
+
+**Index templates and component templates**
+
+Each data stream is backed by a composable index template (e.g. ``rally-metrics-template-v1``) that is composed of two `component templates <https://www.elastic.co/docs/manage-data/data-store/templates#component-templates>`_:
+
+1. **Main component** (e.g. ``rally-metrics-v1``): Contains field mappings, index settings, and an `Index Lifecycle Management (ILM) <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-lifecycle-management.html>`_ policy reference. The default ILM policy triggers a rollover when any primary shard exceeds 50 GB, which helps keep individual shards at a manageable size for search and storage efficiency.
+
+2. **Custom component** (e.g. ``rally-metrics-v1@custom``): An empty placeholder template that is applied *on top of* the main component. You can populate it with your own settings to override defaults — for example, changing the number of replicas or adding a custom ILM policy — without modifying Rally's managed templates. Rally never overwrites this template.
+
+**Customisation example**
+
+To add a custom retention policy, first create the policy::
+
+  PUT _ilm/policy/my-custom-ilm-policy
+  {
+    "policy": {
+      "phases": {
+        "hot": {
+          "actions": {
+            "set_priority": {
+              "priority": 600
+            },
+            "rollover": {
+              "max_age": "90d",
+              "max_primary_shard_size": "30gb"
+            }
+          }
+        },
+      }
+    }
+  }
+
+and then modify the ``@custom`` component template::
+
+  PUT _component_template/rally-races-v1@custom
+  {
+    "template": {
+      "settings": {
+        "index": {
+          "lifecycle": {
+            "name": "my-custom-ilm-policy"
+          }
+        }
+      }
+    }
+  }
+
+Because the ``@custom`` component is listed last in the ``composed_of`` order, its settings take precedence over the main component.
+
+.. note::
+
+   The ``datastore.number_of_shards`` and ``datastore.number_of_replicas`` settings in ``rally.ini`` are **not** applied to data streams. Use the ``@custom`` component template to configure shard and replica counts for data streams.
