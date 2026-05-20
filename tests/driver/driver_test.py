@@ -351,6 +351,31 @@ class TestDriver:
         delete.assert_called_once_with(d.default_sync_es_client, d.generated_api_key_ids)
 
 
+class TestTrackPreparationActor:
+    @mock.patch("esrally.actor.log.post_configure_actor_logging")
+    @mock.patch("esrally.driver.driver.load_track")
+    @mock.patch("esrally.driver.driver.load_local_config")
+    def test_bootstrap_installs_track_dependencies(self, load_local_config, load_track, post_configure_actor_logging):
+        local_cfg = mock.sentinel.local_cfg
+        load_local_config.return_value = local_cfg
+        driver_actor = mock.sentinel.driver_actor
+        coordinator_cfg = mock.sentinel.coordinator_cfg
+        actor_under_test = driver.TrackPreparationActor()
+        actor_under_test.send = mock.Mock()
+
+        actor_under_test.receiveMsg_Bootstrap(driver.Bootstrap(coordinator_cfg), driver_actor)
+
+        post_configure_actor_logging.assert_called_once_with()
+        load_local_config.assert_called_once_with(coordinator_cfg)
+        load_track.assert_called_once_with(local_cfg, install_dependencies=True)
+        actor_under_test.send.assert_called_once()
+        sent_driver_actor, ready_msg = actor_under_test.send.call_args.args
+        assert sent_driver_actor is driver_actor
+        assert isinstance(ready_msg, driver.ReadyForWork)
+        assert actor_under_test.driver_actor is driver_actor
+        assert actor_under_test.cfg is local_cfg
+
+
 def op(name, operation_type):
     return track.Operation(name, operation_type, param_source="driver-test-param-source")
 
