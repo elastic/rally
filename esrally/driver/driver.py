@@ -1138,8 +1138,9 @@ class SamplePostprocessor:
         end = time.perf_counter()
         self.logger.debug("Calculating throughput took [%f] seconds.", (end - start))
         start = end
-        for task, samples in aggregates.items():
-            meta_data = self.merge(self.track_meta_data, self.challenge_meta_data, task.operation.meta_data, task.meta_data)
+        for (task, cluster_name), samples in aggregates.items():
+            cluster_meta = {"cluster": cluster_name} if cluster_name is not None else {}
+            meta_data = self.merge(self.track_meta_data, self.challenge_meta_data, task.operation.meta_data, task.meta_data, cluster_meta)
             for absolute_time, relative_time, sample_type, throughput, throughput_unit in samples:
                 self.metrics_store.put_value_cluster_level(
                     name="throughput",
@@ -1690,9 +1691,10 @@ class ThroughputCalculator:
         """
 
         samples_per_task = {}
-        # first we group all samples by task (operation).
+        # Group samples by (task, cluster_name) so multi-cluster throughput is calculated per cluster.
         for sample in samples:
-            k = sample.task
+            cluster_name = sample.request_meta_data.get("cluster") if sample.request_meta_data else None
+            k = (sample.task, cluster_name)
             if k not in samples_per_task:
                 samples_per_task[k] = []
             samples_per_task[k].append(sample)
@@ -1701,12 +1703,12 @@ class ThroughputCalculator:
         # with open("raw_samples_new.csv", "a") as sample_log:
         # print("client_id,absolute_time,relative_time,operation,sample_type,total_ops,time_period", file=sample_log)
         for k, v in samples_per_task.items():
-            task = k
-            if task not in global_throughput:
-                global_throughput[task] = []
+            task, cluster_name = k
+            if k not in global_throughput:
+                global_throughput[k] = []
             # sort all samples by time
-            if task in self.task_stats:
-                samples = itertools.chain(v, self.task_stats[task].unprocessed)
+            if k in self.task_stats:
+                samples = itertools.chain(v, self.task_stats[k].unprocessed)
             else:
                 samples = v
             current_samples = sorted(samples, key=lambda s: s.absolute_time)
@@ -1715,24 +1717,24 @@ class ThroughputCalculator:
             # only transform the values into the expected structure.
             first_sample = current_samples[0]
             if first_sample.throughput is None:
-                task_throughput = self.calculate_task_throughput(task, current_samples, bucket_interval_secs)
+                task_throughput = self.calculate_task_throughput(k, current_samples, bucket_interval_secs)
             else:
                 task_throughput = self.map_task_throughput(current_samples)
-            global_throughput[task].extend(task_throughput)
+            global_throughput[k].extend(task_throughput)
 
         return global_throughput
 
-    def calculate_task_throughput(self, task, current_samples, bucket_interval_secs):
+    def calculate_task_throughput(self, task_key, current_samples, bucket_interval_secs):
         task_throughput = []
 
-        if task not in self.task_stats:
+        if task_key not in self.task_stats:
             first_sample = current_samples[0]
-            self.task_stats[task] = ThroughputCalculator.TaskStats(
+            self.task_stats[task_key] = ThroughputCalculator.TaskStats(
                 bucket_interval=bucket_interval_secs,
                 sample_type=first_sample.sample_type,
                 start_time=first_sample.absolute_time - first_sample.time_period,
             )
-        current = self.task_stats[task]
+        current = self.task_stats[task_key]
         count = current.total_count
         last_sample = None
         for sample in current_samples:
