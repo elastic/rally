@@ -25,49 +25,28 @@ import subprocess
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from esrally import config, paths, types
+from esrally import paths
 
 LOG = logging.getLogger(__name__)
+
+_TRACKS_DIR = Path(__file__).resolve().parent
+COMPOSE_FILE = str(_TRACKS_DIR / "compose.yaml")
+COMPOSE_DIR = os.path.dirname(paths.rally_root())
+
+
+def _compose_cmd() -> list[str]:
+    cmd: str | list[str] = os.environ.get("COMPOSE_COMMAND", "docker compose")
+    if isinstance(cmd, str):
+        cmd = shlex.split(cmd)
+    if not isinstance(cmd, list):
+        raise TypeError(f"Expected COMPOSE_COMMAND to be a string or list of strings, but got [{type(cmd).__name__}]")
+    return cmd
 
 
 def _default_rally_compose_run_name() -> str:
     """Return a Docker-safe unique ``docker compose run --name`` (``rally_`` + 8 URL-safe base64 chars)."""
     raw = base64.urlsafe_b64encode(secrets.token_bytes(9)).decode("ascii").rstrip("=")
     return f"rally_{raw[:8]}"
-
-
-class ComposeConfig(config.Config):
-
-    @property
-    def compose_cmd(self) -> list[str]:
-        cmd = self.opts(
-            section="compose", key="compose.cmd", default_value=os.environ.get("COMPOSE_COMMAND", "docker compose"), mandatory=False
-        )
-        if isinstance(cmd, str):
-            cmd = shlex.split(cmd)
-        if not isinstance(cmd, list):
-            raise TypeError(f"Expected compose.cmd to be a string or list of strings, but got [{type(cmd).__name__}]")
-        return cmd
-
-    @staticmethod
-    def _default_compose_file() -> str:
-        return os.environ.get(
-            "RALLY_COMPOSE_FILE",
-            os.path.join(os.path.dirname(__file__), "compose.yaml"),
-        )
-
-    @property
-    def compose_file(self) -> str:
-        return self.opts(section="compose", key="compose.file", default_value=self._default_compose_file(), mandatory=False)
-
-    @property
-    def compose_dir(self) -> str:
-        return self.opts(
-            section="compose",
-            key="compose.dir",
-            default_value=os.path.dirname(paths.rally_root()),
-            mandatory=False,
-        )
 
 
 def decode(output: bytes | None) -> str:
@@ -144,20 +123,12 @@ def run_compose(
     args: list[str] | None = None,
     *,
     env: dict[str, str] | None = None,
-    cfg: types.Config | None = None,
-    compose_dir: str | None = None,
     compose_options: list[str] | None = None,
-    compose_file: str | None = None,
     logger: logging.Logger = LOG,
     check: bool = True,
     **kwargs: Any,
 ) -> subprocess.CompletedProcess:
-    cfg = ComposeConfig.from_config(cfg)
-    cmd = []
-    compose_file = compose_file or cfg.compose_file
-    if compose_file:
-        cmd += ["--file", compose_file]
-    cmd += [command]
+    cmd = ["--file", COMPOSE_FILE, command]
     if compose_options:
         cmd += compose_options
     if service:
@@ -165,20 +136,19 @@ def run_compose(
     if args:
         cmd += args
 
-    compose_dir = compose_dir or cfg.compose_dir
     if not kwargs.get("capture_output"):
         kwargs.setdefault("stderr", subprocess.PIPE)
-    kwargs.setdefault("cwd", compose_dir)
+    kwargs.setdefault("cwd", COMPOSE_DIR)
     run_env = os.environ.copy()
     run_env.update(env or {})
     # Absolute repo root: Compose resolves relative build.context from the compose file path, not cwd.
-    run_env["RALLY_DOCKER_DIR"] = compose_dir
+    run_env["RALLY_DOCKER_DIR"] = COMPOSE_DIR
     project = (run_env.get("COMPOSE_PROJECT_NAME") or "").strip()
     if project and not _compose_options_set_project_name(compose_options):
         cmd = ["--project-name", project] + cmd
     try:
         logger.debug("Running compose command: %s", cmd)
-        result = subprocess.run(cfg.compose_cmd + cmd, check=check, env=run_env, **kwargs)
+        result = subprocess.run(_compose_cmd() + cmd, check=check, env=run_env, **kwargs)
     except subprocess.CalledProcessError as e:
         logger.error(
             "Compose command returned nonzero exit status (%s): %s\nstdout:%s\nstderr:%s",
@@ -203,9 +173,6 @@ def run_compose(
 def spawn_compose_logs_follow(  # pylint: disable=consider-using-with
     path: Path,
     *,
-    cfg: types.Config | None = None,
-    compose_file: str | None = None,
-    compose_dir: str | None = None,
     env: dict[str, str] | None = None,
     logger: logging.Logger = LOG,
 ) -> tuple[subprocess.Popen, BinaryIO]:
@@ -215,30 +182,24 @@ def spawn_compose_logs_follow(  # pylint: disable=consider-using-with
     fixture ``finally``). ``stderr`` is discarded to avoid blocking on a full pipe while following.
     Intentionally not using ``with`` so the subprocess and file outlive this function.
     """
-    cfg = ComposeConfig.from_config(cfg)
     path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     log_file = open(path, "wb")
-    cmd: list[str] = []
-    cf = compose_file or cfg.compose_file
-    if cf:
-        cmd += ["--file", cf]
-    cmd += ["logs", "-f", "--timestamps", "--no-color"]
-    cdir = compose_dir or cfg.compose_dir
+    cmd: list[str] = ["--file", COMPOSE_FILE, "logs", "-f", "--timestamps", "--no-color"]
     run_env = os.environ.copy()
     run_env.update(env or {})
-    run_env["RALLY_DOCKER_DIR"] = cdir
+    run_env["RALLY_DOCKER_DIR"] = COMPOSE_DIR
     project = (run_env.get("COMPOSE_PROJECT_NAME") or "").strip()
     if project and not _compose_options_set_project_name(None):
         cmd = ["--project-name", project] + cmd
-    full_cmd = cfg.compose_cmd + cmd
+    full_cmd = _compose_cmd() + cmd
     logger.debug("Spawning compose logs follow: %s", full_cmd)
     try:
         proc = subprocess.Popen(
             full_cmd,
             stdout=log_file,
             stderr=subprocess.DEVNULL,
-            cwd=cdir,
+            cwd=COMPOSE_DIR,
             env=run_env,
         )
     except OSError:
@@ -250,8 +211,6 @@ def spawn_compose_logs_follow(  # pylint: disable=consider-using-with
 def _cleanup_compose_run_service(
     service: str | None,
     *,
-    cfg: types.Config | None = None,
-    compose_file: str | None = None,
     logger: logging.Logger = LOG,
     **kwargs: Any,
 ) -> None:
@@ -265,16 +224,14 @@ def _cleanup_compose_run_service(
     ``docker compose kill`` **includes** one-off containers (``pkg/compose/kill.go``). We kill, then remove
     IDs from ``compose ps -a -q`` (``ps --all`` includes one-off), via ``docker rm -f``.
     """
-    run_kwargs = {k: kwargs[k] for k in ("compose_dir", "env") if k in kwargs}
-    run_compose("kill", service, check=False, cfg=cfg, compose_file=compose_file, logger=logger, **run_kwargs)
+    run_kwargs = {k: kwargs[k] for k in ("env",) if k in kwargs}
+    run_compose("kill", service, check=False, logger=logger, **run_kwargs)
     listed = run_compose(
         "ps",
         service,
         compose_options=["-a", "-q"],
         check=False,
         stdout=subprocess.PIPE,
-        cfg=cfg,
-        compose_file=compose_file,
         logger=logger,
         **run_kwargs,
     )
@@ -302,9 +259,7 @@ def run_service(
     *,
     remove: bool = True,
     name: str | None = None,
-    cfg: types.Config | None = None,
     compose_options: list[str] | None = None,
-    compose_file: str | None = None,
     logger: logging.Logger = LOG,
     **kwargs: Any,
 ) -> subprocess.CompletedProcess:
@@ -317,9 +272,7 @@ def run_service(
         compose_options += ["--rm"]
     logger.info("Run service '%s' (options=%s)", service, compose_options)
     try:
-        result = run_compose(
-            "run", service, args, cfg=cfg, compose_options=compose_options, compose_file=compose_file, logger=logger, **kwargs
-        )
+        result = run_compose("run", service, args, compose_options=compose_options, logger=logger, **kwargs)
         logger.info("Ran service '%s'.", service)
         return result
     finally:
@@ -331,15 +284,9 @@ def run_service(
             # filters them out (``oneOffExclude``). So we use ``_cleanup_compose_run_service`` instead:
             # ``compose kill`` (includes one-offs), then ``compose ps -a -q`` and ``docker rm -f``.
 
-            cleanup_kw = {k: kwargs[k] for k in ("compose_dir", "env") if k in kwargs}
+            cleanup_kw = {k: kwargs[k] for k in ("env",) if k in kwargs}
             try:
-                _cleanup_compose_run_service(
-                    service,
-                    cfg=cfg,
-                    compose_file=compose_file,
-                    logger=logger,
-                    **cleanup_kw,
-                )
+                _cleanup_compose_run_service(service, logger=logger, **cleanup_kw)
             except Exception as exc:
                 logger.warning("Best-effort cleanup after compose run failed for service=%s: %s", service, exc)
 
@@ -375,7 +322,6 @@ def start_service(
 
 def teardown_project(
     *,
-    cfg: types.Config | None = None,
     logger: logging.Logger = LOG,
     **kwargs: Any,
 ) -> None:
@@ -385,13 +331,13 @@ def teardown_project(
     may not run: ``compose kill`` / ``docker rm`` covers one-off containers that ``compose rm`` skips,
     then ``docker compose down --volumes --remove-orphans`` drops the rest of the stack.
     """
-    run_kwargs = {k: kwargs[k] for k in ("compose_dir", "env", "compose_file") if k in kwargs}
+    run_kwargs = {k: kwargs[k] for k in ("env",) if k in kwargs}
     try:
-        _cleanup_compose_run_service(None, cfg=cfg, logger=logger, **run_kwargs)
+        _cleanup_compose_run_service(None, logger=logger, **run_kwargs)
     except Exception as exc:
         logger.warning("Best-effort cleanup of compose run containers failed: %s", exc)
     try:
-        run_compose("down", args=["--volumes", "--remove-orphans"], check=False, cfg=cfg, logger=logger, **run_kwargs)
+        run_compose("down", args=["--volumes", "--remove-orphans"], check=False, logger=logger, **run_kwargs)
     except Exception as exc:
         logger.warning("Best-effort compose down failed: %s", exc)
 

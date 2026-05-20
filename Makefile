@@ -219,7 +219,7 @@ it_tracks_image:
 
 # It runs Docker-based per-track Rally race integration tests (it/tracks).
 # Isolation from it/conftest.py is handled by it/tracks/pytest.ini (confcutdir).
-# Options: see it/tracks/README.md (IT_SKIP_XFAIL, IT_TRACKS_ES_VERSIONS, IT_TRACKS_TIMEOUT_MINUTES, IT_TRACKS_NAME, pytest --it-tracks-* / --it-skip-xfail flags).
+# Options: see it/tracks/conftest.py (IT_SKIP_XFAIL, IT_TRACKS_ES_VERSIONS, IT_TRACKS_TIMEOUT_MINUTES, IT_TRACKS_NAME, pytest --it-tracks-* / --it-skip-xfail flags).
 it_tracks: venv it_tracks_image
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/tracks/ $(ARGS)
 

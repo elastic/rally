@@ -47,14 +47,11 @@ import fnmatch
 import os
 import subprocess
 from collections.abc import Generator
-from pathlib import Path
 
 import pytest
 
 from it.tracks import compose, helpers
 
-_TRACKS_DIR = Path(__file__).resolve().parent
-os.environ.setdefault("RALLY_COMPOSE_FILE", str(_TRACKS_DIR / "compose.yaml"))
 os.environ.setdefault("RALLY_IT_TRACKS_ROOT", "/tracks")
 
 
@@ -268,7 +265,7 @@ _LOG_FOLLOW_KILL_TIMEOUT_S = 5.0
 def it_tracks_compose_logs_follow(request: pytest.FixtureRequest, elasticsearch_version: object) -> Generator[None, None, None]:
     """Background ``docker compose logs -f`` into ``containers.log``; stopped before ``elasticsearch_version`` teardown."""
     dest = helpers.host_log_dir_for_nodeid(helpers.log_root(), request.node.nodeid) / "containers.log"
-    proc, log_f = compose.spawn_compose_logs_follow(dest, cfg=compose.ComposeConfig())
+    proc, log_f = compose.spawn_compose_logs_follow(dest)
     try:
         yield
     finally:
@@ -299,15 +296,14 @@ def pytest_sessionstart(session: pytest.Session) -> None:
         return
     if num in (None, 0, False):
         return
-    compose.build_image("rally", cfg=compose.ComposeConfig())
+    compose.build_image("rally")
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Tear down the Compose project when the session ends (including ``KeyboardInterrupt`` / Ctrl+C).
 
     Per-test fixture teardown can be skipped if the process exits before unwinding generators; this hook
-    runs on normal exit and on the first interrupt that ends the session. Uses a fresh
-    ``it.tracks.compose.ComposeConfig`` so it works even if ``init_config`` was never set.
+    runs on normal exit and on the first interrupt that ends the session.
 
     Under pytest-xdist, only **workers** run ``docker compose down`` here; the controller must not run it
     while workers still hold containers. Each test sets ``COMPOSE_PROJECT_NAME`` from its nodeid; this hook
@@ -318,11 +314,11 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     opt = getattr(session.config, "option", None)
     num = getattr(opt, "numprocesses", None) if opt else None
     if isinstance(wi, dict):
-        compose.teardown_project(cfg=compose.ComposeConfig())
+        compose.teardown_project()
         return
     if num not in (None, 0, False):
         return
-    compose.teardown_project(cfg=compose.ComposeConfig())
+    compose.teardown_project()
 
 
 @pytest.fixture(scope="session")

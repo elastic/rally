@@ -17,8 +17,7 @@
 
 """Docker track race integration tests for Rally.
 
-See ``it/tracks/README.md`` for how to run, timeouts, and pytest options.
-``conftest.py`` in this directory configures pytest isolation from ``it/conftest.py``.
+See ``conftest.py`` in this directory for pytest options, timeouts, and isolation from ``it/conftest.py``.
 """
 
 from __future__ import annotations
@@ -31,7 +30,6 @@ from collections.abc import Generator
 
 import pytest
 
-from esrally import config
 from esrally.utils.cases import cases
 from it.tracks import compose, helpers
 
@@ -52,23 +50,13 @@ class TrackCase:
 
     # ``None``: no skip / no xfail translation around ``rally race``. Use
     # ``helpers.ExpectCommandFailure(...)`` for known subprocess failures; the test wraps the race with
-    # ``helpers.expect_command_failure`` (see ``helpers.it_skip_xfail_applies`` and
-    # ``it/tracks/README.md``).
+    # ``helpers.expect_command_failure`` (see ``helpers.it_skip_xfail_applies`` and ``conftest.py``).
     expect_failure: helpers.ExpectCommandFailure | None = None
 
 
 @pytest.fixture(scope="module", autouse=True)
-def compose_config() -> Generator[compose.ComposeConfig]:
-    """Initialize Rally global config from Docker Compose settings for this module; clear it on teardown."""
-    cfg = compose.ComposeConfig()
-    config.init_config(cfg=cfg)
-    yield cfg
-    config.clear_config()
-
-
-@pytest.fixture(scope="module", autouse=True)
-def build_rally(compose_config: compose.ComposeConfig) -> None:
-    """Build the Rally Docker image once per module (after ``compose_config`` is ready)."""
+def build_rally() -> None:
+    """Build the Rally Docker image once per module."""
     compose.build_image("rally")
 
 
@@ -95,7 +83,7 @@ def elasticsearch_version(
     finally:
         # Stop es01 and remove the compose project so the next test gets a clean stack.
         compose.remove_service("es01", force=True, volumes=True)
-        compose.teardown_project(cfg=compose.ComposeConfig())
+        compose.teardown_project()
 
 
 @cases(
@@ -320,7 +308,7 @@ def test_race(
     ``pytest.skip`` before the race when skip-xfail is on (default), else ``pytest.xfail`` on a matching
     ``CalledProcessError`` when skip-xfail is off.
     Per-race timeout is ``race_timeout_s`` (total minutes from CLI/env divided by ``N``; ``N`` omits
-    version-skip rows when skip-xfail applies; see ``it/tracks/README.md``).
+    version-skip rows when skip-xfail applies; see ``conftest.py``).
     Subprocess timeout is treated as success; Rally one-off containers are torn down in ``run_service``
     when ``remove`` is ``True`` (default).
     """
