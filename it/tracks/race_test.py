@@ -72,13 +72,13 @@ def elasticsearch_version(
     # compose.yaml uses ES_VERSION to pick the Elasticsearch image tag.
     monkeypatch.setenv("ES_VERSION", request.param)
     # Drop any leftover es01 from a prior run in the same project before starting fresh.
-    compose.remove_service("es01", force=True, volumes=True)
+    compose.remove_service("es01", force=True, stop=True, volumes=True)
     try:
         compose.start_elasticsearch("es01")
         yield request.param
     finally:
         # Stop es01 and remove the compose project so the next test gets a clean stack.
-        compose.remove_service("es01", force=True, volumes=True)
+        compose.remove_service("es01", force=True, stop=True, volumes=True)
         compose.teardown_project()
 
 
