@@ -35,9 +35,6 @@ from it.tracks import compose, helpers
 
 LOG = logging.getLogger(__name__)
 
-# Default ES versions (overridden by conftest / IT_TRACKS_ES_VERSIONS / --it-tracks-es-versions).
-ES_VERSIONS = list(helpers.DEFAULT_IT_TRACKS_ES_VERSIONS)
-
 
 @dataclasses.dataclass
 class TrackCase:
