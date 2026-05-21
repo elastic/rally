@@ -207,7 +207,8 @@ test-3.13:
 
 # It runs integration tests (excludes it/tracks; use make it_tracks for those).
 it: venv
-	$(MAKE) test ARGS="$(or $(ARGS),it/ --ignore=it/tracks)"
+	mkdir -p "$${RALLY_HOME:-$$HOME}/.rally/logs"
+	uv run -- pytest -s --log-file="$${RALLY_HOME:-$$HOME}/.rally/logs/pytest.log" it/ --ignore=it/tracks $(ARGS)
 
 # It runs serverless integration tests.
 it_serverless: install_pytest_rally_plugin
