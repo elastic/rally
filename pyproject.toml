@@ -85,7 +85,7 @@ dependencies = [
     # License: Apache 2.0
     "google-auth==2.38.0",
     # License: BSD
-    "zstandard==0.21.0",
+    "zstandard==0.25.0",
     # License: Python Software Foundation License
     "typing-extensions==4.12.2",
     # License:  BSD-2-Clause license
