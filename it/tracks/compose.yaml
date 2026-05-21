@@ -5,6 +5,14 @@
 # IT_TRACKS_HOST_LOG_DIR: pytest sets an absolute path per test. Default below avoids
 # "variable is not set" when running e.g. `docker compose build` without env; path is
 # relative to this file's directory (it/tracks/) → checkout logs/_compose_default/.
+#
+# RALLY_TRACKS_REF (build arg, default master): shallow-clones elastic/rally-tracks into
+# the rally image at build time. Default master exercises current tracks HEAD so Rally IT
+# surfaces cross-repo breakage early. Override for reproducible or cross-repo gating jobs
+# (branch, tag, or commit SHA), e.g.:
+#   RALLY_TRACKS_REF=<ref> docker compose --file it/tracks/compose.yaml build --no-cache rally
+#   RALLY_TRACKS_REF=<ref> make it_tracks_image
+# Clones happen at image build; use --no-cache when you need a fresh master after tracks moved.
 name: rally_it_tracks
 
 services:

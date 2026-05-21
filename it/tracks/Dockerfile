@@ -72,6 +72,8 @@ LABEL org.label-schema.schema-version="1.0" \
   license="${RALLY_LICENSE}"
 
 USER root
+# Default master: integration with rally-tracks HEAD (see compose.yaml header). Override at
+# build time via compose build arg RALLY_TRACKS_REF (branch, tag, or SHA) for pinned gating.
 ARG RALLY_TRACKS_REF=master
 RUN git clone --depth 1 --branch "${RALLY_TRACKS_REF}" https://github.com/elastic/rally-tracks.git /tracks
 RUN chown -R 1000:0 /tracks

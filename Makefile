@@ -214,12 +214,14 @@ it_serverless: install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_tracks_serverless it/track_repo_compatibility $(ARGS)
 
 # It builds the Rally driver image for it/tracks (compose file in it/tracks/).
+# RALLY_TRACKS_REF (default master) is forwarded to compose build args; see it/tracks/compose.yaml.
 it_tracks_image:
 	docker compose --file $(IT_TRACKS_COMPOSE) build
 
 # It runs Docker-based per-track Rally race integration tests (it/tracks).
 # Isolation from it/conftest.py is handled by it/tracks/pytest.ini (confcutdir).
-# Options: see it/tracks/conftest.py (IT_SKIP_XFAIL, IT_TRACKS_ES_VERSIONS, IT_TRACKS_TIMEOUT_MINUTES, IT_TRACKS_NAME, pytest --it-tracks-* / --it-skip-xfail flags).
+# Options: see it/tracks/conftest.py (IT_SKIP_XFAIL, IT_TRACKS_ES_VERSIONS, IT_TRACKS_TIMEOUT_MINUTES,
+# IT_TRACKS_NAME, RALLY_TRACKS_REF in compose.yaml, pytest --it-tracks-* / --it-skip-xfail).
 it_tracks: venv it_tracks_image
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/tracks/ $(ARGS)
 
