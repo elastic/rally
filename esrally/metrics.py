@@ -619,20 +619,13 @@ class MetaInfoScope(Enum):
     """
 
 
-def calculate_results(store, race, cfg=None):
+def calculate_results(store, race):
     calc = GlobalStatsCalculator(store, race.track, race.challenge)
-    cluster_names = []
-    if cfg is not None:
-        try:
-            all_hosts = cfg.opts("client", "hosts").all_hosts
-            if isinstance(all_hosts, dict) and len(all_hosts) > 1:
-                cluster_names = list(all_hosts.keys())
-        except Exception:
-            pass
+    cluster_names = store.task_cluster_names()
     if not cluster_names:
         return calc()
     # Multi-cluster: return one GlobalStats per cluster, each stamped with its name.
-    return [calc(cluster_name=cn) for cn in cluster_names]
+    return [calc(cluster_name=cn) for cn in sorted(cluster_names)]
 
 
 def calculate_system_results(store, node_name):
@@ -686,7 +679,7 @@ def track_params_for_reporting(track_params):
     return {k: (SECRET_TRACK_PARAM_PLACEHOLDER if str(k).startswith("secret_") else v) for k, v in track_params.items()}
 
 
-class MetricsStore:
+class MetricsStore:  # pylint: disable=too-many-public-methods
     """
     Abstract metrics store
     """
@@ -1142,6 +1135,13 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
+    def task_cluster_names(self):
+        """
+        :return: The set of distinct cluster names stamped on per-task request samples for the current race.
+                 Empty if the race ran against a single cluster (no cluster name is stamped).
+        """
+        raise NotImplementedError("abstract method")
+
     def get_stats(self, name, task=None, operation_type=None, sample_type=None, cluster_name=None):
         """
         Gets standard statistics for the given metric.
@@ -1383,6 +1383,33 @@ class EsMetricsStore(MetricsStore):
         result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         return result["aggregations"]["metric_stats"]
 
+    def task_cluster_names(self):
+        query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"race-id": self._race_id}},
+                        {"exists": {"field": "task"}},
+                        {"exists": {"field": "meta.cluster"}},
+                    ],
+                },
+            },
+            "size": 0,
+            "aggs": {
+                "clusters": {
+                    "terms": {
+                        "field": "meta.cluster",
+                        "size": 1000,
+                    },
+                },
+            },
+        }
+        self.logger.debug(
+            "Issuing task_cluster_names against index=[%s], query=[%s]", self._index_handler.index_name(self._race_timestamp), query
+        )
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
+        return {b["key"] for b in result["aggregations"]["clusters"]["buckets"]}
+
     def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None, cluster_name=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
@@ -1588,6 +1615,11 @@ class InMemoryMetricsStore(MetricsStore):
             }
         else:
             return None
+
+    def task_cluster_names(self):
+        return {
+            doc["meta"]["cluster"] for doc in self.docs if doc.get("task") is not None and doc.get("meta", {}).get("cluster") is not None
+        }
 
     def _get(self, name, task, operation_type, sample_type, node_name, cluster_name, mapper):
         return [

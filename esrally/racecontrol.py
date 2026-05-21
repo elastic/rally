@@ -296,7 +296,7 @@ class BenchmarkCoordinator:
         self.metrics_store.bulk_add(new_metrics)
         self.metrics_store.flush()
         if not self.cancelled and not self.error:
-            final_results = metrics.calculate_results(self.metrics_store, self.race, self.cfg)
+            final_results = metrics.calculate_results(self.metrics_store, self.race)
             self.race.add_results(final_results)
             self.race_store.store_race(self.race)
             metrics.results_store(self.cfg).store_results(self.race)

@@ -1703,7 +1703,6 @@ class ThroughputCalculator:
         # with open("raw_samples_new.csv", "a") as sample_log:
         # print("client_id,absolute_time,relative_time,operation,sample_type,total_ops,time_period", file=sample_log)
         for k, v in samples_per_task.items():
-            task, cluster_name = k
             if k not in global_throughput:
                 global_throughput[k] = []
             # sort all samples by time
