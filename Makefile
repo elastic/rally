@@ -226,8 +226,9 @@ it_tracks: venv it_tracks_image
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/tracks/ $(ARGS)
 
 # It tears down it/tracks compose (containers, networks, volumes, locally built images).
+# Best-effort: does not require Docker so `make clean` still runs clean-others/clean-docs.
 clean-it_tracks:
-	docker compose --file $(IT_TRACKS_COMPOSE) down --volumes --remove-orphans --rmi local
+	-docker compose --file $(IT_TRACKS_COMPOSE) down --volumes --remove-orphans --rmi local
 
 # It runs rally_tracks_compat integration tests.
 it_tracks_compat: install_pytest_rally_plugin
