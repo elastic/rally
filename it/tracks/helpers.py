@@ -38,7 +38,7 @@ from it.tracks import compose
 
 # Default Elasticsearch distribution versions for track race IT (Docker compose es01 image tag).
 # Keep in sync with the es-version matrix in .github/workflows/ci.yml (job it-tracks-race).
-DEFAULT_IT_TRACKS_ES_VERSIONS: list[str] = ["8.19.14", "9.3.3"]
+DEFAULT_IT_TRACKS_ES_VERSIONS: list[str] = ["8.19.15", "9.3.4"]
 
 
 class PytestConfig(Protocol):
@@ -48,7 +48,7 @@ class PytestConfig(Protocol):
 
 
 def parse_es_versions_csv(raw: str | None) -> list[str]:
-    """Parse a comma-separated list of ES version strings (e.g. ``8.19.14,9.3.3``)."""
+    """Parse a comma-separated list of ES version strings (e.g. ``8.19.15,9.3.4``)."""
     if not raw or not raw.strip():
         return list(DEFAULT_IT_TRACKS_ES_VERSIONS)
     return [p.strip() for p in raw.split(",") if p.strip()]

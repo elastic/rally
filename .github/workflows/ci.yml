@@ -137,8 +137,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Must match DEFAULT_IT_TRACKS_ES_VERSIONS in it/tracks/helpers.py
-        es-version: ["8.19.14", "9.3.3"]
+        es-version: ["8.19.15", "9.3.4", "9.4.1"]
 
     runs-on: ubuntu-22.04
     name: it/tracks ES ${{ matrix.es-version }}
