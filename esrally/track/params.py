@@ -719,6 +719,123 @@ class BulkIndexParamSource(ParamSource):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
 
 
+class OtlpParamSource(ParamSource):
+    """
+    Parameter source for OTLP binary protobuf corpus files (source_format: otlp-proto).
+
+    Reads pre-generated ExportMetricsServiceRequest records from a .pb file.
+    Supports multi-client partitioning via the companion .pb.offset index.
+    """
+
+    def __init__(self, track_obj, params, **kwargs):
+        super().__init__(track_obj, params, **kwargs)
+        self._partition_index = 0
+        self._total_partitions = 1
+        # records loaded into memory after partition()
+        self._records: list[bytes] | None = None
+        self._cursor = 0
+        self.looped = params.get("looped", False)
+
+        otlp_docs = self._find_otlp_docs()
+        if not otlp_docs:
+            raise exceptions.InvalidSyntax(
+                f"No OTLP corpus found in track [{track_obj}]. "
+                f"Add at least one document corpus with source_format={track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF!r}."
+            )
+        # expose corpora so used_corpora() in loader.py includes OTLP corpora in the prepare-track phase
+        seen_names: set[str] = set()
+        self.corpora = []
+        for corpus, _ in otlp_docs:
+            if corpus.name not in seen_names:
+                seen_names.add(corpus.name)
+                self.corpora.append(corpus)
+        # use the first matching document set
+        _, self._doc = otlp_docs[0]
+
+    def _find_otlp_docs(self):
+        return [
+            (corpus, doc)
+            for corpus in self.track.corpora
+            for doc in corpus.documents
+            if doc.source_format == track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF
+        ]
+
+    def partition(self, partition_index, total_partitions):
+        # pylint: disable=protected-access
+        # the "copy" is another OtlpParamSource instance, so accessing its private state is fine
+        copy = OtlpParamSource.__new__(OtlpParamSource)
+        copy.__dict__.update(self.__dict__)
+        copy._partition_index = partition_index
+        copy._total_partitions = total_partitions
+        copy._records = None  # loaded lazily on first params() call
+        copy._cursor = 0
+        return copy
+
+    def size(self):
+        """
+        Return the partition size so Rally treats this as a finite (non-infinite) source.
+        Without this, the base class returns None → infinite=True → Rally defaults
+        iterations=1 and each worker runs exactly one operation.
+        """
+        total_records = self._doc.number_of_documents
+        if total_records <= 0:
+            return None
+        if self._total_partitions > 1:
+            records_per_partition = total_records / self._total_partitions
+            start_record = round(records_per_partition * self._partition_index)
+            end_record = round(records_per_partition * (self._partition_index + 1))
+            return end_record - start_record
+        return total_records
+
+    def _load_records(self):
+        pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file)
+        total_records = self._doc.number_of_documents
+
+        if total_records > 0 and self._total_partitions > 1:
+            records_per_partition = total_records / self._total_partitions
+            start_record = round(records_per_partition * self._partition_index)
+            end_record = round(records_per_partition * (self._partition_index + 1))
+        else:
+            start_record = 0
+            end_record = None
+
+        # materialize records for this partition into memory (sequential single-pass read)
+        self._records = list(pb_file.read_records(start_record, end_record))
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "OtlpParamSource partition %d/%d: total_records=%s start=%d end=%s loaded=%d (%d bytes)",
+            self._partition_index,
+            self._total_partitions,
+            total_records,
+            start_record,
+            end_record,
+            len(self._records),
+            sum(len(r) for r in self._records),
+        )
+
+    def params(self):
+        if self._records is None:
+            self._load_records()
+
+        if not self._records:
+            raise StopIteration()
+
+        if self._cursor >= len(self._records):
+            if self.looped:
+                self._cursor = 0
+            else:
+                raise StopIteration()
+
+        payload = self._records[self._cursor]
+        self._cursor += 1
+
+        result = {"body": payload}
+        if "request-timeout" in self._params:
+            result["request-timeout"] = self._params["request-timeout"]
+        return result
+
+
 class PartitionBulkIndexParamSource:
     def __init__(
         self,
@@ -1431,6 +1548,7 @@ register_param_source_for_operation(track.OperationType.DeleteComposableTemplate
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
 register_param_source_for_operation(track.OperationType.ForceMerge, ForceMergeParamSource)
 register_param_source_for_operation(track.OperationType.Downsample, DownsampleParamSource)
+register_param_source_for_operation(track.OperationType.OtlpIngest, OtlpParamSource)
 
 # Also register by name, so users can use it too
 register_param_source_for_name("file-reader", BulkIndexParamSource)

@@ -23,11 +23,12 @@ import logging
 import mmap
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
 import zipfile
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from types import TracebackType
 from typing import IO, Any, AnyStr, Callable, Generic, Literal, Optional, overload
 
@@ -37,6 +38,7 @@ import zstandard
 # but they are treated the same by mypy, so I'm not going to use conditional imports here
 from typing_extensions import Self
 
+from esrally import exceptions
 from esrally.utils import console, net
 
 SUPPORTED_ARCHIVE_FORMATS = [".zip", ".bz2", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".zst"]
@@ -703,6 +705,210 @@ def remove_file_offset_table(data_file_path: str) -> None:
     :param data_file_path: The path to a text file that is readable by this process.
     """
     FileOffsetTable.remove(data_file_path)
+
+
+class OtlpProtobufFile:
+    """
+    Manages the binary protobuf corpus file derived from an OTLP JSON source.
+
+    On-disk format: sequence of length-prefixed records —
+        4-byte big-endian uint32 (payload length) + binary ExportMetricsServiceRequest bytes.
+
+    A companion ``{pb_path}.offset`` file maps record numbers to byte offsets for efficient
+    multi-client partitioning, using the same ``record_number;byte_offset`` text format as
+    FileOffsetTable. One entry is written every OFFSET_SAMPLING_INTERVAL records.
+    """
+
+    OFFSET_SAMPLING_INTERVAL = 1000
+
+    def __init__(self, source_json_path: str, pb_path: str):
+        self.source_json_path = source_json_path
+        self.pb_path = pb_path
+
+    def exists(self) -> bool:
+        return os.path.exists(self.pb_path) and os.path.getsize(self.pb_path) > 0
+
+    def is_valid(self) -> bool:
+        if not self.exists():
+            return False
+        # if the source JSON is present, the .pb must be newer than it
+        if os.path.exists(self.source_json_path):
+            if os.path.getmtime(self.pb_path) < os.path.getmtime(self.source_json_path):
+                return False
+        return True
+
+    def try_download_from_corpus_location(self, corpus_base_url: str | None) -> bool:
+        """
+        Attempts to download the pre-built .pb file from the corpus URL. Also attempts to
+        download the companion .pb.offset file; if that's not available, partitioning will
+        still work by scanning the .pb from the start (just slightly slower on startup).
+
+        :return: True if the .pb file was downloaded successfully, False otherwise.
+        """
+        if not corpus_base_url:
+            return False
+        logger = logging.getLogger(__name__)
+        pb_name = os.path.basename(self.pb_path)
+        remote_url = f"{corpus_base_url.rstrip('/')}/{pb_name}"
+        logger.info("Attempting to download binary protobuf file from [%s]", remote_url)
+        os.makedirs(os.path.dirname(self.pb_path), exist_ok=True)
+        try:
+            net.download(remote_url, self.pb_path)
+            logger.info("Successfully downloaded binary protobuf file from [%s]", remote_url)
+        except Exception:
+            logger.debug("Could not download binary protobuf file from [%s]", remote_url)
+            return False
+
+        # Best-effort: also fetch the offset index. Failure is non-fatal — read_records()
+        # falls back to scanning from the start of the .pb if .offset is missing.
+        offset_path = self.pb_path + ".offset"
+        offset_url = f"{corpus_base_url.rstrip('/')}/{os.path.basename(offset_path)}"
+        try:
+            net.download(offset_url, offset_path)
+            logger.info("Successfully downloaded offset index from [%s]", offset_url)
+        except Exception:
+            logger.debug("Could not download offset index from [%s] (will scan .pb directly)", offset_url)
+
+        return True
+
+    def create(self) -> int:
+        """
+        Parse the source OTLP JSON file and write binary protobuf records to the .pb file.
+        Also writes a companion .offset file for fast multi-client partitioning.
+
+        :return: Total number of records written.
+        :raises exceptions.SystemSetupError: if opentelemetry-proto is not installed.
+        """
+        # opentelemetry-proto is an optional dependency, only needed when preparing an OTLP corpus.
+        # pylint: disable=import-outside-toplevel
+        try:
+            from google.protobuf.json_format import Parse
+            from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import (
+                ExportMetricsServiceRequest,
+            )
+        except ImportError:
+            raise exceptions.SystemSetupError(
+                "The 'opentelemetry-proto' package is required to pre-process OTLP corpus files. "
+                "Install it with: pip install opentelemetry-proto"
+            )
+
+        offset_path = self.pb_path + ".offset"
+        record_count = 0
+        byte_offset = 0
+        with (
+            open(self.source_json_path, encoding="utf-8") as src,
+            open(self.pb_path, "wb") as dst,
+            open(offset_path, "w", encoding="utf-8") as off,
+        ):
+            for line in src:
+                line = line.strip()
+                if not line:
+                    continue
+                msg = Parse(line, ExportMetricsServiceRequest())
+                payload = msg.SerializeToString()
+                length_bytes = struct.pack(">I", len(payload))
+                if record_count % self.OFFSET_SAMPLING_INTERVAL == 0:
+                    print(f"{record_count};{byte_offset}", file=off)
+                dst.write(length_bytes)
+                dst.write(payload)
+                byte_offset += 4 + len(payload)
+                record_count += 1
+        return record_count
+
+    def read_records(self, start_record: int, end_record: int | None = None) -> Iterator[bytes]:
+        """
+        Generator yielding raw binary payloads from start_record up to (but not including) end_record.
+        Uses the companion .offset file to seek efficiently.
+        """
+        seek_byte, records_to_skip = self._find_offset(start_record)
+        with open(self.pb_path, "rb") as f:
+            f.seek(seek_byte)
+            for _ in range(records_to_skip):
+                length_data = f.read(4)
+                if len(length_data) < 4:
+                    return
+                (length,) = struct.unpack(">I", length_data)
+                f.seek(length, 1)
+            count = 0
+            target = None if end_record is None else (end_record - start_record)
+            while target is None or count < target:
+                length_data = f.read(4)
+                if len(length_data) < 4:
+                    return
+                (length,) = struct.unpack(">I", length_data)
+                payload = f.read(length)
+                if len(payload) < length:
+                    return
+                count += 1
+                yield payload
+
+    def _find_offset(self, target_record: int) -> tuple[int, int]:
+        """Return (byte_offset, records_still_to_skip) for the sampled position closest to target_record."""
+        offset_path = self.pb_path + ".offset"
+        if not os.path.exists(offset_path):
+            return 0, target_record
+        prior_byte = 0
+        prior_remaining = target_record
+        try:
+            with open(offset_path, encoding="utf-8") as f:
+                for line in f:
+                    parts = line.strip().split(";")
+                    if len(parts) != 2:
+                        continue
+                    rec_num, byte_off = int(parts[0]), int(parts[1])
+                    if rec_num <= target_record:
+                        prior_byte = byte_off
+                        prior_remaining = target_record - rec_num
+                    else:
+                        break
+        except OSError:
+            pass
+        return prior_byte, prior_remaining
+
+    @classmethod
+    def for_source_file(cls, source_json_path: str) -> "OtlpProtobufFile":
+        return cls(source_json_path, f"{source_json_path}.pb")
+
+
+def prepare_otlp_protobuf_file(source_json_path: str, corpus_base_url: str | None) -> int | None:
+    """
+    Ensures a binary protobuf (.pb) file exists for the given OTLP JSON corpus.
+
+    Strategy:
+    1. If .pb is already valid locally, return None immediately.
+    2. Try downloading the .pb from corpus_base_url (avoids downloading the larger JSON source).
+    3. If JSON is present locally, convert it to .pb.
+
+    Returns the record count if the .pb was created locally, or None if it already existed or
+    was downloaded. Returns None without creating the file if the JSON source is absent and the
+    download failed — the caller is responsible for ensuring the JSON is present if needed.
+    """
+    pb_file = OtlpProtobufFile.for_source_file(source_json_path)
+    if pb_file.is_valid():
+        return None
+
+    if corpus_base_url:
+        console.info(
+            "Attempting to download binary protobuf file for [%s] ... " % os.path.basename(source_json_path),
+            end="",
+            flush=True,
+        )
+        if pb_file.try_download_from_corpus_location(corpus_base_url) and pb_file.is_valid():
+            console.println("[DOWNLOADED]")
+            return None
+        console.println("[NOT FOUND - will create locally]")
+
+    if not os.path.exists(source_json_path):
+        return None
+
+    console.info(
+        "Converting OTLP JSON to binary protobuf for [%s] ... " % os.path.basename(source_json_path),
+        end="",
+        flush=True,
+    )
+    record_count = pb_file.create()
+    console.println("[OK]")
+    return record_count
 
 
 def skip_lines(data_file_path: str, data_file: IO[AnyStr], number_of_lines_to_skip: int) -> None:

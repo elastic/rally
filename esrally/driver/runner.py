@@ -46,6 +46,7 @@ __RUNNERS = {}
 
 def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.Bulk, BulkIndex(), async_runner=True)
+    register_runner(track.OperationType.OtlpIngest, OtlpIngest(), async_runner=True)
     register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
@@ -804,6 +805,88 @@ class BulkIndex(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "bulk-index"
+
+
+class _ProtobufSerializer:
+    """Passthrough serializer for pre-serialized binary protobuf payloads."""
+
+    mimetype = "application/x-protobuf"
+
+    def dumps(self, data):
+        if isinstance(data, (bytes, bytearray)):
+            return bytes(data)
+        raise TypeError(f"Expected bytes for application/x-protobuf body, got {type(data).__name__}")
+
+    def loads(self, data):
+        return data
+
+
+class OtlpIngest(Runner):
+    """
+    Sends a pre-serialized OTLP ExportMetricsServiceRequest (binary protobuf) to Elasticsearch.
+    """
+
+    DEFAULT_ENDPOINT = "/_otlp/v1/metrics"
+    _PROTOBUF_MIMETYPE = "application/x-protobuf"
+
+    async def __call__(self, es, params):
+        """
+        :param es: The Elasticsearch client.
+        :param params: A hash with all parameters.
+
+        Mandatory parameters:
+        * ``body``: Raw binary protobuf payload (bytes).
+
+        Optional parameters:
+        * ``endpoint``: OTLP endpoint path. Defaults to ``/_otlp/v1/metrics``.
+        * ``request-timeout``: Client-side timeout in seconds.
+        """
+        body = mandatory(params, "body", self)
+        path = params.get("endpoint", self.DEFAULT_ENDPOINT)
+
+        transport_params = {}
+        if "request-timeout" in params:
+            transport_params["request_timeout"] = params["request-timeout"]
+
+        if transport_params:
+            es = es.options(**transport_params)
+
+        # elastic-transport has no built-in serializer for application/x-protobuf; register a
+        # passthrough serializer so it forwards the already-serialized bytes without modification.
+        serializers = es.transport.serializers.serializers
+        if self._PROTOBUF_MIMETYPE not in serializers:
+            serializers[self._PROTOBUF_MIMETYPE] = _ProtobufSerializer()
+
+        # Local imports follow the existing pattern in this module for the elasticsearch dependency.
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+        from elasticsearch import AsyncElasticsearch
+
+        try:
+            # Bypass RallyAsyncElasticsearch.perform_request to avoid injecting
+            # ES REST compatibility headers (Accept: application/vnd.elasticsearch+...)
+            # that OTLP endpoints do not understand.
+            await AsyncElasticsearch.perform_request(
+                es,
+                method="POST",
+                path=path,
+                headers={"Content-Type": self._PROTOBUF_MIMETYPE},
+                body=body,
+            )
+        except elasticsearch.ApiError as e:
+            err_body = e.body
+            if hasattr(err_body, "read"):
+                err_body = err_body.read().decode("utf-8", errors="replace")
+            self.logger.warning("OTLP ingest failed: HTTP %s — %s", e.status_code, err_body)
+            raise
+        return {
+            "weight": 1,
+            "unit": "ops",
+            "request-size-bytes": len(body),
+        }
+
+    def __repr__(self, *args, **kwargs):
+        return "otlp-ingest"
 
 
 class ForceMerge(Runner):
