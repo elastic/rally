@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# pylint: disable=protected-access
 
 import asyncio
 import collections
@@ -8658,3 +8659,163 @@ class TestEnrichPolicy:
 
     def test_str(self):
         assert str(runner.EnrichPolicy()) == "enrich-policy"
+
+
+class TestProtobufSerializer:
+    def test_dumps_bytes_passes_through(self):
+        serializer = runner._ProtobufSerializer()
+        payload = b"\x08\x96\x01"  # arbitrary protobuf-shaped bytes
+        assert serializer.dumps(payload) == payload
+
+    def test_dumps_rejects_non_bytes(self):
+        serializer = runner._ProtobufSerializer()
+        with pytest.raises(TypeError):
+            serializer.dumps({"not": "bytes"})
+
+    def test_loads_returns_data_unchanged(self):
+        serializer = runner._ProtobufSerializer()
+        assert serializer.loads(b"\x00\x01") == b"\x00\x01"
+
+    def test_mimetype(self):
+        assert runner._ProtobufSerializer.mimetype == "application/x-protobuf"
+
+
+class TestOtlpIngestRunner:
+    _headers = HttpHeaders()
+    _node = NodeConfig(scheme="http", host="localhost", port=9200)
+    _OK_META = ApiResponseMeta(status=200, http_version="1.1", headers=_headers, duration=0.1, node=_node)
+
+    def _make_es_mock(self):
+        es = mock.MagicMock()
+        # transport.serializers.serializers is a dict the runner mutates to register the protobuf serializer
+        es.transport.serializers.serializers = {}
+        # es.options(**kw) returns the same client so chained mutations stay observable
+        es.options.return_value = es
+        return es
+
+    @pytest.mark.asyncio
+    async def test_posts_to_default_endpoint_with_protobuf_body(self):
+        es = self._make_es_mock()
+        body = b"\x0a\x05hello"
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ) as pr:
+            result = await runner.OtlpIngest()(es, {"body": body})
+
+        pr.assert_awaited_once()
+        kwargs = pr.await_args.kwargs
+        assert kwargs["method"] == "POST"
+        assert kwargs["path"] == "/_otlp/v1/metrics"
+        assert kwargs["headers"] == {"Content-Type": "application/x-protobuf"}
+        assert kwargs["body"] is body
+        assert result == {"weight": 1, "unit": "ops", "request-size-bytes": len(body)}
+
+    @pytest.mark.asyncio
+    async def test_custom_endpoint(self):
+        es = self._make_es_mock()
+        body = b"\x0a\x05world"
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ) as pr:
+            await runner.OtlpIngest()(es, {"body": body, "endpoint": "/custom/otlp"})
+
+        assert pr.await_args.kwargs["path"] == "/custom/otlp"
+
+    @pytest.mark.asyncio
+    async def test_request_timeout_applied_via_options(self):
+        es = self._make_es_mock()
+        body = b"\x0a\x01"
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ):
+            await runner.OtlpIngest()(es, {"body": body, "request-timeout": 42})
+
+        es.options.assert_called_once_with(request_timeout=42)
+
+    @pytest.mark.asyncio
+    async def test_options_not_called_without_request_timeout(self):
+        es = self._make_es_mock()
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ):
+            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+        es.options.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_registers_protobuf_serializer(self):
+        es = self._make_es_mock()
+        assert "application/x-protobuf" not in es.transport.serializers.serializers
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ):
+            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+        registered = es.transport.serializers.serializers["application/x-protobuf"]
+        assert isinstance(registered, runner._ProtobufSerializer)
+
+    @pytest.mark.asyncio
+    async def test_does_not_replace_existing_serializer(self):
+        es = self._make_es_mock()
+        existing = runner._ProtobufSerializer()
+        es.transport.serializers.serializers["application/x-protobuf"] = existing
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ):
+            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+        # the existing serializer instance is preserved
+        assert es.transport.serializers.serializers["application/x-protobuf"] is existing
+
+    @pytest.mark.asyncio
+    async def test_missing_body_raises(self):
+        es = self._make_es_mock()
+        with pytest.raises(exceptions.DataError):
+            await runner.OtlpIngest()(es, {})
+
+    @pytest.mark.asyncio
+    async def test_api_error_is_logged_and_reraised(self):
+        es = self._make_es_mock()
+        err_meta = ApiResponseMeta(status=400, http_version="1.1", headers=self._headers, duration=0.1, node=self._node)
+        api_error = elasticsearch.BadRequestError(message="bad", meta=err_meta, body={"error": "boom"})
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(side_effect=api_error),
+        ):
+            with pytest.raises(elasticsearch.ApiError):
+                await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+    @pytest.mark.asyncio
+    async def test_api_error_with_bytesio_body_is_decoded(self):
+        # the elasticsearch client wraps response bodies in BytesIO when return_raw_response is set;
+        # the runner should still log a readable string rather than the BytesIO repr.
+        es = self._make_es_mock()
+        err_meta = ApiResponseMeta(status=400, http_version="1.1", headers=self._headers, duration=0.1, node=self._node)
+        api_error = elasticsearch.BadRequestError(
+            message="bad",
+            meta=err_meta,
+            body=io.BytesIO(b'{"error":"no handler"}'),
+        )
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(side_effect=api_error),
+        ):
+            with pytest.raises(elasticsearch.ApiError):
+                await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+    def test_repr(self):
+        assert repr(runner.OtlpIngest()) == "otlp-ingest"
