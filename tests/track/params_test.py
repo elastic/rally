@@ -3480,6 +3480,50 @@ class TestOtlpParamSource:
         )
         return corpus
 
+    def test_selects_corpus_by_operation_param(self, tmp_path):
+        # two OTLP corpora — make sure the operation's `corpora` param picks the right one
+        d_a = tmp_path / "a"
+        d_b = tmp_path / "b"
+        d_a.mkdir()
+        d_b.mkdir()
+        corpus_a = self._build_corpus(d_a, num_records=3, corpus_name="corpus-60m")
+        corpus_b = self._build_corpus(d_b, num_records=5, corpus_name="corpus-270m")
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus_a, corpus_b]),
+            params={"corpora": "corpus-270m"},
+        )
+        # _doc must come from corpus-270m, not the first-listed one (corpus-60m)
+        assert source._doc.number_of_documents == 5
+        # corpora exposed to prepare-track only contains the selected corpus
+        assert [c.name for c in source.corpora] == ["corpus-270m"]
+
+    def test_selects_first_corpus_when_no_param(self, tmp_path):
+        # legacy behaviour — without an explicit `corpora` param we fall back to all matching corpora
+        d_a = tmp_path / "a"
+        d_b = tmp_path / "b"
+        d_a.mkdir()
+        d_b.mkdir()
+        corpus_a = self._build_corpus(d_a, num_records=3, corpus_name="corpus-60m")
+        corpus_b = self._build_corpus(d_b, num_records=5, corpus_name="corpus-270m")
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus_a, corpus_b]),
+            params={},
+        )
+        # both corpora are visible to prepare-track…
+        assert [c.name for c in source.corpora] == ["corpus-60m", "corpus-270m"]
+        # …and we pick the first one as the active document set
+        assert source._doc.number_of_documents == 3
+
+    def test_raises_when_corpora_param_doesnt_match(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=3, corpus_name="corpus-60m")
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.OtlpParamSource(
+                track_obj=track.Track(name="unit-test", corpora=[corpus]),
+                params={"corpora": "corpus-270m"},
+            )
+        assert "corpus-270m" in exc.value.args[0]
+        assert "corpus-60m" in exc.value.args[0]
+
     def test_raises_when_no_otlp_corpus(self):
         bulk_corpus = track.DocumentCorpus(
             name="bulk-only",
@@ -3531,6 +3575,35 @@ class TestOtlpParamSource:
             params={},
         )
         assert source.corpora == [corpus]
+
+    def test_size_uses_actual_pb_count_not_document_count(self, tmp_path):
+        # Critical correctness test: if the track's document-count doesn't match the actual .pb,
+        # we MUST use the actual count or partitioning silently breaks (most workers seek past EOF
+        # or get empty partitions, and only one client ends up doing any work).
+        json_path = tmp_path / "metrics.otlp.json"
+        json_path.write_text("\n".join([self._SAMPLE_OTLP_JSON_LINE] * 100) + "\n")
+        io.OtlpProtobufFile.for_source_file(str(json_path)).create()
+        # track claims 10 documents but the .pb actually has 100
+        corpus = track.DocumentCorpus(
+            name="otlp-corpus",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                    number_of_documents=10,
+                    document_file=str(json_path),
+                )
+            ],
+        )
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        p = source.partition(0, 4)
+        # Partition size should be derived from the ACTUAL 100 records, not the (wrong) 10
+        assert p.size() == 25
+        # And all 100 records should actually be reachable across 4 partitions
+        sizes = [source.partition(i, 4).size() for i in range(4)]
+        assert sum(sizes) == 100
 
     def test_size_returns_finite_value_not_none(self, tmp_path):
         # critical: size() must NOT be None, otherwise Rally treats us as infinite and defaults iterations=1
@@ -3610,6 +3683,32 @@ class TestOtlpParamSource:
         # should cycle through the 2 records
         assert bodies[0] == bodies[2] == bodies[4]
         assert bodies[1] == bodies[3]
+
+    def test_percent_completed_progresses_with_cursor(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=10)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        p = source.partition(0, 1)
+        assert p.percent_completed == 0.0  # before any params() call
+        for i in range(1, 11):
+            p.params()
+            assert p.percent_completed == i / 10
+
+    def test_percent_completed_is_none_when_looped(self, tmp_path):
+        # in looped mode the cursor cycles back to 0 — Rally must fall back to time/iteration
+        # based progress, so we return None to avoid misleading numbers.
+        corpus = self._build_corpus(tmp_path, num_records=3)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={"looped": True},
+        )
+        p = source.partition(0, 1)
+        assert p.percent_completed is None
+        for _ in range(7):
+            p.params()
+        assert p.percent_completed is None
 
     def test_params_propagates_request_timeout(self, tmp_path):
         corpus = self._build_corpus(tmp_path, num_records=1)

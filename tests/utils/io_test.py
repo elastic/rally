@@ -294,7 +294,7 @@ class TestPrepareFileOffsetTable:
         assert result is None
 
 
-class TestOtlpProtobufFile:
+class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
     """Tests for OTLP JSON → length-prefixed binary protobuf conversion + read-back."""
 
     SAMPLE_OTLP_JSON_LINE = (
@@ -363,6 +363,67 @@ class TestOtlpProtobufFile:
         json_path = self._write_json_lines(tmp_path, ["", self.SAMPLE_OTLP_JSON_LINE, "", self.SAMPLE_OTLP_JSON_LINE, ""])
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         assert pb.create() == 2
+
+    def test_create_with_single_worker_matches_multi_worker(self, tmp_path):
+        # source must span multiple batches to exercise parallel collection ordering
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile._CONVERSION_BATCH_SIZE * 2 + 17)
+        seq_dir = tmp_path / "seq"
+        par_dir = tmp_path / "par"
+        seq_dir.mkdir()
+        par_dir.mkdir()
+        json_path_seq = self._write_json_lines(seq_dir, lines)
+        json_path_par = self._write_json_lines(par_dir, lines)
+
+        pb_seq = io.OtlpProtobufFile.for_source_file(json_path_seq)
+        pb_par = io.OtlpProtobufFile.for_source_file(json_path_par)
+
+        assert pb_seq.create(workers=1) == len(lines)
+        assert pb_par.create(workers=4) == len(lines)
+
+        # byte-for-byte identical output regardless of worker count → ordering is preserved
+        with open(pb_seq.pb_path, "rb") as f1, open(pb_par.pb_path, "rb") as f2:
+            assert f1.read() == f2.read()
+
+    def test_count_records_returns_none_when_pb_missing(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        assert pb.count_records() is None
+
+    def test_count_records_uses_offset_index(self, tmp_path):
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile._CONVERSION_BATCH_SIZE * 2 + 137)
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create()
+        assert pb.count_records() == len(lines)
+
+    def test_count_records_works_without_offset_index(self, tmp_path):
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * 50
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create()
+        os.remove(pb.pb_path + ".offset")
+        assert pb.count_records() == 50
+
+    def test_create_offset_file_aligns_with_batches(self, tmp_path):
+        # 2.5 batches: 3 offset entries (one at the start of each batch)
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile._CONVERSION_BATCH_SIZE * 2 + 50)
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(workers=2)
+
+        with open(pb.pb_path + ".offset") as f:
+            entries = [line.strip().split(";") for line in f if line.strip()]
+        assert len(entries) == 3
+        # first record numbers are 0, BATCH_SIZE, 2*BATCH_SIZE
+        assert [int(r) for r, _ in entries] == [
+            0,
+            io.OtlpProtobufFile._CONVERSION_BATCH_SIZE,
+            2 * io.OtlpProtobufFile._CONVERSION_BATCH_SIZE,
+        ]
+        # byte offsets are monotonically increasing
+        byte_offsets = [int(b) for _, b in entries]
+        assert byte_offsets[0] == 0
+        assert byte_offsets[0] < byte_offsets[1] < byte_offsets[2]
 
     def test_read_records_respects_partition_range(self, tmp_path):
         lines = [self.SAMPLE_OTLP_JSON_LINE] * 8
@@ -474,3 +535,28 @@ class TestOtlpProtobufFile:
             result = io.prepare_otlp_protobuf_file(json_path, "http://example.com/corpus")
 
         assert result is None
+
+    def test_prepare_passes_workers_from_env(self, tmp_path):
+        # env var lets users dial up parallelism without code changes
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 2)
+
+        with (
+            mock.patch("esrally.utils.net.download", side_effect=Exception("404")),
+            mock.patch.object(io.OtlpProtobufFile, "create", return_value=2) as create_mock,
+            mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "12"}),
+        ):
+            result = io.prepare_otlp_protobuf_file(json_path, None)
+
+        assert result == 2
+        create_mock.assert_called_once_with(workers=12)
+
+    def test_prepare_ignores_invalid_workers_env(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "create", return_value=1) as create_mock,
+            mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "not-a-number"}),
+        ):
+            io.prepare_otlp_protobuf_file(json_path, None)
+
+        create_mock.assert_called_once_with(workers=None)

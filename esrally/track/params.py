@@ -738,6 +738,12 @@ class OtlpParamSource(ParamSource):
 
         otlp_docs = self._find_otlp_docs()
         if not otlp_docs:
+            requested = self._params.get("corpora")
+            if requested:
+                raise exceptions.InvalidSyntax(
+                    f"No OTLP corpus matching 'corpora'={requested!r} found in track [{track_obj}]. "
+                    f"Available corpora: {[c.name for c in self.track.corpora]}."
+                )
             raise exceptions.InvalidSyntax(
                 f"No OTLP corpus found in track [{track_obj}]. "
                 f"Add at least one document corpus with source_format={track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF!r}."
@@ -753,9 +759,16 @@ class OtlpParamSource(ParamSource):
         _, self._doc = otlp_docs[0]
 
     def _find_otlp_docs(self):
+        # honor the operation's "corpora" param so a track with multiple OTLP corpora can pick
+        # between them — without this we'd silently use whichever corpus comes first in track.corpora.
+        track_corpora_names = [corpus.name for corpus in self.track.corpora]
+        corpora_names = self._params.get("corpora", track_corpora_names)
+        if isinstance(corpora_names, str):
+            corpora_names = [corpora_names]
         return [
             (corpus, doc)
             for corpus in self.track.corpora
+            if corpus.name in corpora_names
             for doc in corpus.documents
             if doc.source_format == track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF
         ]
@@ -771,13 +784,28 @@ class OtlpParamSource(ParamSource):
         copy._cursor = 0
         return copy
 
+    def _total_records(self):
+        """
+        Source of truth for partitioning: count records in the .pb file directly. The track's
+        document-count is only used as a fallback (e.g. when the .pb doesn't exist yet, such as
+        during initial track parsing — corpora preparation comes later). Trusting the track value
+        unconditionally is a footgun: if it doesn't match the actual .pb, most workers either get
+        empty partitions or seek past EOF and the benchmark silently finishes after only one
+        client does any work.
+        """
+        if not hasattr(self, "_cached_total_records"):
+            pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file)
+            actual = pb_file.count_records()
+            self._cached_total_records = actual if actual is not None else self._doc.number_of_documents
+        return self._cached_total_records
+
     def size(self):
         """
         Return the partition size so Rally treats this as a finite (non-infinite) source.
         Without this, the base class returns None → infinite=True → Rally defaults
         iterations=1 and each worker runs exactly one operation.
         """
-        total_records = self._doc.number_of_documents
+        total_records = self._total_records()
         if total_records <= 0:
             return None
         if self._total_partitions > 1:
@@ -787,9 +815,30 @@ class OtlpParamSource(ParamSource):
             return end_record - start_record
         return total_records
 
+    @property
+    def percent_completed(self):
+        """
+        Fraction of this partition's records that have been yielded so far.
+
+        Rally pulls this per-client and averages across all clients to render the [N% done] bar.
+        Without this property the bar stays stuck at 0% because the loop control falls into the
+        ``infinite`` branch (we don't set a time_period/iterations explicitly — the param source
+        itself terminates the task by raising StopIteration in non-looped mode).
+
+        Returns ``None`` in looped mode because the cursor cycles back to 0 indefinitely, so a
+        cursor-based percentage is meaningless. The schedule's time_period / iterations bounds
+        progress instead in that case.
+        """
+        if self.looped:
+            return None
+        partition_size = self.size()
+        if not partition_size:
+            return None
+        return min(self._cursor / partition_size, 1.0)
+
     def _load_records(self):
         pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file)
-        total_records = self._doc.number_of_documents
+        total_records = self._total_records()
 
         if total_records > 0 and self._total_partitions > 1:
             records_per_partition = total_records / self._total_partitions
