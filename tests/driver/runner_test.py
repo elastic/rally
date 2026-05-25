@@ -7952,6 +7952,103 @@ class TestComposite:
         es.open_point_in_time.assert_awaited_once_with(index="test-index", params=None, keep_alive="1m")
         es.close_point_in_time.assert_awaited_once_with(body={"id": "pit-id"}, params={}, headers=None)
 
+    @pytest.mark.asyncio
+    async def test_parallel_streams_dependent_timing_equals_longest_stream(self):
+        """Two streams each holding one search run concurrently: the effective total is max, not sum."""
+
+        class FixedRequestContext:
+            def __enter__(self):
+                self.request_start = 0.0
+                self.request_end = 0.1
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        search_response = io.BytesIO(json.dumps({"hits": {"total": {"value": 0, "relation": "eq"}, "hits": []}}).encode())
+        es = mock.Mock()
+        es.options.return_value = es
+        es.new_request_context = mock.Mock(side_effect=FixedRequestContext)
+        es.perform_request = mock.AsyncMock(return_value=search_response)
+
+        params = {
+            "requests": [
+                {
+                    "stream": [
+                        {"operation-type": "search", "name": "search-1", "index": "test", "body": {"query": {"match_all": {}}}},
+                    ]
+                },
+                {
+                    "stream": [
+                        {"operation-type": "search", "name": "search-2", "index": "test", "body": {"query": {"match_all": {}}}},
+                    ]
+                },
+            ]
+        }
+
+        r = runner.Composite()
+        response = await r(es, params)
+
+        timings = response["dependent_timing"]
+        assert len(timings) == 2
+        names = {t["dependent_timing"]["operation"] for t in timings}
+        assert names == {"search-1", "search-2"}
+        service_times = [t["dependent_timing"]["service_time"] for t in timings]
+        assert all(st == pytest.approx(0.1) for st in service_times)
+        # Streams ran concurrently: effective total = max(individual times), not sum.
+        # max(0.1, 0.1) = 0.1  vs  sum(0.1, 0.1) = 0.2
+        assert max(service_times) == pytest.approx(0.1)
+        assert sum(service_times) == pytest.approx(0.2)
+
+    @pytest.mark.asyncio
+    async def test_single_stream_sequential_searches_dependent_timing_equals_sum(self):
+        """One stream holding two searches runs them sequentially: the effective total is the sum, not the max."""
+
+        call_count = [0]
+        service_time_per_call = [0.1, 0.3]
+
+        class CountedRequestContext:
+            def __enter__(self):
+                idx = call_count[0]
+                call_count[0] += 1
+                self.request_start = 0.0
+                self.request_end = service_time_per_call[idx]
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        search_response = io.BytesIO(json.dumps({"hits": {"total": {"value": 0, "relation": "eq"}, "hits": []}}).encode())
+        es = mock.Mock()
+        es.options.return_value = es
+        es.new_request_context = mock.Mock(side_effect=CountedRequestContext)
+        es.perform_request = mock.AsyncMock(return_value=search_response)
+
+        params = {
+            "requests": [
+                {
+                    "stream": [
+                        {"operation-type": "search", "name": "search-1", "index": "test", "body": {"query": {"match_all": {}}}},
+                        {"operation-type": "search", "name": "search-2", "index": "test", "body": {"query": {"match_all": {}}}},
+                    ]
+                }
+            ]
+        }
+
+        r = runner.Composite()
+        response = await r(es, params)
+
+        timings = response["dependent_timing"]
+        assert len(timings) == 2
+        by_name = {t["dependent_timing"]["operation"]: t["dependent_timing"]["service_time"] for t in timings}
+        assert set(by_name.keys()) == {"search-1", "search-2"}
+        assert by_name["search-1"] == pytest.approx(0.1)
+        assert by_name["search-2"] == pytest.approx(0.3)
+        # Searches ran sequentially: effective total = sum(individual times), not max.
+        # sum(0.1, 0.3) = 0.4  vs  max(0.1, 0.3) = 0.3
+        assert sum(by_name.values()) == pytest.approx(0.4)
+        assert max(by_name.values()) == pytest.approx(0.3)
+
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_limits_connections(self, es):
