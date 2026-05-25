@@ -774,7 +774,8 @@ class DocumentSetPreparator:
 
         Strategy:
         1. If a valid .pb file already exists, nothing to do.
-        2. Try downloading the .pb from the corpus base URL (avoids downloading the JSON source).
+        2. Try downloading a compressed .pb (using the same compression as the JSON corpus, if any),
+           or the uncompressed .pb directly. Either avoids downloading the much larger JSON source.
         3. Download and decompress the JSON source, then convert it to .pb locally.
 
         :param document_set: A document set with source_format == SOURCE_FORMAT_OTLP_PROTOBUF.
@@ -788,15 +789,11 @@ class DocumentSetPreparator:
         if pb_file.is_valid():
             return
 
-        # 2. Try downloading .pb directly — avoids downloading the larger JSON source
-        if document_set.base_url:
-            pb_path = doc_path + ".pb"
-            try:
-                self.downloader.download(document_set.base_url, pb_path)
-                if pb_file.is_valid():
-                    return
-            except exceptions.DataError:
-                pass  # .pb not available remotely, fall through
+        # 2. Try downloading .pb directly — avoids downloading the larger JSON source.
+        # Prefer the compressed variant (matching the JSON corpus compression) since .pb files
+        # can be tens of GB and zstd-compressed protobuf is typically 2–4× smaller.
+        if document_set.base_url and self._try_download_pb(document_set, doc_path, pb_file):
+            return
 
         # 3. Ensure JSON source is available
         while True:
@@ -830,6 +827,42 @@ class DocumentSetPreparator:
 
         # 4. Convert JSON to .pb
         pb_file.create()
+
+    def _try_download_pb(self, document_set, doc_path, pb_file) -> bool:
+        """
+        Try to fetch a pre-built .pb file from the corpus base URL. If the JSON corpus is
+        compressed (document_archive ends in .zst/.gz/.bz2/etc.), try the matching .pb.{ext} first
+        and decompress on the fly; otherwise try the uncompressed .pb directly.
+
+        :return: True if a valid .pb is now on disk, False if nothing was downloaded.
+        """
+        pb_path = doc_path + ".pb"
+
+        # try compressed first if the JSON corpus uses an archive
+        if document_set.has_compressed_corpus():
+            _, archive_ext = io.splitext(document_set.document_archive)
+            if archive_ext and archive_ext in io.SUPPORTED_ARCHIVE_FORMATS:
+                pb_archive_path = pb_path + archive_ext
+                try:
+                    self.downloader.download(document_set.base_url, pb_archive_path)
+                except exceptions.DataError:
+                    LOG.debug("Compressed .pb%s not available remotely, will try uncompressed .pb.", archive_ext)
+                else:
+                    self.decompressor.decompress(pb_archive_path, pb_path, uncompressed_size=None)
+                    # archive no longer needed once decompressed
+                    try:
+                        os.remove(pb_archive_path)
+                    except OSError:
+                        pass
+                    if pb_file.is_valid():
+                        return True
+
+        # uncompressed .pb fallback
+        try:
+            self.downloader.download(document_set.base_url, pb_path)
+        except exceptions.DataError:
+            return False
+        return pb_file.is_valid()
 
     def prepare_bundled_otlp_document_set(self, document_set, data_root):
         """
