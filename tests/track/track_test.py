@@ -230,6 +230,7 @@ class TestDocumentCorpus:
         )
         assert b.union(a) == a.union(b)
         assert len(a.union(b).documents) == 2
+        assert [d.target_index for d in a.union(b).documents] == ["logs-01", "logs-02"]
 
     def test_cannot_union_mixed_document_corpora_by_name(self):
         a = track.DocumentCorpus(
