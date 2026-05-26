@@ -2893,19 +2893,26 @@ class Composite(Runner):
                         runner = RequestTiming(runner_for(op_type))
                     else:
                         runner = runner_for(op_type)
-                    async with connection_limit:
+                    if op_type == "composite":
+                        nested_item = dict(item)
+                        nested_item["_rally_connection_limit"] = connection_limit
                         async with runner:
-                            response = await runner({"default": es}, item)
-                            if response:
-                                # TODO: support calculating dependent's throughput
-                                # drop weight and unit metadata but keep the rest
-                                response.pop("weight")
-                                response.pop("unit")
-                                timing = response.get("dependent_timing")
-                                if timing:
-                                    timings.append(response)
-                            else:
-                                timings.append(None)
+                            response = await runner({"default": es}, nested_item)
+                    else:
+                        async with connection_limit:
+                            async with runner:
+                                response = await runner({"default": es}, item)
+
+                    if response:
+                        # TODO: support calculating dependent's throughput
+                        # drop weight and unit metadata but keep the rest
+                        response.pop("weight")
+                        response.pop("unit")
+                        timing = response.get("dependent_timing")
+                        if timing:
+                            timings.append(response)
+                    else:
+                        timings.append(None)
 
                 else:
                     raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
@@ -2925,12 +2932,15 @@ class Composite(Runner):
 
     async def __call__(self, es, params):
         requests = mandatory(params, "requests", self)
-        max_connections = params.get("max-connections", sys.maxsize)
+        connection_limit = params.get("_rally_connection_limit")
+        if connection_limit is None:
+            max_connections = params.get("max-connections", sys.maxsize)
+            connection_limit = asyncio.BoundedSemaphore(max_connections)
         if CompositeContext.has_active_context():
-            response = await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+            response = await self.run_stream(es, requests, connection_limit)
         else:
             async with CompositeContext():
-                response = await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+                response = await self.run_stream(es, requests, connection_limit)
         return {
             "weight": 1,
             "unit": "ops",

@@ -8113,6 +8113,55 @@ class TestComposite:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
+    async def test_nested_composite_reuses_parent_connection_limit(self, es):
+        class FixedRequestContext:
+            def __enter__(self):
+                self.request_start = 1.0
+                self.request_end = 1.1
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        in_flight = 0
+        max_in_flight = 0
+        lock = asyncio.Lock()
+
+        async def perform_request(*args, **kwargs):
+            nonlocal in_flight, max_in_flight
+            async with lock:
+                in_flight += 1
+                max_in_flight = max(max_in_flight, in_flight)
+            await asyncio.sleep(0.1)
+            async with lock:
+                in_flight -= 1
+            return io.BytesIO(json.dumps({"hits": {"total": {"value": 0, "relation": "eq"}, "hits": []}}).encode())
+
+        es.options.return_value = es
+        es.new_request_context = mock.Mock(side_effect=FixedRequestContext)
+        es.perform_request = mock.AsyncMock(side_effect=perform_request)
+
+        params = {
+            "max-connections": 2,
+            "requests": [
+                {
+                    "operation-type": "composite",
+                    "requests": [
+                        {"stream": [{"operation-type": "search", "index": "test", "body": {"query": {"match_all": {}}}}]},
+                        {"stream": [{"operation-type": "search", "index": "test", "body": {"query": {"match_all": {}}}}]},
+                        {"stream": [{"operation-type": "search", "index": "test", "body": {"query": {"match_all": {}}}}]},
+                    ],
+                }
+            ],
+        }
+
+        r = runner.Composite()
+        await r(es, params)
+
+        assert max_in_flight == 2
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
     async def test_rejects_invalid_stream(self, es):
         # params contains a "streams" property (plural) but it should be "stream" (singular)
         params = {
