@@ -396,6 +396,24 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         pb.create()
         assert pb.count_records() == len(lines)
 
+    def test_count_records_generates_offset_index_when_missing(self, tmp_path):
+        # If the .pb was downloaded without its offset, count_records should regenerate the offset
+        # on the fly so subsequent runs/partitions can seek efficiently.
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL + 17)
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create()
+        # delete the offset file as if only the .pb was downloaded
+        os.remove(pb.pb_path + ".offset")
+
+        # call count_records — it should produce an offset file as a side effect
+        assert pb.count_records() == len(lines)
+        assert os.path.exists(pb.pb_path + ".offset")
+
+        # confirm the generated offset file is valid: subsequent reads partition correctly
+        records_via_offset = list(pb.read_records(io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL, None))
+        assert len(records_via_offset) == 17
+
     def test_count_records_works_without_offset_index(self, tmp_path):
         lines = [self.SAMPLE_OTLP_JSON_LINE] * 50
         json_path = self._write_json_lines(tmp_path, lines)

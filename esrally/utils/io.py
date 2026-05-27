@@ -948,14 +948,19 @@ class OtlpProtobufFile:
         (entries every OFFSET_SAMPLING_INTERVAL records) to jump near the end, then scans only the
         final partial chunk by reading length prefixes — so this is fast even for multi-GB files.
 
+        Side effect: if no .pb.offset is present, generates one while scanning the file. The
+        offset file lets subsequent workers (and future runs) seek directly to their partition's
+        start record instead of walking from byte 0 — a big win for high-index partitions on
+        multi-GB corpora.
+
         Returns ``None`` if the .pb file is missing.
         """
         if not os.path.exists(self.pb_path):
             return None
-        # find the last sampled offset (record_num, byte_offset)
+        offset_path = self.pb_path + ".offset"
+        # if an offset file exists, use it to skip to the last sampled position before scanning the tail
         last_record = 0
         last_byte = 0
-        offset_path = self.pb_path + ".offset"
         if os.path.exists(offset_path):
             try:
                 with open(offset_path, encoding="utf-8") as f:
@@ -972,21 +977,52 @@ class OtlpProtobufFile:
                             last_byte = byte_off
             except OSError:
                 pass
-        # scan from the last sampled position to the end, counting length prefixes
+
+        # If no offset file exists, generate one as we scan. Write to a temp file and atomically
+        # rename at the end so concurrent workers don't see a half-written file. If another worker
+        # beat us to the rename, that's fine — both versions of the file are byte-identical.
+        offset_tmp_path: str | None = None
+        offset_out: Optional[IO[str]] = None
+        if not os.path.exists(offset_path):
+            offset_tmp_path = f"{offset_path}.tmp.{os.getpid()}"
+            offset_out = open(offset_tmp_path, "w", encoding="utf-8", buffering=64 * 1024)
+            logging.getLogger(__name__).info("Generating %s while scanning .pb (one-time cost per machine).", offset_path)
+
         count = last_record
         try:
             with open(self.pb_path, "rb") as f:
                 f.seek(last_byte)
+                byte_offset = last_byte
                 while True:
+                    if offset_out is not None and count % self.OFFSET_SAMPLING_INTERVAL == 0:
+                        offset_out.write(f"{count};{byte_offset}\n")
                     header = f.read(4)
                     if len(header) < 4:
                         break
                     (length,) = struct.unpack(">I", header)
                     # skip the payload without reading it into memory
                     f.seek(length, 1)
+                    byte_offset += 4 + length
                     count += 1
         except OSError:
+            if offset_out is not None and offset_tmp_path is not None:
+                offset_out.close()
+                try:
+                    os.remove(offset_tmp_path)
+                except OSError:
+                    pass
             return None
+
+        if offset_out is not None and offset_tmp_path is not None:
+            offset_out.close()
+            try:
+                os.replace(offset_tmp_path, offset_path)
+            except OSError:
+                # best-effort — if we can't rename (e.g. another worker beat us), clean up our temp
+                try:
+                    os.remove(offset_tmp_path)
+                except OSError:
+                    pass
         return count
 
     def _find_offset(self, target_record: int) -> tuple[int, int]:
@@ -1014,6 +1050,13 @@ class OtlpProtobufFile:
 
     @classmethod
     def for_source_file(cls, source_json_path: str) -> "OtlpProtobufFile":
+        if not source_json_path:
+            raise ValueError(
+                "OtlpProtobufFile.for_source_file got an empty/None source path. "
+                "This usually means set_absolute_data_path could not resolve the corpus path: "
+                "neither the source .json nor the pre-built .pb was found in any data root. "
+                "Check that prepare-track ran successfully and the .pb is on disk where Rally expects it."
+            )
         return cls(source_json_path, f"{source_json_path}.pb")
 
 

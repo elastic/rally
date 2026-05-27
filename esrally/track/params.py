@@ -731,9 +731,12 @@ class OtlpParamSource(ParamSource):
         super().__init__(track_obj, params, **kwargs)
         self._partition_index = 0
         self._total_partitions = 1
-        # records loaded into memory after partition()
-        self._records: list[bytes] | None = None
+        # Streaming state — generators can't be pickled, so they're created lazily on the first
+        # params() call inside the worker process (after Rally has done its actor pickling).
+        # The cursor and end_record bounds let us track progress without materializing records.
+        self._record_iter = None
         self._cursor = 0
+        self._partition_size: int | None = None
         self.looped = params.get("looped", False)
 
         otlp_docs = self._find_otlp_docs()
@@ -780,8 +783,9 @@ class OtlpParamSource(ParamSource):
         copy.__dict__.update(self.__dict__)
         copy._partition_index = partition_index
         copy._total_partitions = total_partitions
-        copy._records = None  # loaded lazily on first params() call
+        copy._record_iter = None  # streaming iterator created lazily on first params() call
         copy._cursor = 0
+        copy._partition_size = None
         return copy
 
     def _total_records(self):
@@ -836,7 +840,21 @@ class OtlpParamSource(ParamSource):
             return None
         return min(self._cursor / partition_size, 1.0)
 
-    def _load_records(self):
+    def _open_iter(self):
+        """
+        Create a new streaming iterator over this partition's records. We do NOT materialize them
+        into memory — for large corpora (e.g. 1 MB protobuf records, 6k records per partition) that
+        would consume 6+ GB per worker. The iterator holds an open file handle and yields one
+        record at a time; the file handle closes when the generator completes or is GC'd.
+        """
+        if not self._doc.document_file:
+            raise exceptions.SystemSetupError(
+                f"OTLP corpus document_file is unset for [{self._doc}]. This usually means neither the "
+                "source .json nor the pre-built .pb was found in any data root after prepare-track. "
+                "Check that the prepare-track phase completed successfully (look for the "
+                "'Successfully downloaded binary protobuf file from ...' log line) and that the "
+                "data directory is the same as Rally is reading from."
+            )
         pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file)
         total_records = self._total_records()
 
@@ -848,35 +866,36 @@ class OtlpParamSource(ParamSource):
             start_record = 0
             end_record = None
 
-        # materialize records for this partition into memory (sequential single-pass read)
-        self._records = list(pb_file.read_records(start_record, end_record))
+        # cache the partition size so percent_completed/size don't have to recompute
+        if self._partition_size is None:
+            self._partition_size = (end_record - start_record) if end_record is not None else total_records
 
         logger = logging.getLogger(__name__)
         logger.info(
-            "OtlpParamSource partition %d/%d: total_records=%s start=%d end=%s loaded=%d (%d bytes)",
+            "OtlpParamSource partition %d/%d: total_records=%s start=%d end=%s (streaming, not preloading)",
             self._partition_index,
             self._total_partitions,
             total_records,
             start_record,
             end_record,
-            len(self._records),
-            sum(len(r) for r in self._records),
         )
+        return pb_file.read_records(start_record, end_record)
 
     def params(self):
-        if self._records is None:
-            self._load_records()
+        if self._record_iter is None:
+            self._record_iter = self._open_iter()
 
-        if not self._records:
-            raise StopIteration()
+        try:
+            payload = next(self._record_iter)
+        except StopIteration:
+            if not self.looped:
+                raise
+            # restart the iterator from the start of this partition. If even the fresh iterator
+            # is empty (partition has no records at all), the StopIteration here propagates.
+            self._record_iter = self._open_iter()
+            self._cursor = 0
+            payload = next(self._record_iter)
 
-        if self._cursor >= len(self._records):
-            if self.looped:
-                self._cursor = 0
-            else:
-                raise StopIteration()
-
-        payload = self._records[self._cursor]
         self._cursor += 1
 
         result = {"body": payload}
