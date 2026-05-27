@@ -1612,6 +1612,40 @@ class TestTrackPath:
         assert t.corpora[0].documents[0].document_file == "/data/unittest/docs/documents.json"
         assert t.corpora[0].documents[0].document_archive == "/data/unittest/docs/documents.json.bz2"
 
+    @mock.patch("os.path.exists")
+    def test_otlp_resolves_via_pb_when_json_missing(self, path_exists):
+        # OTLP corpora are special: the hot path only needs the .pb (and .pb.offset). If we
+        # downloaded just the .pb (no source JSON), document_file would otherwise stay None and
+        # the param source would later try to open "None.pb".
+        def fake_exists(path: str) -> bool:
+            # JSON doesn't exist locally; only the .pb does
+            return path.endswith(".pb")
+
+        path_exists.side_effect = fake_exists
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
+
+        t = track.Track(
+            name="u",
+            corpora=[
+                track.DocumentCorpus(
+                    "otlp",
+                    documents=[
+                        track.Documents(
+                            source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                            document_file="metrics.otlp.json",
+                        )
+                    ],
+                )
+            ],
+        )
+
+        loader.set_absolute_data_path(cfg, t)
+
+        # document_file points to where the JSON would be — so the derived .pb path is correct
+        assert t.corpora[0].documents[0].document_file == "/data/otlp/metrics.otlp.json"
+
 
 class TestTrackFilter:
     def filter(self, track_specification, *, include_tasks=None, exclude_tasks=None):

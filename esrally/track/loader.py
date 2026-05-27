@@ -340,6 +340,13 @@ def set_absolute_data_path(cfg: types.Config, t):
                 return p
         return None
 
+    def first_existing_with_suffix(root_dirs, f, suffix):
+        for root_dir in root_dirs:
+            candidate = os.path.join(root_dir, f)
+            if os.path.exists(candidate + suffix):
+                return candidate
+        return None
+
     for corpus in t.corpora:
         data_root = data_dir(cfg, t.name, corpus.name)
         for document_set in corpus.documents:
@@ -347,7 +354,14 @@ def set_absolute_data_path(cfg: types.Config, t):
             if document_set.document_archive:
                 document_set.document_archive = first_existing(data_root, document_set.document_archive)
             if document_set.document_file:
-                document_set.document_file = first_existing(data_root, document_set.document_file)
+                resolved = first_existing(data_root, document_set.document_file)
+                # For OTLP corpora, the hot path reads the .pb (and .pb.offset) — the source JSON is
+                # only needed during prepare-track when generating the .pb locally. If only the .pb
+                # has been downloaded, the JSON path won't exist; resolve document_file to the path
+                # the JSON *would* have so the derived ``.pb`` path is correct.
+                if resolved is None and document_set.is_otlp:
+                    resolved = first_existing_with_suffix(data_root, document_set.document_file, ".pb")
+                document_set.document_file = resolved
 
 
 def is_simple_track_mode(cfg: types.Config):
