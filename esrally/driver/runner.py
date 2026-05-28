@@ -860,11 +860,15 @@ class OtlpIngest(Runner):
           errors). Defaults to 5.
         * ``retry-wait-period``: Base seconds for exponential backoff with full jitter between
           retries. Defaults to 0.5 (so attempts sleep up to 0.5, 1, 2, 4, 8 ... seconds, capped at 30s).
+        * ``gzip``: When True, send the body with ``Content-Encoding: gzip``. The body bytes are
+          expected to already be a gzip stream (Rally pre-compresses each record at prepare-track
+          time so the hot path does no compression). Defaults to False.
         """
         body = mandatory(params, "body", self)
         path = params.get("endpoint", self.DEFAULT_ENDPOINT)
         max_retries = int(params.get("retries-on-error", 5))
         retry_wait_base = float(params.get("retry-wait-period", 0.5))
+        gzip_body = bool(params.get("gzip", False))
 
         # max_retries=0 on the transport — our outer loop handles retries with proper backoff.
         # Without this the transport would fire its own 4 fast back-to-back retries on 429 before
@@ -885,6 +889,12 @@ class OtlpIngest(Runner):
         import elasticsearch
         from elasticsearch import AsyncElasticsearch
 
+        headers = {"Content-Type": self._PROTOBUF_MIMETYPE}
+        if gzip_body:
+            # Body bytes are already a gzip stream (pre-compressed at prepare-track time).
+            # Just tell ES so it decompresses before parsing the protobuf.
+            headers["Content-Encoding"] = "gzip"
+
         max_attempts = max_retries + 1
         last_status: Optional[int] = None
         last_error_type = "rejected"
@@ -897,7 +907,7 @@ class OtlpIngest(Runner):
                     es,
                     method="POST",
                     path=path,
-                    headers={"Content-Type": self._PROTOBUF_MIMETYPE},
+                    headers=headers,
                     body=body,
                 )
                 return {

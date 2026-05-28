@@ -8932,5 +8932,32 @@ class TestOtlpIngestRunner:
         # full-jitter: random.uniform(0, base*2^0) = uniform(0, 10)
         assert 0 <= captured[0] <= 10
 
+    @pytest.mark.asyncio
+    async def test_gzip_param_sets_content_encoding_header(self):
+        es = self._make_es_mock()
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ) as pr:
+            await runner.OtlpIngest()(es, {"body": b"\x1f\x8b...gzipped...", "gzip": True})
+
+        assert pr.await_args.kwargs["headers"] == {
+            "Content-Type": "application/x-protobuf",
+            "Content-Encoding": "gzip",
+        }
+
+    @pytest.mark.asyncio
+    async def test_gzip_false_omits_content_encoding(self):
+        es = self._make_es_mock()
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ) as pr:
+            await runner.OtlpIngest()(es, {"body": b"\x0a", "gzip": False})
+
+        assert pr.await_args.kwargs["headers"] == {"Content-Type": "application/x-protobuf"}
+
     def test_repr(self):
         assert repr(runner.OtlpIngest()) == "otlp-ingest"

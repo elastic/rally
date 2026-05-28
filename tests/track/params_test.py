@@ -3710,6 +3710,43 @@ class TestOtlpParamSource:
             p.params()
         assert p.percent_completed is None
 
+    def test_gzip_param_defaults_to_false_and_uses_pb(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        assert source.gzip is False
+        p = source.partition(0, 1)
+        result = p.params()
+        assert result["gzip"] is False
+
+    def test_gzip_param_true_yields_gzip_in_params(self, tmp_path):
+        # build a .pbgz alongside the default .pb so partition can read it
+        json_path = tmp_path / "metrics.otlp.json"
+        json_path.write_text("\n".join([self._SAMPLE_OTLP_JSON_LINE] * 3) + "\n")
+        io.OtlpProtobufFile.for_source_file(str(json_path), gzip_records=True).create()
+        corpus = track.DocumentCorpus(
+            name="otlp-corpus",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                    number_of_documents=3,
+                    document_file=str(json_path),
+                )
+            ],
+        )
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={"gzip": True},
+        )
+        assert source.gzip is True
+        p = source.partition(0, 1)
+        result = p.params()
+        assert result["gzip"] is True
+        # body should be gzip-magic-prefixed (each record is a gzip stream)
+        assert result["body"][:2] == b"\x1f\x8b"
+
     def test_params_propagates_request_timeout(self, tmp_path):
         corpus = self._build_corpus(tmp_path, num_records=1)
         source = params.OtlpParamSource(

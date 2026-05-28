@@ -707,7 +707,7 @@ def remove_file_offset_table(data_file_path: str) -> None:
     FileOffsetTable.remove(data_file_path)
 
 
-def _convert_lines_batch(lines: list[str]) -> tuple[bytes, int]:
+def _convert_lines_batch(args: tuple[list[str], bool]) -> tuple[bytes, int]:
     """
     Worker function for parallel OTLP JSON → binary protobuf conversion.
 
@@ -717,8 +717,11 @@ def _convert_lines_batch(lines: list[str]) -> tuple[bytes, int]:
     in source order.
 
     Format of returned bytes: a concatenation of length-prefixed records, each ``4 bytes big-endian
-    length || payload``. This is exactly the on-disk format the main process appends to ``.pb``.
+    length || payload``. When ``gzip_records`` is True, each payload is gzip-compressed independently
+    (so the length prefix is the compressed size). This is exactly the on-disk format the main
+    process appends to the corpus file.
     """
+    lines, gzip_records = args
     # pylint: disable=import-outside-toplevel,no-name-in-module
     from google.protobuf.json_format import Parse
     from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import (
@@ -729,6 +732,9 @@ def _convert_lines_batch(lines: list[str]) -> tuple[bytes, int]:
     for line in lines:
         msg = Parse(line, ExportMetricsServiceRequest())
         payload = msg.SerializeToString()
+        if gzip_records:
+            # mtime=0 keeps the output byte-deterministic across runs (no timestamp in the gzip header).
+            payload = gzip.compress(payload, compresslevel=6, mtime=0)
         parts.append(struct.pack(">I", len(payload)))
         parts.append(payload)
     return b"".join(parts), len(lines)
@@ -748,9 +754,14 @@ class OtlpProtobufFile:
 
     OFFSET_SAMPLING_INTERVAL = 1000
 
-    def __init__(self, source_json_path: str, pb_path: str):
+    def __init__(self, source_json_path: str, pb_path: str, gzip_records: bool = False):
         self.source_json_path = source_json_path
         self.pb_path = pb_path
+        # When True, individual records in the file are stored gzip-compressed. The length prefix
+        # is the compressed size. ``read_records`` yields the raw (still-compressed) payload bytes
+        # — Rally ships them verbatim to ES with ``Content-Encoding: gzip``, avoiding any
+        # decompress/recompress on the hot path.
+        self.gzip_records = gzip_records
 
     def exists(self) -> bool:
         return os.path.exists(self.pb_path) and os.path.getsize(self.pb_path) > 0
@@ -873,7 +884,7 @@ class OtlpProtobufFile:
 
             # prime the pipeline with up to max_in_flight batches
             for batch in batch_iter:
-                in_flight.append(pool.submit(_convert_lines_batch, batch))
+                in_flight.append(pool.submit(_convert_lines_batch, (batch, self.gzip_records)))
                 if len(in_flight) >= max_in_flight:
                     break
 
@@ -894,7 +905,7 @@ class OtlpProtobufFile:
                     )
                 # keep the pipeline full by submitting the next batch (if any)
                 try:
-                    in_flight.append(pool.submit(_convert_lines_batch, next(batch_iter)))
+                    in_flight.append(pool.submit(_convert_lines_batch, (next(batch_iter), self.gzip_records)))
                 except StopIteration:
                     pass
 
@@ -1049,7 +1060,7 @@ class OtlpProtobufFile:
         return prior_byte, prior_remaining
 
     @classmethod
-    def for_source_file(cls, source_json_path: str) -> "OtlpProtobufFile":
+    def for_source_file(cls, source_json_path: str, gzip_records: bool = False) -> "OtlpProtobufFile":
         if not source_json_path:
             raise ValueError(
                 "OtlpProtobufFile.for_source_file got an empty/None source path. "
@@ -1057,7 +1068,8 @@ class OtlpProtobufFile:
                 "neither the source .json nor the pre-built .pb was found in any data root. "
                 "Check that prepare-track ran successfully and the .pb is on disk where Rally expects it."
             )
-        return cls(source_json_path, f"{source_json_path}.pb")
+        ext = ".pbgz" if gzip_records else ".pb"
+        return cls(source_json_path, f"{source_json_path}{ext}", gzip_records=gzip_records)
 
 
 def prepare_otlp_protobuf_file(source_json_path: str, corpus_base_url: str | None) -> int | None:
