@@ -1052,6 +1052,20 @@ class SamplePostprocessor:
         self.throughput_calculator = ThroughputCalculator()
         self.downsample_factor = downsample_factor
 
+    def put_sample(self, sample, name, unit, meta_data):
+        self.metrics_store.put_value_cluster_level(
+            name=name,
+            value=convert.seconds_to_ms(getattr(sample, name)),
+            unit=unit,
+            task=sample.task.name,
+            operation=sample.operation_name,
+            operation_type=sample.operation_type,
+            sample_type=sample.sample_type,
+            absolute_time=sample.absolute_time,
+            relative_time=sample.relative_time,
+            meta_data=meta_data,
+        )
+
     def __call__(self, raw_samples):
         if len(raw_samples) == 0:
             return
@@ -1070,58 +1084,31 @@ class SamplePostprocessor:
                     sample.request_meta_data,
                     client_id_meta_data,
                 )
-
-                self.metrics_store.put_value_cluster_level(
-                    name="latency",
-                    value=convert.seconds_to_ms(sample.latency),
-                    unit="ms",
-                    task=sample.task.name,
-                    operation=sample.operation_name,
-                    operation_type=sample.operation_type,
-                    sample_type=sample.sample_type,
-                    absolute_time=sample.absolute_time,
-                    relative_time=sample.relative_time,
-                    meta_data=meta_data,
+                self.put_sample(
+                    sample,
+                    "latency",
+                    "ms",
+                    meta_data,
                 )
-
-                self.metrics_store.put_value_cluster_level(
-                    name="service_time",
-                    value=convert.seconds_to_ms(sample.service_time),
-                    unit="ms",
-                    task=sample.task.name,
-                    operation=sample.operation_name,
-                    operation_type=sample.operation_type,
-                    sample_type=sample.sample_type,
-                    absolute_time=sample.absolute_time,
-                    relative_time=sample.relative_time,
-                    meta_data=meta_data,
+                self.put_sample(
+                    sample,
+                    "service_time",
+                    "ms",
+                    meta_data,
                 )
-
-                self.metrics_store.put_value_cluster_level(
-                    name="processing_time",
-                    value=convert.seconds_to_ms(sample.processing_time),
-                    unit="ms",
-                    task=sample.task.name,
-                    operation=sample.operation_name,
-                    operation_type=sample.operation_type,
-                    sample_type=sample.sample_type,
-                    absolute_time=sample.absolute_time,
-                    relative_time=sample.relative_time,
-                    meta_data=meta_data,
+                self.put_sample(
+                    sample,
+                    "processing_time",
+                    "ms",
+                    meta_data,
                 )
 
                 for timing in sample.dependent_timings:
-                    self.metrics_store.put_value_cluster_level(
-                        name="service_time",
-                        value=convert.seconds_to_ms(timing.service_time),
-                        unit="ms",
-                        task=timing.task.name,
-                        operation=timing.operation_name,
-                        operation_type=timing.operation_type,
-                        sample_type=timing.sample_type,
-                        absolute_time=timing.absolute_time,
-                        relative_time=timing.relative_time,
-                        meta_data=self.merge(timing.request_meta_data, client_id_meta_data),
+                    self.put_sample(
+                        timing,
+                        "service_time",
+                        "ms",
+                        self.merge(timing.request_meta_data, client_id_meta_data),
                     )
 
         end = time.perf_counter()
@@ -1578,28 +1565,45 @@ class Sample:
     def dependent_timings(self):
         if self._dependent_timing:
             for t in self._dependent_timing:
-                timing = t.pop("dependent_timing")
-                meta_data = self._merge(self.request_meta_data, t)
-                yield Sample(
-                    self.client_id,
-                    timing["absolute_time"],
-                    timing["request_start"],
-                    self.task_start,
-                    self.task,
-                    self.sample_type,
-                    meta_data,
-                    0,
-                    timing["service_time"],
-                    0,
-                    0,
-                    self.total_ops,
-                    self.total_ops_unit,
-                    self.time_period,
-                    self.percent_completed,
-                    None,
-                    timing["operation"],
-                    timing["operation-type"],
-                )
+                if t:
+                    yield from self._dependent_sample(t, self.request_meta_data)
+
+    def _dependent_sample(self, dependent_timing, meta_data):
+        """Recursively flatten dependent timings while accumulating parent-level metadata."""
+        if not isinstance(dependent_timing, dict):
+            return
+        timing = dependent_timing.get("dependent_timing")
+        current_meta_data = self._merge(meta_data, self._metadata_without_dependent_timing(dependent_timing))
+
+        if isinstance(timing, dict):
+            yield Sample(
+                self.client_id,
+                timing["absolute_time"],
+                timing["request_start"],
+                self.task_start,
+                self.task,
+                self.sample_type,
+                current_meta_data,
+                0,
+                timing["service_time"],
+                0,
+                0,
+                self.total_ops,
+                self.total_ops_unit,
+                self.time_period,
+                self.percent_completed,
+                None,
+                timing["operation"],
+                timing["operation-type"],
+            )
+        elif timing:
+            for sub_timing in timing:
+                if sub_timing:
+                    yield from self._dependent_sample(sub_timing, current_meta_data)
+
+    def _metadata_without_dependent_timing(self, dependent_timing):
+        """Extract metadata fields, excluding the nested dependent timing payload."""
+        return {k: v for k, v in dependent_timing.items() if k != "dependent_timing"}
 
     def __repr__(self, *args, **kwargs):
         return (
