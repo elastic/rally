@@ -641,7 +641,7 @@ class Driver:
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
 
-        es_default = es["default"]
+        es_default = es.get("default", next(iter(es.values()), None))
         all_client_options = self.config.opts("client", "options").all_client_options
         default_client_options = all_client_options.get("default", {})
 
@@ -676,7 +676,7 @@ class Driver:
         )
 
     def wait_for_rest_api(self, es):
-        es_default = es["default"]
+        es_default = es.get("default", next(iter(es.values()), None))
         self.logger.info("Checking if REST API is available.")
         if client.wait_for_rest_layer(es_default, max_attempts=40):
             self.logger.info("REST API is available.")
@@ -686,14 +686,18 @@ class Driver:
 
     def retrieve_cluster_info(self, es):
         try:
-            return es["default"].info()
+            es_default = es.get("default", next(iter(es.values()), None))
+            return es_default.info() if es_default else None
         except BaseException:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
     def retrieve_build_hash_from_nodes_info(self, es):
         try:
-            nodes_info = es["default"].nodes.info(filter_path="**.build_hash")
+            es_default = es.get("default", next(iter(es.values()), None))
+            if not es_default:
+                return None
+            nodes_info = es_default.nodes.info(filter_path="**.build_hash")
             nodes = nodes_info["nodes"]
             # assumption: build hash is the same across all the nodes
             first_node_id = next(iter(nodes))
@@ -726,7 +730,7 @@ class Driver:
         )
 
         es_clients = self.create_es_clients()
-        self.default_sync_es_client = es_clients["default"]
+        self.default_sync_es_client = es_clients.get("default", next(iter(es_clients.values()), None))
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
@@ -821,7 +825,10 @@ class Driver:
         if allocator.clients < 128:
             self.logger.debug("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
 
-        create_api_keys = self.config.opts("client", "options").all_client_options["default"].get("create_api_key_per_client", None)
+        all_client_options = self.config.opts("client", "options").all_client_options
+        create_api_keys = all_client_options.get("default", next(iter(all_client_options.values()), {})).get(
+            "create_api_key_per_client", None
+        )
         worker_assignments = calculate_worker_assignments(self.load_driver_hosts, allocator.clients)
         worker_id = 0
         for assignment in worker_assignments:
@@ -1118,8 +1125,9 @@ class SamplePostprocessor:
         end = time.perf_counter()
         self.logger.debug("Calculating throughput took [%f] seconds.", (end - start))
         start = end
-        for task, samples in aggregates.items():
-            meta_data = self.merge(self.track_meta_data, self.challenge_meta_data, task.operation.meta_data, task.meta_data)
+        for (task, cluster_name), samples in aggregates.items():
+            cluster_meta = {"cluster": cluster_name} if cluster_name is not None else {}
+            meta_data = self.merge(self.track_meta_data, self.challenge_meta_data, task.operation.meta_data, task.meta_data, cluster_meta)
             for absolute_time, relative_time, sample_type, throughput, throughput_unit in samples:
                 self.metrics_store.put_value_cluster_level(
                     name="throughput",
@@ -1687,9 +1695,10 @@ class ThroughputCalculator:
         """
 
         samples_per_task = {}
-        # first we group all samples by task (operation).
+        # Group samples by (task, cluster_name) so multi-cluster throughput is calculated per cluster.
         for sample in samples:
-            k = sample.task
+            cluster_name = sample.request_meta_data.get("cluster") if sample.request_meta_data else None
+            k = (sample.task, cluster_name)
             if k not in samples_per_task:
                 samples_per_task[k] = []
             samples_per_task[k].append(sample)
@@ -1698,12 +1707,11 @@ class ThroughputCalculator:
         # with open("raw_samples_new.csv", "a") as sample_log:
         # print("client_id,absolute_time,relative_time,operation,sample_type,total_ops,time_period", file=sample_log)
         for k, v in samples_per_task.items():
-            task = k
-            if task not in global_throughput:
-                global_throughput[task] = []
+            if k not in global_throughput:
+                global_throughput[k] = []
             # sort all samples by time
-            if task in self.task_stats:
-                samples = itertools.chain(v, self.task_stats[task].unprocessed)
+            if k in self.task_stats:
+                samples = itertools.chain(v, self.task_stats[k].unprocessed)
             else:
                 samples = v
             current_samples = sorted(samples, key=lambda s: s.absolute_time)
@@ -1712,24 +1720,24 @@ class ThroughputCalculator:
             # only transform the values into the expected structure.
             first_sample = current_samples[0]
             if first_sample.throughput is None:
-                task_throughput = self.calculate_task_throughput(task, current_samples, bucket_interval_secs)
+                task_throughput = self.calculate_task_throughput(k, current_samples, bucket_interval_secs)
             else:
                 task_throughput = self.map_task_throughput(current_samples)
-            global_throughput[task].extend(task_throughput)
+            global_throughput[k].extend(task_throughput)
 
         return global_throughput
 
-    def calculate_task_throughput(self, task, current_samples, bucket_interval_secs):
+    def calculate_task_throughput(self, task_key, current_samples, bucket_interval_secs):
         task_throughput = []
 
-        if task not in self.task_stats:
+        if task_key not in self.task_stats:
             first_sample = current_samples[0]
-            self.task_stats[task] = ThroughputCalculator.TaskStats(
+            self.task_stats[task_key] = ThroughputCalculator.TaskStats(
                 bucket_interval=bucket_interval_secs,
                 sample_type=first_sample.sample_type,
                 start_time=first_sample.absolute_time - first_sample.time_period,
             )
-        current = self.task_stats[task]
+        current = self.task_stats[task_key]
         count = current.total_count
         last_sample = None
         for sample in current_samples:
@@ -1845,47 +1853,104 @@ class AsyncIoAdapter:
             self.logger.info("Task assertions enabled")
         runner.enable_assertions(self.assertions_enabled)
 
+        all_hosts = self.cfg.opts("client", "hosts").all_hosts
+        client_options = self.cfg.opts("client", "options")
+        distribution_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
+        distribution_flavor = self.cfg.opts("mechanic", "distribution.flavor", mandatory=False)
+        # Resolve to dict so we can index by cluster name in multi-cluster mode
+        all_client_options = (
+            client_options.all_client_options
+            if hasattr(client_options, "all_client_options")
+            else {n: client_options[n] for n in all_hosts}
+        )
+
         clients = []
-        awaitables = []
-        # A parameter source should only be created once per task - it is partitioned later on per client.
-        params_per_task = {}
         for client_id, task_allocation in self.task_allocations:
-            task = task_allocation.task
-            if task not in params_per_task:
-                param_source = track.operation_parameters(self.track, task)
-                params_per_task[task] = param_source
-            schedule = schedule_for(task_allocation, params_per_task[task])
             es = es_clients(
                 client_id,
-                self.cfg.opts("client", "hosts").all_hosts,
-                self.cfg.opts("client", "options"),
-                self.cfg.opts("mechanic", "distribution.version", mandatory=False),
-                self.cfg.opts("mechanic", "distribution.flavor", mandatory=False),
+                all_hosts,
+                all_client_options,
+                distribution_version=distribution_version,
+                distribution_flavor=distribution_flavor,
             )
             clients.append(es)
-            async_executor = AsyncExecutor(
-                client_id, task, schedule, es, self.sampler, self.cancel, self.complete, task.error_behavior(self.on_error)
-            )
-            final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
-            awaitables.append(final_executor())
+
         task_names = [t.task.task.name for t in self.task_allocations]
-        self.logger.info("Worker[%s] executing tasks: %s", self.parent_worker_id, task_names)
         run_start = time.perf_counter()
-        try:
-            _ = await asyncio.gather(*awaitables)
-        finally:
-            run_end = time.perf_counter()
+
+        if len(all_hosts) > 1:
+            # Multi-cluster: run all clusters in parallel for this step
             self.logger.info(
-                "Worker[%s] finished executing tasks %s in %f seconds", self.parent_worker_id, task_names, (run_end - run_start)
+                "Worker[%s] executing tasks %s against clusters [%s] in parallel",
+                self.parent_worker_id,
+                task_names,
+                ", ".join(all_hosts),
             )
-            await asyncio.get_event_loop().shutdown_asyncgens()
-            shutdown_asyncgens_end = time.perf_counter()
-            self.logger.debug("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
-            for c in clients:
-                for es in c.values():
-                    await es.close()
-            transport_close_end = time.perf_counter()
-            self.logger.debug("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
+            awaitables = []
+            for cluster_name in all_hosts:
+                params_per_task = {}
+                for (client_id, task_allocation), es in zip(self.task_allocations, clients):
+                    task = task_allocation.task
+                    if task not in params_per_task:
+                        param_source = track.operation_parameters(self.track, task)
+                        params_per_task[task] = param_source
+                    schedule = schedule_for(task_allocation, params_per_task[task])
+                    es_single = {"default": es[cluster_name]}
+                    async_executor = AsyncExecutor(
+                        client_id,
+                        task,
+                        schedule,
+                        es_single,
+                        self.sampler,
+                        self.cancel,
+                        self.complete,
+                        task.error_behavior(self.on_error),
+                        cluster_name=cluster_name,
+                    )
+                    final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
+                    awaitables.append(final_executor())
+            await asyncio.gather(*awaitables)
+        else:
+            # Single cluster: current behavior
+            params_per_task = {}
+            awaitables = []
+            for (client_id, task_allocation), es in zip(self.task_allocations, clients):
+                task = task_allocation.task
+                if task not in params_per_task:
+                    param_source = track.operation_parameters(self.track, task)
+                    params_per_task[task] = param_source
+                schedule = schedule_for(task_allocation, params_per_task[task])
+                async_executor = AsyncExecutor(
+                    client_id,
+                    task,
+                    schedule,
+                    es,
+                    self.sampler,
+                    self.cancel,
+                    self.complete,
+                    task.error_behavior(self.on_error),
+                    cluster_name=None,
+                )
+                final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
+                awaitables.append(final_executor())
+            self.logger.info("Worker[%s] executing tasks: %s", self.parent_worker_id, task_names)
+            await asyncio.gather(*awaitables)
+
+        run_end = time.perf_counter()
+        self.logger.info(
+            "Worker[%s] finished executing tasks %s in %f seconds",
+            self.parent_worker_id,
+            task_names,
+            (run_end - run_start),
+        )
+        await asyncio.get_event_loop().shutdown_asyncgens()
+        shutdown_asyncgens_end = time.perf_counter()
+        self.logger.debug("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
+        for c in clients:
+            for conn in c.values():
+                await conn.close()
+        transport_close_end = time.perf_counter()
+        self.logger.debug("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
 
 
 class AsyncProfiler:
@@ -1920,7 +1985,18 @@ class AsyncProfiler:
 
 
 class AsyncExecutor:
-    def __init__(self, client_id, task, schedule, es, sampler, cancel, complete, on_error: OnErrorBehavior):
+    def __init__(
+        self,
+        client_id,
+        task,
+        schedule,
+        es,
+        sampler,
+        cancel,
+        complete,
+        on_error: OnErrorBehavior,
+        cluster_name=None,
+    ):
         """
         Executes tasks according to the schedule for a given operation.
 
@@ -1931,6 +2007,7 @@ class AsyncExecutor:
         :param cancel: A shared boolean that indicates we need to cancel execution.
         :param complete: A shared boolean that indicates we need to prematurely complete execution.
         :param on_error: An Enum of type `OnErrorBehaviour` specifying how the load generator should behave on errors.
+        :param cluster_name: Optional name of the target cluster (for multi-cluster reporting).
         """
         self.client_id = client_id
         self.task = task
@@ -1941,6 +2018,7 @@ class AsyncExecutor:
         self.cancel = cancel
         self.complete = complete
         self.on_error = on_error
+        self.cluster_name = cluster_name
         self.logger = logging.getLogger(__name__)
 
     async def __call__(self, *args, **kwargs):
@@ -1974,7 +2052,8 @@ class AsyncExecutor:
                 absolute_processing_start = time.time()
                 processing_start = time.perf_counter()
                 self.schedule_handle.before_request(processing_start)
-                with self.es["default"].new_request_context() as request_context:
+                es_client = self.es.get("default", next(iter(self.es.values()), None))
+                with es_client.new_request_context() as request_context:
                     total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                     request_start = request_context.request_start
                     request_end = request_context.request_end
@@ -2014,11 +2093,14 @@ class AsyncExecutor:
                 else:
                     progress = percent_completed
 
+                sample_meta = dict(request_meta_data) if request_meta_data else {}
+                if self.cluster_name is not None:
+                    sample_meta["cluster"] = self.cluster_name
                 self.sampler.add(
                     self.task,
                     self.client_id,
                     sample_type,
-                    request_meta_data,
+                    sample_meta,
                     absolute_processing_start,
                     request_start,
                     latency,

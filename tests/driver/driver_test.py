@@ -1003,10 +1003,10 @@ class TestMetricsAggregation:
 
         aggregated = self.calculate_global_throughput(samples)
 
-        assert op in aggregated
+        assert (op, None) in aggregated
         assert len(aggregated) == 1
 
-        throughput = aggregated[op]
+        throughput = aggregated[(op, None)]
         assert len(throughput) == 2
         assert throughput[0] == (1470838595, 21, metrics.SampleType.Warmup, 3000, "docs/s")
         assert throughput[1] == (1470838595.5, 21.5, metrics.SampleType.Normal, 3666.6666666666665, "docs/s")
@@ -1028,10 +1028,10 @@ class TestMetricsAggregation:
 
         aggregated = self.calculate_global_throughput(samples)
 
-        assert op in aggregated
+        assert (op, None) in aggregated
         assert len(aggregated) == 1
 
-        throughput = aggregated[op]
+        throughput = aggregated[(op, None)]
         assert len(throughput) == 6
         assert throughput[0] == (38595, 21, metrics.SampleType.Normal, 5000, "docs/s")
         assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 5000, "docs/s")
@@ -1051,10 +1051,10 @@ class TestMetricsAggregation:
 
         aggregated = self.calculate_global_throughput(samples)
 
-        assert op in aggregated
+        assert (op, None) in aggregated
         assert len(aggregated) == 1
 
-        throughput = aggregated[op]
+        throughput = aggregated[(op, None)]
         assert len(throughput) == 3
         assert throughput[0] == (38595, 21, metrics.SampleType.Normal, 8000, "byte/s")
         assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 8000, "byte/s")
