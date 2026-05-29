@@ -362,13 +362,13 @@ def set_absolute_data_path(cfg: types.Config, t):
                 document_set.document_archive = first_existing(data_root, document_set.document_archive)
             if document_set.document_file:
                 resolved = first_existing(data_root, document_set.document_file)
-                # For OTLP corpora, the hot path reads the .pb (and .offset) — the source JSON is
-                # only needed during prepare-track when generating the corpus file locally. If only
-                # the binary corpus has been downloaded, the JSON path won't exist; resolve
-                # document_file to the path the JSON *would* have so the derived ``.pb`` path is
-                # correct.
+                # For OTLP corpora, the hot path reads the .pb or .pbgz (and .offset) — the source
+                # JSON is only needed during prepare-track when generating the corpus file locally.
+                # If only the binary corpus has been downloaded, the JSON path won't exist; resolve
+                # document_file to the path the JSON *would* have so the derived ``.pb``/``.pbgz``
+                # path is correct. Try both suffixes — same corpus can be present as either form.
                 if resolved is None and document_set.is_otlp:
-                    resolved = first_existing_with_any_suffix(data_root, document_set.document_file, (".pb",))
+                    resolved = first_existing_with_any_suffix(data_root, document_set.document_file, (".pb", ".pbgz"))
                 document_set.document_file = resolved
 
 
@@ -508,6 +508,27 @@ def used_corpora(t):
     return corpora.values()
 
 
+def _otlp_gzip_preferences_for_corpus(t, corpus_name: str) -> set[bool]:
+    """
+    Returns the set of gzip preferences (True/False) requested by any OTLP operation in the
+    selected challenge that uses the given corpus. Used during prepare-track to decide whether
+    to produce ``.pb``, ``.pbgz``, or both for a given corpus.
+    """
+    prefs: set[bool] = set()
+    if not t.corpora:
+        return prefs
+    challenge = t.selected_challenge_or_default
+    for task in challenge.schedule:
+        for sub_task in task:
+            param_source = operation_parameters(t, sub_task)
+            if not hasattr(param_source, "corpora") or not hasattr(param_source, "gzip"):
+                continue
+            for c in param_source.corpora:
+                if c.name == corpus_name:
+                    prefs.add(bool(param_source.gzip))
+    return prefs
+
+
 class DefaultTrackPreparator(TrackProcessor):
     def __init__(self):
         super().__init__()
@@ -552,10 +573,16 @@ def prepare_document(cfg: types.Config, track, corpus, preparator, document_set)
 def prepare_otlp_document(cfg: types.Config, track, corpus, preparator, document_set):
     data_root = data_dir(cfg, track.name, corpus.name)
     LOG.info("Resolved data root directory for OTLP corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root)
-    if len(data_root) == 1:
-        preparator.prepare_otlp_document_set(document_set, data_root[0])
-    elif not preparator.prepare_bundled_otlp_document_set(document_set, data_root[0]):
-        preparator.prepare_otlp_document_set(document_set, data_root[1])
+    # Determine which file formats the operations using this corpus need. Same corpus can be used
+    # by multiple operations with different ``gzip`` settings — in that case we produce both .pb
+    # and .pbgz so each operation can read its required format. Fall back to non-gzip if no
+    # operation expresses a preference (e.g., during initial track parsing).
+    gzip_prefs = _otlp_gzip_preferences_for_corpus(track, corpus.name) or {False}
+    for gzip_records in gzip_prefs:
+        if len(data_root) == 1:
+            preparator.prepare_otlp_document_set(document_set, data_root[0], gzip_records=gzip_records)
+        elif not preparator.prepare_bundled_otlp_document_set(document_set, data_root[0], gzip_records=gzip_records):
+            preparator.prepare_otlp_document_set(document_set, data_root[1], gzip_records=gzip_records)
 
 
 class Decompressor:
@@ -790,7 +817,7 @@ class DocumentSetPreparator:
             else:
                 return False
 
-    def prepare_otlp_document_set(self, document_set, data_root):
+    def prepare_otlp_document_set(self, document_set, data_root, gzip_records: bool = False):
         """
         Prepares an OTLP binary protobuf corpus file locally.
 
@@ -798,14 +825,17 @@ class DocumentSetPreparator:
         1. If a valid corpus file already exists, nothing to do.
         2. Try downloading a compressed corpus (using the same compression as the JSON corpus, if any),
            or the uncompressed corpus directly. Either avoids downloading the much larger JSON source.
-        3. Download and decompress the JSON source, then convert it to ``.pb`` locally.
+        3. Download and decompress the JSON source, then convert it to ``.pb``/``.pbgz`` locally.
 
         :param document_set: A document set with source_format == SOURCE_FORMAT_OTLP_PROTOBUF.
         :param data_root: The data root directory for this document set.
+        :param gzip_records: When True, produce ``.pbgz`` (each record gzip-compressed independently).
+            When False, produce ``.pb`` (raw protobuf records). Operations using the corpus pick
+            the matching file via their own ``gzip`` param.
         """
         doc_path = os.path.join(data_root, document_set.document_file)
         archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
-        pb_file = io.OtlpProtobufFile.for_source_file(doc_path)
+        pb_file = io.OtlpProtobufFile.for_source_file(doc_path, gzip_records=gzip_records)
 
         # 1. Valid corpus already present
         if pb_file.is_valid():
@@ -847,7 +877,7 @@ class DocumentSetPreparator:
                         ) from None
                     raise
 
-        # 4. Convert JSON to .pb
+        # 4. Convert JSON to .pb / .pbgz
         pb_file.create()
 
     def _try_download_pb(self, document_set, doc_path, pb_file) -> bool:
@@ -855,6 +885,9 @@ class DocumentSetPreparator:
         Try to fetch a pre-built corpus file from the corpus base URL. If the JSON corpus is
         compressed (document_archive ends in .zst/.gz/.bz2/etc.), try the matching <pb>.{ext} first
         and decompress on the fly; otherwise try the uncompressed corpus directly.
+
+        Uses ``pb_file.pb_path`` (``.pb`` or ``.pbgz`` depending on the gzip_records flag) so the
+        download target matches whatever the caller requested.
 
         :return: True if a valid corpus file is now on disk, False if nothing was downloaded.
         """
@@ -886,15 +919,16 @@ class DocumentSetPreparator:
             return False
         return pb_file.is_valid()
 
-    def prepare_bundled_otlp_document_set(self, document_set, data_root):
+    def prepare_bundled_otlp_document_set(self, document_set, data_root, gzip_records: bool = False):
         """
         Prepares a bundled OTLP document set (files in the same directory as the track).
 
+        :param gzip_records: When True, produce ``.pbgz`` (each record gzipped); otherwise ``.pb``.
         :return: True if the corpus file is ready, False if required files were not found locally.
         """
         doc_path = os.path.join(data_root, document_set.document_file)
         archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
-        pb_file = io.OtlpProtobufFile.for_source_file(doc_path)
+        pb_file = io.OtlpProtobufFile.for_source_file(doc_path, gzip_records=gzip_records)
 
         if pb_file.is_valid():
             return True

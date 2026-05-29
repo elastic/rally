@@ -16,6 +16,7 @@
 # under the License.
 # pylint: disable=protected-access
 
+import gzip
 import logging
 import os
 import subprocess
@@ -383,6 +384,53 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         # byte-for-byte identical output regardless of worker count → ordering is preserved
         with open(pb_seq.pb_path, "rb") as f1, open(pb_par.pb_path, "rb") as f2:
             assert f1.read() == f2.read()
+
+    def test_for_source_file_picks_pbgz_extension_when_gzip(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb_raw = io.OtlpProtobufFile.for_source_file(json_path, gzip_records=False)
+        pb_gz = io.OtlpProtobufFile.for_source_file(json_path, gzip_records=True)
+        assert pb_raw.pb_path == json_path + ".pb"
+        assert pb_gz.pb_path == json_path + ".pbgz"
+        assert pb_raw.gzip_records is False
+        assert pb_gz.gzip_records is True
+
+    def test_create_with_gzip_records_writes_gzipped_payloads(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
+        pb = io.OtlpProtobufFile.for_source_file(json_path, gzip_records=True)
+        assert pb.create() == 3
+
+        # the file is at .pbgz (not .pb)
+        assert os.path.exists(pb.pb_path)
+        assert pb.pb_path.endswith(".pbgz")
+
+        # each record yielded by read_records is a valid gzip stream (gzip magic 0x1f8b)
+        records = list(pb.read_records(0, None))
+        assert len(records) == 3
+        for rec in records:
+            assert rec[:2] == b"\x1f\x8b", "expected gzip magic bytes"
+            # round-trip: gunzip recovers the original protobuf payload
+            decompressed = gzip.decompress(rec)
+            assert len(decompressed) > 0
+
+    def test_create_gzip_and_raw_produce_different_files(self, tmp_path):
+        seq_dir = tmp_path / "raw"
+        gz_dir = tmp_path / "gz"
+        seq_dir.mkdir()
+        gz_dir.mkdir()
+        json_raw = self._write_json_lines(seq_dir, [self.SAMPLE_OTLP_JSON_LINE] * 5)
+        json_gz = self._write_json_lines(gz_dir, [self.SAMPLE_OTLP_JSON_LINE] * 5)
+
+        pb_raw = io.OtlpProtobufFile.for_source_file(json_raw, gzip_records=False)
+        pb_gz = io.OtlpProtobufFile.for_source_file(json_gz, gzip_records=True)
+        pb_raw.create()
+        pb_gz.create()
+
+        # the two files diverge — different extensions, different on-disk content
+        assert pb_raw.pb_path != pb_gz.pb_path
+        with open(pb_raw.pb_path, "rb") as f1, open(pb_gz.pb_path, "rb") as f2:
+            assert f1.read() != f2.read()
+        # (Size comparison: for a realistic 1 MB OTLP record, .pbgz is ~3× smaller than .pb. For
+        # the tiny test record gzip overhead dominates, so we don't assert size here.)
 
     def test_count_records_returns_none_when_pb_missing(self, tmp_path):
         json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])

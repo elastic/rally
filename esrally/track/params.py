@@ -738,6 +738,11 @@ class OtlpParamSource(ParamSource):
         self._cursor = 0
         self._partition_size: int | None = None
         self.looped = params.get("looped", False)
+        # When True, the corpus file is a ``.pbgz`` where each record is independently gzipped.
+        # The runner ships those bytes verbatim with ``Content-Encoding: gzip``; no hot-path
+        # compression/decompression happens on the Rally side. Prepare-track produces the matching
+        # file format based on this flag.
+        self.gzip = bool(params.get("gzip", False))
 
         otlp_docs = self._find_otlp_docs()
         if not otlp_docs:
@@ -798,7 +803,7 @@ class OtlpParamSource(ParamSource):
         client does any work.
         """
         if not hasattr(self, "_cached_total_records"):
-            pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file)
+            pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file, gzip_records=self.gzip)
             actual = pb_file.count_records()
             self._cached_total_records = actual if actual is not None else self._doc.number_of_documents
         return self._cached_total_records
@@ -855,7 +860,7 @@ class OtlpParamSource(ParamSource):
                 "'Successfully downloaded binary protobuf file from ...' log line) and that the "
                 "data directory is the same as Rally is reading from."
             )
-        pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file)
+        pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file, gzip_records=self.gzip)
         total_records = self._total_records()
 
         if total_records > 0 and self._total_partitions > 1:
@@ -898,7 +903,7 @@ class OtlpParamSource(ParamSource):
 
         self._cursor += 1
 
-        result = {"body": payload}
+        result = {"body": payload, "gzip": self.gzip}
         if "request-timeout" in self._params:
             result["request-timeout"] = self._params["request-timeout"]
         return result
