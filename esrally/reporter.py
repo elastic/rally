@@ -277,7 +277,7 @@ class SummaryReporter:
         """One row: [Metric, Task, val_1, val_2, ..., Unit] for multi-cluster table."""
         if not any(v is not None for v in values_per_cluster):
             return []
-        converted = [converter(v) if v is not None else None for v in values_per_cluster]
+        converted = [converter(v) if v is not None else "" for v in values_per_cluster]
         return [k, task] + converted + [unit]
 
     def _report_throughput(self, values, task):
