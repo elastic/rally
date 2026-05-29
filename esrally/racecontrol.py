@@ -388,7 +388,7 @@ def multi_cluster(cfg: types.Config):
     )
     # Same as benchmark-only: no provisioning, external car. One race with full multi-cluster config.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
-    race(cfg, external=True)
+    return race(cfg, external=True)
 
 
 def docker(cfg: types.Config):
