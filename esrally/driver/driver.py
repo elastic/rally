@@ -1872,8 +1872,8 @@ class AsyncIoAdapter:
             clients.append(es)
 
         task_names = [t.task.task.name for t in self.task_allocations]
-        run_start = time.perf_counter()
 
+        awaitables = []
         if self.cfg.opts("race", "pipeline") == "multi-cluster" and len(all_hosts) > 1:
             # Multi-cluster: run all clusters in parallel for this step
             self.logger.info(
@@ -1882,7 +1882,6 @@ class AsyncIoAdapter:
                 task_names,
                 ", ".join(all_hosts),
             )
-            awaitables = []
             for cluster_name in all_hosts:
                 params_per_task = {}
                 for (client_id, task_allocation), es in zip(self.task_allocations, clients):
@@ -1905,11 +1904,9 @@ class AsyncIoAdapter:
                     )
                     final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                     awaitables.append(final_executor())
-            await asyncio.gather(*awaitables)
         else:
             # Single cluster: current behavior
             params_per_task = {}
-            awaitables = []
             for (client_id, task_allocation), es in zip(self.task_allocations, clients):
                 task = task_allocation.task
                 if task not in params_per_task:
@@ -1930,23 +1927,26 @@ class AsyncIoAdapter:
                 final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                 awaitables.append(final_executor())
             self.logger.info("Worker[%s] executing tasks: %s", self.parent_worker_id, task_names)
-            await asyncio.gather(*awaitables)
 
-        run_end = time.perf_counter()
-        self.logger.info(
-            "Worker[%s] finished executing tasks %s in %f seconds",
-            self.parent_worker_id,
-            task_names,
-            (run_end - run_start),
-        )
-        await asyncio.get_event_loop().shutdown_asyncgens()
-        shutdown_asyncgens_end = time.perf_counter()
-        self.logger.debug("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
-        for c in clients:
-            for conn in c.values():
-                await conn.close()
-        transport_close_end = time.perf_counter()
-        self.logger.debug("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
+        run_start = time.perf_counter()
+        try:
+            await asyncio.gather(*awaitables)
+        finally:
+            run_end = time.perf_counter()
+            self.logger.info(
+                "Worker[%s] finished executing tasks %s in %f seconds",
+                self.parent_worker_id,
+                task_names,
+                (run_end - run_start),
+            )
+            await asyncio.get_event_loop().shutdown_asyncgens()
+            shutdown_asyncgens_end = time.perf_counter()
+            self.logger.debug("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
+            for c in clients:
+                for conn in c.values():
+                    await conn.close()
+            transport_close_end = time.perf_counter()
+            self.logger.debug("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
 
 
 class AsyncProfiler:
