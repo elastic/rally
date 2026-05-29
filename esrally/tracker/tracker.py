@@ -77,7 +77,7 @@ def create_track(cfg: types.Config):
     hosts_cfg = cfg.opts("client", "hosts")
     options_cfg = cfg.opts("client", "options")
     all_h = hosts_cfg.all_hosts
-    all_o = getattr(options_cfg, "all_client_options", None) or {k: options_cfg[k] for k in all_h}
+    all_o = options_cfg.all_client_options if hasattr(options_cfg, "all_client_options") else {k: options_cfg[k] for k in all_h}
     target_hosts = all_h.get("default", list(all_h.values())[0] if all_h else [])
     client_options = all_o.get("default", list(all_o.values())[0] if all_o else {})
     data_streams = cfg.opts("generator", "data_streams")
