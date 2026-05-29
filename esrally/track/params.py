@@ -719,6 +719,191 @@ class BulkIndexParamSource(ParamSource):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
 
 
+class OtlpParamSource(ParamSource):
+    """
+    Parameter source for OTLP binary protobuf corpus files (source_format: otlp-proto).
+
+    Reads pre-generated ExportMetricsServiceRequest records from a .pb file.
+    Supports multi-client partitioning via the companion .pb.offset index.
+    """
+
+    def __init__(self, track_obj, params, **kwargs):
+        super().__init__(track_obj, params, **kwargs)
+        self._partition_index = 0
+        self._total_partitions = 1
+        # Streaming state — generators can't be pickled, so they're created lazily on the first
+        # params() call inside the worker process (after Rally has done its actor pickling).
+        # The cursor and end_record bounds let us track progress without materializing records.
+        self._record_iter = None
+        self._cursor = 0
+        self._partition_size: int | None = None
+        self.looped = params.get("looped", False)
+
+        otlp_docs = self._find_otlp_docs()
+        if not otlp_docs:
+            requested = self._params.get("corpora")
+            if requested:
+                raise exceptions.InvalidSyntax(
+                    f"No OTLP corpus matching 'corpora'={requested!r} found in track [{track_obj}]. "
+                    f"Available corpora: {[c.name for c in self.track.corpora]}."
+                )
+            raise exceptions.InvalidSyntax(
+                f"No OTLP corpus found in track [{track_obj}]. "
+                f"Add at least one document corpus with source_format={track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF!r}."
+            )
+        # expose corpora so used_corpora() in loader.py includes OTLP corpora in the prepare-track phase
+        seen_names: set[str] = set()
+        self.corpora = []
+        for corpus, _ in otlp_docs:
+            if corpus.name not in seen_names:
+                seen_names.add(corpus.name)
+                self.corpora.append(corpus)
+        # use the first matching document set
+        _, self._doc = otlp_docs[0]
+
+    def _find_otlp_docs(self):
+        # honor the operation's "corpora" param so a track with multiple OTLP corpora can pick
+        # between them — without this we'd silently use whichever corpus comes first in track.corpora.
+        track_corpora_names = [corpus.name for corpus in self.track.corpora]
+        corpora_names = self._params.get("corpora", track_corpora_names)
+        if isinstance(corpora_names, str):
+            corpora_names = [corpora_names]
+        return [
+            (corpus, doc)
+            for corpus in self.track.corpora
+            if corpus.name in corpora_names
+            for doc in corpus.documents
+            if doc.source_format == track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF
+        ]
+
+    def partition(self, partition_index, total_partitions):
+        # pylint: disable=protected-access
+        # the "copy" is another OtlpParamSource instance, so accessing its private state is fine
+        copy = OtlpParamSource.__new__(OtlpParamSource)
+        copy.__dict__.update(self.__dict__)
+        copy._partition_index = partition_index
+        copy._total_partitions = total_partitions
+        copy._record_iter = None  # streaming iterator created lazily on first params() call
+        copy._cursor = 0
+        copy._partition_size = None
+        return copy
+
+    def _total_records(self):
+        """
+        Source of truth for partitioning: count records in the .pb file directly. The track's
+        document-count is only used as a fallback (e.g. when the .pb doesn't exist yet, such as
+        during initial track parsing — corpora preparation comes later). Trusting the track value
+        unconditionally is a footgun: if it doesn't match the actual .pb, most workers either get
+        empty partitions or seek past EOF and the benchmark silently finishes after only one
+        client does any work.
+        """
+        if not hasattr(self, "_cached_total_records"):
+            pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file)
+            actual = pb_file.count_records()
+            self._cached_total_records = actual if actual is not None else self._doc.number_of_documents
+        return self._cached_total_records
+
+    def size(self):
+        """
+        Return the partition size so Rally treats this as a finite (non-infinite) source.
+        Without this, the base class returns None → infinite=True → Rally defaults
+        iterations=1 and each worker runs exactly one operation.
+        """
+        total_records = self._total_records()
+        if total_records <= 0:
+            return None
+        if self._total_partitions > 1:
+            records_per_partition = total_records / self._total_partitions
+            start_record = round(records_per_partition * self._partition_index)
+            end_record = round(records_per_partition * (self._partition_index + 1))
+            return end_record - start_record
+        return total_records
+
+    @property
+    def percent_completed(self):
+        """
+        Fraction of this partition's records that have been yielded so far.
+
+        Rally pulls this per-client and averages across all clients to render the [N% done] bar.
+        Without this property the bar stays stuck at 0% because the loop control falls into the
+        ``infinite`` branch (we don't set a time_period/iterations explicitly — the param source
+        itself terminates the task by raising StopIteration in non-looped mode).
+
+        Returns ``None`` in looped mode because the cursor cycles back to 0 indefinitely, so a
+        cursor-based percentage is meaningless. The schedule's time_period / iterations bounds
+        progress instead in that case.
+        """
+        if self.looped:
+            return None
+        partition_size = self.size()
+        if not partition_size:
+            return None
+        return min(self._cursor / partition_size, 1.0)
+
+    def _open_iter(self):
+        """
+        Create a new streaming iterator over this partition's records. We do NOT materialize them
+        into memory — for large corpora (e.g. 1 MB protobuf records, 6k records per partition) that
+        would consume 6+ GB per worker. The iterator holds an open file handle and yields one
+        record at a time; the file handle closes when the generator completes or is GC'd.
+        """
+        if not self._doc.document_file:
+            raise exceptions.SystemSetupError(
+                f"OTLP corpus document_file is unset for [{self._doc}]. This usually means neither the "
+                "source .json nor the pre-built .pb was found in any data root after prepare-track. "
+                "Check that the prepare-track phase completed successfully (look for the "
+                "'Successfully downloaded binary protobuf file from ...' log line) and that the "
+                "data directory is the same as Rally is reading from."
+            )
+        pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file)
+        total_records = self._total_records()
+
+        if total_records > 0 and self._total_partitions > 1:
+            records_per_partition = total_records / self._total_partitions
+            start_record = round(records_per_partition * self._partition_index)
+            end_record = round(records_per_partition * (self._partition_index + 1))
+        else:
+            start_record = 0
+            end_record = None
+
+        # cache the partition size so percent_completed/size don't have to recompute
+        if self._partition_size is None:
+            self._partition_size = (end_record - start_record) if end_record is not None else total_records
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "OtlpParamSource partition %d/%d: total_records=%s start=%d end=%s (streaming, not preloading)",
+            self._partition_index,
+            self._total_partitions,
+            total_records,
+            start_record,
+            end_record,
+        )
+        return pb_file.read_records(start_record, end_record)
+
+    def params(self):
+        if self._record_iter is None:
+            self._record_iter = self._open_iter()
+
+        try:
+            payload = next(self._record_iter)
+        except StopIteration:
+            if not self.looped:
+                raise
+            # restart the iterator from the start of this partition. If even the fresh iterator
+            # is empty (partition has no records at all), the StopIteration here propagates.
+            self._record_iter = self._open_iter()
+            self._cursor = 0
+            payload = next(self._record_iter)
+
+        self._cursor += 1
+
+        result = {"body": payload}
+        if "request-timeout" in self._params:
+            result["request-timeout"] = self._params["request-timeout"]
+        return result
+
+
 class PartitionBulkIndexParamSource:
     def __init__(
         self,
@@ -1431,6 +1616,7 @@ register_param_source_for_operation(track.OperationType.DeleteComposableTemplate
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
 register_param_source_for_operation(track.OperationType.ForceMerge, ForceMergeParamSource)
 register_param_source_for_operation(track.OperationType.Downsample, DownsampleParamSource)
+register_param_source_for_operation(track.OperationType.OtlpIngest, OtlpParamSource)
 
 # Also register by name, so users can use it too
 register_param_source_for_name("file-reader", BulkIndexParamSource)
