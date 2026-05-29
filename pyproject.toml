@@ -101,6 +101,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# These packages are required for pre-processing OTLP JSON corpus files into binary protobuf format.
+# Only needed during corpus preparation (prepare-track phase), not during the benchmark hot path.
+otlp = [
+    # License: Apache 2.0
+    "opentelemetry-proto==1.34.0",
+    # License: BSD
+    "protobuf>=5.29.0",
+]
+
 # These packages are required to download files from a private AWS S3 bucket
 s3 = [
     # License: Apache 2.0
@@ -115,6 +124,9 @@ s3 = [
 develop = [
     # s3
     "boto3==1.34.68",
+    # otlp — required for the OtlpProtobufFile / OtlpParamSource / OtlpIngest test suites
+    "opentelemetry-proto==1.34.0",
+    "protobuf>=5.29.0",
     # tests
     "ujson",
     "pytest==8.4.2",
@@ -137,6 +149,7 @@ develop = [
     "types-tabulate==0.8.9",
     "types-requests>=2.31.0.7,<3",
     "types-jsonschema==3.2.0",
+    "types-protobuf>=4.24,<8",
     # Python dead library removed in version 3.13 and used to build Rally docs.
     "standard-imghdr==3.13.0",
 ]

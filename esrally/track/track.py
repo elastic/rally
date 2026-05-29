@@ -181,6 +181,7 @@ class ComponentTemplate:
 
 class Documents:
     SOURCE_FORMAT_BULK = "bulk"
+    SOURCE_FORMAT_OTLP_PROTOBUF = "otlp-proto"
 
     def __init__(
         self,
@@ -274,6 +275,10 @@ class Documents:
     @property
     def is_bulk(self):
         return self.source_format == Documents.SOURCE_FORMAT_BULK
+
+    @property
+    def is_otlp(self):
+        return self.source_format == Documents.SOURCE_FORMAT_OTLP_PROTOBUF
 
     def __str__(self):
         return "%s documents from %s" % (self.source_format, self.document_file)
@@ -745,6 +750,7 @@ class OperationType(Enum):
     # this is classed the same as RawRequest, but could potentially be used to call endpoints that are blocked
     RunUntil = (58, AdminStatus.No, serverless.Status.Public)
     EnrichPolicy = (59, AdminStatus.Yes, serverless.Status.Public)
+    OtlpIngest = (60, AdminStatus.No, serverless.Status.Public)
 
     def __init__(self, id: int, admin_status: AdminStatus, serverless_status: serverless.Status):
         self.id = id
@@ -884,6 +890,8 @@ class OperationType(Enum):
             return OperationType.RunUntil
         elif v == "enrich-policy":
             return OperationType.EnrichPolicy
+        elif v == "otlp-ingest":
+            return OperationType.OtlpIngest
         else:
             raise KeyError(f"No enum value for [{v}]")
 

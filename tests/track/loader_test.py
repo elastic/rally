@@ -915,6 +915,35 @@ class TestTrackPreparation:
         assert prepare_file_offset_table.call_count == 0
 
 
+class TestOtlpDocumentPreparation:
+    """Tests for the OTLP-specific path in DocumentSetPreparator — specifically the compressed
+    .pb download support that mirrors the JSON corpus's archive compression."""
+
+    def _doc_set(self, *, archive=None, compressed_size=0):
+        return track.Documents(
+            source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+            document_file="metrics.otlp.json",
+            document_archive=archive,
+            number_of_documents=10,
+            base_url="http://example.com/otlp",
+            uncompressed_size_in_bytes=2000,
+            compressed_size_in_bytes=compressed_size,
+        )
+
+    def _preparator(self):
+        return loader.DocumentSetPreparator(
+            track_name="unit-test",
+            downloader=mock.MagicMock(spec=loader.Downloader),
+            decompressor=mock.MagicMock(spec=loader.Decompressor),
+        )
+
+    def test_skips_when_pb_already_valid(self):
+        p = self._preparator()
+        with mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=True):
+            p.prepare_otlp_document_set(self._doc_set(), data_root="/tmp")
+        p.downloader.download.assert_not_called()
+
+
 class TestTemplateSource:
     @mock.patch("esrally.utils.io.dirname")
     @mock.patch.object(loader.TemplateSource, "read_glob_files")
@@ -1541,6 +1570,40 @@ class TestTrackPath:
 
         assert t.corpora[0].documents[0].document_file == "/data/unittest/docs/documents.json"
         assert t.corpora[0].documents[0].document_archive == "/data/unittest/docs/documents.json.bz2"
+
+    @mock.patch("os.path.exists")
+    def test_otlp_resolves_via_pb_when_json_missing(self, path_exists):
+        # OTLP corpora are special: the hot path only needs the .pb (and .pb.offset). If we
+        # downloaded just the .pb (no source JSON), document_file would otherwise stay None and
+        # the param source would later try to open "None.pb".
+        def fake_exists(path: str) -> bool:
+            # JSON doesn't exist locally; only the .pb does
+            return path.endswith(".pb")
+
+        path_exists.side_effect = fake_exists
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
+
+        t = track.Track(
+            name="u",
+            corpora=[
+                track.DocumentCorpus(
+                    "otlp",
+                    documents=[
+                        track.Documents(
+                            source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                            document_file="metrics.otlp.json",
+                        )
+                    ],
+                )
+            ],
+        )
+
+        loader.set_absolute_data_path(cfg, t)
+
+        # document_file points to where the JSON would be — so the derived .pb path is correct
+        assert t.corpora[0].documents[0].document_file == "/data/otlp/metrics.otlp.json"
 
 
 class TestTrackFilter:
