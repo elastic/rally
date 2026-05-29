@@ -108,6 +108,12 @@ def variants_of(version):
         yield v
 
 
+def latest_supported_major(version):
+    if version.version() == "serverless":
+        return "serverless"
+    return Version.from_string(version.version()).major
+
+
 class VersionVariants:
     """
     Build all possible variations of a version.
