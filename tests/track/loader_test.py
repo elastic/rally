@@ -943,6 +943,47 @@ class TestOtlpDocumentPreparation:
             p.prepare_otlp_document_set(self._doc_set(), data_root="/tmp")
         p.downloader.download.assert_not_called()
 
+    def test_tries_compressed_pb_first_when_corpus_is_compressed(self):
+        p = self._preparator()
+        # is_valid: False initially, False before download, True after decompress
+        with mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]), mock.patch("os.remove"):
+            p.prepare_otlp_document_set(
+                self._doc_set(archive="metrics.otlp.json.zst", compressed_size=500),
+                data_root="/tmp",
+            )
+
+        # downloaded the .pb.zst from the base URL
+        p.downloader.download.assert_called_once_with("http://example.com/otlp", "/tmp/metrics.otlp.json.pb.zst")
+        # decompressed it into the .pb path
+        p.decompressor.decompress.assert_called_once_with(
+            "/tmp/metrics.otlp.json.pb.zst", "/tmp/metrics.otlp.json.pb", uncompressed_size=None
+        )
+
+    def test_falls_back_to_uncompressed_pb_when_compressed_unavailable(self):
+        p = self._preparator()
+        # first download (compressed) raises DataError, second (uncompressed) succeeds
+        p.downloader.download.side_effect = [exceptions.DataError("not found"), None]
+        with mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]):
+            p.prepare_otlp_document_set(
+                self._doc_set(archive="metrics.otlp.json.zst", compressed_size=500),
+                data_root="/tmp",
+            )
+
+        assert p.downloader.download.call_count == 2
+        # second call is the uncompressed .pb
+        assert p.downloader.download.call_args_list[1] == mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb")
+        # never decompressed
+        p.decompressor.decompress.assert_not_called()
+
+    def test_skips_compressed_attempt_when_corpus_is_uncompressed(self):
+        p = self._preparator()
+        with mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]):
+            p.prepare_otlp_document_set(self._doc_set(), data_root="/tmp")
+
+        # only one download — the uncompressed .pb — no archive attempt
+        p.downloader.download.assert_called_once_with("http://example.com/otlp", "/tmp/metrics.otlp.json.pb")
+        p.decompressor.decompress.assert_not_called()
+
 
 class TestTemplateSource:
     @mock.patch("esrally.utils.io.dirname")

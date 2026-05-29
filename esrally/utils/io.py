@@ -707,6 +707,34 @@ def remove_file_offset_table(data_file_path: str) -> None:
     FileOffsetTable.remove(data_file_path)
 
 
+def _convert_lines_batch(lines: list[str]) -> tuple[bytes, int]:
+    """
+    Worker function for parallel OTLP JSON → binary protobuf conversion.
+
+    Each worker process imports the protobuf bindings lazily on first call (this happens once
+    per worker process, since the function is a module-level callable that ``ProcessPoolExecutor``
+    pickles by reference). Returns ``(concatenated_records_bytes, record_count)`` for the batch
+    in source order.
+
+    Format of returned bytes: a concatenation of length-prefixed records, each ``4 bytes big-endian
+    length || payload``. This is exactly the on-disk format the main process appends to the corpus
+    file.
+    """
+    # pylint: disable=import-outside-toplevel,no-name-in-module
+    from google.protobuf.json_format import Parse
+    from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import (
+        ExportMetricsServiceRequest,
+    )
+
+    parts: list[bytes] = []
+    for line in lines:
+        msg = Parse(line, ExportMetricsServiceRequest())
+        payload = msg.SerializeToString()
+        parts.append(struct.pack(">I", len(payload)))
+        parts.append(payload)
+    return b"".join(parts), len(lines)
+
+
 class OtlpProtobufFile:
     """
     Manages the binary protobuf corpus file derived from an OTLP JSON source.
@@ -771,49 +799,122 @@ class OtlpProtobufFile:
 
         return True
 
-    def create(self) -> int:
+    # batch size for parallel conversion. Smaller batches → less memory per in-flight batch.
+    # The actual memory cost per batch is ~5× the raw input size (Python object overhead + parsed
+    # protobuf message tree during conversion), so 500 lines × ~50 KB ≈ ~125 MB per in-flight batch.
+    _CONVERSION_BATCH_SIZE = 500
+    # in-flight queue depth. Just enough to keep workers fed while the main thread writes the next
+    # completed batch to disk — adding more buffers grows memory without much throughput benefit.
+    _QUEUE_BUFFER = 4
+
+    def create(self, workers: int | None = None) -> int:
         """
         Parse the source OTLP JSON file and write binary protobuf records to the .pb file,
         also writing a companion .offset file for fast multi-client partitioning.
 
+        JSON→protobuf conversion is parallelized across processes since each line is independent.
+        Results are gathered in source order so the .pb byte offsets stay correct. Memory usage
+        is bounded by limiting the number of in-flight batches — we do NOT buffer the whole input
+        file (which is what ``ProcessPoolExecutor.map`` would do, since it eagerly consumes its
+        iterable up front).
+
+        :param workers: Number of worker processes for conversion. Defaults to ``os.cpu_count()``.
+                        Peak memory ≈ ``workers × 325 MB`` regardless of source file size:
+                        ~200 MB per worker process (interpreter + loaded protobuf bindings) plus
+                        ~125 MB per in-flight batch (input strings + parsed proto tree + output).
+                        Override via ``RALLY_OTLP_CONVERSION_WORKERS`` if you need to cap memory.
         :return: Total number of records written.
         :raises exceptions.SystemSetupError: if opentelemetry-proto is not installed.
         """
         # opentelemetry-proto is an optional dependency, only needed when preparing an OTLP corpus.
-        # pylint: disable=import-outside-toplevel
+        # we probe the import here so we fail fast with a clear message rather than inside the worker.
+        # pylint: disable=import-outside-toplevel,unused-import
         try:
-            from google.protobuf.json_format import Parse
-            from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import (
-                ExportMetricsServiceRequest,
-            )
+            import opentelemetry.proto.collector.metrics.v1.metrics_service_pb2  # noqa: F401
         except ImportError:
             raise exceptions.SystemSetupError(
                 "The 'opentelemetry-proto' package is required to pre-process OTLP corpus files. "
                 "Install it with: pip install opentelemetry-proto"
             )
 
+        import collections  # pylint: disable=import-outside-toplevel
+        import concurrent.futures  # pylint: disable=import-outside-toplevel
+
+        if workers and workers > 0:
+            worker_count = workers
+        else:
+            worker_count = os.cpu_count() or 1
+        # Bounded queue depth = workers + small buffer. Pickling each batch costs ~5× the raw input
+        # size (input list lives in main + queue + worker simultaneously, plus the parsed protobuf
+        # message tree dominates worker memory during JSON→proto conversion). Keeping the queue tight
+        # caps peak memory at roughly ``(workers + _QUEUE_BUFFER) × ~125 MB`` plus ~200 MB per worker
+        # process for the interpreter and loaded protobuf bindings.
+        max_in_flight = worker_count + self._QUEUE_BUFFER
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Converting OTLP JSON to binary protobuf using %d worker(s) (max in-flight batches: %d).",
+            worker_count,
+            max_in_flight,
+        )
+
         offset_path = self.pb_path + ".offset"
         record_count = 0
         byte_offset = 0
+        batch_index = 0
+        # 8 MB output buffer for .pb — much larger than Python's default 8 KB, reduces syscall
+        # overhead noticeably for multi-gigabyte writes.
         with (
-            open(self.source_json_path, encoding="utf-8") as src,
-            open(self.pb_path, "wb") as dst,
-            open(offset_path, "w", encoding="utf-8") as off,
+            open(self.pb_path, "wb", buffering=8 * 1024 * 1024) as dst,
+            open(offset_path, "w", encoding="utf-8", buffering=64 * 1024) as off,
+            concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as pool,
         ):
+            batch_iter = self._iter_line_batches(self._CONVERSION_BATCH_SIZE)
+            in_flight: collections.deque = collections.deque()
+
+            # prime the pipeline with up to max_in_flight batches
+            for batch in batch_iter:
+                in_flight.append(pool.submit(_convert_lines_batch, batch))
+                if len(in_flight) >= max_in_flight:
+                    break
+
+            # consume one result at a time (FIFO preserves source order) and submit a replacement
+            while in_flight:
+                chunk_bytes, chunk_record_count = in_flight.popleft().result()
+                # one offset entry at the start of each batch (BATCH_SIZE == OFFSET_SAMPLING_INTERVAL)
+                off.write(f"{record_count};{byte_offset}\n")
+                dst.write(chunk_bytes)
+                record_count += chunk_record_count
+                byte_offset += len(chunk_bytes)
+                batch_index += 1
+                if batch_index % 50 == 0:
+                    logger.info(
+                        "OTLP conversion progress: %d records, %d MB written.",
+                        record_count,
+                        byte_offset // (1024 * 1024),
+                    )
+                # keep the pipeline full by submitting the next batch (if any)
+                try:
+                    in_flight.append(pool.submit(_convert_lines_batch, next(batch_iter)))
+                except StopIteration:
+                    pass
+
+        return record_count
+
+    def _iter_line_batches(self, batch_size: int) -> Iterator[list[str]]:
+        """Stream the source JSON file as batches of non-blank lines (each line stripped)."""
+        batch: list[str] = []
+        with open(self.source_json_path, encoding="utf-8", buffering=8 * 1024 * 1024) as src:
             for line in src:
                 line = line.strip()
                 if not line:
                     continue
-                msg = Parse(line, ExportMetricsServiceRequest())
-                payload = msg.SerializeToString()
-                length_bytes = struct.pack(">I", len(payload))
-                if record_count % self.OFFSET_SAMPLING_INTERVAL == 0:
-                    print(f"{record_count};{byte_offset}", file=off)
-                dst.write(length_bytes)
-                dst.write(payload)
-                byte_offset += 4 + len(payload)
-                record_count += 1
-        return record_count
+                batch.append(line)
+                if len(batch) >= batch_size:
+                    yield batch
+                    batch = []
+        if batch:
+            yield batch
 
     def read_records(self, start_record: int, end_record: int | None = None) -> Iterator[bytes]:
         """
@@ -996,7 +1097,12 @@ def prepare_otlp_protobuf_file(source_json_path: str, corpus_base_url: str | Non
         end="",
         flush=True,
     )
-    record_count = pb_file.create()
+    # honor RALLY_OTLP_CONVERSION_WORKERS for environments where the default (os.cpu_count()) needs
+    # tuning. Each worker process consumes ~200 MB for the interpreter + protobuf bindings, plus an
+    # in-flight batch of ~125 MB while it's parsing. Reduce on low-RAM machines, leave alone otherwise.
+    workers_env = os.environ.get("RALLY_OTLP_CONVERSION_WORKERS")
+    workers = int(workers_env) if workers_env and workers_env.isdigit() else None
+    record_count = pb_file.create(workers=workers)
     console.println("[OK]")
     return record_count
 
