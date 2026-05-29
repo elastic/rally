@@ -211,13 +211,18 @@ def test_run_subprocess():
     assert completed_process.stderr is None
 
 
-def test_run_subprocess_with_logging_timeout_kills_child(caplog):
-    cmd = "sleep 5"
-    timeout = 0
+def test_run_subprocess_with_logging_timeout_kills_process_group(caplog, tmp_path):
+    pid_file = tmp_path / "grandchild.pid"
+    # The shell backgrounds `sleep 600` in the same process group; both should die on timeout.
+    cmd = f"sh -c 'sleep 600 & echo $! > {pid_file}; wait'"
+    timeout = 1
+
     with caplog.at_level(logging.ERROR, logger="esrally.utils.process"):
         returncode = process.run_subprocess_with_logging(cmd, timeout=timeout)
+    grandchild_pid = int(pid_file.read_text().strip())
 
     assert returncode == -signal.SIGKILL
+    assert not psutil.pid_exists(grandchild_pid), f"grandchild PID {grandchild_pid} survived process-group kill"
     expected = f"Subprocess [{cmd}] exceeded timeout of [{timeout}]s and was terminated with return code [{-signal.SIGKILL}]."
     assert any(
         r.levelno == logging.ERROR and r.getMessage().startswith(expected) for r in caplog.records

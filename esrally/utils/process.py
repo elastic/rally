@@ -18,6 +18,7 @@
 import logging
 import os
 import shlex
+import signal
 import subprocess
 import time
 from collections.abc import Iterable, Mapping
@@ -111,11 +112,12 @@ def run_subprocess_with_logging(
         env=env,
         stdin=stdin if stdin else None,
         preexec_fn=pre_exec,
+        start_new_session=True,
     ) as command_line_process:
         try:
             stdout, _ = command_line_process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            command_line_process.kill()
+            os.killpg(command_line_process.pid, signal.SIGKILL)
             # finish handling pipes and populate the returncode attribute
             stdout, _ = command_line_process.communicate()
             output = f" Output: [{stdout}]" if stdout else ""
