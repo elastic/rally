@@ -21,7 +21,6 @@ import re
 import pytest
 
 from esrally import exceptions
-from esrally.mechanic import team
 from esrally.utils import versions
 
 
@@ -73,8 +72,16 @@ class TestsVersions:
         assert versions.major_version("25.0.3") == 25
 
     def test_latest_supported_major(self):
-        assert versions.latest_supported_major(team.Version("serverless")) == "serverless"
-        assert versions.latest_supported_major(team.Version("8.4.0")) == 8
+        class VersionStub:
+            def __init__(self, version):
+                self._version = version
+
+            def version(self):
+                return self._version
+
+        assert versions.latest_supported_major(VersionStub("serverless")) == "serverless"
+        assert versions.latest_supported_major(VersionStub("8.4.0")) == 8
+        assert versions.latest_supported_major(VersionStub("8.4.0-SNAPSHOT")) == 8
 
     @pytest.mark.parametrize("seed", range(40))
     def test_latest_bounded_minor(self, seed):

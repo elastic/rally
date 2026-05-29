@@ -109,6 +109,12 @@ def variants_of(version):
 
 
 def latest_supported_major(version):
+    """
+    Determines the major version of a distribution version object.
+
+    :param version: An object providing a ``version()`` method.
+    :return: The major version as int or ``"serverless"`` for serverless distributions.
+    """
     if version.version() == "serverless":
         return "serverless"
     return Version.from_string(version.version()).major
