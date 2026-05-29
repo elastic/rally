@@ -1874,7 +1874,7 @@ class AsyncIoAdapter:
         task_names = [t.task.task.name for t in self.task_allocations]
         run_start = time.perf_counter()
 
-        if len(all_hosts) > 1:
+        if self.cfg.opts("race", "pipeline") == "multi-cluster" and len(all_hosts) > 1:
             # Multi-cluster: run all clusters in parallel for this step
             self.logger.info(
                 "Worker[%s] executing tasks %s against clusters [%s] in parallel",

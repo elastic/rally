@@ -2296,6 +2296,120 @@ class TestAsyncExecutor:
         assert "handling_cluster" not in request_meta_data
 
 
+class TestAsyncIoAdapter:
+    class Holder:
+        def __init__(self, all_hosts=None, all_client_options=None):
+            self.all_hosts = all_hosts
+            self.all_client_options = all_client_options
+
+    @staticmethod
+    def cfg(pipeline):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "race", "pipeline", pipeline)
+        cfg.add(
+            config.Scope.application,
+            "client",
+            "hosts",
+            TestAsyncIoAdapter.Holder(all_hosts={"default": ["127.0.0.1:9200"], "remote": ["127.0.0.1:9201"]}),
+        )
+        cfg.add(
+            config.Scope.application,
+            "client",
+            "options",
+            TestAsyncIoAdapter.Holder(all_client_options={"default": {}, "remote": {}}),
+        )
+        cfg.add(config.Scope.application, "driver", "profiling", False)
+        cfg.add(config.Scope.application, "driver", "assertions", False)
+        return cfg
+
+    @staticmethod
+    def task_allocations():
+        task = track.Task(
+            "index",
+            track.Operation(
+                "index-op", track.OperationType.Bulk.to_hyphenated_string(), params={}, param_source="driver-test-param-source"
+            ),
+            clients=1,
+        )
+        allocation = driver.TaskAllocation(task=task, client_index_in_task=0, global_client_index=0, total_clients=1)
+        return [driver.ClientAllocation(client_id=0, task=allocation)]
+
+    @staticmethod
+    def client_factory(*args, **kwargs):
+        es = mock.Mock()
+        es.close = mock.AsyncMock()
+        return mock.Mock(create_async=mock.Mock(return_value=es))
+
+    @pytest.mark.asyncio
+    async def test_benchmark_only_with_multiple_clusters_uses_existing_single_execution_path(self):
+        executor_calls = []
+
+        class Executor:
+            def __init__(self, *args, **kwargs):
+                executor_calls.append({"args": args, "kwargs": kwargs})
+
+            async def __call__(self):
+                return None
+
+        adapter = driver.AsyncIoAdapter(
+            self.cfg("benchmark-only"),
+            track=mock.sentinel.track,
+            task_allocations=self.task_allocations(),
+            sampler=mock.Mock(),
+            cancel=threading.Event(),
+            complete=threading.Event(),
+            on_error=OnErrorBehavior.CONTINUE,
+            client_contexts={0: mock.Mock(api_key=None)},
+            worker_id=0,
+        )
+
+        with (
+            mock.patch("esrally.driver.driver.client.EsClientFactory", side_effect=self.client_factory),
+            mock.patch("esrally.driver.driver.track.operation_parameters", return_value=mock.sentinel.param_source),
+            mock.patch("esrally.driver.driver.schedule_for", return_value=mock.sentinel.schedule),
+            mock.patch("esrally.driver.driver.AsyncExecutor", Executor),
+        ):
+            await adapter.run()
+
+        assert len(executor_calls) == 1
+        assert executor_calls[0]["kwargs"]["cluster_name"] is None
+        assert set(executor_calls[0]["args"][3].keys()) == {"default", "remote"}
+
+    @pytest.mark.asyncio
+    async def test_multi_cluster_pipeline_with_multiple_clusters_executes_each_cluster(self):
+        executor_calls = []
+
+        class Executor:
+            def __init__(self, *args, **kwargs):
+                executor_calls.append({"args": args, "kwargs": kwargs})
+
+            async def __call__(self):
+                return None
+
+        adapter = driver.AsyncIoAdapter(
+            self.cfg("multi-cluster"),
+            track=mock.sentinel.track,
+            task_allocations=self.task_allocations(),
+            sampler=mock.Mock(),
+            cancel=threading.Event(),
+            complete=threading.Event(),
+            on_error=OnErrorBehavior.CONTINUE,
+            client_contexts={0: mock.Mock(api_key=None)},
+            worker_id=0,
+        )
+
+        with (
+            mock.patch("esrally.driver.driver.client.EsClientFactory", side_effect=self.client_factory),
+            mock.patch("esrally.driver.driver.track.operation_parameters", return_value=mock.sentinel.param_source),
+            mock.patch("esrally.driver.driver.schedule_for", return_value=mock.sentinel.schedule),
+            mock.patch("esrally.driver.driver.AsyncExecutor", Executor),
+        ):
+            await adapter.run()
+
+        assert [call["kwargs"]["cluster_name"] for call in executor_calls] == ["default", "remote"]
+        assert all(set(call["args"][3].keys()) == {"default"} for call in executor_calls)
+
+
 class TestAsyncProfiler:
     @pytest.mark.asyncio
     async def test_profiler_is_a_transparent_wrapper(self):
