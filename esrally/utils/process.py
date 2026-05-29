@@ -79,6 +79,7 @@ def run_subprocess_with_logging(
     stdin: Optional[Union[FileId, IO[bytes]]] = None,
     env: Optional[Mapping[str, str]] = None,
     detach: bool = False,
+    timeout: Optional[float] = None,
 ) -> int:
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.
@@ -90,6 +91,8 @@ def run_subprocess_with_logging(
       (default: None).
     :param env: Use specific environment variables (default: None).
     :param detach: Whether to detach this process from its parent process (default: False).
+    :param timeout: Optional time in seconds to wait for the subprocess to finish. If exceeded, the child is killed
+      and this function returns the exit code from the killed child. ``None`` (the default) waits indefinitely.
     :return: The process exit code as an int.
     """
     logger = logging.getLogger(__name__)
@@ -109,7 +112,22 @@ def run_subprocess_with_logging(
         stdin=stdin if stdin else None,
         preexec_fn=pre_exec,
     ) as command_line_process:
-        stdout, _ = command_line_process.communicate()
+        try:
+            stdout, _ = command_line_process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            command_line_process.kill()
+            # finish handling pipes and populate the returncode attribute
+            stdout, _ = command_line_process.communicate()
+            output = f" Output: [{stdout}]" if stdout else ""
+            logger.error(
+                "Subprocess [%s] exceeded timeout of [%s]s and was terminated with return code [%s].%s",
+                command_line,
+                timeout,
+                str(command_line_process.returncode),
+                output,
+            )
+            return command_line_process.returncode
+
         if stdout:
             logger.log(level=level, msg=stdout)
 

@@ -15,7 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import logging
 import os
+import signal
 from unittest import mock
 
 import psutil
@@ -207,3 +209,16 @@ def test_run_subprocess():
     assert completed_process.returncode != 0
     assert completed_process.stdout != ""
     assert completed_process.stderr is None
+
+
+def test_run_subprocess_with_logging_timeout_kills_child(caplog):
+    cmd = "sleep 5"
+    timeout = 0
+    with caplog.at_level(logging.ERROR, logger="esrally.utils.process"):
+        returncode = process.run_subprocess_with_logging(cmd, timeout=timeout)
+
+    assert returncode == -signal.SIGKILL
+    expected = f"Subprocess [{cmd}] exceeded timeout of [{timeout}]s and was terminated with return code [{-signal.SIGKILL}]."
+    assert any(
+        r.levelno == logging.ERROR and r.getMessage().startswith(expected) for r in caplog.records
+    ), f"expected ERROR log starting with {expected!r}, got: {[r.getMessage() for r in caplog.records]}"

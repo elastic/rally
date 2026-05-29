@@ -148,7 +148,7 @@ class TestGit:
         with pytest.raises(exceptions.SystemSetupError) as exc:
             git.head_revision("/src")
         assert exc.value.args[0] == "Your git version is [1.0.0] but Rally requires at least git 1.9. Please update git."
-        run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG)
+        run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG, timeout=git.GIT_TIMEOUT)
 
     def test_clone_successful(self):
         git.clone(self.tmp_clone_dir, remote=self.remote_tmp_src_dir)
@@ -159,6 +159,15 @@ class TestGit:
         with pytest.raises(exceptions.SupplyError) as exc:
             git.clone(self.tmp_clone_dir, remote=remote)
         assert exc.value.args[0] == f"Could not clone from [{remote}] to [{self.tmp_clone_dir}]"
+
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_clone_raises_supply_error_on_timeout(self, run_subprocess_with_logging):
+        run_subprocess_with_logging.return_value = -9
+        remote = "https://github.com/elastic/rally-tracks"
+        with pytest.raises(exceptions.SupplyError) as exc:
+            git.clone(self.tmp_clone_dir, remote=remote)
+        assert exc.value.args[0] == f"Could not clone from [{remote}] to [{self.tmp_clone_dir}]"
+        run_subprocess_with_logging.assert_called_once_with(f"git clone {remote} {self.tmp_clone_dir}", timeout=git.GIT_TIMEOUT)
 
     def test_fetch_successful(self):
         git.fetch(self.local_tmp_src_dir, remote=self.local_remote_name)
