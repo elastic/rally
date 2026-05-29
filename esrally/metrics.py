@@ -621,11 +621,12 @@ class MetaInfoScope(Enum):
 
 def calculate_results(store, race):
     calc = GlobalStatsCalculator(store, race.track, race.challenge)
-    cluster_names = store.task_cluster_names()
-    if not cluster_names:
-        return calc()
-    # Multi-cluster: return one GlobalStats per cluster, each stamped with its name.
-    return [calc(cluster_name=cn) for cn in sorted(cluster_names)]
+    if race.pipeline == "multi-cluster":
+        cluster_names = store.task_cluster_names()
+        if cluster_names:
+            # Multi-cluster: return one GlobalStats per cluster, each stamped with its name.
+            return [calc(cluster_name=cn) for cn in sorted(cluster_names)]
+    return calc()
 
 
 def calculate_system_results(store, node_name):
