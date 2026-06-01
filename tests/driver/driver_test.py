@@ -1988,6 +1988,25 @@ class TestAsyncExecutor:
         assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: Huge error, HTTP Status: 499")
 
     @pytest.mark.asyncio
+    async def test_execute_single_with_http_400_with_non_utf8_raw_response_body(self):
+        es = None
+        params = None
+        body = io.BytesIO(b"\xff")
+        str_literal = str(body)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=499,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+        runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal, meta=error_meta, body=body))
+
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await driver.execute_single(self.context_managed(runner), es, params, on_error=OnErrorBehavior.ABORT)
+        assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: �, HTTP Status: 499")
+
+    @pytest.mark.asyncio
     async def test_execute_single_with_http_400(self):
         es = None
         params = None
