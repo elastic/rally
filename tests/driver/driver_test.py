@@ -1994,7 +1994,7 @@ class TestAsyncExecutor:
         body = io.BytesIO(b"\xff")
         str_literal = str(body)
         error_meta = elastic_transport.ApiResponseMeta(
-            status=499,
+            status=400,
             http_version="1.1",
             headers=elastic_transport.HttpHeaders(),
             duration=0.0,
@@ -2004,7 +2004,7 @@ class TestAsyncExecutor:
 
         with pytest.raises(exceptions.RallyAssertionError) as exc:
             await driver.execute_single(self.context_managed(runner), es, params, on_error=OnErrorBehavior.ABORT)
-        assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: �, HTTP Status: 499")
+        assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: �, HTTP Status: 400")
 
     @pytest.mark.asyncio
     async def test_execute_single_with_http_400(self):
