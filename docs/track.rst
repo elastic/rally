@@ -2613,11 +2613,12 @@ With the operation ``composite`` you can specify complex operations consisting o
 Properties
 """"""""""
 
-* ``requests`` (mandatory): A list that specifies the request streams to execute. Streams execute concurrently, operations within a stream sequentially. It is possible to nest streams. See below for specific examples.
-* ``max-connections`` (optional: defaults to unbounded): The maximum number of concurrent connections per client executing this composite operation. By default, the operation itself does not restrict the number of connections but is bound to Rally's network connection limit. Therefore raise the number of available network connections appropriately (see :ref:`command line reference <clr_client_options>`).
+* ``requests`` (mandatory): A list that specifies the request streams to execute. Streams execute concurrently, operations within a stream sequentially. It is possible to nest streams or nest ``composite`` operations. See below for specific examples.
+* ``max-connections`` (optional: defaults to unbounded): The maximum number of concurrent connections per client executing this composite operation. By default, the operation itself does not restrict the number of connections but is bound to Rally's network connection limit. Therefore raise the number of available network connections appropriately (see :ref:`command line reference <clr_client_options>`). When a ``composite`` operation is nested inside another ``composite``, the parent's connection limit is inherited and this parameter is ignored.
 
 The ``composite`` operation only supports the following operation-types:
 
+* ``composite``
 * ``open-point-in-time``
 * ``close-point-in-time``
 * ``search``
@@ -2789,6 +2790,52 @@ The following diagram depicts in which order requests are executed; the specific
 
 .. image:: nested-streams.png
    :alt: Timing view of nested streams
+
+**Nested composite operations**
+
+A ``composite`` operation can also be used as an ``operation-type`` within another ``composite``'s ``requests`` list. This enables a pattern that cannot be expressed with inline stream nesting alone: a **sequence of phases where each phase runs multiple requests concurrently**.
+
+With inline stream nesting, consecutive ``stream`` items are all gathered concurrently — there is no built-in way to make one group of parallel streams wait for another group to finish first. Using a nested ``composite`` as an ``operation-type`` inside a stream solves this: since it is processed sequentially within the enclosing stream, the nested composite runs all its own parallel streams to completion before the next item in the outer stream begins.
+
+Note that a nested ``composite`` is **not timed as an operation itself** — only its leaf operations (``search``, ``raw-request``, etc.) are. This means the timing output of a nested composite is identical to what inline stream nesting would produce for the same requests; composite nesting is purely a structural convenience.
+
+The following example shows two phases executed in sequence, where each phase runs two searches concurrently. The first phase (posts and users) must complete before the second phase (comments and tags) begins::
+
+    {
+      "schedule": [
+        {
+          "name": "two-phase-search",
+          "operation": {
+            "operation-type": "composite",
+            "requests": [
+              {
+                "stream": [
+                  {
+                    "operation-type": "composite",
+                    "requests": [
+                      {"stream": [{"operation-type": "raw-request", "path": "/posts/_search", "body": {"query": {"match_all": {}}}}]},
+                      {"stream": [{"operation-type": "raw-request", "path": "/users/_search", "body": {"query": {"match_all": {}}}}]}
+                    ]
+                  },
+                  {
+                    "operation-type": "composite",
+                    "requests": [
+                      {"stream": [{"operation-type": "raw-request", "path": "/comments/_search", "body": {"query": {"match_all": {}}}}]},
+                      {"stream": [{"operation-type": "raw-request", "path": "/tags/_search", "body": {"query": {"match_all": {}}}}]}
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+
+Additional behaviours when a ``composite`` is nested inside another ``composite``:
+
+* **Connection limit**: The nested composite inherits the parent's connection semaphore and its own ``max-connections`` parameter is ignored. All requests at every nesting level compete for the same pool of connections defined by the outermost composite.
+* **Shared state**: The nested composite reuses the parent's ``CompositeContext``, so shared state (e.g. Point-In-Time IDs, async search IDs) is visible across all nesting levels.
 
 Meta-data
 """""""""

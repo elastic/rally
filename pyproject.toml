@@ -85,7 +85,7 @@ dependencies = [
     # License: Apache 2.0
     "google-auth==2.38.0",
     # License: BSD
-    "zstandard==0.21.0",
+    "zstandard==0.25.0",
     # License: Python Software Foundation License
     "typing-extensions==4.12.2",
     # License:  BSD-2-Clause license
@@ -168,6 +168,8 @@ profile = 'black'
 [tool.pytest.ini_options]
 # set to true for more verbose output of tests
 log_cli = false
+log_date_format = "%Y-%m-%d %H:%M:%S"
+log_format = "%(asctime)s %(levelname)-8s %(name)s:%(filename)s:%(lineno)d %(message)s"
 log_level = "INFO"
 addopts = "--verbose --color=yes"
 testpaths = "tests"

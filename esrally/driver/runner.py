@@ -2828,6 +2828,14 @@ class CompositeContext:
         except LookupError:
             raise exceptions.RallyAssertionError("This operation is only allowed inside a composite operation.") from None
 
+    @staticmethod
+    def has_active_context():
+        try:
+            CompositeContext.ctx.get()
+            return True
+        except LookupError:
+            return False
+
 
 class Composite(Runner):
     """
@@ -2839,6 +2847,7 @@ class Composite(Runner):
         # Since Composite is marked as serverless.Status.Public, only add public
         # operation types here.
         self.supported_op_types = [
+            "composite",
             "open-point-in-time",
             "close-point-in-time",
             "search",
@@ -2851,6 +2860,7 @@ class Composite(Runner):
             "delete-async-search",
             "field-caps",
         ]
+        self.operations_without_request_timing = ["composite"]
 
     async def run_stream(self, es, stream, connection_limit):
         streams = []
@@ -2871,20 +2881,30 @@ class Composite(Runner):
                         raise exceptions.RallyAssertionError(
                             f"Unsupported operation-type [{op_type}]. Use one of [{', '.join(self.supported_op_types)}]."
                         )
-                    runner = RequestTiming(runner_for(op_type))
-                    async with connection_limit:
+                    if op_type not in self.operations_without_request_timing:
+                        runner = RequestTiming(runner_for(op_type))
+                    else:
+                        runner = runner_for(op_type)
+                    if op_type == "composite":
+                        nested_item = dict(item)
+                        nested_item["_rally_connection_limit"] = connection_limit
                         async with runner:
-                            response = await runner({"default": es}, item)
-                            if response:
-                                # TODO: support calculating dependent's throughput
-                                # drop weight and unit metadata but keep the rest
-                                response.pop("weight")
-                                response.pop("unit")
-                                timing = response.get("dependent_timing")
-                                if timing:
-                                    timings.append(response)
-                            else:
-                                timings.append(None)
+                            response = await runner({"default": es}, nested_item)
+                    else:
+                        async with connection_limit:
+                            async with runner:
+                                response = await runner({"default": es}, item)
+
+                    if response:
+                        # TODO: support calculating dependent's throughput
+                        # drop weight and unit metadata but keep the rest
+                        response.pop("weight")
+                        response.pop("unit")
+                        timing = response.get("dependent_timing")
+                        if timing:
+                            timings.append(response)
+                    else:
+                        timings.append(None)
 
                 else:
                     raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
@@ -2904,9 +2924,15 @@ class Composite(Runner):
 
     async def __call__(self, es, params):
         requests = mandatory(params, "requests", self)
-        max_connections = params.get("max-connections", sys.maxsize)
-        async with CompositeContext():
-            response = await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+        connection_limit = params.get("_rally_connection_limit")
+        if connection_limit is None:
+            max_connections = params.get("max-connections", sys.maxsize)
+            connection_limit = asyncio.BoundedSemaphore(max_connections)
+        if CompositeContext.has_active_context():
+            response = await self.run_stream(es, requests, connection_limit)
+        else:
+            async with CompositeContext():
+                response = await self.run_stream(es, requests, connection_limit)
         return {
             "weight": 1,
             "unit": "ops",

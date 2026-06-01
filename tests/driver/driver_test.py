@@ -351,6 +351,31 @@ class TestDriver:
         delete.assert_called_once_with(d.default_sync_es_client, d.generated_api_key_ids)
 
 
+class TestTrackPreparationActor:
+    @mock.patch("esrally.actor.log.post_configure_actor_logging")
+    @mock.patch("esrally.driver.driver.load_track")
+    @mock.patch("esrally.driver.driver.load_local_config")
+    def test_bootstrap_installs_track_dependencies(self, load_local_config, load_track, post_configure_actor_logging):
+        local_cfg = mock.sentinel.local_cfg
+        load_local_config.return_value = local_cfg
+        driver_actor = mock.sentinel.driver_actor
+        coordinator_cfg = mock.sentinel.coordinator_cfg
+        actor_under_test = driver.TrackPreparationActor()
+        actor_under_test.send = mock.Mock()
+
+        actor_under_test.receiveMsg_Bootstrap(driver.Bootstrap(coordinator_cfg), driver_actor)
+
+        post_configure_actor_logging.assert_called_once_with()
+        load_local_config.assert_called_once_with(coordinator_cfg)
+        load_track.assert_called_once_with(local_cfg, install_dependencies=True)
+        actor_under_test.send.assert_called_once()
+        sent_driver_actor, ready_msg = actor_under_test.send.call_args.args
+        assert sent_driver_actor is driver_actor
+        assert isinstance(ready_msg, driver.ReadyForWork)
+        assert actor_under_test.driver_actor is driver_actor
+        assert actor_under_test.cfg is local_cfg
+
+
 def op(name, operation_type):
     return track.Operation(name, operation_type, param_source="driver-test-param-source")
 
@@ -502,6 +527,82 @@ class TestSamplePostprocessor:
             self.service_time(38601, 25, 50.0, meta_data_with_key),
             self.service_time(38602, 26, 80.0, meta_data_with_key),
             # we don't currently calculate dependent throughput
+            self.throughput(38598, 24, 5000),
+        ]
+        metrics_store.put_value_cluster_level.assert_has_calls(calls)
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_multi_layer_dependent_samples(self, metrics_store):
+        post_process = driver.SamplePostprocessor(metrics_store, downsample_factor=1, track_meta_data={}, challenge_meta_data={})
+
+        task = track.Task("index", track.Operation("index-op", "bulk", param_source="driver-test-param-source"))
+        samples = [
+            driver.Sample(
+                0,
+                38598,
+                24,
+                0,
+                task,
+                metrics.SampleType.Normal,
+                None,
+                0.01,
+                0.007,
+                0.009,
+                None,
+                5000,
+                "docs",
+                1,
+                1 / 2,
+                dependent_timing=[
+                    {
+                        "meta_key_1": "meta_value_1",
+                        "dependent_timing": [
+                            {
+                                "meta_key_2": "meta_value_2",
+                                "dependent_timing": {
+                                    "absolute_time": 38601,
+                                    "request_start": 25,
+                                    "service_time": 0.05,
+                                    "operation": "index-op",
+                                    "operation-type": "bulk",
+                                },
+                            },
+                            {
+                                "meta_key_2": "meta_value_2_override",
+                                "dependent_timing": [
+                                    {
+                                        "meta_key_3": "meta_value_3",
+                                        "dependent_timing": {
+                                            "absolute_time": 38602,
+                                            "request_start": 26,
+                                            "service_time": 0.08,
+                                            "operation": "index-op",
+                                            "operation-type": "bulk",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            ),
+        ]
+
+        post_process(samples)
+        meta_data = {"client_id": 0}
+        first_meta_data = {"client_id": 0, "meta_key_1": "meta_value_1", "meta_key_2": "meta_value_2"}
+        second_meta_data = {
+            "client_id": 0,
+            "meta_key_1": "meta_value_1",
+            "meta_key_2": "meta_value_2_override",
+            "meta_key_3": "meta_value_3",
+        }
+        calls = [
+            self.latency(38598, 24, 10.0, meta_data),
+            self.service_time(38598, 24, 7.0, meta_data),
+            self.processing_time(38598, 24, 9.0, meta_data),
+            self.service_time(38601, 25, 50.0, first_meta_data),
+            self.service_time(38602, 26, 80.0, second_meta_data),
             self.throughput(38598, 24, 5000),
         ]
         metrics_store.put_value_cluster_level.assert_has_calls(calls)

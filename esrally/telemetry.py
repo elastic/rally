@@ -2358,6 +2358,9 @@ class DiskUsageStats(TelemetryDevice):
             ``disk-usage-stats-indices``: Comma separated list of indices who's disk
                 usage to fetch. Default is all indices in the track.
             ``disk-usage-stats-timeout``: Timeout in seconds for the disk usage API call. Default is 600s.
+            ``disk-usage-stats-flush``: Whether to pass ``flush=true`` to the disk
+                usage API. Default is ``True`` (matches the API default). When
+                ``False``, the response may not include uncommitted data.
         :param client: The Elasticsearch client for this cluster.
         :param metrics_store: The configured metrics store we write to.
         :param index_names: Names of indices defined by this track
@@ -2373,6 +2376,7 @@ class DiskUsageStats(TelemetryDevice):
     def on_benchmark_start(self):
         self.indices = self.telemetry_params.get("disk-usage-stats-indices", ",".join(self.index_names + self.data_stream_names))
         self.timeout = self.telemetry_params.get("disk-usage-stats-timeout", 600)
+        self.flush = self.telemetry_params.get("disk-usage-stats-flush", True)
         if not self.indices:
             msg = (
                 "No indices defined for disk-usage-stats. Set disk-usage-stats-indices "
@@ -2391,7 +2395,9 @@ class DiskUsageStats(TelemetryDevice):
         for index in self.indices.split(","):
             self.logger.debug("Gathering disk usage for [%s]", index)
             try:
-                response = self.client.options(request_timeout=self.timeout).indices.disk_usage(index=index, run_expensive_tasks=True)
+                response = self.client.options(request_timeout=self.timeout).indices.disk_usage(
+                    index=index, run_expensive_tasks=True, flush=self.flush
+                )
             except elasticsearch.RequestError:
                 msg = f"A transport error occurred while collecting disk usage for {index}"
                 self.logger.exception(msg)

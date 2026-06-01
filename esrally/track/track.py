@@ -276,23 +276,8 @@ class Documents:
             r.append("%s = [%s]" % (prop, repr(value)))
         return ", ".join(r)
 
-    def __hash__(self):
+    def _identity(self, meta_data):
         return (
-            hash(self.source_format)
-            ^ hash(self.document_file)
-            ^ hash(self.document_archive)
-            ^ hash(self.base_url)
-            ^ hash(self.includes_action_and_meta_data)
-            ^ hash(self.number_of_documents)
-            ^ hash(self.compressed_size_in_bytes)
-            ^ hash(self.uncompressed_size_in_bytes)
-            ^ hash(self.target_index)
-            ^ hash(self.target_data_stream)
-            ^ hash(frozenset(self.meta_data.items()))
-        )
-
-    def __eq__(self, othr):
-        return isinstance(othr, type(self)) and (
             self.source_format,
             self.document_file,
             self.document_archive,
@@ -303,20 +288,24 @@ class Documents:
             self.uncompressed_size_in_bytes,
             self.target_index,
             self.target_data_stream,
-            self.meta_data,
-        ) == (
-            othr.source_format,
-            othr.document_file,
-            othr.document_archive,
-            othr.base_url,
-            othr.includes_action_and_meta_data,
-            othr.number_of_documents,
-            othr.compressed_size_in_bytes,
-            othr.uncompressed_size_in_bytes,
-            othr.target_index,
-            othr.target_data_stream,
-            othr.meta_data,
+            meta_data,
         )
+
+    def sort_key(self):
+        def optional(v):
+            return v is not None, v
+
+        # Sort keys need a deterministic, orderable representation of meta-data.
+        sorted_meta_data = tuple(sorted((repr(k), repr(v)) for k, v in self.meta_data.items()))
+        return tuple(optional(v) for v in self._identity(meta_data=sorted_meta_data))
+
+    def __hash__(self):
+        # Hashing needs meta-data to be immutable and hashable.
+        return hash(self._identity(meta_data=frozenset(self.meta_data.items())))
+
+    def __eq__(self, othr):
+        # Equality can compare the original dictionaries directly.
+        return isinstance(othr, type(self)) and self._identity(meta_data=self.meta_data) == othr._identity(meta_data=othr.meta_data)
 
 
 class DocumentCorpus:
@@ -388,7 +377,9 @@ class DocumentCorpus:
             return self
         else:
             return DocumentCorpus(
-                name=self.name, documents=list(set(self.documents).union(other.documents)), meta_data=dict(self.meta_data)
+                name=self.name,
+                documents=sorted(set(self.documents).union(other.documents), key=Documents.sort_key),
+                meta_data=dict(self.meta_data),
             )
 
     def __str__(self):
