@@ -913,7 +913,7 @@ You can also target multiple clusters with ``--target-hosts`` for specific use c
 
 Enables :ref:`multi-cluster mode <multi_cluster_mode>`. For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task, and reports results side-by-side.
 
-Requires a JSON object with two or more named clusters in ``--target-hosts`` and matching keys in ``--client-options``. Must be combined with the ``benchmark-only`` pipeline (or any pipeline that targets an already-running cluster).
+Requires a JSON object with two or more named clusters in ``--target-hosts`` and matching keys in ``--client-options``. Must be combined with the ``benchmark-only`` pipeline.
 
 The default value is ``false``.
 

@@ -134,4 +134,31 @@ What did Rally just do?
 
 If you are curious about the operations that Rally has run, inspect the `geopoint track specification <https://github.com/elastic/rally-tracks/blob/5/geopoint/track.json>`_ or start to :doc:`write your own tracks </adding_tracks>`. You can also configure Rally to :doc:`store all data samples in Elasticsearch </configuration>` so you can analyze the results with Kibana. Finally, you may want to :doc:`change the Elasticsearch configuration </car>`.
 
+.. _multi_cluster_mode:
+
+Multi-cluster mode
+------------------
+
+Multi-cluster mode lets you run the same benchmark against multiple Elasticsearch clusters simultaneously and compare results side-by-side.
+
+For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task. Results are stored in a single race with a ``cluster`` field on each result document, and the terminal summary shows a side-by-side table with one column per cluster.
+
+.. note::
+
+   Multi-cluster mode is currently only supported with the ``benchmark-only`` :doc:`pipeline </pipelines>`. The clusters must already be running — Rally will not provision them.
+
+Enable multi-cluster mode by adding ``--multi-cluster`` to the ``esrally race`` command. You must specify two or more named clusters in ``--target-hosts`` using JSON format with matching keys in ``--client-options``. See :ref:`target-hosts advanced topics <command_line_reference_advanced_topics>` for the full format reference.
+
+**Example**
+
+ ::
+
+   esrally race --track=geonames --pipeline=benchmark-only --multi-cluster \
+     --target-hosts='{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}' \
+     --client-options='{"cluster-a":{"timeout":60},"cluster-b":{"timeout":60}}'
+
+.. note::
+
+   Custom runners work in multi-cluster mode without any changes. For each cluster Rally calls your runner once with a single ``default`` client scoped to that cluster — the same interface as single-cluster mode.
+
 
