@@ -1897,12 +1897,6 @@ class AsyncIoAdapter:
         awaitables = []
         if self.cfg.opts("driver", "multi.cluster", mandatory=False) and len(all_hosts) > 1:
             # Multi-cluster: run all clusters in parallel for this step
-            self.logger.info(
-                "Worker[%s] executing tasks %s against clusters [%s] in parallel",
-                self.parent_worker_id,
-                task_names,
-                ", ".join(all_hosts),
-            )
             for cluster_name in all_hosts:
                 params_per_task = {}
                 for (client_id, task_allocation), es in zip(self.task_allocations, clients):
@@ -1925,6 +1919,12 @@ class AsyncIoAdapter:
                     )
                     final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                     awaitables.append(final_executor())
+            self.logger.info(
+                "Worker[%s] executing tasks %s against clusters [%s] in parallel",
+                self.parent_worker_id,
+                task_names,
+                ", ".join(all_hosts),
+            )
         else:
             # Single cluster: current behavior
             params_per_task = {}
