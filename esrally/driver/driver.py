@@ -1911,7 +1911,7 @@ class AsyncIoAdapter:
                         param_source = track.operation_parameters(self.track, task)
                         params_per_task[task] = param_source
                     schedule = schedule_for(task_allocation, params_per_task[task])
-                    es_single = {"default": es[cluster_name]}
+                    es_single = EsClients({"default": es[cluster_name]})
                     async_executor = AsyncExecutor(
                         client_id,
                         task,
