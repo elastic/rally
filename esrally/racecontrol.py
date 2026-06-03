@@ -362,7 +362,6 @@ def benchmark_only(cfg: types.Config):
     return race(cfg, external=True)
 
 
-
 def docker(cfg: types.Config):
     set_default_hosts(cfg)
     return race(cfg, docker=True)
