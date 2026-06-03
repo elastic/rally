@@ -397,6 +397,8 @@ def load_local_config(coordinator_config) -> types.Config:
             # due to distribution version...
             "mechanic",
             "telemetry",
+            # for multi-cluster
+            "race",
         ],
     )
     # set root path (normally done by the main entry point)
@@ -1874,7 +1876,7 @@ class AsyncIoAdapter:
         task_names = [t.task.task.name for t in self.task_allocations]
 
         awaitables = []
-        if self.cfg.opts("race", "pipeline", mandatory=False) == "multi-cluster" and len(all_hosts) > 1:
+        if self.cfg.opts("driver", "multi.cluster", mandatory=False) and len(all_hosts) > 1:
             # Multi-cluster: run all clusters in parallel for this step
             self.logger.info(
                 "Worker[%s] executing tasks %s against clusters [%s] in parallel",

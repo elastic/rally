@@ -2046,6 +2046,7 @@ class TestEsRaceStore:
             "race-timestamp": "20160131T000000Z",
             "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
             "pipeline": "from-sources",
+            "multi-cluster": False,
             "user-tags": {"os": "Linux"},
             "track": "unittest",
             "track-params": {"shard-count": 3},

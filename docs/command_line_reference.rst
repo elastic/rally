@@ -906,7 +906,24 @@ If multiple Elasticsearch nodes are hidden behind a proxy, it is possible to add
 
 This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
 
-You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`. The :doc:`multi-cluster pipeline </pipelines>` runs each task against all clusters in parallel and expects multiple named clusters in ``--target-hosts`` (JSON format).
+You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`. To benchmark multiple clusters simultaneously, combine the JSON format for ``--target-hosts`` with the :ref:`--multi-cluster flag <multi_cluster_mode>`.
+
+``multi-cluster``
+~~~~~~~~~~~~~~~~~
+
+Enables :ref:`multi-cluster mode <multi_cluster_mode>`. For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task, and reports results side-by-side.
+
+Requires a JSON object with two or more named clusters in ``--target-hosts`` and matching keys in ``--client-options``. Must be combined with the ``benchmark-only`` pipeline (or any pipeline that targets an already-running cluster).
+
+The default value is ``false``.
+
+**Example**
+
+ ::
+
+   esrally race --track=geonames --pipeline=benchmark-only --multi-cluster \
+     --target-hosts='{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}' \
+     --client-options='{"cluster-a":{"timeout":60},"cluster-b":{"timeout":60}}'
 
 ``limit``
 ~~~~~~~~~
@@ -1104,7 +1121,7 @@ Examples:
 .. NOTE::
    **All** :ref:`built-in operations <track_operations>` will use the connection to the ``default`` cluster. However, you can utilize the client connections to the additional clusters in your :ref:`custom runners <adding_tracks_custom_runners>`.
 
-The **multi-cluster** :doc:`pipeline </pipelines>` uses multiple named clusters differently: each task runs against all clusters in parallel within a single race. Use the same JSON format for ``--target-hosts`` and ``--client-options``. Results are stored with a ``cluster`` field on each document so you can filter by cluster in your results store.
+For :ref:`multi-cluster mode <multi_cluster_mode>`, use the same JSON format for ``--target-hosts`` and add ``--multi-cluster`` to the command line. Each task then runs against all clusters in parallel within a single race, and results are stored with a ``cluster`` field on each document so you can filter by cluster in your results store.
 
 ``client-options``
 ~~~~~~~~~~~~~~~~~~

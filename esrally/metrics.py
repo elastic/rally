@@ -621,7 +621,7 @@ class MetaInfoScope(Enum):
 
 def calculate_results(store, race):
     calc = GlobalStatsCalculator(store, race.track, race.challenge)
-    if race.pipeline == "multi-cluster":
+    if race.multi_cluster:
         cluster_names = store.task_cluster_names()
         if cluster_names:
             # Multi-cluster: return one GlobalStats per cluster, each stamped with its name.
@@ -1777,6 +1777,7 @@ def create_race(cfg: types.Config, track, challenge, track_revision=None):
     race_timestamp = cfg.opts("system", "time.start")
     user_tags = cfg.opts("race", "user.tags", default_value={}, mandatory=False)
     pipeline = cfg.opts("race", "pipeline")
+    multi_cluster = cfg.opts("driver", "multi.cluster", mandatory=False, default_value=False)
     track_params = cfg.opts("track", "params")
     car_params = cfg.opts("mechanic", "car.params")
     plugin_params = cfg.opts("mechanic", "plugin.params")
@@ -1798,6 +1799,7 @@ def create_race(cfg: types.Config, track, challenge, track_revision=None):
         car_params,
         plugin_params,
         track_revision,
+        multi_cluster=multi_cluster,
     )
 
 
@@ -1827,6 +1829,7 @@ class Race:
         target_id=None,
         target_platform=None,
         target_auth_type=None,
+        multi_cluster=False,
     ):
         if results is None:
             results = {}
@@ -1843,6 +1846,7 @@ class Race:
         self.race_id = race_id
         self.race_timestamp = race_timestamp
         self.pipeline = pipeline
+        self.multi_cluster = multi_cluster
         self.user_tags = user_tags
         self.track = track
         self.track_params = track_params
@@ -1888,6 +1892,7 @@ class Race:
             "race-id": self.race_id,
             "race-timestamp": time.to_iso8601(self.race_timestamp),
             "pipeline": self.pipeline,
+            "multi-cluster": self.multi_cluster,
             "user-tags": self.user_tags,
             "track": self.track_name,
             "car": self.car,
@@ -1998,6 +2003,7 @@ class Race:
             revision=cluster.get("revision"),
             results=d.get("results"),
             meta_data=d.get("meta", {}),
+            multi_cluster=d.get("multi-cluster", False),
         )
 
 

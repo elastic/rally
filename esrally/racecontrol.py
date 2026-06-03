@@ -359,36 +359,12 @@ def from_distribution(cfg: types.Config):
 
 
 def benchmark_only(cfg: types.Config):
-    set_default_hosts(cfg)
+    if not cfg.opts("driver", "multi.cluster", mandatory=False):
+        set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
     return race(cfg, external=True)
 
-
-def multi_cluster(cfg: types.Config):
-    """
-    Runs one benchmark; each task/step runs against every cluster in
-    --target-hosts before advancing to the next task. Requires multiple
-    named clusters in --target-hosts (JSON format) with matching keys
-    in --client-options. Uses a single Rally process and actor system.
-    """
-    logger = logging.getLogger(__name__)
-    target_hosts = cfg.opts("client", "hosts")
-    cluster_names = list(target_hosts.all_hosts.keys())
-    if len(cluster_names) <= 1:
-        raise exceptions.SystemSetupError(
-            "The multi-cluster pipeline requires multiple named clusters in --target-hosts. "
-            "Specify a JSON object with more than one cluster (e.g. "
-            '--target-hosts=\'{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}\') '
-            "with matching keys in --client-options."
-        )
-    logger.info(
-        "Multi-cluster mode: each task will run against all clusters [%s] before the next task.",
-        ", ".join(cluster_names),
-    )
-    # Same as benchmark-only: no provisioning, external car. One race with full multi-cluster config.
-    cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
-    return race(cfg, external=True)
 
 
 def docker(cfg: types.Config):
@@ -403,12 +379,6 @@ Pipeline(
 )
 
 Pipeline("benchmark-only", "Assumes an already running Elasticsearch instance, runs a benchmark and reports results", benchmark_only)
-
-Pipeline(
-    "multi-cluster",
-    "Runs the benchmark against each cluster in --target-hosts (one full run per cluster).",
-    multi_cluster,
-)
 
 # Very experimental Docker pipeline. Should only be used with great care and is also not supported on all platforms.
 Pipeline("docker", "Runs a benchmark against the official Elasticsearch Docker container and reports results", docker, stable=False)
@@ -441,10 +411,10 @@ def run(cfg: types.Config):
 
     if os.environ.get("RALLY_RUNNING_IN_DOCKER", "").upper() == "TRUE":
         # in this case only benchmarking remote Elasticsearch clusters makes sense
-        if name not in ("benchmark-only", "multi-cluster"):
+        if name != "benchmark-only":
             raise exceptions.SystemSetupError(
-                "Only the [benchmark-only] and [multi-cluster] pipelines are supported by the Rally Docker image.\n"
-                "Add --pipeline=benchmark-only or --pipeline=multi-cluster in your Rally arguments and try again.\n"
+                "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
+                "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
                 "For more details read the docs at {}\n".format(doc_link("pipelines.html"))
             )
 

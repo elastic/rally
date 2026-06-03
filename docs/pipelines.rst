@@ -14,7 +14,6 @@ You can get a list of all pipelines with ``esrally list pipelines``::
     from-sources             Builds and provisions Elasticsearch, runs a benchmark and reports results.
     from-distribution        Downloads an Elasticsearch distribution, provisions it, runs a benchmark and reports results.
     benchmark-only           Assumes an already running Elasticsearch instance, runs a benchmark and reports results
-    multi-cluster            Runs the benchmark against all clusters in --target-hosts in parallel and reports results side-by-side.
 
 benchmark-only
 ~~~~~~~~~~~~~~
@@ -25,20 +24,7 @@ To benchmark a cluster, you also have to specify the hosts to connect to. An exa
 
     esrally race --track=geonames --pipeline=benchmark-only --target-hosts=search-node-a.intranet.acme.com:9200,search-node-b.intranet.acme.com:9200
 
-multi-cluster
-~~~~~~~~~~~~~
-
-Use this pipeline when you want to run the same benchmark against multiple Elasticsearch clusters simultaneously. For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task. Results are stored in a single race with a ``cluster`` field on each result document, and the terminal summary shows a side-by-side table with one column per cluster.
-
-You must specify two or more named clusters in ``--target-hosts`` using JSON format, with matching keys in ``--client-options``. Cluster names can be anything (e.g. ``cluster-a``, ``cluster-b``); a ``default`` key is used for deriving distribution version if ``--distribution-version`` is not set explicitly.
-
-**Example**
-
- ::
-
-   esrally race --track=geonames --pipeline=multi-cluster \
-     --target-hosts='{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}' \
-     --client-options='{"cluster-a":{"timeout":60},"cluster-b":{"timeout":60}}'
+To benchmark multiple clusters simultaneously, add ``--multi-cluster``. See :ref:`multi-cluster mode <multi_cluster_mode>`.
 
 from-distribution
 ~~~~~~~~~~~~~~~~~
@@ -80,3 +66,26 @@ Artifacts are cached for seven days by default in ``~/.rally/benchmarks/distribu
 
 * ``cache`` (default: ``True``): Set to ``False`` to disable artifact caching.
 * ``cache.days`` (default: ``7``): The maximum age in days of an artifact before it gets evicted from the artifact cache.
+
+.. _multi_cluster_mode:
+
+Multi-cluster mode
+------------------
+
+Multi-cluster mode lets you run the same benchmark against multiple Elasticsearch clusters simultaneously. It is enabled with the ``--multi-cluster`` flag and is independent of which pipeline you choose — you will typically combine it with ``benchmark-only``.
+
+For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task. Results are stored in a single race with a ``cluster`` field on each result document, and the terminal summary shows a side-by-side table with one column per cluster.
+
+You must specify two or more named clusters in ``--target-hosts`` using JSON format, with matching keys in ``--client-options``. See :ref:`target-hosts advanced topics <command_line_reference_advanced_topics>` for the full format reference.
+
+**Example**
+
+ ::
+
+   esrally race --track=geonames --pipeline=benchmark-only --multi-cluster \
+     --target-hosts='{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}' \
+     --client-options='{"cluster-a":{"timeout":60},"cluster-b":{"timeout":60}}'
+
+.. note::
+
+   Custom runners work in multi-cluster mode without any changes. For each cluster Rally calls your runner once with a single ``default`` client scoped to that cluster — the same interface as single-cluster mode.

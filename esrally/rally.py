@@ -735,8 +735,8 @@ def create_arg_parser():
     )
     race_parser.add_argument(
         "--target-hosts",
-        help="Define a comma-separated list of host:port pairs for the 'benchmark-only' pipeline (default: localhost:9200). "
-        "For the 'multi-cluster' pipeline use a JSON object with multiple named clusters (e.g. "
+        help="Define a comma-separated list of host:port pairs (default: localhost:9200). "
+        "For multi-cluster mode use a JSON object with multiple named clusters (e.g. "
         '\'{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}\') with matching keys in --client-options.',
         default="",
     )  # actually the default is pipeline specific and it is set later
@@ -836,6 +836,13 @@ def create_arg_parser():
     race_parser.add_argument(
         "--enable-assertions",
         help="Enables assertion checks for tasks (default: false).",
+        default=False,
+        action="store_true",
+    )
+    race_parser.add_argument(
+        "--multi-cluster",
+        help="Benchmark against multiple named clusters defined in --target-hosts. "
+        "Requires a JSON object with more than one cluster in --target-hosts and matching keys in --client-options (default: false).",
         default=False,
         action="store_true",
     )
@@ -1168,6 +1175,14 @@ def configure_connection_params(arg_parser, args, cfg: types.Config):
     cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
     if set(target_hosts.all_hosts) != set(client_options.all_client_options):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
+    if hasattr(args, "multi_cluster") and args.multi_cluster:
+        cluster_names = list(target_hosts.all_hosts.keys())
+        if len(cluster_names) <= 1 or cluster_names == ["default"]:
+            arg_parser.error(
+                "--multi-cluster requires multiple named clusters in --target-hosts. "
+                'Specify a JSON object with more than one cluster (e.g. \'{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}\') '
+                "with matching keys in --client-options."
+            )
 
 
 def configure_reporting_params(args, cfg: types.Config):
@@ -1270,6 +1285,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "system", "install.id", args.race_id)
             cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
             cfg.add(config.Scope.applicationOverride, "race", "user.tags", opts.to_dict(args.user_tags))
+            cfg.add(config.Scope.applicationOverride, "driver", "multi.cluster", args.multi_cluster)
             cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
             cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
             cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
