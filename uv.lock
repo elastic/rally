@@ -730,7 +730,7 @@ requires-dist = [
     { name = "ecs-logging", specifier = "==2.2.0" },
     { name = "elastic-transport", specifier = "==9.2.1" },
     { name = "elasticsearch", extras = ["async"], specifier = "==9.3.0" },
-    { name = "esbonio", marker = "extra == 'develop'" },
+    { name = "esbonio", marker = "extra == 'develop'", specifier = "==2.0.0" },
     { name = "furo", marker = "extra == 'develop'", specifier = "==2022.6.21" },
     { name = "github3-py", marker = "extra == 'develop'", specifier = "==3.2.0" },
     { name = "gitpython", marker = "extra == 'develop'", specifier = "==3.1.30" },
