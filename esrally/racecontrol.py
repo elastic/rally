@@ -202,12 +202,8 @@ class BenchmarkCoordinator:
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
             hosts_cfg = self.cfg.opts("client", "hosts")
             options_cfg = self.cfg.opts("client", "options")
-            all_h = hosts_cfg.all_hosts
-            all_o = options_cfg.all_client_options if hasattr(options_cfg, "all_client_options") else {k: options_cfg[k] for k in all_h}
-            # Use "default" cluster if present, else first cluster (e.g. multi-cluster pipeline with named clusters)
-            first_key = next(iter(all_h)) if all_h else "default"
-            hosts = all_h.get("default", all_h[first_key])
-            client_options = all_o.get("default", all_o[first_key])
+            hosts = hosts_cfg.default_or_first
+            client_options = options_cfg.default_or_first
             (
                 distribution_flavor,
                 distribution_version,

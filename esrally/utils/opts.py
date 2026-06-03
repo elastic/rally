@@ -156,6 +156,11 @@ class ConnectOptions:
         return self.parsed_options["default"]
 
     @property
+    def default_or_first(self):
+        """Return the 'default' entry, or the first entry if there is no 'default' key."""
+        return self.parsed_options.get("default") or next(iter(self.parsed_options.values()))
+
+    @property
     def all_options(self):
         """Return a dict with all parsed options"""
         return self.parsed_options
