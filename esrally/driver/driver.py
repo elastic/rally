@@ -581,6 +581,34 @@ class ClientContext:
     api_key: Optional[ApiKey] = None
 
 
+class EsClients:
+    """
+    Wraps the cluster-name-to-client dict returned by create_es_clients().
+    Exposes a ``default`` property that returns the 'default' client, or the
+    first available client when no 'default' key is present (multi-cluster mode
+    with named clusters).
+    """
+
+    def __init__(self, clients):
+        self._clients = clients
+
+    @property
+    def default(self):
+        return self._clients.get("default") or next(iter(self._clients.values()), None)
+
+    def __getitem__(self, key):
+        return self._clients[key]
+
+    def keys(self):
+        return self._clients.keys()
+
+    def values(self):
+        return self._clients.values()
+
+    def items(self):
+        return self._clients.items()
+
+
 class Driver:
     def __init__(self, driver_actor, config: types.Config, es_client_factory_class=client.EsClientFactory):
         """
@@ -627,25 +655,24 @@ class Driver:
         all_hosts = self.config.opts("client", "hosts").all_hosts
         distribution_version = self.config.opts("mechanic", "distribution.version", mandatory=False)
         distribution_flavor = self.config.opts("mechanic", "distribution.flavor", mandatory=False)
+        all_client_options = self.config.opts("client", "options").all_client_options
         es = {}
         for cluster_name, cluster_hosts in all_hosts.items():
-            all_client_options = self.config.opts("client", "options").all_client_options
             cluster_client_options = dict(all_client_options[cluster_name])
             # Use retries to avoid aborts on long living connections for telemetry devices
             cluster_client_options["retry_on_timeout"] = True
             es[cluster_name] = self.es_client_factory(
                 cluster_hosts, cluster_client_options, distribution_version=distribution_version, distribution_flavor=distribution_flavor
             ).create()
-        return es
+        return EsClients(es)
 
     def prepare_telemetry(self, es, enable, index_names, data_stream_names, build_hash, serverless_mode, serverless_operator):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
 
-        es_default = es.get("default", next(iter(es.values()), None))
-        all_client_options = self.config.opts("client", "options").all_client_options
-        default_client_options = all_client_options.get("default", {})
+        es_default = es.default
+        default_client_options = self.config.opts("client", "options").default
 
         if enable:
             devices = [
@@ -678,7 +705,7 @@ class Driver:
         )
 
     def wait_for_rest_api(self, es):
-        es_default = es.get("default", next(iter(es.values()), None))
+        es_default = es.default
         self.logger.info("Checking if REST API is available.")
         if client.wait_for_rest_layer(es_default, max_attempts=40):
             self.logger.info("REST API is available.")
@@ -688,7 +715,7 @@ class Driver:
 
     def retrieve_cluster_info(self, es):
         try:
-            es_default = es.get("default", next(iter(es.values()), None))
+            es_default = es.default
             return es_default.info() if es_default else None
         except BaseException:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
@@ -696,7 +723,7 @@ class Driver:
 
     def retrieve_build_hash_from_nodes_info(self, es):
         try:
-            es_default = es.get("default", next(iter(es.values()), None))
+            es_default = es.default
             if not es_default:
                 return None
             nodes_info = es_default.nodes.info(filter_path="**.build_hash")
@@ -732,7 +759,7 @@ class Driver:
         )
 
         es_clients = self.create_es_clients()
-        self.default_sync_es_client = es_clients.get("default", next(iter(es_clients.values()), None))
+        self.default_sync_es_client = es_clients.default
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
@@ -773,7 +800,7 @@ class Driver:
                 self.driver_actor.target_platform = target_platform
 
             # Determine target_auth_type from default client options
-            default_client_options = self.config.opts("client", "options").all_client_options.get("default", {})
+            default_client_options = self.config.opts("client", "options").default
             if default_client_options.get("api_key"):
                 self.driver_actor.target_auth_type = "api_key"
             elif default_client_options.get("basic_auth_user") or default_client_options.get("basic_auth"):
@@ -827,10 +854,7 @@ class Driver:
         if allocator.clients < 128:
             self.logger.debug("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
 
-        all_client_options = self.config.opts("client", "options").all_client_options
-        create_api_keys = all_client_options.get("default", next(iter(all_client_options.values()), {})).get(
-            "create_api_key_per_client", None
-        )
+        create_api_keys = self.config.opts("client", "options").default.get("create_api_key_per_client", None)
         worker_assignments = calculate_worker_assignments(self.load_driver_hosts, allocator.clients)
         worker_id = 0
         for assignment in worker_assignments:
@@ -1845,7 +1869,7 @@ class AsyncIoAdapter:
                     distribution_version=distribution_version,
                     distribution_flavor=distribution_flavor,
                 ).create_async(api_key=api_key, client_id=client_id)
-            return es
+            return EsClients(es)
 
         if self.assertions_enabled:
             self.logger.info("Task assertions enabled")
@@ -1855,12 +1879,7 @@ class AsyncIoAdapter:
         client_options = self.cfg.opts("client", "options")
         distribution_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
         distribution_flavor = self.cfg.opts("mechanic", "distribution.flavor", mandatory=False)
-        # Resolve to dict so we can index by cluster name in multi-cluster mode
-        all_client_options = (
-            client_options.all_client_options
-            if hasattr(client_options, "all_client_options")
-            else {n: client_options[n] for n in all_hosts}
-        )
+        all_client_options = client_options.all_client_options
 
         clients = []
         for client_id, task_allocation in self.task_allocations:
@@ -2050,7 +2069,7 @@ class AsyncExecutor:
                 absolute_processing_start = time.time()
                 processing_start = time.perf_counter()
                 self.schedule_handle.before_request(processing_start)
-                es_client = self.es.get("default", next(iter(self.es.values()), None))
+                es_client = self.es.default
                 with es_client.new_request_context() as request_context:
                     total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                     request_start = request_context.request_start

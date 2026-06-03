@@ -66,6 +66,12 @@ class TestDriver:
             self.all_client_options = all_client_options
             self.uses_static_responses = False
 
+        @property
+        def default(self):
+            if not self.all_client_options:
+                return {}
+            return self.all_client_options.get("default") or next(iter(self.all_client_options.values()), {})
+
     class StaticClientFactory:
         PATCHER = None
 
@@ -1508,7 +1514,7 @@ class TestAsyncExecutor:
             client_id=2,
             task=task,
             schedule=schedule,
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1572,7 +1578,7 @@ class TestAsyncExecutor:
             client_id=2,
             task=task,
             schedule=schedule,
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1641,7 +1647,7 @@ class TestAsyncExecutor:
             client_id=0,
             task=task,
             schedule=schedule,
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1715,7 +1721,7 @@ class TestAsyncExecutor:
                 client_id=0,
                 task=task,
                 schedule=schedule,
-                es={"default": es},
+                es=driver.EsClients({"default": es}),
                 sampler=sampler,
                 cancel=cancel,
                 complete=complete,
@@ -1767,7 +1773,7 @@ class TestAsyncExecutor:
                 client_id=0,
                 task=task,
                 schedule=schedule,
-                es={"default": es},
+                es=driver.EsClients({"default": es}),
                 sampler=sampler,
                 cancel=cancel,
                 complete=complete,
@@ -1826,7 +1832,7 @@ class TestAsyncExecutor:
             client_id=2,
             task=task,
             schedule=ScheduleHandle(),
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
