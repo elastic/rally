@@ -1258,7 +1258,15 @@ class EsMetricsStore(MetricsStore):
         return self._parse_values_response(result, mapper)
 
     def get_one(
-        self, name, sample_type=None, node_name=None, task=None, cluster_name=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+        self,
+        name,
+        sample_type=None,
+        node_name=None,
+        task=None,
+        cluster_name=None,
+        mapper=lambda doc: doc["value"],
+        sort_key=None,
+        sort_reverse=False,
     ):
         query = self._build_one_query(name, task, sample_type, node_name, cluster_name, sort_key, sort_reverse)
         self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index_handler.index_name(self._race_timestamp), query)
@@ -2624,9 +2632,7 @@ class GlobalStatsCalculator:
                 sample_size = mstats["count"] if mstats else 0
                 if sample_size > 0 and mpcts:
                     desired = {str(float(p)) for p in percentiles_for_sample_size(sample_size)}
-                    ordered = collections.OrderedDict(
-                        (encode_float_key(k), v) for k, v in mpcts.items() if k in desired
-                    )
+                    ordered = collections.OrderedDict((encode_float_key(k), v) for k, v in mpcts.items() if k in desired)
                     ordered["mean"] = mstats["avg"]
                     ordered["unit"] = munit
                     latency_results[metric] = ordered
