@@ -159,7 +159,7 @@ First, define the name of your parameter source in the operation definition::
     {
       "name": "term",
       "operation-type": "search",
-      "param-source": "my-custom-term-param-source"
+      "param-source": "my-custom-term-param-source",
       "professions": ["mechanic", "physician", "nurse"]
     }
 
@@ -205,7 +205,7 @@ We also derive an appropriate index from the track's index definitions but allow
     {
       "name": "term",
       "operation-type": "search",
-      "param-source": "my-custom-term-param-source"
+      "param-source": "my-custom-term-param-source",
       "professions": ["mechanic", "physician", "nurse"],
       "index": "employee*"
     }
