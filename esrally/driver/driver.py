@@ -1709,7 +1709,8 @@ class ThroughputCalculator:
 
     def calculate(self, samples, bucket_interval_secs=1):
         """
-        Calculates global throughput based on samples gathered from multiple load generators.
+            Calculates global throughput based on samples gathered from multiple load generators.
+            Samples are grouped by task, and in case of multi-cluster mode additionally by cluster.
 
         :param samples: A list containing all samples from all load generators.
         :param bucket_interval_secs: The bucket interval for aggregations.
