@@ -397,8 +397,6 @@ def load_local_config(coordinator_config) -> types.Config:
             # due to distribution version...
             "mechanic",
             "telemetry",
-            # for multi-cluster
-            "race",
         ],
     )
     # set root path (normally done by the main entry point)
