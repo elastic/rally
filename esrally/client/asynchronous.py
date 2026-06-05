@@ -138,6 +138,7 @@ class StaticResponse(aiohttp.ClientResponse):
         traces: list["Trace"],
         loop: asyncio.AbstractEventLoop,
         session: "ClientSession",
+        stream_writer: "aiohttp.abc.AbstractStreamWriter",
     ) -> None:
         super().__init__(
             method,
@@ -149,6 +150,7 @@ class StaticResponse(aiohttp.ClientResponse):
             traces=traces,
             loop=loop,
             session=session,
+            stream_writer=stream_writer,
         )
         self.static_body = None
 
