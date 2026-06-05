@@ -1177,7 +1177,7 @@ def configure_connection_params(arg_parser, args, cfg: types.Config):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
     if hasattr(args, "multi_cluster") and args.multi_cluster:
         cluster_names = list(target_hosts.all_hosts.keys())
-        if len(cluster_names) <= 1 or cluster_names == ["default"]:
+        if len(cluster_names) < 2:
             arg_parser.error(
                 "--multi-cluster requires multiple named clusters in --target-hosts. "
                 'Specify a JSON object with more than one cluster (e.g. \'{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}\') '
