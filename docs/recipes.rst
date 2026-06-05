@@ -1,7 +1,7 @@
-Tips and Tricks
+Using Rally
 ===============
 
-This section covers various tips and tricks in a recipe-style fashion.
+This section covers various examples on how to use Rally in a recipe-style fashion.
 
 Benchmarking an Elastic Cloud cluster
 -------------------------------------
@@ -324,3 +324,28 @@ When a benchmark is executed with ``--enable-assertions`` and this query returns
 
     [ERROR] Cannot race. Error in load generator [0]
         Cannot run task [geo_distance]: Expected [hits] to be > [0] but was [0].
+
+.. _multi_cluster_mode:
+
+Multi-cluster mode
+------------------
+
+Multi-cluster mode lets you run the same benchmark against multiple Elasticsearch clusters simultaneously and compare results side-by-side.
+
+For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task. Results are stored in a single race with a ``cluster`` field on each result document, and the terminal summary shows a side-by-side table with one column per cluster.
+
+.. note::
+
+   Multi-cluster mode is currently only supported with the ``benchmark-only`` :doc:`pipeline </pipelines>`. The clusters must already be running — Rally will not provision them.
+
+Enable multi-cluster mode by adding ``--multi-cluster`` to the ``esrally race`` command. You must specify two or more named clusters in ``--target-hosts`` using JSON format with matching keys in ``--client-options``. See :ref:`target-hosts advanced topics <command_line_reference_advanced_topics>` for the full format reference.
+
+::
+
+   esrally race --track=geonames --pipeline=benchmark-only --multi-cluster \
+     --target-hosts='{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}' \
+     --client-options='{"cluster-a":{"timeout":60},"cluster-b":{"timeout":60}}'
+
+.. note::
+
+   Custom runners work in multi-cluster mode without any changes. For each cluster Rally calls your runner once with a single ``default`` client scoped to that cluster — the same interface as single-cluster mode.
