@@ -2133,16 +2133,19 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
         # Some runners return a raw response, causing the 'error' property to be a string literal of the bytes/BytesIO object,
         # we should avoid bubbling that up
         # e.g. ApiError(413, '<_io.BytesIO object at 0xffffaf146a70>')
+        # errors="replace" so binary response bodies (e.g. OTLP ingest returns binary protobuf
+        # error frames) don't crash the driver with UnicodeDecodeError. Undecodable bytes become
+        # U+FFFD in the logged/recorded message.
         if isinstance(e.body, bytes):
             # could be an empty body
-            if error_body := e.body.decode("utf-8"):
+            if error_body := e.body.decode("utf-8", errors="replace"):
                 error_message = error_body
             else:
                 # to be consistent with an empty 'e.error'
                 error_message = str(None)
         elif isinstance(e.body, BytesIO):
             # could be an empty body
-            if error_body := e.body.read().decode("utf-8"):
+            if error_body := e.body.read().decode("utf-8", errors="replace"):
                 error_message = error_body
             else:
                 # to be consistent with an empty 'e.error'
@@ -2150,17 +2153,17 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
         # fallback to 'error' property if the body isn't bytes/BytesIO
         else:
             if isinstance(e.error, bytes):
-                error_message = e.error.decode("utf-8")
+                error_message = e.error.decode("utf-8", errors="replace")
             elif isinstance(e.error, BytesIO):
-                error_message = e.error.read().decode("utf-8")
+                error_message = e.error.read().decode("utf-8", errors="replace")
             else:
                 # if the 'error' is empty, we get back str(None)
                 error_message = e.error
 
         if isinstance(e.info, bytes):
-            error_info = e.info.decode("utf-8")
+            error_info = e.info.decode("utf-8", errors="replace")
         elif isinstance(e.info, BytesIO):
-            error_info = e.info.read().decode("utf-8")
+            error_info = e.info.read().decode("utf-8", errors="replace")
         else:
             error_info = e.info
 
