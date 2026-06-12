@@ -1027,7 +1027,6 @@ class Query(Runner):
 
     * `operation-type`: One of `search`, `paginated-search`, `scroll-search`, or `composite-agg`
     * `index`: The index or indices against which to issue the query.
-    * `type`: See `index`
     * `cache`: True iff the request cache should be used.
     * `body`: Query body
 

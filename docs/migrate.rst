@@ -473,6 +473,7 @@ A custom runner prior to Rally 2.0.0::
     def percolate(es, params):
         es.percolate(
            index="queries",
+           doc_type="content",
            body=params["body"]
         )
 
@@ -483,9 +484,10 @@ With Rally 2.0.0, the implementation changes as follows::
 
     async def percolate(es, params):
         await es.percolate(
-                index="queries",
-                body=params["body"]
-              )
+           index="queries",
+           doc_type="content",
+           body=params["body"]
+        )
 
     def register(registry):
         registry.register_runner("percolate", percolate, async_runner=True)
