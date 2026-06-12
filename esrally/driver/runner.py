@@ -555,7 +555,6 @@ class BulkIndex(Runner):
         * ``action_metadata_present``: if ``True``, assume that an action and metadata line is present (meaning only half of the lines
         contain actual documents to index)
         * ``index``: The name of the affected index in case ``action_metadata_present`` is ``False``.
-        * ``type``: The name of the affected type in case ``action_metadata_present`` is ``False``.
 
         The following keys are optional:
 
@@ -599,9 +598,7 @@ class BulkIndex(Runner):
 
         if with_action_metadata:
             api_kwargs.pop("index", None)
-            response = await es.bulk(params=bulk_params, **api_kwargs)
-        else:
-            response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
+        response = await es.bulk(params=bulk_params, **api_kwargs)
 
         stats = self._parse_stats(params, bulk_size, unit, response, api_kwargs, detailed_results)
 
@@ -1030,7 +1027,6 @@ class Query(Runner):
 
     * `operation-type`: One of `search`, `paginated-search`, `scroll-search`, or `composite-agg`
     * `index`: The index or indices against which to issue the query.
-    * `type`: See `index`
     * `cache`: True iff the request cache should be used.
     * `body`: Query body
 
@@ -1122,7 +1118,7 @@ class Query(Runner):
                     pit_id = CompositeContext.get(pit_op)
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
-                response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
+                response = await self._raw_search(es, index=index, body=body.copy(), params=request_params, headers=headers)
                 parsed, last_sort = self._search_after_extractor(
                     response,
                     bool(pit_op),
@@ -1183,7 +1179,7 @@ class Query(Runner):
                     composite_agg_body["size"] = size
 
                 body_to_send = tree_copy_composite_agg(body, path_to_composite)
-                response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
+                response = await self._raw_search(es, index=index, body=body_to_send, params=request_params, headers=headers)
                 parsed = self._composite_agg_extractor(
                     response,
                     bool(pit_op),
@@ -1250,9 +1246,7 @@ class Query(Runner):
             return obj
 
         async def _request_body_query(es, params):
-            doc_type = params.get("type")
-
-            r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
+            r = await self._raw_search(es, index, body, request_params, headers=headers)
 
             if detailed_results:
                 props = parse(
@@ -1345,12 +1339,11 @@ class Query(Runner):
                     if page == 0:
                         sort = "_doc"
                         scroll = "10s"
-                        doc_type = params.get("type")
                         params = request_params.copy()
                         params["sort"] = sort
                         params["scroll"] = scroll
                         params["size"] = size
-                        r = await self._raw_search(es, doc_type, index, body, params, headers=headers)
+                        r = await self._raw_search(es, index, body, params, headers=headers)
 
                         props = parse(
                             r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"]
@@ -1418,12 +1411,10 @@ class Query(Runner):
         else:
             raise exceptions.RallyError(f"No runner available for operation-type: [{operation_type}]")
 
-    async def _raw_search(self, es, doc_type, index, body, params, headers=None):
+    async def _raw_search(self, es, index, body, params, headers=None):
         components = []
         if index:
             components.append(index)
-        if doc_type:
-            components.append(doc_type)
         components.append("_search")
         path = "/".join(components)
         return await es.perform_request(method="GET", path="/" + path, params=params, body=body, headers=headers)

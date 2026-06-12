@@ -6,7 +6,7 @@ Definition
 
 A track is a specification of one or more benchmarking scenarios with a specific document corpus. It defines for example the involved indices or data streams, data files and the operations that are invoked. Its most important attributes are:
 
-* One or more indices or data streams, with the former potentially each having one or more types.
+* One or more indices or data streams.
 * The queries to issue.
 * Source URL of the benchmark data.
 * A list of steps to run, which we'll call "challenge", for example indexing data with a specific number of documents per bulk request or running searches for a defined number of iterations.
@@ -213,15 +213,13 @@ Each index in this list consists of the following properties:
 
 * ``name`` (mandatory): The name of the index.
 * ``body`` (optional): File name of the corresponding index definition that will be used as body in the create index API call.
-* ``types`` (optional): A list of type names in this index. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 
 Example::
 
     "indices": [
         {
           "name": "geonames",
-          "body": "geonames-index.json",
-          "types": ["docs"]
+          "body": "geonames-index.json"
         }
     ]
 
@@ -354,7 +352,6 @@ Each entry in the ``documents`` list consists of the following properties:
 * ``compressed-bytes`` (optional but recommended): The size in bytes of the compressed source file. This number is used to show users how much data will be downloaded by Rally and also to check whether the download is complete.
 * ``uncompressed-bytes`` (optional but recommended): The size in bytes of the source file after decompression. This number is used by Rally to show users how much disk space the decompressed file will need and to check that the whole file could be decompressed successfully.
 * ``target-index``: Defines the name of the index which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
-* ``target-type`` (optional): Defines the name of the document type which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``indices`` section and this index has exactly one type. Ignored if ``includes-action-and-meta-data`` is ``true`` or if a ``target-data-stream`` is specified. Types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``target-data-stream``: Defines the name of the data stream which should be targeted for bulk operations. Rally will automatically derive this value if you have defined exactly one index in the ``data-streams`` section. Ignored if ``includes-action-and-meta-data`` is ``true``.
 * ``meta`` (optional): A mapping of arbitrary key-value pairs with additional meta-data for a source file.
 
@@ -364,7 +361,6 @@ To avoid repetition, you can specify default values on document corpus level for
 * ``source-format``
 * ``includes-action-and-meta-data``
 * ``target-index``
-* ``target-type``
 * ``target-data-stream``
 
 Examples
@@ -381,8 +377,7 @@ Here we define a single document corpus with one set of documents::
               "document-count": 11396505,
               "compressed-bytes": 264698741,
               "uncompressed-bytes": 3547614383,
-              "target-index": "geonames",
-              "target-type": "docs"
+              "target-index": "geonames"
             }
           ]
         }
@@ -410,7 +405,6 @@ We can also define default values on document corpus level but override some of 
         {
           "name": "http_logs",
           "base-url": "http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/http_logs",
-          "target-type": "docs",
           "documents": [
             {
               "source-file": "documents-181998.json.bz2",
@@ -988,7 +982,6 @@ Properties
 """"""""""
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
-* ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version. When Rally is used against `Elastic Serverless <https://docs.elastic.co/serverless>`_ the default is ``false``.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
@@ -1113,7 +1106,6 @@ Properties
 """"""""""
 
 * ``index`` (optional): An `index pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/multi-index.html>`_ that defines which indices or data streams should be targeted by this query. Only needed if the ``indices`` or ``data-streams`` section contains more than one index or data stream respectively. Otherwise, Rally will automatically derive the index or data stream to use. If you have defined multiple indices or data streams and want to query all of them, just specify ``"index": "_all"``.
-* ``type`` (optional): Defines the type within the specified index for this query. By default, no ``type`` will be used and the query will be performed across all types in the provided index. Also, types have been removed in Elasticsearch 7.0.0 so you must not specify this property if you want to benchmark Elasticsearch 7.0.0 or later.
 * ``cache`` (optional): Whether to use the query request cache. By default, Rally will define no value thus the default depends on the benchmark candidate settings and Elasticsearch version. When Rally is used against `Elastic Serverless <https://docs.elastic.co/serverless>`_ the default is ``false``.
 * ``request-params`` (optional): A structure containing arbitrary request parameters. The supported parameters names are documented in the `Search URI Request docs <https://www.elastic.co/guide/en/elasticsearch/reference/current/search-uri-request.html#_parameters_3>`_.
 
@@ -1417,19 +1409,14 @@ With the following snippet we will create a new index that is not defined in the
           "index.number_of_shards": 0
         },
         "mappings": {
-          "docs": {
-            "properties": {
-              "name": {
-                "type": "text"
-              }
+          "properties": {
+            "name": {
+              "type": "text"
             }
           }
         }
       }
     }
-
-.. note::
-   Types have been removed in Elasticsearch 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the mapping type above.
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
@@ -1862,17 +1849,12 @@ With the following snippet we will create a new index template that is not defin
           "number_of_shards": 3
         },
         "mappings": {
-          "docs": {
-            "_source": {
-              "enabled": false
-            }
+          "_source": {
+            "enabled": false
           }
         }
       }
     }
-
-.. note::
-   Types have been removed in Elasticsearch 7.0.0. If you want to benchmark Elasticsearch 7.0.0 or later you need to remove the mapping type above.
 
 This is an administrative operation. Metrics are not reported by default. Reporting can be forced by setting ``include-in-reporting`` to ``true``.
 
