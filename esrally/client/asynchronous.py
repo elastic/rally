@@ -94,10 +94,31 @@ class StaticConnector(BaseConnector):
         return handler
 
 
+class StaticStreamWriter(aiohttp.abc.AbstractStreamWriter):
+    async def write(self, chunk):
+        pass
+
+    async def write_eof(self, chunk=b""):
+        pass
+
+    async def drain(self):
+        pass
+
+    def enable_compression(self, encoding="deflate", strategy=None):
+        pass
+
+    def enable_chunking(self):
+        pass
+
+    async def write_headers(self, status_line, headers):
+        pass
+
+
 class StaticRequest(aiohttp.ClientRequest):
     RESPONSES = None
 
     async def send(self, conn: "Connection") -> "ClientResponse":
+        stream_writer = StaticStreamWriter()
         self.response = self.response_class(
             self.method,
             self.original_url,
@@ -108,6 +129,7 @@ class StaticRequest(aiohttp.ClientRequest):
             traces=self._traces,
             loop=self.loop,
             session=self._session,
+            stream_writer=stream_writer,
         )
         path = self.original_url.path
         self.response.static_body = StaticRequest.RESPONSES.response(path)
