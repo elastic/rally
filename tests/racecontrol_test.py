@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# pylint: disable=protected-access
 
 import os
 import re
@@ -22,6 +23,14 @@ from unittest import mock
 import pytest
 
 from esrally import config, exceptions, racecontrol
+from esrally.track import params, track
+
+
+@pytest.fixture(autouse=True)
+def _reset_validators():
+    # the validator registry is module-global; ensure no registration leaks across tests
+    yield
+    params._clear_validators()
 
 
 @pytest.fixture
@@ -107,3 +116,66 @@ def test_runs_a_known_pipeline(unittest_pipeline):
     racecontrol.run(cfg)
 
     unittest_pipeline.target.assert_called_once_with(cfg)
+
+
+def _coordinator_cfg(challenge_name, track_params):
+    cfg = config.Config()
+    # a pinned distribution version skips the cluster version probe so setup() reaches validation without any I/O
+    cfg.add(config.Scope.application, "mechanic", "distribution.version", "8.0.0")
+    cfg.add(config.Scope.application, "track", "challenge.name", challenge_name)
+    cfg.add(config.Scope.application, "track", "params", track_params)
+    return cfg
+
+
+def _track_with_challenge(challenge_name):
+    challenge = track.Challenge(challenge_name, default=True, schedule=[])
+    return track.Track(name="unittest", challenges=[challenge])
+
+
+def test_setup_invokes_track_param_validators_for_selected_challenge():
+    cfg = _coordinator_cfg("validate-challenge", {"scheduling": [1, 2, 3]})
+
+    received = []
+
+    def validator(track_params):
+        received.append(track_params)
+        raise exceptions.TrackConfigError("'scheduling' must have 1 or 2 elements but had 3.")
+
+    params.register_validator("validate-challenge", validator)
+    with mock.patch("esrally.racecontrol.track.load_track", return_value=_track_with_challenge("validate-challenge")):
+        coordinator = racecontrol.BenchmarkCoordinator(cfg)
+        with pytest.raises(exceptions.TrackConfigError, match="'scheduling' must have 1 or 2 elements but had 3."):
+            coordinator.setup()
+    # the validator ran fail-fast (before metrics/engine setup) and received the resolved track params
+    assert received == [{"scheduling": [1, 2, 3]}]
+
+
+@mock.patch("esrally.racecontrol.metrics.race_store")
+@mock.patch("esrally.racecontrol.metrics.metrics_store")
+@mock.patch("esrally.racecontrol.metrics.create_race")
+def test_setup_continues_when_no_validators_registered(create_race, metrics_store, race_store):
+    cfg = _coordinator_cfg("no-validators-challenge", {"scheduling": [1, 2, 3]})
+
+    with mock.patch("esrally.racecontrol.track.load_track", return_value=_track_with_challenge("no-validators-challenge")):
+        coordinator = racecontrol.BenchmarkCoordinator(cfg)
+        # no validators are registered for this challenge, so setup() must proceed past validation
+        coordinator.setup()
+
+    create_race.assert_called_once()
+
+
+@mock.patch("esrally.racecontrol.metrics.race_store")
+@mock.patch("esrally.racecontrol.metrics.metrics_store")
+@mock.patch("esrally.racecontrol.metrics.create_race")
+def test_setup_runs_all_validators_and_continues_when_they_pass(create_race, metrics_store, race_store):
+    cfg = _coordinator_cfg("multi-validator-challenge", {"scheduling": [1]})
+
+    calls = []
+    params.register_validator("multi-validator-challenge", lambda p: calls.append("first"))
+    params.register_validator("multi-validator-challenge", lambda p: calls.append("second"))
+    with mock.patch("esrally.racecontrol.track.load_track", return_value=_track_with_challenge("multi-validator-challenge")):
+        coordinator = racecontrol.BenchmarkCoordinator(cfg)
+        coordinator.setup()
+    # both validators ran (in order) and, because they passed, setup() proceeded past validation
+    assert calls == ["first", "second"]
+    create_race.assert_called_once()

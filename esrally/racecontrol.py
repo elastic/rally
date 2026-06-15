@@ -39,6 +39,7 @@ from esrally import (
     types,
     version,
 )
+from esrally.track import params
 from esrally.utils import console, opts, versions
 
 pipelines = collections.OrderedDict()
@@ -242,6 +243,9 @@ class BenchmarkCoordinator:
                     self.current_track.name, challenge_name, PROGRAM_NAME
                 )
             )
+        # Validate track parameters for the selected challenge before provisioning the engine so that invalid
+        # parameters fail fast. Track plugins were loaded (and any validators registered) during load_track above.
+        params.invoke_validators(self.current_challenge.name, self.cfg.opts("track", "params", mandatory=False, default_value={}))
         if self.current_challenge.user_info:
             console.info(self.current_challenge.user_info)
         for message in self.current_challenge.serverless_info:

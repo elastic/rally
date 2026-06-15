@@ -276,6 +276,38 @@ Custom parameter sources can use the Python standard API but using any additiona
 
 You can also implement your parameter sources and runners in multiple Python files but the main entry point is always ``track.py``. The root package name of your plugin is the name of your track.
 
+.. _adding_tracks_custom_validators:
+
+Validating Track Parameters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Tracks that rely on parameters supplied via ``--track-params`` (or a parameters file) often need those parameters to satisfy certain constraints. Rather than failing deep inside a parameter source or runner with a confusing error, you can register a validator that Rally invokes for the selected challenge before the benchmark starts. This lets you reject invalid parameters up front with a clear, actionable message.
+
+A validator is any callable that accepts the resolved track parameters and raises ``esrally.exceptions.TrackConfigError`` if they are invalid::
+
+    from esrally.exceptions import TrackConfigError
+
+
+    def validate_autoscaling(params):
+        phases = params.get("autoscaling_phases", [])
+        scheduling = params.get("scheduling", [])
+        if len(scheduling) not in (1, len(phases)):
+            raise TrackConfigError(
+                f"'scheduling' must contain either a single element or one element per phase "
+                f"({len(phases)}) but had {len(scheduling)}."
+            )
+
+
+    def register(registry):
+        registry.register_validator("autoscaling", validate_autoscaling)
+
+Note the following:
+
+* The first argument to ``register_validator`` is the **challenge name**. Rally only invokes validators registered for the challenge that is selected for the benchmark.
+* The validator receives the track parameters as a dictionary (the values supplied via ``--track-params`` or a parameters file).
+* Raise ``TrackConfigError`` to abort the benchmark. Rally runs the validators after loading the track and selecting the challenge, but before provisioning nodes or starting the benchmark, so a misconfigured parameter is reported without waiting for the engine to start.
+* You may register more than one validator for the same challenge; Rally invokes them in registration order.
+
 .. _adding_tracks_custom_runners:
 
 Creating Your Own Operations With Custom Runners
