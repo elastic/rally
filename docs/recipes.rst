@@ -348,4 +348,8 @@ Enable multi-cluster mode by adding ``--multi-cluster`` to the ``esrally race`` 
 
 .. note::
 
+   Telemetry devices are disabled in multi-cluster mode. Use dedicated monitoring tooling to collect node-level metrics when benchmarking multiple clusters.
+
+.. note::
+
    Custom runners work in multi-cluster mode without any changes. For each cluster Rally calls your runner once with a single ``default`` client scoped to that cluster — the same interface as single-cluster mode.

@@ -223,6 +223,15 @@ class TestDriver:
             "tagline": "You Know, for Search",
         }
 
+    def test_telemetry_disabled_for_multi_cluster(self):
+        self.cfg.add(config.Scope.applicationOverride, "driver", "multi.cluster", True)
+
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        d.prepare_benchmark(t=self.track)
+
+        assert d.telemetry.devices == []
+
     def test_assign_drivers_round_robin(self):
         worker_id = [0, 1, 2, 3]
         driver_actor = self.create_test_driver_actor()

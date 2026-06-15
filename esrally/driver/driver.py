@@ -761,6 +761,7 @@ class Driver:
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
+        multi_cluster = self.config.opts("driver", "multi.cluster", mandatory=False)
         serverless_mode = convert.to_bool(self.config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
         serverless_operator = convert.to_bool(self.config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
         build_hash = None
@@ -808,7 +809,7 @@ class Driver:
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
         self.prepare_telemetry(
             es_clients,
-            enable=not uses_static_responses,
+            enable=not uses_static_responses and not multi_cluster,
             index_names=self.track.index_names(),
             data_stream_names=self.track.data_stream_names(),
             build_hash=build_hash,

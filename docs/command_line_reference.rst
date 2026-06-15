@@ -915,6 +915,8 @@ Enables :ref:`multi-cluster mode <multi_cluster_mode>`. For each task in the sch
 
 Requires a JSON object with two or more named clusters in ``--target-hosts`` and matching keys in ``--client-options``. Must be combined with the ``benchmark-only`` pipeline.
 
+Telemetry devices are disabled when this flag is active.
+
 The default value is ``false``.
 
 **Example**
