@@ -377,9 +377,7 @@ class MechanicActor(actor.RallyActor):
         self.team_revision = self.cfg.opts("mechanic", "repository.revision")
 
         # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
-        hosts_cfg = self.cfg.opts("client", "hosts")
-        all_h = hosts_cfg.all_hosts
-        hosts = all_h.get("default", next(iter(all_h.values())) if all_h else [])
+        hosts = self.cfg.opts("client", "hosts").default_or_first
         if len(hosts) == 0:
             raise exceptions.LaunchError("No target hosts are configured.")
 
