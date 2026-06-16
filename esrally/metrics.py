@@ -2879,7 +2879,7 @@ class GlobalStats:
         return sorted(all_results, key=lambda m: m["name"])
 
     def v(self, d, k, default=None):
-        return d.get(k, default) if d else default
+        return d.get(k, default) if isinstance(d, dict) else default
 
     def add_op_metrics(self, task, operation, throughput, latency, service_time, processing_time, error_rate, duration, meta):
         doc = {

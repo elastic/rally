@@ -461,9 +461,6 @@ class ComparisonReporter:
 
     def report(self, r1, r2):
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
-        baseline_stats = metrics.GlobalStats(r1.results)
-        contender_stats = metrics.GlobalStats(r2.results)
-
         print_internal("")
         print_internal("Comparing baseline")
         print_internal("  Race ID: %s" % r1.race_id)
@@ -484,12 +481,28 @@ class ComparisonReporter:
         if r2.user_tags:
             r2_user_tags = ", ".join(["%s=%s" % (k, v) for k, v in sorted(r2.user_tags.items())])
             print_internal("  User tags: %s" % r2_user_tags)
-        print_header(FINAL_SCORE)
 
-        metric_table_plain = self._metrics_table(baseline_stats, contender_stats, plain=True)
-        metric_table_rich = self._metrics_table(baseline_stats, contender_stats, plain=False)
-        # Writes metric_table_rich to console, writes metric_table_plain to file
-        self._write_report(metric_table_plain, metric_table_rich)
+        r1_results = r1.results if isinstance(r1.results, list) else [r1.results]
+        r2_results = r2.results if isinstance(r2.results, list) else [r2.results]
+
+        if len(r1_results) > 1 or len(r2_results) > 1:
+            r1_by_cluster = {r.get("cluster_name"): r for r in r1_results if isinstance(r, dict)}
+            r2_by_cluster = {r.get("cluster_name"): r for r in r2_results if isinstance(r, dict)}
+            for cluster_name in sorted(k for k in (set(r1_by_cluster) | set(r2_by_cluster)) if k is not None):
+                print_header("%s [%s]" % (FINAL_SCORE, cluster_name))
+                baseline_stats = metrics.GlobalStats(r1_by_cluster.get(cluster_name))
+                contender_stats = metrics.GlobalStats(r2_by_cluster.get(cluster_name))
+                metric_table_plain = self._metrics_table(baseline_stats, contender_stats, plain=True)
+                metric_table_rich = self._metrics_table(baseline_stats, contender_stats, plain=False)
+                self._write_report(metric_table_plain, metric_table_rich)
+        else:
+            print_header(FINAL_SCORE)
+            baseline_stats = metrics.GlobalStats(r1_results[0])
+            contender_stats = metrics.GlobalStats(r2_results[0])
+            metric_table_plain = self._metrics_table(baseline_stats, contender_stats, plain=True)
+            metric_table_rich = self._metrics_table(baseline_stats, contender_stats, plain=False)
+            # Writes metric_table_rich to console, writes metric_table_plain to file
+            self._write_report(metric_table_plain, metric_table_rich)
 
     def _metrics_table(self, baseline_stats, contender_stats, plain):
         self.plain = plain
