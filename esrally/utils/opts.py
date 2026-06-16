@@ -304,21 +304,3 @@ class ClientOptions(ConnectOptions):
             amended_opts["max_connections"] = max(256, amended_opts.get("max_connections", max_connections))
             final_client_options[cluster] = amended_opts
         return final_client_options
-
-
-class SingleClusterTargetHosts(ConnectOptions):
-    """
-    Wraps a multi-cluster TargetHosts (or similar) and exposes one cluster
-    as the single "default" cluster. Used by the multi-cluster pipeline so
-    each benchmark run sees one cluster as default.
-    """
-
-    def __init__(self, target_hosts, cluster_name):
-        self._target_hosts = target_hosts
-        self._cluster_name = cluster_name
-        self.parsed_options = {TargetHosts.DEFAULT: target_hosts.all_hosts[cluster_name]}
-
-    @property
-    def all_hosts(self):
-        """Return a dict with only the selected cluster under the 'default' key."""
-        return self.all_options

@@ -311,17 +311,3 @@ class TestClientOptions:
             "default": {"timeout": 60, "max_connections": 512},
             "remote": {"timeout": 60, "max_connections": 1024},
         }
-
-
-class TestSingleClusterTargetHosts:
-    def test_exposes_one_cluster_as_default(self):
-        target_hosts = opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"], "cluster-b": ["10.0.0.1:9200"]}')
-        single = opts.SingleClusterTargetHosts(target_hosts, "cluster-b")
-        assert single.default == [{"host": "10.0.0.1", "port": 9200}]
-        assert single.all_hosts == {"default": [{"host": "10.0.0.1", "port": 9200}]}
-        assert single["default"] == single.default
-
-    def test_subscript_returns_default(self):
-        target_hosts = opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"]}')
-        single = opts.SingleClusterTargetHosts(target_hosts, "cluster-a")
-        assert single["default"] == [{"host": "127.0.0.1", "port": 9200}]
