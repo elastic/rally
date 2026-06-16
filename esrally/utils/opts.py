@@ -322,31 +322,3 @@ class SingleClusterTargetHosts(ConnectOptions):
     def all_hosts(self):
         """Return a dict with only the selected cluster under the 'default' key."""
         return self.all_options
-
-
-class SingleClusterClientOptions(ConnectOptions):
-    """
-    Wraps multi-cluster client options and exposes one cluster's options
-    as the single "default". Used by the multi-cluster pipeline so each
-    benchmark run sees one cluster's credentials/options as default.
-    """
-
-    def __init__(self, client_options, cluster_name):
-        self._client_options = client_options
-        self._cluster_name = cluster_name
-        cluster_opts = dict(client_options.all_client_options[cluster_name])
-        self.parsed_options = {TargetHosts.DEFAULT: cluster_opts}
-
-    @property
-    def all_client_options(self):
-        """Return a dict with only the selected cluster's options under the 'default' key."""
-        return self.all_options
-
-    @property
-    def uses_static_responses(self):
-        return self.default.get("static_responses", False)
-
-    def with_max_connections(self, max_connections):
-        amended_opts = dict(self.default)
-        amended_opts["max_connections"] = max(256, amended_opts.get("max_connections", max_connections))
-        return {TargetHosts.DEFAULT: amended_opts}
