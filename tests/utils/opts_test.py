@@ -170,7 +170,7 @@ class TestGenericHelperFunction:
 
 class TestTargetHosts:
     def test_empty_arg_parses_as_empty_list(self):
-        assert opts.TargetHosts("").default == []
+        assert opts.TargetHosts("").default_or_first == []
         assert opts.TargetHosts("").all_hosts == {"default": []}
 
     def test_csv_hosts_parses(self):
@@ -180,7 +180,7 @@ class TestTargetHosts:
             "default": [{"host": "127.0.0.1", "port": 9200}, {"host": "10.17.0.5", "port": 19200, "url_prefix": "/path"}]
         }
 
-        assert opts.TargetHosts(target_hosts).default == [
+        assert opts.TargetHosts(target_hosts).default_or_first == [
             {"host": "127.0.0.1", "port": 9200},
             {"host": "10.17.0.5", "port": 19200, "url_prefix": "/path"},
         ]
@@ -209,20 +209,24 @@ class TestTargetHosts:
             "remote_2": [{"host": "88.33.27.15", "port": 39200}],
         }
 
+    def test_default_or_first_falls_back_to_first_cluster_when_no_default_key(self):
+        target_hosts = '{"cluster-a": ["127.0.0.1:9200"], "cluster-b": ["10.0.0.1:9200"]}'
+        assert opts.TargetHosts(target_hosts).default_or_first == [{"host": "127.0.0.1", "port": 9200}]
+
 
 class TestClientOptions:
     def test_csv_client_options_parses(self):
         # "timeout": 60 should automatically get added to each configuration unless overridden
         client_options_string = "use_ssl:true,verify_certs:true,ca_certs:'/path/to/cacert.pem'"
 
-        assert opts.ClientOptions(client_options_string).default == {
+        assert opts.ClientOptions(client_options_string).default_or_first == {
             "use_ssl": True,
             "verify_certs": True,
             "ca_certs": "/path/to/cacert.pem",
             "timeout": 60,
         }
 
-        assert opts.ClientOptions(client_options_string).default == {
+        assert opts.ClientOptions(client_options_string).default_or_first == {
             "use_ssl": True,
             "verify_certs": True,
             "ca_certs": "/path/to/cacert.pem",
@@ -245,9 +249,9 @@ class TestClientOptions:
             '"remote_2": {"use_ssl":true,"verify_certs":true,"ca_certs":"/path/to/cacert.pem"}}'
         )
 
-        assert opts.ClientOptions(client_options_string).default == {"timeout": 60}
+        assert opts.ClientOptions(client_options_string).default_or_first == {"timeout": 60}
 
-        assert opts.ClientOptions(client_options_string).default == {"timeout": 60}
+        assert opts.ClientOptions(client_options_string).default_or_first == {"timeout": 60}
 
         assert opts.ClientOptions(client_options_string).all_client_options == {
             "default": {"timeout": 60},
@@ -270,23 +274,28 @@ class TestClientOptions:
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = None
 
-        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default == {"timeout": 60}
+        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default_or_first == {"timeout": 60}
 
         assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).all_client_options == {"default": {"timeout": 60}}
 
-        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default == {"timeout": 60}
+        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default_or_first == {"timeout": 60}
 
     def test_no_client_option_parses_to_default_with_multicluster(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS
         target_hosts = opts.TargetHosts('{"default": ["127.0.0.1:9200", "10.17.0.5:19200"], "remote": ["88.33.22.15:19200"]}')
-        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default == {"timeout": 60}
+        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default_or_first == {"timeout": 60}
 
         assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).all_client_options == {
             "default": {"timeout": 60},
             "remote": {"timeout": 60},
         }
 
-        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default == {"timeout": 60}
+        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default_or_first == {"timeout": 60}
+
+    def test_default_or_first_falls_back_to_first_cluster_when_no_default_key(self):
+        client_options_string = '{"cluster-a": {"timeout": 60}, "cluster-b": {"timeout": 120}}'
+        target_hosts = opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"], "cluster-b": ["10.0.0.1:9200"]}')
+        assert opts.ClientOptions(client_options_string, target_hosts=target_hosts).default_or_first == {"timeout": 60}
 
     def test_default_client_ops_with_max_connections(self):
         client_options_string = opts.ClientOptions.DEFAULT_CLIENT_OPTIONS

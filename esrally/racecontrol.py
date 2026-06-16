@@ -333,8 +333,8 @@ def race(cfg: types.Config, sources=False, distribution=False, external=False, d
 def set_default_hosts(cfg: types.Config, host="127.0.0.1", port=9200):
     logger = logging.getLogger(__name__)
     configured_hosts = cfg.opts("client", "hosts")
-    if len(configured_hosts.default) != 0:
-        logger.info("Using configured hosts %s", configured_hosts.default)
+    if len(configured_hosts.default_or_first) != 0:
+        logger.info("Using configured hosts %s", configured_hosts.default_or_first)
     else:
         logger.info("Setting default host to [%s:%d]", host, port)
         default_host_object = opts.TargetHosts(f"{host}:{port}")

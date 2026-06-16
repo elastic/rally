@@ -670,7 +670,7 @@ class Driver:
         log_root = paths.race_root(self.config)
 
         es_default = es.default
-        default_client_options = self.config.opts("client", "options").default
+        default_client_options = self.config.opts("client", "options").default_or_first
 
         if enable:
             devices = [
@@ -799,7 +799,7 @@ class Driver:
                 self.driver_actor.target_platform = target_platform
 
             # Determine target_auth_type from default client options
-            default_client_options = self.config.opts("client", "options").default
+            default_client_options = self.config.opts("client", "options").default_or_first
             if default_client_options.get("api_key"):
                 self.driver_actor.target_auth_type = "api_key"
             elif default_client_options.get("basic_auth_user") or default_client_options.get("basic_auth"):
@@ -853,7 +853,7 @@ class Driver:
         if allocator.clients < 128:
             self.logger.debug("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
 
-        create_api_keys = self.config.opts("client", "options").default.get("create_api_key_per_client", None)
+        create_api_keys = self.config.opts("client", "options").default_or_first.get("create_api_key_per_client", None)
         worker_assignments = calculate_worker_assignments(self.load_driver_hosts, allocator.clients)
         worker_id = 0
         for assignment in worker_assignments:

@@ -67,7 +67,7 @@ class TestDriver:
             self.uses_static_responses = False
 
         @property
-        def default(self):
+        def default_or_first(self):
             if not self.all_client_options:
                 return {}
             return self.all_client_options.get("default") or next(iter(self.all_client_options.values()), {})

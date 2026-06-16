@@ -148,12 +148,7 @@ class ConnectOptions:
         Race expects the cfg object to be subscriptable
         Just return 'default'
         """
-        return self.default
-
-    @property
-    def default(self):
-        """Return a list with the options assigned to the 'default' key"""
-        return self.parsed_options["default"]
+        return self.default_or_first
 
     @property
     def default_or_first(self):
@@ -286,16 +281,8 @@ class ClientOptions(ConnectOptions):
         return self.all_options
 
     @property
-    def default(self):
-        """Return options for the 'default' key, or the first cluster when only named clusters exist."""
-        return self.parsed_options.get(
-            TargetHosts.DEFAULT,
-            next(iter(self.parsed_options.values()), {}),
-        )
-
-    @property
     def uses_static_responses(self):
-        return self.default.get("static_responses", False)
+        return self.default_or_first.get("static_responses", False)
 
     def with_max_connections(self, max_connections):
         final_client_options = {}
