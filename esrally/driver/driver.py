@@ -719,10 +719,13 @@ class Driver:
         self.challenge = select_challenge(self.config, self.track)
         self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
         downsample_factor = int(self.config.opts("reporting", "metrics.request.downsample.factor", mandatory=False, default_value=1))
+        windowed_throughput = convert.to_bool(
+            self.config.opts("reporting", "metrics.request.throughput.window", mandatory=False, default_value=False)
+        )
         self.metrics_store = metrics.metrics_store(cfg=self.config, track=self.track.name, challenge=self.challenge.name, read_only=False)
 
         self.sample_post_processor = SamplePostprocessor(
-            self.metrics_store, downsample_factor, self.track.meta_data, self.challenge.meta_data
+            self.metrics_store, downsample_factor, self.track.meta_data, self.challenge.meta_data, windowed_throughput=windowed_throughput
         )
 
         es_clients = self.create_es_clients()
@@ -1044,13 +1047,14 @@ class Driver:
 
 
 class SamplePostprocessor:
-    def __init__(self, metrics_store, downsample_factor, track_meta_data, challenge_meta_data):
+    def __init__(self, metrics_store, downsample_factor, track_meta_data, challenge_meta_data, windowed_throughput=False):
         self.logger = logging.getLogger(__name__)
         self.metrics_store = metrics_store
         self.track_meta_data = track_meta_data
         self.challenge_meta_data = challenge_meta_data
         self.throughput_calculator = ThroughputCalculator()
         self.downsample_factor = downsample_factor
+        self.windowed_throughput = windowed_throughput
 
     def put_sample(self, sample, name, unit, meta_data):
         self.metrics_store.put_value_cluster_level(
@@ -1114,7 +1118,7 @@ class SamplePostprocessor:
         end = time.perf_counter()
         self.logger.debug("Storing latency and service time took [%f] seconds.", (end - start))
         start = end
-        aggregates = self.throughput_calculator.calculate(raw_samples)
+        aggregates = self.throughput_calculator.calculate(raw_samples, windowed=self.windowed_throughput)
         end = time.perf_counter()
         self.logger.debug("Calculating throughput took [%f] seconds.", (end - start))
         start = end
@@ -1649,10 +1653,17 @@ class ThroughputCalculator:
             self.has_samples_in_sample_type = False
             # start relative to the beginning of our (calculation) time slice.
             self.start_time = start_time
+            self._prev_interval = 0
+            self._windowed_rate = None
 
         @property
         def throughput(self):
             return self.total_count / self.interval
+
+        @property
+        def windowed_throughput(self):
+            """Throughput based only on ops and time elapsed since the previous bucket boundary."""
+            return self._windowed_rate if self._windowed_rate is not None else self.throughput
 
         def maybe_update_sample_type(self, current_sample_type):
             if self.sample_type < current_sample_type:
@@ -1669,6 +1680,10 @@ class ThroughputCalculator:
             return self.interval > 0 and not self.has_samples_in_sample_type
 
         def finish_bucket(self, new_total):
+            delta_count = new_total - self.total_count
+            delta_interval = self.interval - self._prev_interval
+            self._windowed_rate = delta_count / delta_interval if delta_interval > 0 else None
+            self._prev_interval = self.interval
             self.unprocessed = []
             self.total_count = new_total
             self.has_samples_in_sample_type = True
@@ -1677,12 +1692,14 @@ class ThroughputCalculator:
     def __init__(self):
         self.task_stats = {}
 
-    def calculate(self, samples, bucket_interval_secs=1):
+    def calculate(self, samples, bucket_interval_secs=1, windowed=False):
         """
         Calculates global throughput based on samples gathered from multiple load generators.
 
         :param samples: A list containing all samples from all load generators.
         :param bucket_interval_secs: The bucket interval for aggregations.
+        :param windowed: When True, each throughput sample reflects only the ops since the previous bucket
+                         rather than the cumulative average since task start.
         :return: A global view of throughput samples.
         """
 
@@ -1712,14 +1729,14 @@ class ThroughputCalculator:
             # only transform the values into the expected structure.
             first_sample = current_samples[0]
             if first_sample.throughput is None:
-                task_throughput = self.calculate_task_throughput(task, current_samples, bucket_interval_secs)
+                task_throughput = self.calculate_task_throughput(task, current_samples, bucket_interval_secs, windowed=windowed)
             else:
                 task_throughput = self.map_task_throughput(current_samples)
             global_throughput[task].extend(task_throughput)
 
         return global_throughput
 
-    def calculate_task_throughput(self, task, current_samples, bucket_interval_secs):
+    def calculate_task_throughput(self, task, current_samples, bucket_interval_secs, windowed=False):
         task_throughput = []
 
         if task not in self.task_stats:
@@ -1749,12 +1766,13 @@ class ThroughputCalculator:
 
             if current.can_calculate_throughput():
                 current.finish_bucket(count)
+                rate = current.windowed_throughput if windowed else current.throughput
                 task_throughput.append(
                     (
                         sample.absolute_time,
                         sample.relative_time,
                         current.sample_type,
-                        current.throughput,
+                        rate,
                         # we calculate throughput per second
                         f"{sample.total_ops_unit}/s",
                     )
@@ -1766,12 +1784,13 @@ class ThroughputCalculator:
         # interval (mainly needed to ensure we show throughput data in test mode)
         if last_sample is not None and current.can_add_final_throughput_sample():
             current.finish_bucket(count)
+            rate = current.windowed_throughput if windowed else current.throughput
             task_throughput.append(
                 (
                     last_sample.absolute_time,
                     last_sample.relative_time,
                     current.sample_type,
-                    current.throughput,
+                    rate,
                     f"{last_sample.total_ops_unit}/s",
                 )
             )

@@ -1060,6 +1060,37 @@ class TestMetricsAggregation:
         assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 8000, "byte/s")
         assert throughput[2] == (38597, 23, metrics.SampleType.Normal, 8000, "byte/s")
 
+    def test_windowed_throughput(self):
+        # Three one-second buckets: 1000 ops/s, 1000 ops/s, then a spike to 9000 ops/s.
+        # Windowed mode should report 9000 for the spike bucket; cumulative mode blends it down to ~3667.
+        op = track.Operation("index", track.OperationType.Bulk, param_source="driver-test-param-source")
+
+        samples = [
+            driver.Sample(0, 100, 1, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 1000, "ops", 1, 1 / 3),
+            driver.Sample(0, 101, 2, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 1000, "ops", 2, 2 / 3),
+            driver.Sample(0, 102, 3, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 9000, "ops", 3, 3 / 3),
+        ]
+
+        windowed = driver.ThroughputCalculator().calculate(samples, windowed=True)
+        cumulative = driver.ThroughputCalculator().calculate(samples, windowed=False)
+
+        assert op in windowed
+        assert op in cumulative
+
+        w = windowed[op]
+        c = cumulative[op]
+        assert len(w) == len(c) == 3
+
+        # first two buckets are identical in both modes (single-client, steady rate)
+        assert w[0] == (100, 1, metrics.SampleType.Normal, 1000, "ops/s")
+        assert w[1] == (101, 2, metrics.SampleType.Normal, 1000, "ops/s")
+        assert c[0] == (100, 1, metrics.SampleType.Normal, 1000, "ops/s")
+        assert c[1] == (101, 2, metrics.SampleType.Normal, 1000, "ops/s")
+
+        # spike bucket: windowed sees only this bucket's 9000 ops over 1s; cumulative blends all 11000 ops over 3s
+        assert w[2] == (102, 3, metrics.SampleType.Normal, 9000, "ops/s")
+        assert c[2] == (102, 3, metrics.SampleType.Normal, pytest.approx(11000 / 3), "ops/s")
+
     def calculate_global_throughput(self, samples):
         return driver.ThroughputCalculator().calculate(samples)
 

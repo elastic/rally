@@ -108,6 +108,7 @@ Key = Literal[
     "master.nodes",
     "metrics.log.dir",
     "metrics.request.downsample.factor",
+    "metrics.request.throughput.window",
     "metrics.url",
     "network.host",
     "network.http.port",
