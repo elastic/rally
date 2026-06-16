@@ -1548,7 +1548,13 @@ class TrackSpecificationReader:
         else:
             body = None
 
-        return track.Index(name=index_name, body=body, types=self._r(index_spec, "types", mandatory=False, default_value=[]))
+        if "types" in index_spec:
+            raise TrackSyntaxError(
+                f"Track index '{index_name}' specifies 'types', which is no longer supported by Rally "
+                "(document types were removed in Elasticsearch 7.0). Remove the 'types' key."
+            )
+
+        return track.Index(name=index_name, body=body)
 
     def _create_data_stream(self, data_stream_spec):
         return track.DataStream(name=self._r(data_stream_spec, "name"))
@@ -1621,7 +1627,6 @@ class TrackSpecificationReader:
             default_action_and_meta_data = self._r(corpus_spec, "includes-action-and-meta-data", mandatory=False, default_value=False)
             corpus_target_idx = None
             corpus_target_ds = None
-            corpus_target_type = None
 
             if len(indices) == 1:
                 corpus_target_idx = self._r(corpus_spec, "target-index", mandatory=False, default_value=indices[0].name)
@@ -1633,10 +1638,11 @@ class TrackSpecificationReader:
             elif len(data_streams) > 0:
                 corpus_target_ds = self._r(corpus_spec, "target-data-stream", mandatory=False)
 
-            if len(indices) == 1 and len(indices[0].types) == 1:
-                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False, default_value=indices[0].types[0])
-            elif len(indices) > 0:
-                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False)
+            if "target-type" in corpus_spec:
+                raise TrackSyntaxError(
+                    f"Track corpus '{name}' specifies 'target-type', which is no longer supported by Rally "
+                    "(document types were removed in Elasticsearch 7.0). Remove the 'target-type' key."
+                )
 
             for doc_spec in self._r(corpus_spec, "documents"):
                 base_url = self._r(doc_spec, "base-url", mandatory=False, default_value=default_base_url)
@@ -1658,13 +1664,15 @@ class TrackSpecificationReader:
                     includes_action_and_meta_data = self._r(
                         doc_spec, "includes-action-and-meta-data", mandatory=False, default_value=default_action_and_meta_data
                     )
+                    if "target-type" in doc_spec:
+                        raise TrackSyntaxError(
+                            f"Track document set '{docs}' in corpus '{name}' specifies 'target-type', which is no longer "
+                            "supported by Rally (document types were removed in Elasticsearch 7.0). Remove the 'target-type' key."
+                        )
                     if includes_action_and_meta_data:
                         target_idx = None
-                        target_type = None
                         target_ds = None
                     else:
-                        target_type = self._r(doc_spec, "target-type", mandatory=False, default_value=corpus_target_type, error_ctx=docs)
-
                         # require to be specified if we're using data streams and we have no default
                         target_ds = self._r(
                             doc_spec,
@@ -1676,9 +1684,6 @@ class TrackSpecificationReader:
                         if target_ds and len(indices) > 0:
                             # if indices are in use we error
                             raise TrackSyntaxError("target-data-stream cannot be used when using indices")
-
-                        if target_ds and target_type:
-                            raise TrackSyntaxError("target-type cannot be used when using data-streams")
 
                         # need an index if we're using indices and no meta-data are present and we don't have a default
                         target_idx = self._r(
@@ -1709,7 +1714,6 @@ class TrackSpecificationReader:
                         compressed_size_in_bytes=compressed_bytes,
                         uncompressed_size_in_bytes=uncompressed_bytes,
                         target_index=target_idx,
-                        target_type=target_type,
                         target_data_stream=target_ds,
                         meta_data=doc_meta_data,
                     )
@@ -2006,6 +2010,11 @@ class TrackSpecificationReader:
 
         try:
             op = track.OperationType.from_hyphenated_string(op_type_name)
+            if op in (track.OperationType.Search, track.OperationType.ScrollSearch) and "type" in params:
+                self._error(
+                    f"Operation '{op_name}' specifies 'type', which is no longer supported by Rally "
+                    "(document types were removed in Elasticsearch 7.0). Remove the 'type' parameter."
+                )
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
             LOG.debug("Using built-in operation type [%s] for operation [%s].", op_type_name, op_name)

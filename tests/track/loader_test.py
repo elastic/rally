@@ -707,7 +707,6 @@ class TestTrackPreparation:
             "corpora": [
                 {
                     "name": "http_logs_unparsed",
-                    "target-type": "type",
                     "documents": [
                         {
                             "target-index": "logs-181998",
@@ -734,7 +733,6 @@ class TestTrackPreparation:
                 },
                 {
                     "name": "http_logs",
-                    "target-type": "type",
                     "documents": [
                         {
                             "target-index": "logs-181998",
@@ -1259,7 +1257,6 @@ class TestTrackPostProcessing:
             {
                 "name": "test-index",
                 "body": "test-index-body.json",
-                "types": ["test-type"]
             }
         ],
         "corpora": [
@@ -1336,9 +1333,6 @@ class TestTrackPostProcessing:
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": [
-                        "test-type",
-                    ],
                 },
             ],
             "corpora": [
@@ -1425,7 +1419,6 @@ class TestTrackPostProcessing:
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": ["test-type"],
                 },
             ],
             "corpora": [
@@ -1563,7 +1556,7 @@ class TestTrackPath:
                     ],
                 )
             ],
-            indices=[track.Index(name="test", types=["docs"])],
+            indices=[track.Index(name="test")],
         )
 
         loader.set_absolute_data_path(cfg, t)
@@ -2145,7 +2138,6 @@ class TestTrackSpecificationReader:
             "indices": [
                 {
                     "name": "test-index",
-                    "types": ["test-type"],
                 },
             ],
             "data-streams": [],
@@ -2164,7 +2156,6 @@ class TestTrackSpecificationReader:
             "indices": [
                 {
                     "name": "test-index",
-                    "types": ["docs"],
                 },
             ],
             "corpora": [
@@ -2190,7 +2181,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": ["docs"],
                 }
             ],
             "corpora": [
@@ -2245,7 +2235,7 @@ class TestTrackSpecificationReader:
     def test_parse_with_mixed_iterations_and_ramp_up(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "body": "index.json", "types": ["docs"]}],
+            "indices": [{"name": "test-index", "body": "index.json"}],
             "corpora": [
                 {
                     "name": "test",
@@ -2304,7 +2294,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": ["docs"],
                 },
             ],
             "corpora": [
@@ -2338,7 +2327,7 @@ class TestTrackSpecificationReader:
     def test_parse_challenge_and_challenges_are_defined(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "body": "index.json", "types": ["docs"]}],
+            "indices": [{"name": "test-index", "body": "index.json"}],
             "corpora": [
                 {
                     "name": "test",
@@ -2377,7 +2366,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": ["docs"],
                 },
             ],
             "corpora": [
@@ -2502,7 +2490,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "index-historical",
                     "body": "body.json",
-                    "types": ["_doc"],
                 },
             ],
             "corpora": [
@@ -2597,7 +2584,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "index-historical",
                     "body": "body.json",
-                    "types": ["main", "secondary"],
                 },
             ],
             "corpora": [
@@ -2612,7 +2598,6 @@ class TestTrackSpecificationReader:
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
                             "target-index": "index-historical",
-                            "target-type": "main",
                             "meta": {"test-docs": True, "role": "main"},
                         },
                         {
@@ -2697,9 +2682,6 @@ class TestTrackSpecificationReader:
                 "secondary": "empty-for-test",
             },
         } == resulting_track.indices[0].body
-        assert len(resulting_track.indices[0].types) == 2
-        assert resulting_track.indices[0].types[0] == "main"
-        assert resulting_track.indices[0].types[1] == "secondary"
         # corpora
         assert len(resulting_track.corpora) == 1
         assert resulting_track.corpora[0].name == "test"
@@ -2716,7 +2698,6 @@ class TestTrackSpecificationReader:
         assert docs_primary.compressed_size_in_bytes == 100
         assert docs_primary.uncompressed_size_in_bytes == 10000
         assert docs_primary.target_index == "index-historical"
-        assert docs_primary.target_type == "main"
         assert docs_primary.meta_data == {"test-docs": True, "role": "main"}
 
         docs_secondary = resulting_track.corpora[0].documents[1]
@@ -2730,7 +2711,6 @@ class TestTrackSpecificationReader:
         assert docs_secondary.uncompressed_size_in_bytes == 20000
         # This is defined by the action-and-meta-data line!
         assert docs_secondary.target_index is None
-        assert docs_secondary.target_type is None
         assert docs_secondary.meta_data == {"test-docs": True, "role": "secondary"}
 
         # challenges
@@ -2834,7 +2814,6 @@ class TestTrackSpecificationReader:
         assert docs_primary.uncompressed_size_in_bytes == 10000
         assert docs_primary.target_data_stream == "data-stream-historical"
         assert docs_primary.target_index is None
-        assert docs_primary.target_type is None
 
         docs_secondary = resulting_track.corpora[0].documents[1]
         assert track.Documents.SOURCE_FORMAT_BULK == docs_secondary.source_format
@@ -2848,7 +2827,6 @@ class TestTrackSpecificationReader:
         # This is defined by the action-and-meta-data line!
         assert docs_secondary.target_data_stream is None
         assert docs_secondary.target_index is None
-        assert docs_secondary.target_type is None
 
         docs_tertiary = resulting_track.corpora[0].documents[2]
         assert track.Documents.SOURCE_FORMAT_BULK == docs_tertiary.source_format
@@ -2859,7 +2837,6 @@ class TestTrackSpecificationReader:
         assert docs_tertiary.number_of_documents == 10
         assert docs_tertiary.compressed_size_in_bytes == 100
         assert docs_tertiary.target_index is None
-        assert docs_tertiary.target_type is None
         assert docs_tertiary.target_data_stream == "data-stream-historical"
 
         # challenges
@@ -2932,7 +2909,6 @@ class TestTrackSpecificationReader:
                 "number_of_shards": 3,
             },
         }
-        assert len(resulting_track.indices[0].types) == 0
         # corpora
         assert len(resulting_track.corpora) == 1
         assert resulting_track.corpora[0].name == "test"
@@ -2948,7 +2924,6 @@ class TestTrackSpecificationReader:
         assert docs_primary.compressed_size_in_bytes == 100
         assert docs_primary.uncompressed_size_in_bytes == 10000
         assert docs_primary.target_index == "index-historical"
-        assert docs_primary.target_type is None
         assert docs_primary.target_data_stream is None
 
         # challenges
@@ -3017,41 +2992,6 @@ class TestTrackSpecificationReader:
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
                             "target-index": "historical-index",
-                        },
-                    ],
-                }
-            ],
-            "schedule": [
-                {
-                    "clients": 8,
-                    "operation": {
-                        "name": "index-append",
-                        "operation-type": "bulk",
-                        "bulk-size": 5000,
-                    },
-                },
-            ],
-        }
-        complete_track_params = loader.CompleteTrackParams()
-        reader = loader.TrackSpecificationReader(complete_track_params=complete_track_params)
-        with pytest.raises(loader.TrackSyntaxError):
-            reader("unittest", track_specification, "/mapping")
-
-    def test_parse_invalid_data_streams_with_target_type(self):
-        track_specification = {
-            "description": "description for unit test",
-            "data-streams": [{"name": "historical-data-stream"}],
-            "corpora": [
-                {
-                    "name": "test",
-                    "base-url": "https://localhost/data",
-                    "documents": [
-                        {
-                            "source-file": "documents-main.json.bz2",
-                            "document-count": 10,
-                            "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000,
-                            "target-type": "_doc",
                         },
                     ],
                 }
@@ -3181,7 +3121,6 @@ class TestTrackSpecificationReader:
         assert docs_primary.compressed_size_in_bytes == 100
         assert docs_primary.uncompressed_size_in_bytes == 10000
         assert docs_primary.target_data_stream == "historical-data-stream"
-        assert docs_primary.target_type is None
         assert docs_primary.target_index is None
 
         # challenges
@@ -4378,6 +4317,108 @@ class TestTrackSpecificationReader:
             "level": "track",
             "value": 7,
         }
+
+    def test_rejects_index_types(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index", "types": ["docs"]}],
+            "corpora": [],
+            "operations": [],
+            "challenges": [],
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Track index 'test-index' specifies 'types'"):
+            reader("unittest", track_specification, "/mappings")
+
+    def test_rejects_corpus_target_type(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "corpora": [
+                {
+                    "name": "test-corpus",
+                    "target-type": "docs",
+                    "documents": [
+                        {
+                            "source-file": "documents.json.bz2",
+                            "document-count": 10,
+                            "target-index": "test-index",
+                        }
+                    ],
+                }
+            ],
+            "operations": [],
+            "challenges": [],
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Track corpus 'test-corpus' specifies 'target-type'"):
+            reader("unittest", track_specification, "/mappings")
+
+    def test_rejects_document_target_type(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "corpora": [
+                {
+                    "name": "test-corpus",
+                    "documents": [
+                        {
+                            "source-file": "documents.json.bz2",
+                            "document-count": 10,
+                            "target-index": "test-index",
+                            "target-type": "docs",
+                        }
+                    ],
+                }
+            ],
+            "operations": [],
+            "challenges": [],
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"documents.json.bz2.*specifies 'target-type'"):
+            reader("unittest", track_specification, "/mappings")
+
+    @pytest.mark.parametrize("operation_type", ["search", "scroll-search"])
+    def test_rejects_search_operation_document_type(self, operation_type):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [
+                {
+                    "name": "match-all",
+                    "operation-type": operation_type,
+                    "index": "test-index",
+                    "type": "docs",
+                    "body": {"query": {"match_all": {}}},
+                }
+            ],
+            "challenges": [],
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Operation 'match-all' specifies 'type'"):
+            reader("unittest", track_specification, "/mappings")
+
+    def test_rejects_inline_search_operation_document_type(self):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": {
+                            "name": "match-all",
+                            "operation-type": "search",
+                            "index": "test-index",
+                            "type": "docs",
+                            "body": {"query": {"match_all": {}}},
+                        },
+                    },
+                ],
+            },
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Operation 'match-all' specifies 'type'"):
+            reader("unittest", track_specification, "/mappings")
 
 
 class MyMockTrackProcessor(loader.TrackProcessor):

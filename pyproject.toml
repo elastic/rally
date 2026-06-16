@@ -152,6 +152,8 @@ develop = [
     "types-protobuf>=4.24,<8",
     # Python dead library removed in version 3.13 and used to build Rally docs.
     "standard-imghdr==3.13.0",
+    # For RST docs preview using the reStructuredText VS Code extension, which relies on the Esbonio language server.
+    "esbonio==2.0.0",
 ]
 
 [dependency-groups]

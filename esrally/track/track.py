@@ -30,22 +30,18 @@ class Index:
     Defines an index in Elasticsearch.
     """
 
-    def __init__(self, name, body=None, types=None):
+    def __init__(self, name, body=None):
         """
 
         Creates a new index.
 
         :param name: The index name. Mandatory.
         :param body: A dict representation of the index body. Optional.
-        :param types: A list of types. Should contain at least one type.
         """
-        if types is None:
-            types = []
         if body is None:
             body = {}
         self.name = name
         self.body = body
-        self.types = types
 
     def matches(self, pattern):
         if pattern is None:
@@ -195,7 +191,6 @@ class Documents:
         uncompressed_size_in_bytes=0,
         target_index=None,
         target_data_stream=None,
-        target_type=None,
         meta_data=None,
     ):
         """
@@ -217,8 +212,6 @@ class Documents:
         :param target_index: The index to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data`` is ``False``.
         :param target_data_stream: The data stream to target for bulk operations.
         Maybe be ``None`` if ``includes_action_and_meta_data`` is ``False``.
-        :param target_type: The document type to target for bulk operations. May be ``None`` if ``includes_action_and_meta_data``
-                            is ``False``.
         :param meta_data: A dict containing key-value pairs with additional meta-data describing documents. Optional.
         """
 
@@ -232,7 +225,6 @@ class Documents:
         self._uncompressed_size_in_bytes = uncompressed_size_in_bytes
         self.target_index = target_index
         self.target_data_stream = target_data_stream
-        self.target_type = target_type
         self.meta_data = meta_data or {}
 
     def has_compressed_corpus(self):
@@ -289,24 +281,8 @@ class Documents:
             r.append("%s = [%s]" % (prop, repr(value)))
         return ", ".join(r)
 
-    def __hash__(self):
+    def _identity(self, meta_data):
         return (
-            hash(self.source_format)
-            ^ hash(self.document_file)
-            ^ hash(self.document_archive)
-            ^ hash(self.base_url)
-            ^ hash(self.includes_action_and_meta_data)
-            ^ hash(self.number_of_documents)
-            ^ hash(self.compressed_size_in_bytes)
-            ^ hash(self.uncompressed_size_in_bytes)
-            ^ hash(self.target_index)
-            ^ hash(self.target_data_stream)
-            ^ hash(self.target_type)
-            ^ hash(frozenset(self.meta_data.items()))
-        )
-
-    def __eq__(self, othr):
-        return isinstance(othr, type(self)) and (
             self.source_format,
             self.document_file,
             self.document_archive,
@@ -315,24 +291,26 @@ class Documents:
             self.number_of_documents,
             self.compressed_size_in_bytes,
             self.uncompressed_size_in_bytes,
-            self.target_type,
+            self.target_index,
             self.target_data_stream,
-            self.target_type,
-            self.meta_data,
-        ) == (
-            othr.source_format,
-            othr.document_file,
-            othr.document_archive,
-            othr.base_url,
-            othr.includes_action_and_meta_data,
-            othr.number_of_documents,
-            othr.compressed_size_in_bytes,
-            othr.uncompressed_size_in_bytes,
-            othr.target_type,
-            othr.target_data_stream,
-            othr.target_type,
-            othr.meta_data,
+            meta_data,
         )
+
+    def sort_key(self):
+        def optional(v):
+            return v is not None, v
+
+        # Sort keys need a deterministic, orderable representation of meta-data.
+        sorted_meta_data = tuple(sorted((repr(k), repr(v)) for k, v in self.meta_data.items()))
+        return tuple(optional(v) for v in self._identity(meta_data=sorted_meta_data))
+
+    def __hash__(self):
+        # Hashing needs meta-data to be immutable and hashable.
+        return hash(self._identity(meta_data=frozenset(self.meta_data.items())))
+
+    def __eq__(self, othr):
+        # Equality can compare the original dictionaries directly.
+        return isinstance(othr, type(self)) and self._identity(meta_data=self.meta_data) == othr._identity(meta_data=othr.meta_data)
 
 
 class DocumentCorpus:
@@ -404,7 +382,9 @@ class DocumentCorpus:
             return self
         else:
             return DocumentCorpus(
-                name=self.name, documents=list(set(self.documents).union(other.documents)), meta_data=dict(self.meta_data)
+                name=self.name,
+                documents=sorted(set(self.documents).union(other.documents), key=Documents.sort_key),
+                meta_data=dict(self.meta_data),
             )
 
     def __str__(self):
