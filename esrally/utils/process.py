@@ -93,7 +93,6 @@ def run_subprocess_with_logging(
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with logging.", command_line)
     command_line_args = shlex.split(command_line)
-    pre_exec = os.setpgrp if detach else None
     if header is not None:
         logger.info(header)
 
@@ -104,7 +103,7 @@ def run_subprocess_with_logging(
         text=True,
         env=env,
         stdin=stdin if stdin else None,
-        preexec_fn=pre_exec,
+        start_new_session=detach,
         check=False,
     )
     if completed.stdout:
@@ -137,7 +136,6 @@ def run_subprocess_with_logging_and_output(
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with logging.", command_line)
     command_line_args = shlex.split(command_line)
-    pre_exec = os.setpgrp if detach else None
     if header is not None:
         logger.info(header)
 
@@ -149,7 +147,7 @@ def run_subprocess_with_logging_and_output(
         env=env,
         check=False,
         stdin=stdin if stdin else None,
-        preexec_fn=pre_exec,
+        start_new_session=detach,
     )
 
     for stdout in completed.stdout.splitlines():
