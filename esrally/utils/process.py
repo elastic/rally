@@ -36,24 +36,22 @@ def run_subprocess(command_line: str) -> int:
     :param command_line: The command line of the subprocess to launch.
     :return: The process' return code
     """
-    return subprocess.call(command_line, shell=True)
+    return subprocess.run(command_line, check=False, shell=True).returncode
 
 
 def run_subprocess_with_output(command_line: str, env: Optional[Mapping[str, str]] = None) -> list[str]:
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
-    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
-        has_output = True
-        lines = []
-        while has_output:
-            assert command_line_process.stdout is not None, "stdout is None"
-            line = command_line_process.stdout.readline()
-            if line:
-                lines.append(line.decode("UTF-8").strip())
-            else:
-                has_output = False
-    return lines
+    result = subprocess.run(
+        command_line_args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        text=True,
+        check=False,
+    )
+    return [line.rstrip("\n") for line in result.stdout.splitlines()]
 
 
 def exit_status_as_bool(runnable: Callable[[], int], quiet: bool = False) -> bool:
@@ -99,22 +97,21 @@ def run_subprocess_with_logging(
     if header is not None:
         logger.info(header)
 
-    # pylint: disable=subprocess-popen-preexec-fn
-    with subprocess.Popen(
+    completed = subprocess.run(
         command_line_args,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        universal_newlines=True,
+        text=True,
         env=env,
         stdin=stdin if stdin else None,
         preexec_fn=pre_exec,
-    ) as command_line_process:
-        stdout, _ = command_line_process.communicate()
-        if stdout:
-            logger.log(level=level, msg=stdout)
+        check=False,
+    )
+    if completed.stdout:
+        logger.log(level=level, msg=completed.stdout)
 
-    logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(command_line_process.returncode))
-    return command_line_process.returncode
+    logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(completed.returncode))
+    return completed.returncode
 
 
 def run_subprocess_with_logging_and_output(
