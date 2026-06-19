@@ -49,6 +49,7 @@ def run_subprocess_with_output(command_line: str, env: Optional[Mapping[str, str
         stderr=subprocess.STDOUT,
         env=env,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     return [line.rstrip("\n") for line in result.stdout.splitlines()]
