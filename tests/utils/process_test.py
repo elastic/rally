@@ -18,6 +18,7 @@
 import logging
 import os
 import signal
+import time
 from unittest import mock
 
 import psutil
@@ -222,6 +223,10 @@ def test_run_subprocess_with_logging_timeout_kills_process_group(caplog, tmp_pat
     grandchild_pid = int(pid_file.read_text().strip())
 
     assert returncode == -signal.SIGKILL
+    # the grandchild PID is reaped asynchronously, so poll until its PID is gone
+    deadline = time.monotonic() + 10
+    while psutil.pid_exists(grandchild_pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
     assert not psutil.pid_exists(grandchild_pid), f"grandchild PID {grandchild_pid} survived process-group kill"
     expected = f"Subprocess [{cmd}] exceeded timeout of [{timeout}]s and was terminated with return code [{-signal.SIGKILL}]."
     assert any(
