@@ -2152,9 +2152,10 @@ class EsRaceStore(RaceStore):
             )
         else:
             if not self.client.exists(index="rally-annotations"):
-                # create or overwrite template on index creation
-                self.client.put_template("rally-annotations", self._index_handler.annotations_template())
+                if not self.client.index_template_exists(name="rally-annotations") or self._index_handler.overwrite_templates:
+                    self.client.put_template("rally-annotations", self._index_handler.annotations_template())
                 self.client.create_index(index="rally-annotations")
+
             self.client.index(
                 index="rally-annotations",
                 id=annotation_id,
