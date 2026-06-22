@@ -32,12 +32,12 @@ GIT_RETRY_BACKOFF_SECONDS = 2
 
 def _with_retries(operation, *, on_retry=None):
     """
-    Runs ``operation`` and retries it on :class:`exceptions.SupplyError` up to ``GIT_RETRIES`` times,
+    Runs ``operation`` and retries it on ``SupplyError`` up to ``GIT_RETRIES`` times,
     sleeping with exponential backoff between attempts. This is intended for network-bound git
     operations that may hang or fail transiently.
 
     :param operation: A zero-argument callable that performs the git operation and raises
-      :class:`exceptions.SupplyError` on failure.
+      ``exceptions.SupplyError`` on failure.
     :param on_retry: An optional zero-argument callable invoked between attempts (e.g. to clean up
       partial state) but not after the final, failing attempt.
     """
