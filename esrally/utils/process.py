@@ -103,6 +103,9 @@ def run_subprocess_with_logging(
     if header is not None:
         logger.info(header)
 
+    # only start a new session when a timeout is requested
+    new_session = timeout is not None
+
     # pylint: disable=subprocess-popen-preexec-fn
     with subprocess.Popen(
         command_line_args,
@@ -112,12 +115,16 @@ def run_subprocess_with_logging(
         env=env,
         stdin=stdin if stdin else None,
         preexec_fn=pre_exec,
-        start_new_session=True,
+        start_new_session=new_session,
     ) as command_line_process:
         try:
             stdout, _ = command_line_process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            os.killpg(command_line_process.pid, signal.SIGKILL)
+            try:
+                os.killpg(command_line_process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                # the process group already exited between the timeout firing and the kill
+                logger.debug("Subprocess [%s] already exited before it could be killed.", command_line)
             # finish handling pipes and populate the returncode attribute
             stdout, _ = command_line_process.communicate()
             output = f" Output: [{stdout}]" if stdout else ""
