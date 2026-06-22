@@ -1998,7 +1998,7 @@ class TestEsRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2046,6 +2046,7 @@ class TestEsRaceStore:
             "race-timestamp": "20160131T000000Z",
             "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
             "pipeline": "from-sources",
+            "multi-cluster": False,
             "user-tags": {"os": "Linux"},
             "track": "unittest",
             "track-params": {"shard-count": 3},
@@ -2098,7 +2099,7 @@ class TestEsRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2167,7 +2168,7 @@ class TestEsRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2356,7 +2357,7 @@ class TestEsResultsStore:
 
         t = track.Track(
             name="unittest-track",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
             meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"},
         )
@@ -2505,7 +2506,7 @@ class TestEsResultsStore:
 
         t = track.Track(
             name="unittest-track",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
             meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"},
         )
@@ -2932,7 +2933,7 @@ class TestFileRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2985,7 +2986,7 @@ class TestFileRaceStore:
     def test_filter_race(self):
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True)],
         )
 

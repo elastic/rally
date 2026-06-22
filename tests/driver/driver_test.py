@@ -66,6 +66,12 @@ class TestDriver:
             self.all_client_options = all_client_options
             self.uses_static_responses = False
 
+        @property
+        def default_or_first(self):
+            if not self.all_client_options:
+                return {}
+            return self.all_client_options.get("default") or next(iter(self.all_client_options.values()), {})
+
     class StaticClientFactory:
         PATCHER = None
 
@@ -216,6 +222,15 @@ class TestDriver:
             },
             "tagline": "You Know, for Search",
         }
+
+    def test_telemetry_disabled_for_multi_cluster(self):
+        self.cfg.add(config.Scope.applicationOverride, "driver", "multi.cluster", True)
+
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        d.prepare_benchmark(t=self.track)
+
+        assert d.telemetry.devices == []
 
     def test_assign_drivers_round_robin(self):
         worker_id = [0, 1, 2, 3]
@@ -1003,10 +1018,10 @@ class TestMetricsAggregation:
 
         aggregated = self.calculate_global_throughput(samples)
 
-        assert op in aggregated
+        assert (op, None) in aggregated
         assert len(aggregated) == 1
 
-        throughput = aggregated[op]
+        throughput = aggregated[(op, None)]
         assert len(throughput) == 2
         assert throughput[0] == (1470838595, 21, metrics.SampleType.Warmup, 3000, "docs/s")
         assert throughput[1] == (1470838595.5, 21.5, metrics.SampleType.Normal, 3666.6666666666665, "docs/s")
@@ -1028,10 +1043,10 @@ class TestMetricsAggregation:
 
         aggregated = self.calculate_global_throughput(samples)
 
-        assert op in aggregated
+        assert (op, None) in aggregated
         assert len(aggregated) == 1
 
-        throughput = aggregated[op]
+        throughput = aggregated[(op, None)]
         assert len(throughput) == 6
         assert throughput[0] == (38595, 21, metrics.SampleType.Normal, 5000, "docs/s")
         assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 5000, "docs/s")
@@ -1051,10 +1066,10 @@ class TestMetricsAggregation:
 
         aggregated = self.calculate_global_throughput(samples)
 
-        assert op in aggregated
+        assert (op, None) in aggregated
         assert len(aggregated) == 1
 
-        throughput = aggregated[op]
+        throughput = aggregated[(op, None)]
         assert len(throughput) == 3
         assert throughput[0] == (38595, 21, metrics.SampleType.Normal, 8000, "byte/s")
         assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 8000, "byte/s")
@@ -1609,7 +1624,7 @@ class TestAsyncExecutor:
             client_id=2,
             task=task,
             schedule=schedule,
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1673,7 +1688,7 @@ class TestAsyncExecutor:
             client_id=2,
             task=task,
             schedule=schedule,
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1742,7 +1757,7 @@ class TestAsyncExecutor:
             client_id=0,
             task=task,
             schedule=schedule,
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1816,7 +1831,7 @@ class TestAsyncExecutor:
                 client_id=0,
                 task=task,
                 schedule=schedule,
-                es={"default": es},
+                es=driver.EsClients({"default": es}),
                 sampler=sampler,
                 cancel=cancel,
                 complete=complete,
@@ -1868,7 +1883,7 @@ class TestAsyncExecutor:
                 client_id=0,
                 task=task,
                 schedule=schedule,
-                es={"default": es},
+                es=driver.EsClients({"default": es}),
                 sampler=sampler,
                 cancel=cancel,
                 complete=complete,
@@ -1927,7 +1942,7 @@ class TestAsyncExecutor:
             client_id=2,
             task=task,
             schedule=ScheduleHandle(),
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
