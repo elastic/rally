@@ -17,11 +17,42 @@
 
 import logging
 import os
+import shutil
+import time
 
 from esrally import exceptions
 from esrally.utils import io, process
 
 GIT_TIMEOUT = 600
+# Number of attempts for network-bound git operations (clone, fetch) before giving up.
+GIT_RETRIES = 3
+# Base delay for exponential backoff between retries, in seconds (waits ~2s, then ~4s).
+GIT_RETRY_BACKOFF_SECONDS = 2
+
+
+def _with_retries(operation, *, on_retry=None):
+    """
+    Runs ``operation`` and retries it on :class:`exceptions.SupplyError` up to ``GIT_RETRIES`` times,
+    sleeping with exponential backoff between attempts. This is intended for network-bound git
+    operations that may hang or fail transiently.
+
+    :param operation: A zero-argument callable that performs the git operation and raises
+      :class:`exceptions.SupplyError` on failure.
+    :param on_retry: An optional zero-argument callable invoked between attempts (e.g. to clean up
+      partial state) but not after the final, failing attempt.
+    """
+    logger = logging.getLogger(__name__)
+    for attempt in range(1, GIT_RETRIES + 1):
+        try:
+            return operation()
+        except exceptions.SupplyError:
+            if attempt == GIT_RETRIES:
+                raise
+            wait = GIT_RETRY_BACKOFF_SECONDS * 2 ** (attempt - 1)
+            logger.warning("git operation failed (attempt [%d/%d]); retrying in [%d]s.", attempt, GIT_RETRIES, wait)
+            if on_retry is not None:
+                on_retry()
+            time.sleep(wait)
 
 
 def probed(f):
@@ -71,16 +102,23 @@ def is_branch(src_dir, identifier):
 
 
 def clone(src, *, remote):
-    io.ensure_dir(src)
-    # Don't swallow subprocess output, user might need to enter credentials...
-    if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src)), timeout=GIT_TIMEOUT):
-        raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
+    def _clone():
+        io.ensure_dir(src)
+        # Don't swallow subprocess output, user might need to enter credentials...
+        if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src)), timeout=GIT_TIMEOUT):
+            raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
+
+    # A timed-out or failed clone could leave a partial directory behind, remove it so the retry starts clean.
+    _with_retries(_clone, on_retry=lambda: shutil.rmtree(src, ignore_errors=True))
 
 
 @probed
 def fetch(src, *, remote):
-    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src)} fetch --prune --tags {remote}", timeout=GIT_TIMEOUT):
-        raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
+    def _fetch():
+        if process.run_subprocess_with_logging(f"git -C {io.escape_path(src)} fetch --prune --tags {remote}", timeout=GIT_TIMEOUT):
+            raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
+
+    _with_retries(_fetch)
 
 
 @probed
