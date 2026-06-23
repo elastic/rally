@@ -46,6 +46,7 @@ __RUNNERS = {}
 
 def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.Bulk, BulkIndex(), async_runner=True)
+    register_runner(track.OperationType.OtlpIngest, OtlpIngest(), async_runner=True)
     register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
@@ -801,6 +802,179 @@ class BulkIndex(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "bulk-index"
+
+
+class _ProtobufSerializer:
+    """Passthrough serializer for pre-serialized binary protobuf payloads."""
+
+    mimetype = "application/x-protobuf"
+
+    def dumps(self, data):
+        if isinstance(data, (bytes, bytearray)):
+            return bytes(data)
+        raise TypeError(f"Expected bytes for application/x-protobuf body, got {type(data).__name__}")
+
+    def loads(self, data):
+        return data
+
+
+def _decode_error_body(body) -> str:
+    """Best-effort string-rep of an ApiError body for logging. ES returns a mix of UTF-8 text and
+    binary protobuf framing for OTLP errors (e.g. 429s come back as protobuf with embedded text)."""
+    if body is None:
+        return "<no body>"
+    if hasattr(body, "read"):
+        body = body.read()
+    if isinstance(body, (bytes, bytearray)):
+        return bytes(body).decode("utf-8", errors="replace")
+    return str(body)
+
+
+class OtlpIngest(Runner):
+    """
+    Sends a pre-serialized OTLP ExportMetricsServiceRequest (binary protobuf) to Elasticsearch.
+    """
+
+    DEFAULT_ENDPOINT = "/_otlp/v1/metrics"
+    _PROTOBUF_MIMETYPE = "application/x-protobuf"
+    # statuses we treat as transient and retry with backoff. Matches elastic-transport's
+    # default retry_on_status, but we add proper exponential backoff between attempts.
+    _RETRYABLE_STATUSES = frozenset({429, 502, 503, 504})
+    _MAX_BACKOFF_SECONDS = 30.0
+
+    async def __call__(self, es, params):
+        """
+        :param es: The Elasticsearch client.
+        :param params: A hash with all parameters.
+
+        Mandatory parameters:
+        * ``body``: Raw binary protobuf payload (bytes).
+
+        Optional parameters:
+        * ``endpoint``: OTLP endpoint path. Defaults to ``/_otlp/v1/metrics``.
+        * ``request-timeout``: Client-side timeout in seconds.
+        * ``retries-on-error``: Number of retries on retryable errors (429, 502, 503, 504, connection
+          errors). Defaults to 5.
+        * ``retry-wait-period``: Base seconds for exponential backoff with full jitter between
+          retries. Defaults to 0.5 (so attempts sleep up to 0.5, 1, 2, 4, 8 ... seconds, capped at 30s).
+        * ``gzip``: When True, send the body with ``Content-Encoding: gzip``. The body bytes are
+          expected to already be a gzip stream (Rally pre-compresses each record at prepare-track
+          time so the hot path does no compression). Defaults to False.
+        """
+        body = mandatory(params, "body", self)
+        path = params.get("endpoint", self.DEFAULT_ENDPOINT)
+        max_retries = int(params.get("retries-on-error", 5))
+        retry_wait_base = float(params.get("retry-wait-period", 0.5))
+        gzip_body = bool(params.get("gzip", False))
+
+        # max_retries=0 on the transport — our outer loop handles retries with proper backoff.
+        # Without this the transport would fire its own 4 fast back-to-back retries on 429 before
+        # our backoff ever gets a chance, hammering an already-overloaded ES.
+        transport_params = {"max_retries": 0}
+        if "request-timeout" in params:
+            transport_params["request_timeout"] = params["request-timeout"]
+        es = es.options(**transport_params)
+
+        # elastic-transport has no built-in serializer for application/x-protobuf; register a
+        # passthrough serializer so it forwards the already-serialized bytes without modification.
+        serializers = es.transport.serializers.serializers
+        if self._PROTOBUF_MIMETYPE not in serializers:
+            serializers[self._PROTOBUF_MIMETYPE] = _ProtobufSerializer()
+
+        # Local imports follow the existing pattern in this module for the elasticsearch dependency.
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+        from elasticsearch import AsyncElasticsearch
+
+        headers = {"Content-Type": self._PROTOBUF_MIMETYPE}
+        if gzip_body:
+            # Body bytes are already a gzip stream (pre-compressed at prepare-track time).
+            # Just tell ES so it decompresses before parsing the protobuf.
+            headers["Content-Encoding"] = "gzip"
+
+        max_attempts = max_retries + 1
+        last_status: Optional[int] = None
+        last_error_type = "rejected"
+        for attempt in range(max_attempts):
+            try:
+                # Bypass RallyAsyncElasticsearch.perform_request to avoid injecting
+                # ES REST compatibility headers (Accept: application/vnd.elasticsearch+...)
+                # that OTLP endpoints do not understand.
+                await AsyncElasticsearch.perform_request(
+                    es,
+                    method="POST",
+                    path=path,
+                    headers=headers,
+                    body=body,
+                )
+                return {
+                    "weight": 1,
+                    "unit": "ops",
+                    "success": True,
+                    "request-status": 200,
+                    "request-size-bytes": len(body),
+                }
+            except elasticsearch.ApiError as e:
+                last_status = e.status_code
+                if e.status_code in self._RETRYABLE_STATUSES:
+                    last_error_type = "backpressure" if e.status_code == 429 else "transport"
+                    if attempt < max_attempts - 1:
+                        sleep_s = self._backoff(attempt, retry_wait_base)
+                        self.logger.info(
+                            "OTLP ingest got HTTP %s, retrying in %.2fs (attempt %d/%d).",
+                            e.status_code,
+                            sleep_s,
+                            attempt + 2,
+                            max_attempts,
+                        )
+                        await asyncio.sleep(sleep_s)
+                        continue
+                    self.logger.warning(
+                        "OTLP ingest failed after %d attempts: HTTP %s — %s",
+                        max_attempts,
+                        e.status_code,
+                        _decode_error_body(e.body),
+                    )
+                else:
+                    # non-retryable HTTP error (e.g. 400/401/403/404) — fail fast
+                    last_error_type = "rejected"
+                    self.logger.warning("OTLP ingest failed: HTTP %s — %s", e.status_code, _decode_error_body(e.body))
+                break
+            except (elasticsearch.ConnectionError, elasticsearch.ConnectionTimeout) as e:
+                last_status = None
+                last_error_type = "transport"
+                if attempt < max_attempts - 1:
+                    sleep_s = self._backoff(attempt, retry_wait_base)
+                    self.logger.info(
+                        "OTLP ingest connection error (%s), retrying in %.2fs (attempt %d/%d).",
+                        type(e).__name__,
+                        sleep_s,
+                        attempt + 2,
+                        max_attempts,
+                    )
+                    await asyncio.sleep(sleep_s)
+                    continue
+                self.logger.warning("OTLP ingest failed after %d attempts: %s", max_attempts, e)
+                break
+
+        result = {
+            "weight": 1,
+            "unit": "ops",
+            "success": False,
+            "error-type": last_error_type,
+            "request-size-bytes": len(body),
+        }
+        if last_status is not None:
+            result["request-status"] = last_status
+        return result
+
+    def _backoff(self, attempt: int, base: float) -> float:
+        """Exponential backoff with full jitter, capped at MAX_BACKOFF_SECONDS."""
+        cap = min(self._MAX_BACKOFF_SECONDS, base * (2**attempt))
+        return random.uniform(0, cap)
+
+    def __repr__(self, *args, **kwargs):
+        return "otlp-ingest"
 
 
 class ForceMerge(Runner):
