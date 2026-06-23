@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# pylint: disable=protected-access
 
 import asyncio
 import collections
@@ -8771,3 +8772,278 @@ class TestEnrichPolicy:
 
     def test_str(self):
         assert str(runner.EnrichPolicy()) == "enrich-policy"
+
+
+class TestProtobufSerializer:
+    def test_dumps_bytes_passes_through(self):
+        serializer = runner._ProtobufSerializer()
+        payload = b"\x08\x96\x01"  # arbitrary protobuf-shaped bytes
+        assert serializer.dumps(payload) == payload
+
+    def test_dumps_rejects_non_bytes(self):
+        serializer = runner._ProtobufSerializer()
+        with pytest.raises(TypeError):
+            serializer.dumps({"not": "bytes"})
+
+    def test_loads_returns_data_unchanged(self):
+        serializer = runner._ProtobufSerializer()
+        assert serializer.loads(b"\x00\x01") == b"\x00\x01"
+
+    def test_mimetype(self):
+        assert runner._ProtobufSerializer.mimetype == "application/x-protobuf"
+
+
+class TestOtlpIngestRunner:
+    _headers = HttpHeaders()
+    _node = NodeConfig(scheme="http", host="localhost", port=9200)
+    _OK_META = ApiResponseMeta(status=200, http_version="1.1", headers=_headers, duration=0.1, node=_node)
+
+    def _make_es_mock(self):
+        es = mock.MagicMock()
+        # transport.serializers.serializers is a dict the runner mutates to register the protobuf serializer
+        es.transport.serializers.serializers = {}
+        # es.options(**kw) returns the same client so chained mutations stay observable
+        es.options.return_value = es
+        return es
+
+    @pytest.mark.asyncio
+    async def test_posts_to_default_endpoint_with_protobuf_body(self):
+        es = self._make_es_mock()
+        body = b"\x0a\x05hello"
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ) as pr:
+            result = await runner.OtlpIngest()(es, {"body": body})
+
+        pr.assert_awaited_once()
+        kwargs = pr.await_args.kwargs
+        assert kwargs["method"] == "POST"
+        assert kwargs["path"] == "/_otlp/v1/metrics"
+        assert kwargs["headers"] == {"Content-Type": "application/x-protobuf"}
+        assert kwargs["body"] is body
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "request-status": 200,
+            "request-size-bytes": len(body),
+        }
+
+    @pytest.mark.asyncio
+    async def test_custom_endpoint(self):
+        es = self._make_es_mock()
+        body = b"\x0a\x05world"
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ) as pr:
+            await runner.OtlpIngest()(es, {"body": body, "endpoint": "/custom/otlp"})
+
+        assert pr.await_args.kwargs["path"] == "/custom/otlp"
+
+    @pytest.mark.asyncio
+    async def test_request_timeout_applied_via_options(self):
+        es = self._make_es_mock()
+        body = b"\x0a\x01"
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ):
+            await runner.OtlpIngest()(es, {"body": body, "request-timeout": 42})
+
+        # both transport retry disable AND custom timeout flow through es.options
+        es.options.assert_called_once_with(max_retries=0, request_timeout=42)
+
+    @pytest.mark.asyncio
+    async def test_transport_retries_always_disabled(self):
+        # Our outer retry loop handles backoff; the transport's same-node retries fire without delay
+        # and would just hammer an overloaded ES, so we always disable them.
+        es = self._make_es_mock()
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ):
+            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+        es.options.assert_called_once_with(max_retries=0)
+
+    @pytest.mark.asyncio
+    async def test_registers_protobuf_serializer(self):
+        es = self._make_es_mock()
+        assert "application/x-protobuf" not in es.transport.serializers.serializers
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ):
+            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+        registered = es.transport.serializers.serializers["application/x-protobuf"]
+        assert isinstance(registered, runner._ProtobufSerializer)
+
+    @pytest.mark.asyncio
+    async def test_does_not_replace_existing_serializer(self):
+        es = self._make_es_mock()
+        existing = runner._ProtobufSerializer()
+        es.transport.serializers.serializers["application/x-protobuf"] = existing
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ):
+            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+        # the existing serializer instance is preserved
+        assert es.transport.serializers.serializers["application/x-protobuf"] is existing
+
+    @pytest.mark.asyncio
+    async def test_missing_body_raises(self):
+        es = self._make_es_mock()
+        with pytest.raises(exceptions.DataError):
+            await runner.OtlpIngest()(es, {})
+
+    @pytest.mark.asyncio
+    async def test_non_retryable_api_error_returns_failure_dict(self):
+        # 4xx errors other than 429 are not retryable (e.g. malformed request) — we surface them
+        # as a failed operation so the benchmark continues with a non-zero error rate.
+        es = self._make_es_mock()
+        err_meta = ApiResponseMeta(status=400, http_version="1.1", headers=self._headers, duration=0.1, node=self._node)
+        api_error = elasticsearch.BadRequestError(message="bad", meta=err_meta, body={"error": "boom"})
+
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(side_effect=api_error),
+        ) as pr:
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+        # only one attempt — no retry for non-retryable status
+        assert pr.await_count == 1
+        assert result["success"] is False
+        assert result["request-status"] == 400
+        assert result["error-type"] == "rejected"
+
+    @pytest.mark.asyncio
+    async def test_429_retried_with_backoff_then_succeeds(self):
+        # 429 should trigger our retry loop with backoff. On the third attempt the mock returns OK
+        # and we expect a success result (with no leakage of the prior failed attempts).
+        es = self._make_es_mock()
+        err_meta = ApiResponseMeta(status=429, http_version="1.1", headers=self._headers, duration=0.1, node=self._node)
+        api_error = elasticsearch.ApiError(message="too many", meta=err_meta, body=b"\x12\xc5\x01rejected")
+
+        ok_response = ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)
+        # first two attempts → 429, third → 200
+        perform = mock.AsyncMock(side_effect=[api_error, api_error, ok_response])
+
+        sleeps: list[float] = []
+
+        async def fake_sleep(s):
+            sleeps.append(s)
+
+        with (
+            mock.patch("elasticsearch.AsyncElasticsearch.perform_request", new=perform),
+            mock.patch("esrally.driver.runner.asyncio.sleep", new=fake_sleep),
+        ):
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+        assert perform.await_count == 3
+        # two sleeps for the two retries
+        assert len(sleeps) == 2
+        # each sleep is non-negative (full-jitter exponential — value depends on random.uniform but is bounded)
+        assert all(s >= 0 for s in sleeps)
+        assert result["success"] is True
+        assert result["request-status"] == 200
+
+    @pytest.mark.asyncio
+    async def test_429_retries_exhausted_returns_backpressure_failure(self):
+        # All retries fail with 429 → we should return a failure dict with error-type=backpressure.
+        es = self._make_es_mock()
+        err_meta = ApiResponseMeta(status=429, http_version="1.1", headers=self._headers, duration=0.1, node=self._node)
+        api_error = elasticsearch.ApiError(message="too many", meta=err_meta, body=b"backpressure body")
+
+        with (
+            mock.patch(
+                "elasticsearch.AsyncElasticsearch.perform_request",
+                new=mock.AsyncMock(side_effect=api_error),
+            ) as pr,
+            mock.patch("esrally.driver.runner.asyncio.sleep", new=mock.AsyncMock()),
+        ):
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "retries-on-error": 2})
+
+        # 2 retries + 1 initial attempt = 3 attempts
+        assert pr.await_count == 3
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": False,
+            "error-type": "backpressure",
+            "request-status": 429,
+            "request-size-bytes": 1,
+        }
+
+    @pytest.mark.asyncio
+    async def test_5xx_retried_like_429(self):
+        es = self._make_es_mock()
+        err_meta = ApiResponseMeta(status=503, http_version="1.1", headers=self._headers, duration=0.1, node=self._node)
+        api_error = elasticsearch.ApiError(message="unavailable", meta=err_meta, body=b"")
+
+        with (
+            mock.patch(
+                "elasticsearch.AsyncElasticsearch.perform_request",
+                new=mock.AsyncMock(side_effect=api_error),
+            ) as pr,
+            mock.patch("esrally.driver.runner.asyncio.sleep", new=mock.AsyncMock()),
+        ):
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "retries-on-error": 1})
+
+        assert pr.await_count == 2  # 1 retry + 1 initial
+        assert result["error-type"] == "transport"
+        assert result["request-status"] == 503
+
+    @pytest.mark.asyncio
+    async def test_connection_error_retried(self):
+        es = self._make_es_mock()
+        with (
+            mock.patch(
+                "elasticsearch.AsyncElasticsearch.perform_request",
+                new=mock.AsyncMock(side_effect=elasticsearch.ConnectionError("refused")),
+            ) as pr,
+            mock.patch("esrally.driver.runner.asyncio.sleep", new=mock.AsyncMock()),
+        ):
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "retries-on-error": 2})
+
+        assert pr.await_count == 3
+        assert result["success"] is False
+        assert result["error-type"] == "transport"
+        assert "request-status" not in result  # connection errors have no HTTP status
+
+    @pytest.mark.asyncio
+    async def test_retry_wait_period_param_honoured(self):
+        # base=10 with attempt=0 → uniform(0, 10) → at least we know it sleeps once and cap is 10
+        es = self._make_es_mock()
+        err_meta = ApiResponseMeta(status=429, http_version="1.1", headers=self._headers, duration=0.1, node=self._node)
+        api_error = elasticsearch.ApiError(message="too many", meta=err_meta, body=b"")
+        ok = ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)
+        perform = mock.AsyncMock(side_effect=[api_error, ok])
+
+        captured: list[float] = []
+
+        async def fake_sleep(s):
+            captured.append(s)
+
+        with (
+            mock.patch("elasticsearch.AsyncElasticsearch.perform_request", new=perform),
+            mock.patch("esrally.driver.runner.asyncio.sleep", new=fake_sleep),
+        ):
+            await runner.OtlpIngest()(es, {"body": b"\x0a", "retry-wait-period": 10})
+
+        assert len(captured) == 1
+        # full-jitter: random.uniform(0, base*2^0) = uniform(0, 10)
+        assert 0 <= captured[0] <= 10
+
+    def test_repr(self):
+        assert repr(runner.OtlpIngest()) == "otlp-ingest"
