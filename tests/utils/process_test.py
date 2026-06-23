@@ -216,7 +216,7 @@ def test_run_subprocess():
 def test_run_subprocess_with_logging_timeout_kills_process_group(caplog, tmp_path):
     pid_file = tmp_path / "grandchild.pid"
     # The shell backgrounds `sleep 600` in the same process group; both should die on timeout.
-    cmd = f"sh -c 'sleep 600 & echo $! > {pid_file}; wait'"
+    cmd = f"sh -c 'sleep 600 & echo $! > \"{pid_file}\"; wait'"
     timeout = 1
 
     with caplog.at_level(logging.ERROR, logger="esrally.utils.process"):
