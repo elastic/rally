@@ -703,7 +703,9 @@ develop = [
     { name = "github3-py" },
     { name = "gitpython" },
     { name = "mypy" },
+    { name = "opentelemetry-proto" },
     { name = "pre-commit" },
+    { name = "protobuf" },
     { name = "pylint" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -713,10 +715,15 @@ develop = [
     { name = "standard-imghdr" },
     { name = "trustme" },
     { name = "types-jsonschema" },
+    { name = "types-protobuf" },
     { name = "types-psutil" },
     { name = "types-requests" },
     { name = "types-tabulate" },
     { name = "ujson" },
+]
+otlp = [
+    { name = "opentelemetry-proto" },
+    { name = "protobuf" },
 ]
 s3 = [
     { name = "boto3" },
@@ -754,8 +761,12 @@ requires-dist = [
     { name = "jsonschema", specifier = "==3.1.1" },
     { name = "markupsafe", specifier = "==2.0.1" },
     { name = "mypy", marker = "extra == 'develop'", specifier = "==1.15.0" },
+    { name = "opentelemetry-proto", marker = "extra == 'develop'", specifier = "==1.34.0" },
+    { name = "opentelemetry-proto", marker = "extra == 'otlp'", specifier = "==1.34.0" },
     { name = "pip", specifier = "==26.1" },
     { name = "pre-commit", marker = "extra == 'develop'", specifier = "==2.20.0" },
+    { name = "protobuf", marker = "extra == 'develop'", specifier = ">=5.29.0" },
+    { name = "protobuf", marker = "extra == 'otlp'", specifier = ">=5.29.0" },
     { name = "psutil", specifier = "==5.9.4" },
     { name = "py-cpuinfo", specifier = "==7.0.0" },
     { name = "pylint", marker = "extra == 'develop'", specifier = "==3.3.8" },
@@ -771,6 +782,7 @@ requires-dist = [
     { name = "thespian", specifier = "==4.0.1" },
     { name = "trustme", marker = "extra == 'develop'", specifier = "==0.9.0" },
     { name = "types-jsonschema", marker = "extra == 'develop'", specifier = "==3.2.0" },
+    { name = "types-protobuf", marker = "extra == 'develop'", specifier = ">=4.24,<8" },
     { name = "types-psutil", marker = "extra == 'develop'", specifier = "==5.9.4" },
     { name = "types-requests", marker = "extra == 'develop'", specifier = ">=2.31.0.7,<3" },
     { name = "types-tabulate", marker = "extra == 'develop'", specifier = "==0.8.9" },
@@ -781,7 +793,7 @@ requires-dist = [
     { name = "yappi", specifier = "==1.6.10" },
     { name = "zstandard", specifier = "==0.25.0" },
 ]
-provides-extras = ["develop", "s3"]
+provides-extras = ["develop", "otlp", "s3"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "esrally", extras = ["develop"], editable = "." }]
@@ -1559,6 +1571,18 @@ wheels = [
 ]
 
 [[package]]
+name = "opentelemetry-proto"
+version = "1.34.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/95/19/45adb533d0a34990942d12eefb2077d59b22958940c71484a45e694f5dd7/opentelemetry_proto-1.34.0.tar.gz", hash = "sha256:73e40509b692630a47192888424f7e0b8fb19d9ecf2f04e6f708170cd3346dfe", size = 34343, upload-time = "2025-06-04T13:31:35.695Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/db/58/708881f5ad3c72954caa61ac970d3c01209dbebf5e534fb840dfb777bad2/opentelemetry_proto-1.34.0-py3-none-any.whl", hash = "sha256:ffb1f1b27552fda5a1cd581e34243cc0b6f134fb14c1c2a33cc3b4b208c9bf97", size = 55691, upload-time = "2025-06-04T13:31:20.333Z" },
+]
+
+[[package]]
 name = "packaging"
 version = "25.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1719,6 +1743,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9a/4c/b0fe775a2bdd01e176b14b574be679d84fc83958335790f7c9a686c1f468/propcache-0.3.2-cp313-cp313t-win32.whl", hash = "sha256:f86e5d7cd03afb3a1db8e9f9f6eff15794e79e791350ac48a8c924e6f439f394", size = 41175, upload-time = "2025-06-09T22:55:38.436Z" },
     { url = "https://files.pythonhosted.org/packages/a4/ff/47f08595e3d9b5e149c150f88d9714574f1a7cbd89fe2817158a952674bf/propcache-0.3.2-cp313-cp313t-win_amd64.whl", hash = "sha256:9704bedf6e7cbe3c65eca4379a9b53ee6a83749f047808cbb5044d40d7d72198", size = 44857, upload-time = "2025-06-09T22:55:39.687Z" },
     { url = "https://files.pythonhosted.org/packages/cc/35/cc0aaecf278bb4575b8555f2b137de5ab821595ddae9da9d3cd1da4072c7/propcache-0.3.2-py3-none-any.whl", hash = "sha256:98f1ec44fb675f5052cccc8e609c46ed23a35a1cfd18545ad4e29002d858a43f", size = 12663, upload-time = "2025-06-09T22:56:04.484Z" },
+]
+
+[[package]]
+name = "protobuf"
+version = "5.29.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7e/57/394a763c103e0edf87f0938dafcd918d53b4c011dfc5c8ae80f3b0452dbb/protobuf-5.29.6.tar.gz", hash = "sha256:da9ee6a5424b6b30fd5e45c5ea663aef540ca95f9ad99d1e887e819cdf9b8723", size = 425623, upload-time = "2026-02-04T22:54:40.584Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/88/9ee58ff7863c479d6f8346686d4636dd4c415b0cbeed7a6a7d0617639c2a/protobuf-5.29.6-cp310-abi3-win32.whl", hash = "sha256:62e8a3114992c7c647bce37dcc93647575fc52d50e48de30c6fcb28a6a291eb1", size = 423357, upload-time = "2026-02-04T22:54:25.805Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/66/2dc736a4d576847134fb6d80bd995c569b13cdc7b815d669050bf0ce2d2c/protobuf-5.29.6-cp310-abi3-win_amd64.whl", hash = "sha256:7e6ad413275be172f67fdee0f43484b6de5a904cc1c3ea9804cb6fe2ff366eda", size = 435175, upload-time = "2026-02-04T22:54:28.592Z" },
+    { url = "https://files.pythonhosted.org/packages/06/db/49b05966fd208ae3f44dcd33837b6243b4915c57561d730a43f881f24dea/protobuf-5.29.6-cp38-abi3-macosx_10_9_universal2.whl", hash = "sha256:b5a169e664b4057183a34bdc424540e86eea47560f3c123a0d64de4e137f9269", size = 418619, upload-time = "2026-02-04T22:54:30.266Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/d7/48cbf6b0c3c39761e47a99cb483405f0fde2be22cf00d71ef316ce52b458/protobuf-5.29.6-cp38-abi3-manylinux2014_aarch64.whl", hash = "sha256:a8866b2cff111f0f863c1b3b9e7572dc7eaea23a7fae27f6fc613304046483e6", size = 320284, upload-time = "2026-02-04T22:54:31.782Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/dd/cadd6ec43069247d91f6345fa7a0d2858bef6af366dbd7ba8f05d2c77d3b/protobuf-5.29.6-cp38-abi3-manylinux2014_x86_64.whl", hash = "sha256:e3387f44798ac1106af0233c04fb8abf543772ff241169946f698b3a9a3d3ab9", size = 320478, upload-time = "2026-02-04T22:54:32.909Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/cb/e3065b447186cb70aa65acc70c86baf482d82bf75625bf5a2c4f6919c6a3/protobuf-5.29.6-py3-none-any.whl", hash = "sha256:6b9edb641441b2da9fa8f428760fc136a49cf97a52076010cf22a2ff73438a86", size = 173126, upload-time = "2026-02-04T22:54:39.462Z" },
 ]
 
 [[package]]
@@ -2392,6 +2430,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/2c/1c/cc3f150d59fcc0ad00b1a8bab7fcda8d36745bf7529413aec719d0a725a1/types-jsonschema-3.2.0.tar.gz", hash = "sha256:1bbee1d5992f768f798aea96f05045821035e919a34136ea94f0444f31d08189", size = 4602, upload-time = "2021-07-15T18:19:35.533Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/f0/7558cd331217021e37975f4f0fb4f58548971d002c6401d5012194fd781b/types_jsonschema-3.2.0-py3-none-any.whl", hash = "sha256:4a8f2e87aa7001361b4c3666565f8684f0e016517228396ac1bffd397d8c3fd0", size = 6619, upload-time = "2021-07-15T18:19:34.203Z" },
+]
+
+[[package]]
+name = "types-protobuf"
+version = "7.34.1.20260518"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/29/59/e2b13b499d15e6720150c4b1a8d91e31fcacf716b432397475b3151ff7e4/types_protobuf-7.34.1.20260518.tar.gz", hash = "sha256:28cfaded25889cb83ebfb63cfb0a43628f0b6f3785767bec17287dc6468795f2", size = 68936, upload-time = "2026-05-18T06:01:47.332Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/1f/ec5caf72c2e3b688ca3927e0979a04ddad19e1afc4bf1c199bd743e0f419/types_protobuf-7.34.1.20260518-py3-none-any.whl", hash = "sha256:a0a5337413347166439c0e07cbc26c6164d091401c6f01b1dfd8cdb966c4dd8f", size = 85992, upload-time = "2026-05-18T06:01:45.696Z" },
 ]
 
 [[package]]
