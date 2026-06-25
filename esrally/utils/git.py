@@ -104,7 +104,6 @@ def is_branch(src_dir, identifier):
 def clone(src, *, remote):
     def _clone():
         io.ensure_dir(src)
-        # Don't swallow subprocess output, user might need to enter credentials...
         if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src)), timeout=GIT_TIMEOUT):
             raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
 
