@@ -99,14 +99,9 @@ def run_subprocess_with_logging(
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with logging.", command_line)
     command_line_args = shlex.split(command_line)
-    pre_exec = os.setpgrp if detach else None
     if header is not None:
         logger.info(header)
 
-    # only start a new session when a timeout is requested
-    new_session = timeout is not None
-
-    # pylint: disable=subprocess-popen-preexec-fn
     with subprocess.Popen(
         command_line_args,
         stdout=subprocess.PIPE,
@@ -114,8 +109,7 @@ def run_subprocess_with_logging(
         universal_newlines=True,
         env=env,
         stdin=stdin if stdin else None,
-        preexec_fn=pre_exec,
-        start_new_session=new_session,
+        start_new_session=detach or timeout is not None,
     ) as command_line_process:
         try:
             stdout, _ = command_line_process.communicate(timeout=timeout)
@@ -167,7 +161,6 @@ def run_subprocess_with_logging_and_output(
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with logging.", command_line)
     command_line_args = shlex.split(command_line)
-    pre_exec = os.setpgrp if detach else None
     if header is not None:
         logger.info(header)
 
@@ -179,7 +172,7 @@ def run_subprocess_with_logging_and_output(
         env=env,
         check=False,
         stdin=stdin if stdin else None,
-        preexec_fn=pre_exec,
+        start_new_session=detach,
     )
 
     for stdout in completed.stdout.splitlines():
