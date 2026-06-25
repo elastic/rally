@@ -118,7 +118,7 @@ def run_subprocess_with_logging(
                 os.killpg(command_line_process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 # the process group already exited between the timeout firing and the kill
-                logger.debug("Subprocess [%s] already exited before it could be killed.", command_line)
+                pass
             # finish handling pipes and populate the returncode attribute
             stdout, _ = command_line_process.communicate()
             output = f" Output: [{stdout}]" if stdout else ""
