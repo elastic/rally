@@ -201,8 +201,10 @@ class BenchmarkCoordinator:
         # but there are rare cases (external pipeline and user did not specify the distribution version) where we need
         # to derive it ourselves. For source builds we always assume "main"
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
-            hosts = self.cfg.opts("client", "hosts").default
-            client_options = self.cfg.opts("client", "options").default
+            hosts_cfg = self.cfg.opts("client", "hosts")
+            options_cfg = self.cfg.opts("client", "options")
+            hosts = hosts_cfg.default_or_first
+            client_options = options_cfg.default_or_first
             (
                 distribution_flavor,
                 distribution_version,
@@ -335,8 +337,8 @@ def race(cfg: types.Config, sources=False, distribution=False, external=False, d
 def set_default_hosts(cfg: types.Config, host="127.0.0.1", port=9200):
     logger = logging.getLogger(__name__)
     configured_hosts = cfg.opts("client", "hosts")
-    if len(configured_hosts.default) != 0:
-        logger.info("Using configured hosts %s", configured_hosts.default)
+    if len(configured_hosts.default_or_first) != 0:
+        logger.info("Using configured hosts %s", configured_hosts.default_or_first)
     else:
         logger.info("Setting default host to [%s:%d]", host, port)
         default_host_object = opts.TargetHosts(f"{host}:{port}")
@@ -357,7 +359,8 @@ def from_distribution(cfg: types.Config):
 
 
 def benchmark_only(cfg: types.Config):
-    set_default_hosts(cfg)
+    if not cfg.opts("driver", "multi.cluster", mandatory=False):
+        set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
     return race(cfg, external=True)
@@ -411,7 +414,7 @@ def run(cfg: types.Config):
             raise exceptions.SystemSetupError(
                 "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
                 "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
-                "For more details read the docs for the benchmark-only pipeline in {}\n".format(doc_link("pipelines.html#benchmark-only"))
+                "For more details read the docs at {}\n".format(doc_link("pipelines.html"))
             )
 
     try:

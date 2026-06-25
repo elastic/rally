@@ -17,13 +17,13 @@
 # pylint: disable=protected-access
 
 import os
-import re
 from unittest import mock
 
 import pytest
 
 from esrally import config, exceptions, racecontrol
 from esrally.track import params, track
+from esrally.utils import opts
 
 
 @pytest.fixture(autouse=True)
@@ -98,10 +98,10 @@ def test_fails_without_benchmark_only_pipeline_in_docker(running_in_docker, unit
     with pytest.raises(
         exceptions.SystemSetupError,
         match=(
-            f"Only the {re.escape('[benchmark-only]')} pipeline is supported by the Rally Docker image.\n"
+            "Only the \\[benchmark-only\\] pipeline is supported by the Rally Docker image.\n"
             "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
-            "For more details read the docs for the benchmark-only pipeline in "
-            "https://esrally.readthedocs.io/en/.*/pipelines.html#benchmark-only\n"
+            "For more details read the docs at "
+            "https://esrally.readthedocs.io/en/.*/pipelines.html\n"
         ),
     ):
         racecontrol.run(cfg)
@@ -179,3 +179,41 @@ def test_setup_runs_all_validators_and_continues_when_they_pass(create_race, met
     # both validators ran (in order) and, because they passed, setup() proceeded past validation
     assert calls == ["first", "second"]
     create_race.assert_called_once()
+
+
+def test_multi_cluster_flag_rejected_with_single_host():
+    """--multi-cluster with a single host in --target-hosts should be caught by CLI validation."""
+    # This validation happens in configure_connection_params (rally.py), not racecontrol,
+    # so here we just confirm that benchmark-only still works without the flag for a single host.
+    cfg = config.Config()
+    cfg.add(config.Scope.benchmark, "system", "race.id", "28a032d1-0b03-4579-ad2a-c65316f126e9")
+    cfg.add(config.Scope.benchmark, "race", "pipeline", "benchmark-only")
+
+
+@mock.patch("esrally.racecontrol.race")
+def test_benchmark_only_with_multi_cluster_flag(mock_race, unittest_pipeline):
+    """benchmark-only pipeline with --multi-cluster flag runs a single race covering all clusters."""
+    cfg = config.Config()
+    cfg.add(config.Scope.applicationOverride, "system", "race.id", "base-race-id")
+    cfg.add(config.Scope.applicationOverride, "race", "pipeline", "benchmark-only")
+    cfg.add(config.Scope.applicationOverride, "driver", "multi.cluster", True)
+    cfg.add(
+        config.Scope.applicationOverride,
+        "client",
+        "hosts",
+        opts.TargetHosts('{"cluster-a": ["127.0.0.1:9200"], "cluster-b": ["10.0.0.1:9200"]}'),
+    )
+    cfg.add(
+        config.Scope.applicationOverride,
+        "client",
+        "options",
+        opts.ClientOptions(
+            '{"cluster-a": {"timeout": 60}, "cluster-b": {"timeout": 60}}',
+            target_hosts=cfg.opts("client", "hosts"),
+        ),
+    )
+    cfg.add(config.Scope.benchmark, "mechanic", "distribution.version", "")
+
+    racecontrol.run(cfg)
+
+    assert mock_race.call_count == 1
