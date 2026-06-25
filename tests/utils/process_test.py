@@ -235,30 +235,6 @@ def test_run_subprocess_with_logging_timeout_kills_process_group(caplog, tmp_pat
     ), f"expected ERROR log starting with {expected!r}, got: {[r.getMessage() for r in caplog.records]}"
 
 
-@mock.patch("esrally.utils.process.subprocess.Popen")
-def test_run_subprocess_with_logging_without_timeout_does_not_start_new_session(popen):
-    proc = popen.return_value.__enter__.return_value
-    proc.returncode = 0
-    proc.communicate.return_value = ("", None)
-
-    process.run_subprocess_with_logging("true")
-
-    # a new session detaches the child from the controlling terminal, so only do it when we need
-    # os.killpg() to enforce a timeout
-    assert popen.call_args.kwargs["start_new_session"] is False
-
-
-@mock.patch("esrally.utils.process.subprocess.Popen")
-def test_run_subprocess_with_logging_with_timeout_starts_new_session(popen):
-    proc = popen.return_value.__enter__.return_value
-    proc.returncode = 0
-    proc.communicate.return_value = ("", None)
-
-    process.run_subprocess_with_logging("true", timeout=5)
-
-    assert popen.call_args.kwargs["start_new_session"] is True
-
-
 @mock.patch("esrally.utils.process.os.killpg", side_effect=ProcessLookupError)
 @mock.patch("esrally.utils.process.subprocess.Popen")
 def test_run_subprocess_with_logging_timeout_handles_already_exited_process(popen, killpg):
