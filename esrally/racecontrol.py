@@ -112,7 +112,12 @@ class BenchmarkActor(actor.RallyActor):
         self.cfg = msg.cfg
         assert self.cfg is not None
         self.coordinator = BenchmarkCoordinator(msg.cfg)
-        self.coordinator.setup(sources=msg.sources)
+        try:
+            self.coordinator.setup(sources=msg.sources)
+        except exceptions.RallyError as e:
+            self.logger.info("Setup failed due to a Rally error.", exc_info=e)
+            self.send(sender, actor.BenchmarkFailure(e.full_message))
+            return
         self.logger.info("Asking mechanic to start the engine.")
         self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
         self.send(

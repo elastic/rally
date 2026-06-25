@@ -150,6 +150,28 @@ def test_setup_invokes_track_param_validators_for_selected_challenge():
     assert received == [{"scheduling": [1, 2, 3]}]
 
 
+def test_benchmark_actor_reports_rally_error_from_setup_without_traceback():
+    cfg = _coordinator_cfg("validate-challenge", {"scheduling": [1, 2, 3]})
+    benchmark_actor = racecontrol.BenchmarkActor()
+    sender = mock.Mock()
+
+    with (
+        mock.patch.object(benchmark_actor, "send") as send,
+        mock.patch(
+            "esrally.racecontrol.BenchmarkCoordinator.setup",
+            side_effect=exceptions.TrackConfigError("invalid track parameters"),
+        ),
+    ):
+        benchmark_actor.receiveMsg_Setup(racecontrol.Setup(cfg), sender)
+
+    send.assert_called_once()
+    assert send.call_args.args[0] is sender
+    failure = send.call_args.args[1]
+    assert isinstance(failure, racecontrol.actor.BenchmarkFailure)
+    assert failure.message == "invalid track parameters"
+    assert "Traceback" not in failure.message
+
+
 @mock.patch("esrally.racecontrol.metrics.race_store")
 @mock.patch("esrally.racecontrol.metrics.metrics_store")
 @mock.patch("esrally.racecontrol.metrics.create_race")
