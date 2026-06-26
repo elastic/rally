@@ -152,8 +152,10 @@ def test_setup_invokes_track_param_validators_for_selected_challenge():
 
 def test_benchmark_actor_reports_rally_error_from_setup_without_traceback():
     cfg = _coordinator_cfg("validate-challenge", {"scheduling": [1, 2, 3]})
-    benchmark_actor = racecontrol.BenchmarkActor()
     sender = mock.Mock()
+
+    with mock.patch("esrally.actor.log.post_configure_actor_logging"):
+        benchmark_actor = racecontrol.BenchmarkActor()
 
     with (
         mock.patch.object(benchmark_actor, "send") as send,
