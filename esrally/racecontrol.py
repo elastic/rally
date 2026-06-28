@@ -39,6 +39,7 @@ from esrally import (
     types,
     version,
 )
+from esrally.track import params
 from esrally.utils import console, opts, versions
 
 pipelines = collections.OrderedDict()
@@ -111,7 +112,12 @@ class BenchmarkActor(actor.RallyActor):
         self.cfg = msg.cfg
         assert self.cfg is not None
         self.coordinator = BenchmarkCoordinator(msg.cfg)
-        self.coordinator.setup(sources=msg.sources)
+        try:
+            self.coordinator.setup(sources=msg.sources)
+        except exceptions.RallyError as e:
+            self.logger.info("Setup failed due to a Rally error.", exc_info=e)
+            self.send(sender, actor.BenchmarkFailure(e.full_message))
+            return
         self.logger.info("Asking mechanic to start the engine.")
         self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
         self.send(
@@ -244,6 +250,9 @@ class BenchmarkCoordinator:
                     self.current_track.name, challenge_name, PROGRAM_NAME
                 )
             )
+        # Validate track parameters for the selected challenge before provisioning the engine so that invalid
+        # parameters fail fast. Track plugins were loaded (and any validators registered) during load_track above.
+        params.invoke_validators(self.current_challenge.name, self.cfg.opts("track", "params", mandatory=False, default_value={}))
         if self.current_challenge.user_info:
             console.info(self.current_challenge.user_info)
         for message in self.current_challenge.serverless_info:

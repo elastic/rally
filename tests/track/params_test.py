@@ -3358,3 +3358,82 @@ class TestDownsampleParamSource:
         assert p["fixed-interval"] == "1h"
         assert p["target-index"] == f"{p['source-index']}-{p['fixed-interval']}"
         assert p.get("sampling-method") is None
+
+
+class TestValidatorRegistry:
+    def teardown_method(self):
+        params._clear_validators()
+
+    def test_registered_validator_is_invoked(self):
+        received = []
+
+        def my_validator(p):
+            received.append(p)
+
+        params.register_validator("test-challenge", my_validator)
+        params.invoke_validators("test-challenge", {"key": "value"})
+
+        assert received == [{"key": "value"}]
+
+    def test_multiple_validators_all_invoked(self):
+        calls = []
+
+        params.register_validator("test-challenge", lambda p: calls.append("first"))
+        params.register_validator("test-challenge", lambda p: calls.append("second"))
+        params.invoke_validators("test-challenge", {})
+
+        assert calls == ["first", "second"]
+
+    def test_invoke_with_no_validators_is_a_noop(self):
+        params.invoke_validators("test-challenge", {"key": "value"})
+
+    def test_invoke_with_none_params_does_not_crash(self):
+        received = []
+        params.register_validator("test-challenge", received.append)
+        # a None params payload is normalized to an empty dict before reaching the validator
+        params.invoke_validators("test-challenge", None)  # type: ignore[arg-type]
+        assert received == [{}]
+
+    def test_registering_the_same_validator_twice_invokes_it_once(self):
+        calls = []
+
+        def my_validator(p):
+            calls.append(p)
+
+        # simulates a track's plugins being (re)loaded more than once in the same process
+        params.register_validator("test-challenge", my_validator)
+        params.register_validator("test-challenge", my_validator)
+        params.invoke_validators("test-challenge", {})
+
+        assert calls == [{}]
+
+    def test_validator_raising_track_config_error_propagates(self):
+        def bad_validator(p):
+            raise exceptions.TrackConfigError("invalid param")
+
+        params.register_validator("test-challenge", bad_validator)
+
+        with pytest.raises(exceptions.TrackConfigError, match="invalid param"):
+            params.invoke_validators("test-challenge", {})
+
+    def test_validators_not_invoked_for_different_challenge(self):
+        called = []
+        params.register_validator("test-challenge", lambda p: called.append(True))
+        params.invoke_validators("other-challenge", {})
+        assert called == []
+
+    def test_cannot_register_a_non_callable_validator(self):
+        with pytest.raises(exceptions.RallyAssertionError, match="Validator for challenge \\[test-challenge\\] must be callable"):
+            # intentionally pass a non-callable to exercise the runtime guard
+            params.register_validator("test-challenge", "not-callable")  # type: ignore[arg-type]
+
+    def test_unexpected_validator_error_is_wrapped_with_context(self):
+        def buggy_validator(p):
+            return p["missing-key"]
+
+        params.register_validator("test-challenge", buggy_validator)
+
+        with pytest.raises(
+            exceptions.TrackConfigError, match="Validator \\[buggy_validator\\] for challenge \\[test-challenge\\] failed: 'missing-key'"
+        ):
+            params.invoke_validators("test-challenge", {})
