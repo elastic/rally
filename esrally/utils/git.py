@@ -17,16 +17,51 @@
 
 import logging
 import os
+import shutil
+import time
 
 from esrally import exceptions
 from esrally.utils import io, process
+
+GIT_TIMEOUT = 600
+# Number of attempts for network-bound git operations (clone, fetch) before giving up.
+GIT_RETRIES = 3
+# Base delay for exponential backoff between retries, in seconds (waits ~2s, then ~4s).
+GIT_RETRY_BACKOFF_SECONDS = 2
+
+
+def _with_retries(operation, *, on_retry=None):
+    """
+    Runs ``operation`` and retries it on ``SupplyError`` up to ``GIT_RETRIES`` times,
+    sleeping with exponential backoff between attempts. This is intended for network-bound git
+    operations that may hang or fail transiently.
+
+    :param operation: A zero-argument callable that performs the git operation and raises
+      ``exceptions.SupplyError`` on failure.
+    :param on_retry: An optional zero-argument callable invoked between attempts (e.g. to clean up
+      partial state) but not after the final, failing attempt.
+    """
+    logger = logging.getLogger(__name__)
+    for attempt in range(1, GIT_RETRIES + 1):
+        try:
+            return operation()
+        except exceptions.SupplyError:
+            if attempt == GIT_RETRIES:
+                raise
+            wait = GIT_RETRY_BACKOFF_SECONDS * 2 ** (attempt - 1)
+            logger.warning("git operation failed (attempt [%d/%d]); retrying in [%d]s.", attempt, GIT_RETRIES, wait)
+            if on_retry is not None:
+                on_retry()
+            time.sleep(wait)
 
 
 def probed(f):
     def probe(src, *args, **kwargs):
         # Probe for -C
         if not process.exit_status_as_bool(
-            lambda: process.run_subprocess_with_logging(f"git -C {io.escape_path(src)} --version", level=logging.DEBUG),
+            lambda: process.run_subprocess_with_logging(
+                f"git -C {io.escape_path(src)} --version", level=logging.DEBUG, timeout=GIT_TIMEOUT
+            ),
             quiet=True,
         ):
             version = process.run_subprocess_with_output("git --version")
@@ -67,34 +102,40 @@ def is_branch(src_dir, identifier):
 
 
 def clone(src, *, remote):
-    io.ensure_dir(src)
-    # Don't swallow subprocess output, user might need to enter credentials...
-    if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src))):
-        raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
+    def _clone():
+        io.ensure_dir(src)
+        if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src)), timeout=GIT_TIMEOUT):
+            raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
+
+    # A timed-out or failed clone could leave a partial directory behind, remove it so the retry starts clean.
+    _with_retries(_clone, on_retry=lambda: shutil.rmtree(src, ignore_errors=True))
 
 
 @probed
 def fetch(src, *, remote):
-    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src)} fetch --prune --tags {remote}"):
-        raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
+    def _fetch():
+        if process.run_subprocess_with_logging(f"git -C {io.escape_path(src)} fetch --prune --tags {remote}", timeout=GIT_TIMEOUT):
+            raise exceptions.SupplyError("Could not fetch source tree from [%s]" % remote)
+
+    _with_retries(_fetch)
 
 
 @probed
 def checkout(src_dir, *, branch):
-    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} checkout {branch}"):
+    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} checkout {branch}", timeout=GIT_TIMEOUT):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
 @probed
 def checkout_branch(src_dir, remote, branch):
-    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} checkout {remote}/{branch}"):
+    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} checkout {remote}/{branch}", timeout=GIT_TIMEOUT):
         raise exceptions.SupplyError("Could not checkout [%s]. Do you have uncommitted changes?" % branch)
 
 
 @probed
 def rebase(src_dir, *, remote, branch):
     checkout(src_dir, branch=branch)
-    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} rebase {remote}/{branch}"):
+    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} rebase {remote}/{branch}", timeout=GIT_TIMEOUT):
         raise exceptions.SupplyError("Could not rebase on branch [%s]" % branch)
 
 
@@ -114,13 +155,13 @@ def pull_ts(src_dir, ts, *, remote, branch, default_branch):
     else:
         rev_list_command = f'git -C {clean_src} rev-list -n 1 --before="{ts}" --date=iso8601 {remote}/{branch}'
     revision = process.run_subprocess_with_output(rev_list_command)[0].strip()
-    if process.run_subprocess_with_logging(f"git -C {clean_src} checkout {revision}"):
+    if process.run_subprocess_with_logging(f"git -C {clean_src} checkout {revision}", timeout=GIT_TIMEOUT):
         raise exceptions.SupplyError("Could not checkout source tree for timestamped revision [%s]" % ts)
 
 
 @probed
 def checkout_revision(src_dir, *, revision):
-    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} checkout {revision}"):
+    if process.run_subprocess_with_logging(f"git -C {io.escape_path(src_dir)} checkout {revision}", timeout=GIT_TIMEOUT):
         raise exceptions.SupplyError("Could not checkout source tree for revision [%s]" % revision)
 
 
