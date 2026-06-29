@@ -276,7 +276,12 @@ def _load_single_track(cfg: types.Config, track_repository, track_name, install_
         tpr = TrackProcessorRegistry(cfg)
         if install_dependencies:
             _install_dependencies(current_track.dependencies)
-        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor)
+        has_plugins = load_track_plugins(
+            cfg,
+            track_name,
+            register_track_processor=tpr.register_track_processor,
+            register_validator=params.register_validator,
+        )
         current_track.has_plugins = has_plugins
         for processor in tpr.processors:
             processor.on_after_load_track(current_track)
@@ -298,6 +303,7 @@ def load_track_plugins(
     register_scheduler=None,
     register_track_processor=None,
     force_update=False,
+    register_validator=None,
 ):
     """
     Loads plugins that are defined for the current track (as specified by the configuration).
@@ -309,12 +315,13 @@ def load_track_plugins(
     :param register_track_processor: An optional function where track processors can be registered.
     :param force_update: If set to ``True`` this ensures that the track is first updated from the remote repository.
                          Defaults to ``False``.
+    :param register_validator: An optional function where challenge validators can be registered.
     :return: True iff this track defines plugins and they have been loaded.
     """
     repo = track_repo(cfg, fetch=force_update, update=force_update)
     track_plugin_path = repo.track_dir(track_name)
     LOG.debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
-    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
+    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor, register_validator)
 
     if plugin_reader.can_load():
         plugin_reader.load()
@@ -1272,10 +1279,13 @@ class TrackPluginReader:
     Loads track plugins
     """
 
-    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None):
+    def __init__(
+        self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None, validator_registry=None
+    ):
         self.runner_registry = runner_registry
         self.scheduler_registry = scheduler_registry
         self.track_processor_registry = track_processor_registry
+        self.validator_registry = validator_registry
         self.loader = modules.ComponentLoader(root_path=track_plugin_path, component_entry_point="track")
 
     def can_load(self):
@@ -1309,6 +1319,10 @@ class TrackPluginReader:
     def register_track_processor(self, track_processor):
         if self.track_processor_registry:
             self.track_processor_registry(track_processor)
+
+    def register_validator(self, challenge_name, fn):
+        if self.validator_registry:
+            self.validator_registry(challenge_name, fn)
 
     @property
     def meta_data(self):

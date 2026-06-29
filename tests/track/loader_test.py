@@ -29,7 +29,7 @@ from unittest import mock
 import pytest
 
 from esrally import config, exceptions, paths
-from esrally.track import loader, track
+from esrally.track import loader, params, track
 from esrally.utils import console, io
 from esrally.utils.cases import cases
 
@@ -4356,6 +4356,53 @@ class TestTrackSpecificationReader:
         reader = loader.TrackSpecificationReader()
         with pytest.raises(loader.TrackSyntaxError, match=r"Operation 'match-all' specifies 'type'"):
             reader("unittest", track_specification, "/mappings")
+
+
+class TestTrackPluginReader:
+    def test_register_validator_forwards_to_registry(self):
+        registry = mock.Mock()
+        reader = loader.TrackPluginReader("/some/track/path", validator_registry=registry)
+
+        def my_validator(params):
+            pass
+
+        reader.register_validator("my-challenge", my_validator)
+
+        registry.assert_called_once_with("my-challenge", my_validator)
+
+    def test_register_validator_without_registry_is_a_noop(self):
+        reader = loader.TrackPluginReader("/some/track/path")
+        # no validator_registry was provided, so forwarding must be skipped without raising
+        reader.register_validator("my-challenge", lambda params: None)
+
+
+class TestValidatorRegistrationWiring:
+    @mock.patch("esrally.track.loader.TrackPluginReader")
+    @mock.patch("esrally.track.loader.track_repo")
+    def test_load_track_plugins_passes_validator_registry_to_reader(self, track_repo, plugin_reader_class):
+        # short-circuit before load() so we only assert how the reader is constructed
+        plugin_reader_class.return_value.can_load.return_value = False
+
+        def my_register_validator(challenge_name, fn):
+            pass
+
+        loader.load_track_plugins(config.Config(), "unittest-track", register_validator=my_register_validator)
+
+        # validator_registry is the 5th positional arg of TrackPluginReader.__init__
+        assert plugin_reader_class.call_args.args[4] is my_register_validator
+
+    @mock.patch("esrally.track.loader.load_track_plugins")
+    @mock.patch("esrally.track.loader.TrackProcessorRegistry")
+    @mock.patch("esrally.track.loader.TrackFileReader")
+    def test_load_single_track_registers_params_validators(self, file_reader, track_processor_registry, load_track_plugins):
+        # pylint: disable=protected-access
+        load_track_plugins.return_value = False
+        track_processor_registry.return_value.processors = []
+
+        loader._load_single_track(config.Config(), mock.Mock(), "unittest-track")
+
+        # the loader must wire the params validator registry so a track's register() can register validators
+        assert load_track_plugins.call_args.kwargs["register_validator"] is params.register_validator
 
 
 class MyMockTrackProcessor(loader.TrackProcessor):

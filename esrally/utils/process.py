@@ -18,6 +18,7 @@
 import logging
 import os
 import shlex
+import signal
 import subprocess
 import time
 from collections.abc import Iterable, Mapping
@@ -78,6 +79,7 @@ def run_subprocess_with_logging(
     stdin: Optional[Union[FileId, IO[bytes]]] = None,
     env: Optional[Mapping[str, str]] = None,
     detach: bool = False,
+    timeout: Optional[float] = None,
 ) -> int:
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.
@@ -89,6 +91,8 @@ def run_subprocess_with_logging(
       (default: None).
     :param env: Use specific environment variables (default: None).
     :param detach: Whether to detach this process from its parent process (default: False).
+    :param timeout: Optional time in seconds to wait for the subprocess to finish. If exceeded, the child is killed
+      and this function returns the exit code from the killed child. ``None`` (the default) waits indefinitely.
     :return: The process exit code as an int.
     """
     logger = logging.getLogger(__name__)
@@ -97,21 +101,40 @@ def run_subprocess_with_logging(
     if header is not None:
         logger.info(header)
 
-    completed = subprocess.run(
+    with subprocess.Popen(
         command_line_args,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         env=env,
         stdin=stdin if stdin else None,
-        start_new_session=detach,
-        check=False,
-    )
-    if completed.stdout:
-        logger.log(level=level, msg=completed.stdout)
+        start_new_session=detach or timeout is not None,
+    ) as command_line_process:
+        try:
+            stdout, _ = command_line_process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(command_line_process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                # the process group already exited between the timeout firing and the kill
+                pass
+            # finish handling pipes and populate the returncode attribute
+            stdout, _ = command_line_process.communicate()
+            output = f" Output: [{stdout}]" if stdout else ""
+            logger.error(
+                "Subprocess [%s] exceeded timeout of [%s]s and was terminated with return code [%s].%s",
+                command_line,
+                timeout,
+                str(command_line_process.returncode),
+                output,
+            )
+            return command_line_process.returncode
 
-    logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(completed.returncode))
-    return completed.returncode
+        if stdout:
+            logger.log(level=level, msg=stdout)
+
+    logger.debug("Subprocess [%s] finished with return code [%s].", command_line, str(command_line_process.returncode))
+    return command_line_process.returncode
 
 
 def run_subprocess_with_logging_and_output(

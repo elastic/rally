@@ -35,6 +35,7 @@ from esrally.utils import io
 
 __PARAM_SOURCES_BY_OP: dict[track.OperationType, ParamSource] = {}
 __PARAM_SOURCES_BY_NAME: dict[str, ParamSource] = {}
+__VALIDATORS_BY_CHALLENGE: dict[str, list[Callable]] = collections.defaultdict(list)
 
 
 def param_source_for_operation(op_type, track, params, task_name):
@@ -67,6 +68,37 @@ def register_param_source_for_operation(op_type, param_source_class):
 def register_param_source_for_name(name, param_source_class):
     ensure_valid_param_source(param_source_class)
     __PARAM_SOURCES_BY_NAME[name] = param_source_class
+
+
+def register_validator(challenge_name: str, fn: Callable) -> None:
+    if not callable(fn):
+        raise exceptions.RallyAssertionError(f"Validator for challenge [{challenge_name}] must be callable but was [{fn}].")
+    # Registration is idempotent per function: a track's plugins may be (re)loaded more than once within a process
+    # and we must not invoke the same validator multiple times.
+    if fn not in __VALIDATORS_BY_CHALLENGE[challenge_name]:
+        __VALIDATORS_BY_CHALLENGE[challenge_name].append(fn)
+
+
+def invoke_validators(challenge_name: str, track_params: dict) -> None:
+    for validator in __VALIDATORS_BY_CHALLENGE.get(challenge_name, []):
+        try:
+            validator(track_params or {})
+        except exceptions.TrackConfigError:
+            # raised intentionally by the validator to signal invalid parameters; propagate its message as-is
+            raise
+        except Exception as e:
+            validator_name = getattr(validator, "__name__", repr(validator))
+            raise exceptions.TrackConfigError(f"Validator [{validator_name}] for challenge [{challenge_name}] failed: {e}") from e
+
+
+# only intended for tests
+def _unregister_validators_for_challenge(challenge_name: str) -> None:
+    __VALIDATORS_BY_CHALLENGE.pop(challenge_name, None)
+
+
+# only intended for tests
+def _clear_validators() -> None:
+    __VALIDATORS_BY_CHALLENGE.clear()
 
 
 # only intended for tests
