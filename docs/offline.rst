@@ -20,7 +20,7 @@ A Rally track describes a benchmarking scenario. You can either write your own t
 
 First, install `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ to be able to run the download script.
 
-Then, with `download.py script<https://raw.githubusercontent.com/elastic/rally-tracks/master/download.py>`_, download all data for a track on a machine that has access to the Internet. Example::
+Then, with `download.py script <https://raw.githubusercontent.com/elastic/rally-tracks/master/download.py>`_, download all data for a track on a machine that has access to the Internet. Example::
 
     # download the script from Github
     curl -O https://raw.githubusercontent.com/elastic/rally-tracks/master/download.py
