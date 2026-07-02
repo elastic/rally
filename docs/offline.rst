@@ -22,7 +22,7 @@ First, install `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ t
 
 Then, with `download.py script <https://raw.githubusercontent.com/elastic/rally-tracks/master/download.py>`_, download all data for a track on a machine that has access to the Internet. Example::
 
-    # download the script from Github
+    # download the script from GitHub
     curl -O https://raw.githubusercontent.com/elastic/rally-tracks/master/download.py
     # download all data for the geonames track
     uv run download.py geonames
