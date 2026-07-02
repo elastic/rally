@@ -24,8 +24,11 @@ Then, with `download.py script <https://raw.githubusercontent.com/elastic/rally-
 
     # download the script from GitHub
     curl -O https://raw.githubusercontent.com/elastic/rally-tracks/master/download.py
+    # make it executable
+    chmod +x download.py
     # download all data for the geonames track
-    uv run download.py geonames
+    # the script will start by installing all required dependencies
+    ./download.py geonames
 
 This will download all data for the geonames track and create a tar file ``rally-track-data-geonames.tar`` in the current directory. Copy this file to the home directory of the user which will execute Rally on the target machine (e.g. ``/home/rally-user``).
 
