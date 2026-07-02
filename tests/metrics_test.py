@@ -22,7 +22,10 @@ import json
 import logging
 import os
 import random
+import socket
+import sys
 import tempfile
+import urllib3.connection
 import uuid
 from dataclasses import dataclass
 from unittest import mock
@@ -638,22 +641,16 @@ class TestKeepaliveUrllib3HttpNode:
         return metrics.KeepaliveUrllib3HttpNode(config=None)
 
     def test_enables_so_keepalive(self, monkeypatch):
-        import socket
-
         node = self._make_node(monkeypatch)
         assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
 
     def test_preserves_existing_socket_options(self, monkeypatch):
-        import socket
-
         sentinel = (socket.IPPROTO_TCP, 200, 42)
         node = self._make_node(monkeypatch, conn_kw={"socket_options": [sentinel]})
         assert sentinel in node.pool.conn_kw["socket_options"]
         assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
 
     def test_does_not_mutate_original_socket_options_list(self, monkeypatch):
-        import socket
-
         # Pass the original list object directly (no copy) so mutation is detectable.
         original = []
         node = self._make_node(monkeypatch, conn_kw={"socket_options": original})
@@ -661,10 +658,6 @@ class TestKeepaliveUrllib3HttpNode:
         assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
 
     def test_includes_tcp_nodelay_from_urllib3_default(self, monkeypatch):
-        import socket
-
-        import urllib3.connection
-
         # When conn_kw starts without socket_options the implementation must seed from
         # urllib3's default (which carries TCP_NODELAY) before appending keepalive opts.
         node = self._make_node(monkeypatch, conn_kw={})
@@ -673,9 +666,6 @@ class TestKeepaliveUrllib3HttpNode:
             assert default_opt in opts, f"Expected urllib3 default socket option {default_opt} to be preserved"
 
     def test_platform_specific_keepalive_options(self, monkeypatch):
-        import socket
-        import sys
-
         node = self._make_node(monkeypatch)
         opts = node.pool.conn_kw["socket_options"]
         if sys.platform == "linux" and hasattr(socket, "TCP_KEEPIDLE"):
