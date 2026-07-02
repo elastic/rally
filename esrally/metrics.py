@@ -1281,7 +1281,8 @@ class EsMetricsStore(MetricsStore):
                 indexed = True
                 self._flush_consecutive_failures = 0
                 self.logger.info(
-                    "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
+                    "Successfully added %d metrics documents for race timestamp=[%s],"
+                    " track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
                     len(docs_to_flush),
                     self._race_timestamp,
                     self._track,

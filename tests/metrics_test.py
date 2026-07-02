@@ -1253,7 +1253,9 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
             "meta": {},
         }
         self.metrics_store.close()
-        self.es_mock.bulk_index.assert_called_with(index="rally-metrics-2016-01", items=[expected_doc], use_data_streams=False, request_timeout=60)
+        self.es_mock.bulk_index.assert_called_with(
+            index="rally-metrics-2016-01", items=[expected_doc], use_data_streams=False, request_timeout=60
+        )
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
     def test_put_value_without_meta_info(self, use_data_streams):
@@ -1280,7 +1282,9 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         }
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
-        es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60
+        )
         es_mock.refresh.assert_called_with(index=expected_index, request_timeout=60)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
@@ -1308,7 +1312,9 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         }
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
-        es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60
+        )
         es_mock.refresh.assert_called_with(index=expected_index, request_timeout=60)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
@@ -1352,7 +1358,9 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         }
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
-        es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60
+        )
         es_mock.refresh.assert_called_with(index=expected_index, request_timeout=60)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
@@ -1385,7 +1393,9 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         }
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
-        es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60
+        )
         es_mock.refresh.assert_called_with(index=expected_index, request_timeout=60)
 
     @pytest.mark.parametrize("use_data_streams", [True, False])
@@ -1441,7 +1451,9 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         }
         ms.close()
         expected_index = ms._index_handler.index_name(self.RACE_TIMESTAMP)
-        es_mock.bulk_index.assert_called_with(index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=[expected_doc], use_data_streams=use_data_streams, request_timeout=60
+        )
         es_mock.refresh.assert_called_with(index=expected_index, request_timeout=60)
 
     def test_get_one(self):
@@ -1877,7 +1889,6 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
             use_data_streams=True,
             request_timeout=60,
         )
-
 
     # ------------------------------------------------------------------ #
     #  flush() error-path tests                                           #
@@ -2613,7 +2624,9 @@ class TestEsResultsStore:
             },
         ]
         expected_index = rs._index_handler.index_name(self.RACE_TIMESTAMP)
-        es_mock.bulk_index.assert_called_with(index=expected_index, items=expected_docs, use_data_streams=use_data_streams, request_timeout=60)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=expected_docs, use_data_streams=use_data_streams, request_timeout=60
+        )
         rs._index_handler.ensure_index_template.assert_called_once_with(create=True)
         es_mock.index.assert_not_called()
         es_mock.refresh.assert_not_called()
@@ -2756,7 +2769,9 @@ class TestEsResultsStore:
             },
         ]
         expected_index = rs._index_handler.index_name(self.RACE_TIMESTAMP)
-        es_mock.bulk_index.assert_called_with(index=expected_index, items=expected_docs, use_data_streams=use_data_streams, request_timeout=60)
+        es_mock.bulk_index.assert_called_with(
+            index=expected_index, items=expected_docs, use_data_streams=use_data_streams, request_timeout=60
+        )
         rs._index_handler.ensure_index_template.assert_called_once_with(create=True)
         es_mock.index.assert_not_called()
         es_mock.refresh.assert_not_called()
