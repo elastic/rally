@@ -81,8 +81,9 @@ class EsClient:
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
 
-    def update_by_query(self, index, body):
-        return self.guarded(self._client.update_by_query, index=index, body=body)
+    def update_by_query(self, index, body, request_timeout=None):
+        client = self._client.options(request_timeout=request_timeout) if request_timeout is not None else self._client
+        return self.guarded(client.update_by_query, index=index, body=body)
 
     def delete(self, index, id):
         # ignore 404 status code (NotFoundError) when index does not exist
@@ -98,34 +99,38 @@ class EsClient:
     def exists(self, index):
         return self.guarded(self._client.indices.exists, index=index)
 
-    def refresh(self, index):
-        return self.guarded(self._client.indices.refresh, index=index)
+    def refresh(self, index, request_timeout=None):
+        client = self._client.options(request_timeout=request_timeout) if request_timeout is not None else self._client
+        return self.guarded(client.indices.refresh, index=index)
 
-    def bulk_index(self, *, index, items, use_data_streams):
+    def bulk_index(self, *, index, items, use_data_streams, request_timeout=None):
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
 
         if use_data_streams:
             for item in items:
                 item["_op_type"] = "create"
-        self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
+        client = self._client.options(request_timeout=request_timeout) if request_timeout is not None else self._client
+        self.guarded(elasticsearch.helpers.bulk, client, items, index=index, chunk_size=5000)
 
-    def index(self, *, index, item, id=None, use_data_streams):
+    def index(self, *, index, item, id=None, use_data_streams, request_timeout=None):
         doc = {"_source": item}
         if not use_data_streams and id:
             doc["_id"] = id
-        self.bulk_index(index=index, items=[doc], use_data_streams=use_data_streams)
+        self.bulk_index(index=index, items=[doc], use_data_streams=use_data_streams, request_timeout=request_timeout)
 
     def search(self, index, body):
         return self.guarded(self._client.search, index=index, body=body)
 
-    def guarded(self, target, *args, **kwargs):
+    def guarded(self, target, *args, _max_retries=3, **kwargs):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
         import elasticsearch.helpers
         from elastic_transport import ApiError, TransportError
 
-        max_execution_count = 10
+        # 3 retries × 60s request_timeout + sleep keeps worst-case blocking under
+        # Thespian's 5-minute actor event-loop delivery timeout.
+        max_execution_count = _max_retries
         execution_count = 0
 
         while execution_count <= max_execution_count:
@@ -770,7 +775,7 @@ class MetricsStore:  # pylint: disable=too-many-public-methods
         """
         self._stop_watch.start()
 
-    def flush(self, refresh=True):
+    def flush(self, refresh=True, closing=False):
         """
         Explicitly flushes buffered metrics to the metric store. It is not required to flush before closing the metrics store.
         """
@@ -783,7 +788,7 @@ class MetricsStore:  # pylint: disable=too-many-public-methods
         """
         self.logger.info("Closing metrics store.")
         self.opened = False
-        self.flush()
+        self.flush(closing=True)
         self._clear_meta_info()
 
     def add_meta_info(self, scope, scope_key, key, value):
@@ -1226,6 +1231,7 @@ class EsMetricsStore(MetricsStore):
         self._client = client_factory_class(cfg).create()
         self._index_handler = IndexHandler(self._config, self._client, EsStoreType.metrics)
         self._docs = None
+        self._flush_consecutive_failures = 0
 
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
@@ -1248,33 +1254,78 @@ class EsMetricsStore(MetricsStore):
                     index_name = new_name
 
             # ensure we can search immediately after opening
-            self._client.refresh(index=index_name)
+            self._client.refresh(index=index_name, request_timeout=60)
 
-    def flush(self, refresh=True):
+    _MAX_FLUSH_FAILURES = 10
+
+    def flush(self, refresh=True, closing=False):
         with self._docs_lock:
             docs_to_flush = self._docs
             self._docs = []
+
+        indexed = False
+        if not docs_to_flush:
+            # A quiet cycle breaks the consecutive-failure chain.
+            self._flush_consecutive_failures = 0
         if docs_to_flush:
-            sw = time.StopWatch()
-            sw.start()
-            self._client.bulk_index(
-                index=self._index_handler.index_name(self._race_timestamp),
-                items=docs_to_flush,
-                use_data_streams=self._index_handler.use_data_streams,
-            )
-            sw.stop()
-            self.logger.info(
-                "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
-                len(docs_to_flush),
-                self._race_timestamp,
-                self._track,
-                self._challenge,
-                self._car,
-                sw.total_time(),
-            )
-        # ensure we can search immediately after flushing
-        if refresh:
-            self._client.refresh(index=self._index_handler.index_name(self._race_timestamp))
+            try:
+                sw = time.StopWatch()
+                sw.start()
+                self._client.bulk_index(
+                    index=self._index_handler.index_name(self._race_timestamp),
+                    items=docs_to_flush,
+                    use_data_streams=self._index_handler.use_data_streams,
+                    request_timeout=60,
+                )
+                sw.stop()
+                indexed = True
+                self._flush_consecutive_failures = 0
+                self.logger.info(
+                    "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
+                    len(docs_to_flush),
+                    self._race_timestamp,
+                    self._track,
+                    self._challenge,
+                    self._car,
+                    sw.total_time(),
+                )
+            except exceptions.SystemSetupError:
+                raise
+            except exceptions.RallyError as e:
+                self._flush_consecutive_failures += 1
+                if closing:
+                    self.logger.error(
+                        "Failed to flush final %d metrics docs on close — these docs are lost: %s",
+                        len(docs_to_flush),
+                        e,
+                    )
+                    return
+                if self._flush_consecutive_failures >= self._MAX_FLUSH_FAILURES:
+                    self.logger.error(
+                        "Metrics store unreachable after %d consecutive flush failures, failing benchmark.",
+                        self._MAX_FLUSH_FAILURES,
+                    )
+                    raise
+                with self._docs_lock:
+                    self._docs = docs_to_flush + self._docs
+                self.logger.warning(
+                    "Failed to flush %d metrics docs (attempt %d/%d), re-queuing for next cycle: %s",
+                    len(docs_to_flush),
+                    self._flush_consecutive_failures,
+                    self._MAX_FLUSH_FAILURES,
+                    e,
+                )
+                return
+
+        # Refresh only when docs were written — skipping when idle avoids a blocking call.
+        if refresh and indexed:
+            try:
+                self._client.refresh(
+                    index=self._index_handler.index_name(self._race_timestamp),
+                    request_timeout=60,
+                )
+            except exceptions.RallyError as e:
+                self.logger.warning("Metrics store refresh failed (docs were indexed successfully): %s", e)
 
     def _add(self, doc):
         with self._docs_lock:
@@ -1535,7 +1586,7 @@ class InMemoryMetricsStore(MetricsStore):
     def _add_unlocked(self, doc):
         self.docs.append(doc)
 
-    def flush(self, refresh=True):
+    def flush(self, refresh=True, closing=False):
         pass
 
     def to_externalizable(self, clear=False):
@@ -2205,7 +2256,7 @@ class EsRaceStore(RaceStore):
         index = self._index_handler.index_name(race.race_timestamp)
 
         if self._index_handler.use_data_streams and self._race_stored:
-            self.client.refresh(index)
+            self.client.refresh(index, request_timeout=60)
             self.client.update_by_query(
                 index=index,
                 body={
@@ -2216,12 +2267,14 @@ class EsRaceStore(RaceStore):
                         "params": race.as_dict(),
                     },
                 },
+                request_timeout=60,
             )
         elif self._index_handler.use_data_streams:
             self.client.index(
                 index=index,
                 item=race.as_dict(),
                 use_data_streams=True,
+                request_timeout=60,
             )
             self._race_stored = True
         else:
@@ -2230,6 +2283,7 @@ class EsRaceStore(RaceStore):
                 item=race.as_dict(),
                 id=race.race_id,
                 use_data_streams=False,
+                request_timeout=60,
             )
 
     def add_annotation(self):
@@ -2463,6 +2517,7 @@ class EsResultsStore:
             index=self._index_handler.index_name(race.race_timestamp),
             items=race.to_result_dicts(),
             use_data_streams=self._index_handler.use_data_streams,
+            request_timeout=60,
         )
 
 
