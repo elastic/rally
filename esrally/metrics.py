@@ -23,6 +23,7 @@ import math
 import os
 import pickle
 import random
+import socket
 import statistics
 import sys
 import threading
@@ -31,6 +32,8 @@ import zlib
 from enum import Enum, IntEnum
 
 import tabulate
+import urllib3.connection
+from elastic_transport import Urllib3HttpNode
 
 from esrally import client, config, exceptions, paths, time, types, version
 from esrally.utils import console, convert, io, pretty, versions
@@ -253,6 +256,37 @@ DATASTORE_API_KEY: str = os.environ.get("RALLY_REPORTING_DATASTORE_API_KEY", "")
 DATASTORE_USER: str = os.environ.get("RALLY_REPORTING_DATASTORE_USER", "")
 DATASTORE_PASSWORD: str = os.environ.get("RALLY_REPORTING_DATASTORE_PASSWORD", "")
 
+# TCP keepalive detects dead connections (e.g. NAT state dropped) without waiting for request_timeout.
+_KEEPALIVE_SOCKET_OPTIONS = [
+    (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+]
+if sys.platform == "linux" and hasattr(socket, "TCP_KEEPIDLE"):
+    # Probe after 60s idle, retry every 10s, give up after 6 missed probes (dead in ~120s).
+    _KEEPALIVE_SOCKET_OPTIONS += [
+        (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60),
+        (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10),
+        (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6),
+    ]
+elif sys.platform == "darwin" and hasattr(socket, "TCP_KEEPALIVE"):
+    # macOS uses TCP_KEEPALIVE (not TCP_KEEPIDLE) for per-socket idle time; interval/count are system-wide only.
+    _KEEPALIVE_SOCKET_OPTIONS += [
+        (socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60),
+    ]
+
+
+class KeepaliveUrllib3HttpNode(Urllib3HttpNode):
+    """Enables TCP keepalive on the metrics store connection pool."""
+
+    def __init__(self, config):
+        super().__init__(config)
+        # Seed from urllib3's default (includes TCP_NODELAY) so we don't lose it by supplying
+        # socket_options explicitly; then extend with keepalive options.
+        self.pool.conn_kw.setdefault(
+            "socket_options",
+            list(urllib3.connection.HTTPConnection.default_socket_options),
+        )
+        self.pool.conn_kw["socket_options"] = self.pool.conn_kw["socket_options"] + _KEEPALIVE_SOCKET_OPTIONS
+
 
 class EsClientFactory:
     """
@@ -308,6 +342,9 @@ class EsClientFactory:
                 hosts=hosts, client_options=client_options
             )
             self._cluster_version = distribution_version
+
+        # Use keepalive nodes for the long-lived metrics connection only (not the probe above).
+        client_options["node_class"] = KeepaliveUrllib3HttpNode
 
         factory = client_factory(
             hosts=hosts,
