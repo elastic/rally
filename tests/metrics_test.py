@@ -25,7 +25,6 @@ import random
 import socket
 import sys
 import tempfile
-import urllib3.connection
 import uuid
 from dataclasses import dataclass
 from unittest import mock
@@ -33,6 +32,7 @@ from unittest import mock
 import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
+import urllib3.connection
 
 from esrally import client, config, exceptions, metrics, paths, time, track
 from esrally.metrics import GlobalStatsCalculator
