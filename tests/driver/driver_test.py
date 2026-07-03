@@ -1568,6 +1568,7 @@ class TestAsyncExecutor:
             self.request_end = None
 
         def __enter__(self):
+            # Requests are instantaneous in this test; only scheduler sleeps advance virtual time.
             self.request_start = self.clock.perf_counter()
             self.request_end = self.request_start
             return self
@@ -1829,9 +1830,8 @@ class TestAsyncExecutor:
         # calculate the per-client target throughput.
         for target_throughput, expected_samples in {10: 4, 100: 26, 1000: 251}.items():
             clock = self.VirtualClock()
-            monkeypatch.setattr(driver.time, "perf_counter", clock.perf_counter)
-            monkeypatch.setattr(driver.time, "time", clock.time)
-            monkeypatch.setattr(driver.asyncio, "sleep", clock.sleep)
+            monkeypatch.setattr(driver, "time", mock.Mock(perf_counter=clock.perf_counter, time=clock.time))
+            monkeypatch.setattr(driver, "asyncio", mock.Mock(sleep=clock.sleep))
             es.new_request_context.side_effect = lambda clock=clock: self.VirtualRequestTiming(clock)
             task = track.Task(
                 "time-based",
