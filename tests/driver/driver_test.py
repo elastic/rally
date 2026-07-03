@@ -1549,6 +1549,7 @@ class TestAsyncExecutor:
     class VirtualClock:
         def __init__(self):
             self.now = 0.0
+            self.sleeps = []
 
         def perf_counter(self):
             return self.now
@@ -1557,6 +1558,7 @@ class TestAsyncExecutor:
             return self.now
 
         async def sleep(self, seconds):
+            self.sleeps.append(seconds)
             self.now += seconds
 
     class VirtualRequestTiming:
@@ -1875,6 +1877,9 @@ class TestAsyncExecutor:
             samples = sampler.samples
 
             assert len(samples) == expected_samples
+            assert len(clock.sleeps) == expected_samples - 1
+            per_client_throughput = target_throughput / task.clients
+            assert sum(clock.sleeps) == pytest.approx((expected_samples - 1) / per_client_throughput)
             assert complete.is_set(), "Executor should auto-complete a task that terminates its parent"
 
     @mock.patch("elasticsearch.Elasticsearch")
