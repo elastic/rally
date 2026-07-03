@@ -37,7 +37,7 @@ On the target machine, run::
     cd ~
     tar -xf rally-track-data-geonames.tar
 
-The download script does not require a Rally installation on the machine with Internet access but assumes that ``git`` is available.
+The download script requires Internet access and git. It installs all the necessary dependencies automatically.
 
 After you've copied the data, you can list the available tracks with ``esrally list tracks``. If a track shows up in this list, it just means that the track description is available locally but not necessarily all data files.
 
