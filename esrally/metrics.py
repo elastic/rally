@@ -1296,7 +1296,7 @@ class EsMetricsStore(MetricsStore):
                 self._flush_consecutive_failures += 1
                 if closing:
                     self.logger.error(
-                        "Failed to flush final %d metrics docs on close — these docs are lost: %s",
+                        "Failed to flush final %d metrics docs on close, these documents have been dropped: %s",
                         len(docs_to_flush),
                         e,
                     )
