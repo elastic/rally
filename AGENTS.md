@@ -35,6 +35,8 @@ Task workflows live in `skills/`:
   TLS/API-key auth, tags, test mode) and interpret the summary report.
 - `skills/accessing-benchmark-results/` — list past races, get a race's overall results,
   chart a metric across runs, compare races, and check convergence from an external metrics store.
+- `skills/developing-rally/` — work *on* Rally's codebase: dev setup, make targets, source
+  layout, and the actor system.
 
 ## Where to look next
 
@@ -46,3 +48,4 @@ Task workflows live in `skills/`:
 - Comparing races: `docs/tournament.rst`
 - Full CLI reference: `docs/command_line_reference.rst`
 - Authoring tracks: `docs/adding_tracks.rst`, `docs/track.rst`
+- Developing Rally: `docs/developing.rst`, `CONTRIBUTING.md`, `docs/rally_daemon.rst`
