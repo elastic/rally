@@ -3,9 +3,8 @@ name: running-benchmarks
 description: >-
   Run Rally benchmarks (races) against Elasticsearch — an existing/external
   cluster or a Rally-provisioned distribution — and read the summary report.
-  Use when launching a race, benchmarking a cluster, choosing a pipeline,
-  track, or challenge, setting target hosts or TLS/API-key auth, tagging runs,
-  saving reports, or interpreting throughput, latency, and service_time results.
+  Use when running a race (any pipeline, track, challenge, target-hosts, or
+  auth) or when interpreting throughput, latency, and service_time results.
 ---
 
 # Running Rally benchmarks
@@ -32,8 +31,8 @@ Rally infers the pipeline from your flags.
 | Pipeline | Use when | Selected by |
 |---|---|---|
 | `benchmark-only` | **Primary path.** Cluster is already running and you provisioned it. | `--pipeline=benchmark-only --target-hosts=...` |
-| `from-distribution` | Rally downloads and runs Elasticsearch locally. Smoke/demo only. | `--distribution-version=X` |
-| `from-sources` | Build Elasticsearch from a git revision (CI/dev). | `--revision=...` |
+| `from-distribution` | Rally downloads and runs Elasticsearch locally. Setup checks/demos; sharing a host skews results, so only large differences stand out. | `--distribution-version=X` |
+| `from-sources` | Rally builds Elasticsearch from a git revision and runs it locally (CI/dev). Setup checks/demos; sharing a host skews results, so only large differences stand out. | `--revision=...` |
 
 `benchmark-only` trade-off (`docs/pipelines.rst`): because Rally did not provision the
 cluster, results are not easily reproducible and Rally cannot gather host-level metrics

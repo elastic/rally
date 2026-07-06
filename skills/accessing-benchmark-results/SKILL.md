@@ -35,9 +35,11 @@ across runs, comparisons, convergence, or ad-hoc aggregations.
 
 ## Where the data lives
 
-Default storage (`datastore.use_data_streams = true`) is three data streams. When it is
-`false`, Rally writes monthly indices (`rally-*-YYYY-MM`) instead. Query with a wildcard
-(`rally-races-*`, `rally-results-*`, `rally-metrics-*`) to cover both layouts.
+By default (`datastore.use_data_streams = true`) Rally writes to three data streams;
+`rally-races-v1`, `rally-results-v1`, and `rally-metrics-v1` (detailed below). If you set
+`datastore.use_data_streams = false`, Rally writes to monthly indices instead
+(`rally-races-YYYY-MM`, `rally-results-YYYY-MM`, `rally-metrics-YYYY-MM`). Querying with a
+wildcard (`rally-races-*`, `rally-results-*`, `rally-metrics-*`) covers both layouts.
 
 | Stream / index | One doc per | Contains |
 |---|---|---|
@@ -49,7 +51,7 @@ Default storage (`datastore.use_data_streams = true`) is three data streams. Whe
 
 `race-id` (UUID grouping a run), `race-timestamp`, `@timestamp` (epoch ms per sample),
 `relative-time` (ms since race start), `track`, `challenge`, `car`, `environment`,
-`sample-type` (`normal` = measured, `warmup` = discard), `name` (metric name, e.g.
+`sample-type` (`normal` = measured samples, `warmup` = warmup-phase samples), `name` (metric name, e.g.
 `service_time`), `value`, `unit`, `task`, `operation`, `operation-type`, and `meta.*`
 (host/CPU/OS info, `source_revision`, `distribution_version`, and user tags stored as
 `meta.tag_<key>`).
@@ -88,26 +90,28 @@ GET rally-races-*/_search
 
 ### Get one race's overall results (per task)
 
+Task and operation names are track-specific — discover them with `esrally info --track=<track>`.
+Omit the `task` filter to return every task.
+
 ```json
 GET rally-results-*/_search
 { "size": 200,
   "query": {"bool": {"filter": [
     {"term": {"race-id": "<uuid>"}},
-    {"term": {"task": "default"}}          // omit to get every task
+    {"term": {"task": "<task>"}}
   ]}} }
 ```
 
 ### Trend of a metric across runs
 
-One row per race; expand `size`/range as needed. Filter `sample-type: normal` to exclude
-warmup samples.
+One row per race; expand `size`/range as needed.
 
 ```json
 GET rally-metrics-*/_search
 { "size": 0,
   "query": {"bool": {"filter": [
     {"term": {"track": "geonames"}},
-    {"term": {"task": "default"}},
+    {"term": {"task": "<task>"}},
     {"term": {"name": "service_time"}},
     {"term": {"sample-type": "normal"}},
     {"range": {"@timestamp": {"gte": "now-30d"}}}
@@ -141,9 +145,11 @@ GET rally-metrics-*/_search
 
 ### Convergence / stability check
 
-Bucket one race's samples over time. If p50/p90/p99 flatten toward the end, the run
-converged; if they are still drifting, the results are unreliable and the workload may need a
-longer warmup or more iterations.
+Use this to check whether a race reached steady state before you trust its numbers. The
+query splits one task's `service_time` samples into up to ~60 time buckets and reports p50/p90/p99
+for each. If those percentiles level off toward the end of the run, the workload converged and
+the results are stable; if they keep drifting, the numbers are unreliable — rerun with a longer
+warmup or more iterations.
 
 ```json
 GET rally-metrics-*/_search
@@ -151,10 +157,10 @@ GET rally-metrics-*/_search
   "query": {"bool": {"filter": [
     {"term": {"race-id": "<uuid>"}},
     {"term": {"name": "service_time"}},
-    {"term": {"operation": "default"}}
+    {"term": {"task": "<task>"}}
   ]}},
   "aggs": {"over_time": {
-    "date_histogram": {"field": "@timestamp", "calendar_interval": "1m"},
+    "auto_date_histogram": {"field": "@timestamp", "buckets": 60},
     "aggs": {"pcts": {"percentiles": {"field": "value", "percents": [50, 90, 99]}}}
   }} }
 ```
