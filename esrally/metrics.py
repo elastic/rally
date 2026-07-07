@@ -41,8 +41,15 @@ class EsClient:
     Provides a stripped-down client interface that is easier to exchange for testing
     """
 
+    # Per-request timeout for the flush/close path. Bounds worst-case blocking in the actor
+    # event loop (see guarded()) well under Thespian's 5-minute message delivery timeout.
+    FLUSH_REQUEST_TIMEOUT = 60
+
     def __init__(self, client, cluster_version=None):
         self._client = client
+        # Reused across the flush/close path so we don't rebuild a client (and its namespaced
+        # clients) on every call. The underlying transport/connection pool is shared.
+        self._flush_client = client.options(request_timeout=self.FLUSH_REQUEST_TIMEOUT)
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
         self.retryable_status_codes = [502, 503, 504, 429]
@@ -81,9 +88,8 @@ class EsClient:
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
 
-    def update_by_query(self, index, body, request_timeout=None):
-        client = self._client.options(request_timeout=request_timeout) if request_timeout is not None else self._client
-        return self.guarded(client.update_by_query, index=index, body=body)
+    def update_by_query(self, index, body):
+        return self.guarded(self._flush_client.update_by_query, index=index, body=body)
 
     def delete(self, index, id):
         # ignore 404 status code (NotFoundError) when index does not exist
@@ -99,25 +105,23 @@ class EsClient:
     def exists(self, index):
         return self.guarded(self._client.indices.exists, index=index)
 
-    def refresh(self, index, request_timeout=None):
-        client = self._client.options(request_timeout=request_timeout) if request_timeout is not None else self._client
-        return self.guarded(client.indices.refresh, index=index)
+    def refresh(self, index):
+        return self.guarded(self._flush_client.indices.refresh, index=index)
 
-    def bulk_index(self, *, index, items, use_data_streams, request_timeout=None):
+    def bulk_index(self, *, index, items, use_data_streams):
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
 
         if use_data_streams:
             for item in items:
                 item["_op_type"] = "create"
-        client = self._client.options(request_timeout=request_timeout) if request_timeout is not None else self._client
-        self.guarded(elasticsearch.helpers.bulk, client, items, index=index, chunk_size=5000)
+        self.guarded(elasticsearch.helpers.bulk, self._flush_client, items, index=index, chunk_size=5000)
 
-    def index(self, *, index, item, id=None, use_data_streams, request_timeout=None):
+    def index(self, *, index, item, id=None, use_data_streams):
         doc = {"_source": item}
         if not use_data_streams and id:
             doc["_id"] = id
-        self.bulk_index(index=index, items=[doc], use_data_streams=use_data_streams, request_timeout=request_timeout)
+        self.bulk_index(index=index, items=[doc], use_data_streams=use_data_streams)
 
     def search(self, index, body):
         return self.guarded(self._client.search, index=index, body=body)
@@ -1254,7 +1258,7 @@ class EsMetricsStore(MetricsStore):
                     index_name = new_name
 
             # ensure we can search immediately after opening
-            self._client.refresh(index=index_name, request_timeout=60)
+            self._client.refresh(index=index_name)
 
     _MAX_FLUSH_FAILURES = 10
 
@@ -1275,7 +1279,6 @@ class EsMetricsStore(MetricsStore):
                     index=self._index_handler.index_name(self._race_timestamp),
                     items=docs_to_flush,
                     use_data_streams=self._index_handler.use_data_streams,
-                    request_timeout=60,
                 )
                 sw.stop()
                 indexed = True
@@ -1323,7 +1326,6 @@ class EsMetricsStore(MetricsStore):
             try:
                 self._client.refresh(
                     index=self._index_handler.index_name(self._race_timestamp),
-                    request_timeout=60,
                 )
             except exceptions.RallyError as e:
                 self.logger.warning("Metrics store refresh failed (docs were indexed successfully): %s", e)
@@ -2257,7 +2259,7 @@ class EsRaceStore(RaceStore):
         index = self._index_handler.index_name(race.race_timestamp)
 
         if self._index_handler.use_data_streams and self._race_stored:
-            self.client.refresh(index, request_timeout=60)
+            self.client.refresh(index)
             self.client.update_by_query(
                 index=index,
                 body={
@@ -2268,14 +2270,12 @@ class EsRaceStore(RaceStore):
                         "params": race.as_dict(),
                     },
                 },
-                request_timeout=60,
             )
         elif self._index_handler.use_data_streams:
             self.client.index(
                 index=index,
                 item=race.as_dict(),
                 use_data_streams=True,
-                request_timeout=60,
             )
             self._race_stored = True
         else:
@@ -2284,7 +2284,6 @@ class EsRaceStore(RaceStore):
                 item=race.as_dict(),
                 id=race.race_id,
                 use_data_streams=False,
-                request_timeout=60,
             )
 
     def add_annotation(self):
@@ -2518,7 +2517,6 @@ class EsResultsStore:
             index=self._index_handler.index_name(race.race_timestamp),
             items=race.to_result_dicts(),
             use_data_streams=self._index_handler.use_data_streams,
-            request_timeout=60,
         )
 
 
