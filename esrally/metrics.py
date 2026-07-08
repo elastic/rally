@@ -47,8 +47,7 @@ class EsClient:
 
     def __init__(self, client, cluster_version=None):
         self._client = client
-        # Reused across the flush/close path so we don't rebuild a client (and its namespaced
-        # clients) on every call. The underlying transport/connection pool is shared.
+        # Reused across the flush/close path.
         self._flush_client = client.options(request_timeout=self.FLUSH_REQUEST_TIMEOUT)
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
@@ -1296,20 +1295,15 @@ class EsMetricsStore(MetricsStore):
             except exceptions.SystemSetupError:
                 raise
             except exceptions.RallyError as e:
-                self._flush_consecutive_failures += 1
                 if closing:
-                    self.logger.error(
-                        "Failed to flush final %d metrics docs on close, these documents have been dropped: %s",
-                        len(docs_to_flush),
-                        e,
-                    )
-                    return
+                    # The closing flush is the last chance to persist, so surface the failure.
+                    raise exceptions.RallyError(f"Failed to flush {len(docs_to_flush)} final metrics docs on close.", cause=e) from e
+                self._flush_consecutive_failures += 1
                 if self._flush_consecutive_failures >= self._MAX_FLUSH_FAILURES:
-                    self.logger.error(
-                        "Metrics store unreachable after %d consecutive flush failures, failing benchmark.",
-                        self._MAX_FLUSH_FAILURES,
-                    )
-                    raise
+                    raise exceptions.RallyError(
+                        f"Metrics store unreachable after {self._MAX_FLUSH_FAILURES} consecutive flush failures, failing benchmark.",
+                        cause=e,
+                    ) from e
                 with self._docs_lock:
                     self._docs = docs_to_flush + self._docs
                 self.logger.warning(
