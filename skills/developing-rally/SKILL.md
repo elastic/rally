@@ -80,7 +80,8 @@ default, all run on the one machine where you invoke `esrally`:
 
 `--load-driver-hosts` and `--target-hosts` split the load driver and provisioner onto other
 machines; multi-machine runs use the `esrallyd` daemon. `esrally/actor.py` holds the shared
-`RallyActor` base and the bootstrap logic. If actor-system startup fails (common on a VPN),
+`RallyActor` base and the bootstrap logic; `docs/architecture/actor_system.md` walks through the actors
+and their message flow with sequence diagrams. If actor-system startup fails (common on a VPN),
 set `THESPIAN_BASE_IPADDR` to a routable address.
 
 ## Debugging
@@ -128,6 +129,7 @@ To debug any IT failure:
 - Developer setup & key components: `docs/developing.rst`
 - Contribution workflow (PRs, license headers, CLA): `CONTRIBUTING.md`
 - Distributed setup & the actor-system roles: `docs/rally_daemon.rst`
+- Actor message flow (sequence diagrams): `docs/architecture/actor_system.md`
 - Thespian actor framework: https://github.com/kquick/Thespian
 - All flags (do not invent flags; verify here or via `esrally <subcommand> --help`): `docs/command_line_reference.rst`
 - Running benchmarks against a cluster: the `running-benchmarks` skill
