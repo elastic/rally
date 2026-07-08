@@ -1546,6 +1546,36 @@ class TestAsyncExecutor:
         def __exit__(self, exc_type, exc_val, exc_tb):
             return False
 
+    class VirtualClock:
+        def __init__(self):
+            self.now = 0.0
+            self.sleeps = []
+
+        def perf_counter(self):
+            return self.now
+
+        def time(self):
+            return self.now
+
+        async def sleep(self, seconds):
+            self.sleeps.append(seconds)
+            self.now += seconds
+
+    class VirtualRequestTiming:
+        def __init__(self, clock):
+            self.clock = clock
+            self.request_start = None
+            self.request_end = None
+
+        def __enter__(self):
+            # Requests are instantaneous in this test; only scheduler sleeps advance virtual time.
+            self.request_start = self.clock.perf_counter()
+            self.request_end = self.request_start
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
     class RunnerWithProgress:
         def __init__(self, iterations=5):
             self.iterations_left = iterations
@@ -1783,12 +1813,11 @@ class TestAsyncExecutor:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_execute_schedule_throughput_throttled(self, es):
+    async def test_execute_schedule_throughput_throttled(self, es, monkeypatch):
         async def perform_request(*args, **kwargs):
             return None
 
         es.options.return_value = es
-        es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         # as this method is called several times we need to return a fresh instance every time as the previous
         # one has been "consumed".
         es.perform_request.side_effect = perform_request
@@ -1797,7 +1826,13 @@ class TestAsyncExecutor:
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
-        for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [220, 280]}.items():
+        # plus one unthrottled request because the unit-aware scheduler needs the runner's weight before it can
+        # calculate the per-client target throughput.
+        for target_throughput, expected_samples in {10: 4, 100: 26, 1000: 251}.items():
+            clock = self.VirtualClock()
+            monkeypatch.setattr(driver, "time", mock.Mock(perf_counter=clock.perf_counter, time=clock.time))
+            monkeypatch.setattr(driver, "asyncio", mock.Mock(sleep=clock.sleep))
+            es.new_request_context.side_effect = lambda clock=clock: self.VirtualRequestTiming(clock)
             task = track.Task(
                 "time-based",
                 track.Operation(
@@ -1819,7 +1854,7 @@ class TestAsyncExecutor:
                 params={"target-throughput": target_throughput, "clients": 4},
                 completes_parent=True,
             )
-            sampler = driver.Sampler(start_timestamp=0)
+            sampler = driver.Sampler(start_timestamp=clock.perf_counter())
 
             cancel = threading.Event()
             complete = threading.Event()
@@ -1841,10 +1876,10 @@ class TestAsyncExecutor:
 
             samples = sampler.samples
 
-            sample_size = len(samples)
-            lower_bound = bounds[0]
-            upper_bound = bounds[1]
-            assert lower_bound <= sample_size <= upper_bound
+            assert len(samples) == expected_samples
+            assert len(clock.sleeps) == expected_samples - 1
+            per_client_throughput = target_throughput / task.clients
+            assert sum(clock.sleeps) == pytest.approx((expected_samples - 1) / per_client_throughput)
             assert complete.is_set(), "Executor should auto-complete a task that terminates its parent"
 
     @mock.patch("elasticsearch.Elasticsearch")
