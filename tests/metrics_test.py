@@ -156,6 +156,9 @@ class TestEsClient:
         def __init__(self, hosts):
             self.transport = TestEsClient.TransportMock(hosts)
 
+        def options(self, **kwargs):
+            return self
+
     @pytest.mark.parametrize("password_configuration", [None, "config", "environment"])
     def test_config_opts_parsing_basic(self, password_configuration, monkeypatch):
         cfg = config.Config()
@@ -439,10 +442,10 @@ class TestEsClient:
             BulkIndexError(bulk_index_errors),
         ]
 
-        max_retry = 10
+        max_retry = 3
 
-        # The sec to sleep for 10 transport errors is
-        # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
+        # Sleep slots for 3 retries: [1, 2, 4] ~> 7s total.
+        # Reduced from 10 to prevent blocking the Thespian actor event loop for ~39 minutes.
         sleep_slots = [float(2**i) for i in range(0, max_retry)]
 
         # we want deterministic timings to assess logging statements
@@ -1876,6 +1879,148 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
             items=[doc_during],
             use_data_streams=True,
         )
+
+    # ------------------------------------------------------------------ #
+    #  flush() error-path tests                                           #
+    # ------------------------------------------------------------------ #
+
+    def test_flush_requeues_docs_on_transient_error(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        doc = {"name": "metric"}
+        ms._add(doc)
+        es_mock.bulk_index.side_effect = exceptions.RallyError("connection failed")
+        es_mock.refresh.reset_mock()  # ignore the refresh issued by open()
+
+        ms.flush()  # must not raise
+
+        assert ms._flush_consecutive_failures == 1
+        assert ms._docs == [doc]
+        ms.logger.warning.assert_called_once()
+        es_mock.refresh.assert_not_called()  # nothing was indexed, so no refresh
+
+    def test_flush_increments_counter_across_cycles(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        es_mock.bulk_index.side_effect = exceptions.RallyError("timeout")
+        for i in range(1, 4):
+            ms._add({"name": f"doc{i}"})
+            ms.flush()
+            assert ms._flush_consecutive_failures == i
+
+    def test_flush_raises_after_max_consecutive_failures(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        original = exceptions.RallyError("unreachable")
+        es_mock.bulk_index.side_effect = original
+        ms._flush_consecutive_failures = metrics.EsMetricsStore._MAX_FLUSH_FAILURES - 1
+        ms._add({"name": "doc"})
+
+        with pytest.raises(exceptions.RallyError) as exc_info:
+            ms.flush()
+
+        # Context is in the exception; the cause is chained for both tracebacks and full_message.
+        assert "consecutive flush failures" in str(exc_info.value)
+        assert exc_info.value.__cause__ is original
+        assert exc_info.value.cause is original
+        assert "unreachable" in exc_info.value.full_message
+        assert ms._flush_consecutive_failures == metrics.EsMetricsStore._MAX_FLUSH_FAILURES
+
+    def test_flush_resets_counter_on_empty_cycle(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._flush_consecutive_failures = 7
+        # No docs added — quiet cycle.
+        ms.flush()
+
+        assert ms._flush_consecutive_failures == 0
+        es_mock.bulk_index.assert_not_called()
+
+    def test_flush_resets_counter_on_success(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._flush_consecutive_failures = 7
+        ms._add({"name": "doc"})
+        es_mock.bulk_index.side_effect = None
+        es_mock.refresh.reset_mock()  # ignore the refresh issued by open()
+
+        ms.flush()
+
+        assert ms._flush_consecutive_failures == 0
+        es_mock.refresh.assert_called_once()  # indexed docs are refreshed
+
+    def test_flush_reraises_system_setup_error_immediately(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        es_mock.bulk_index.side_effect = exceptions.SystemSetupError("auth failed")
+
+        with pytest.raises(exceptions.SystemSetupError):
+            ms.flush()
+
+        # Docs must not be re-queued — a config error is not transient.
+        assert ms._docs == []
+
+    def test_flush_closing_raises_and_chains_error(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        original = exceptions.RallyError("gone")
+        es_mock.bulk_index.side_effect = original
+
+        # On close there is no next cycle, so the failure must surface rather than be dropped.
+        with pytest.raises(exceptions.RallyError) as exc_info:
+            ms.flush(closing=True)
+
+        assert "on close" in str(exc_info.value)
+        assert exc_info.value.__cause__ is original
+        assert exc_info.value.cause is original
+        assert "gone" in exc_info.value.full_message
+        # Closing raises before the counter increment, so it is left untouched.
+        assert ms._flush_consecutive_failures == 0
+
+    def test_flush_closing_without_docs_is_noop(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        # A normal close with an already-drained buffer must not raise or hit the store.
+        ms.flush(closing=True)
+
+        es_mock.bulk_index.assert_not_called()
+
+    def test_flush_closing_reraises_system_setup_error_unwrapped(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        original = exceptions.SystemSetupError("auth failed")
+        es_mock.bulk_index.side_effect = original
+
+        # A config/auth error must propagate as-is, not be wrapped in the "on close" error.
+        with pytest.raises(exceptions.SystemSetupError) as exc_info:
+            ms.flush(closing=True)
+
+        assert exc_info.value is original
+
+    def test_flush_refresh_failure_is_warned_not_raised(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        es_mock.bulk_index.side_effect = None
+        es_mock.refresh.side_effect = exceptions.RallyError("refresh timed out")
+
+        ms.flush()  # must not raise
+
+        ms.logger.warning.assert_called_once()
+        assert ms._flush_consecutive_failures == 0  # bulk succeeded, counter stays at 0
 
 
 class TestEsRaceStore:

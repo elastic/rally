@@ -41,8 +41,14 @@ class EsClient:
     Provides a stripped-down client interface that is easier to exchange for testing
     """
 
+    # Per-request timeout for the flush/close path. Bounds worst-case blocking in the actor
+    # event loop (see guarded()) well under Thespian's 5-minute message delivery timeout.
+    FLUSH_REQUEST_TIMEOUT = 60
+
     def __init__(self, client, cluster_version=None):
         self._client = client
+        # Reused across the flush/close path.
+        self._flush_client = client.options(request_timeout=self.FLUSH_REQUEST_TIMEOUT)
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
         self.retryable_status_codes = [502, 503, 504, 429]
@@ -82,7 +88,7 @@ class EsClient:
         return self.guarded(self._client.delete_by_query, index=index, body=body)
 
     def update_by_query(self, index, body):
-        return self.guarded(self._client.update_by_query, index=index, body=body)
+        return self.guarded(self._flush_client.update_by_query, index=index, body=body)
 
     def delete(self, index, id):
         # ignore 404 status code (NotFoundError) when index does not exist
@@ -99,7 +105,7 @@ class EsClient:
         return self.guarded(self._client.indices.exists, index=index)
 
     def refresh(self, index):
-        return self.guarded(self._client.indices.refresh, index=index)
+        return self.guarded(self._flush_client.indices.refresh, index=index)
 
     def bulk_index(self, *, index, items, use_data_streams):
         # pylint: disable=import-outside-toplevel
@@ -108,7 +114,7 @@ class EsClient:
         if use_data_streams:
             for item in items:
                 item["_op_type"] = "create"
-        self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
+        self.guarded(elasticsearch.helpers.bulk, self._flush_client, items, index=index, chunk_size=5000)
 
     def index(self, *, index, item, id=None, use_data_streams):
         doc = {"_source": item}
@@ -119,13 +125,15 @@ class EsClient:
     def search(self, index, body):
         return self.guarded(self._client.search, index=index, body=body)
 
-    def guarded(self, target, *args, **kwargs):
+    def guarded(self, target, *args, _max_retries=3, **kwargs):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
         import elasticsearch.helpers
         from elastic_transport import ApiError, TransportError
 
-        max_execution_count = 10
+        # 3 retries × 60s request_timeout + sleep keeps worst-case blocking under
+        # Thespian's 5-minute actor event-loop delivery timeout.
+        max_execution_count = _max_retries
         execution_count = 0
 
         while execution_count <= max_execution_count:
@@ -770,7 +778,7 @@ class MetricsStore:  # pylint: disable=too-many-public-methods
         """
         self._stop_watch.start()
 
-    def flush(self, refresh=True):
+    def flush(self, refresh=True, closing=False):
         """
         Explicitly flushes buffered metrics to the metric store. It is not required to flush before closing the metrics store.
         """
@@ -783,7 +791,7 @@ class MetricsStore:  # pylint: disable=too-many-public-methods
         """
         self.logger.info("Closing metrics store.")
         self.opened = False
-        self.flush()
+        self.flush(closing=True)
         self._clear_meta_info()
 
     def add_meta_info(self, scope, scope_key, key, value):
@@ -1226,6 +1234,7 @@ class EsMetricsStore(MetricsStore):
         self._client = client_factory_class(cfg).create()
         self._index_handler = IndexHandler(self._config, self._client, EsStoreType.metrics)
         self._docs = None
+        self._flush_consecutive_failures = 0
 
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
@@ -1250,31 +1259,70 @@ class EsMetricsStore(MetricsStore):
             # ensure we can search immediately after opening
             self._client.refresh(index=index_name)
 
-    def flush(self, refresh=True):
+    _MAX_FLUSH_FAILURES = 10
+
+    def flush(self, refresh=True, closing=False):
         with self._docs_lock:
             docs_to_flush = self._docs
             self._docs = []
+
+        indexed = False
+        if not docs_to_flush:
+            # A quiet cycle breaks the consecutive-failure chain.
+            self._flush_consecutive_failures = 0
         if docs_to_flush:
-            sw = time.StopWatch()
-            sw.start()
-            self._client.bulk_index(
-                index=self._index_handler.index_name(self._race_timestamp),
-                items=docs_to_flush,
-                use_data_streams=self._index_handler.use_data_streams,
-            )
-            sw.stop()
-            self.logger.info(
-                "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
-                len(docs_to_flush),
-                self._race_timestamp,
-                self._track,
-                self._challenge,
-                self._car,
-                sw.total_time(),
-            )
-        # ensure we can search immediately after flushing
-        if refresh:
-            self._client.refresh(index=self._index_handler.index_name(self._race_timestamp))
+            try:
+                sw = time.StopWatch()
+                sw.start()
+                self._client.bulk_index(
+                    index=self._index_handler.index_name(self._race_timestamp),
+                    items=docs_to_flush,
+                    use_data_streams=self._index_handler.use_data_streams,
+                )
+                sw.stop()
+                indexed = True
+                self._flush_consecutive_failures = 0
+                self.logger.info(
+                    "Successfully added %d metrics documents for race timestamp=[%s],"
+                    " track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
+                    len(docs_to_flush),
+                    self._race_timestamp,
+                    self._track,
+                    self._challenge,
+                    self._car,
+                    sw.total_time(),
+                )
+            except exceptions.SystemSetupError:
+                raise
+            except exceptions.RallyError as e:
+                if closing:
+                    # The closing flush is the last chance to persist, so surface the failure.
+                    raise exceptions.RallyError(f"Failed to flush {len(docs_to_flush)} final metrics docs on close.", cause=e) from e
+                self._flush_consecutive_failures += 1
+                if self._flush_consecutive_failures >= self._MAX_FLUSH_FAILURES:
+                    raise exceptions.RallyError(
+                        f"Metrics store unreachable after {self._MAX_FLUSH_FAILURES} consecutive flush failures, failing benchmark.",
+                        cause=e,
+                    ) from e
+                with self._docs_lock:
+                    self._docs = docs_to_flush + self._docs
+                self.logger.warning(
+                    "Failed to flush %d metrics docs (attempt %d/%d), re-queuing for next cycle: %s",
+                    len(docs_to_flush),
+                    self._flush_consecutive_failures,
+                    self._MAX_FLUSH_FAILURES,
+                    e,
+                )
+                return
+
+        # Refresh only when docs were written — skipping when idle avoids a blocking call.
+        if refresh and indexed:
+            try:
+                self._client.refresh(
+                    index=self._index_handler.index_name(self._race_timestamp),
+                )
+            except exceptions.RallyError as e:
+                self.logger.warning("Metrics store refresh failed (docs were indexed successfully): %s", e)
 
     def _add(self, doc):
         with self._docs_lock:
@@ -1535,7 +1583,7 @@ class InMemoryMetricsStore(MetricsStore):
     def _add_unlocked(self, doc):
         self.docs.append(doc)
 
-    def flush(self, refresh=True):
+    def flush(self, refresh=True, closing=False):
         pass
 
     def to_externalizable(self, clear=False):
