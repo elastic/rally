@@ -33,6 +33,7 @@ import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
 import urllib3.connection
+from elastic_transport import NodeConfig
 
 from esrally import client, config, exceptions, metrics, paths, time, track
 from esrally.metrics import GlobalStatsCalculator
@@ -674,6 +675,24 @@ class TestKeepaliveUrllib3HttpNode:
             assert (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6) in opts
         elif sys.platform == "darwin" and hasattr(socket, "TCP_KEEPALIVE"):
             assert (socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60) in opts
+
+    def test_socket_options_applied_to_real_connection(self):
+        # Verify urllib3 actually applies conn_kw["socket_options"] to a real socket.
+        listener = socket.socket()
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        conn = None
+        try:
+            node = metrics.KeepaliveUrllib3HttpNode(NodeConfig(scheme="http", host="127.0.0.1", port=port))
+            conn = node.pool._new_conn()
+            conn.connect()
+            assert conn.sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE) != 0
+        finally:
+            if conn is not None:
+                conn.close()
+            listener.close()
 
 
 class TestIndexTemplateProvider:
