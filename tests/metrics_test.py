@@ -22,6 +22,8 @@ import json
 import logging
 import os
 import random
+import socket
+import sys
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -30,6 +32,8 @@ from unittest import mock
 import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
+import urllib3.connection
+from elastic_transport import NodeConfig
 
 from esrally import client, config, exceptions, metrics, paths, time, track
 from esrally.metrics import GlobalStatsCalculator
@@ -204,6 +208,7 @@ class TestEsClient:
             "basic_auth_user": _datastore_user,
             "basic_auth_password": _datastore_password,
             "verify_certs": _datastore_verify_certs,
+            "node_class": metrics.KeepaliveUrllib3HttpNode,
         }
 
         client_factory.assert_called_with(
@@ -254,6 +259,7 @@ class TestEsClient:
             "timeout": 120,
             "verify_certs": _datastore_verify_certs,
             "api_key": _datastore_apikey,
+            "node_class": metrics.KeepaliveUrllib3HttpNode,
         }
 
         client_factory.assert_called_with(
@@ -622,6 +628,74 @@ class TestEsClient:
             match=r"Unretryable error encountered when sending metrics to remote metrics store: \[version_conflict_engine_exception\]",
         ):
             client.guarded(raise_bulk_index_error)
+
+
+class TestKeepaliveUrllib3HttpNode:
+    """Tests for the TCP keepalive node subclass."""
+
+    def _make_node(self, monkeypatch, conn_kw=None):
+        """Return a KeepaliveUrllib3HttpNode with a mocked pool, bypassing real network setup."""
+        pool = mock.MagicMock()
+        pool.conn_kw = conn_kw if conn_kw is not None else {}
+
+        def fake_urllib3_init(self, config):
+            self.pool = pool
+
+        monkeypatch.setattr(metrics.Urllib3HttpNode, "__init__", fake_urllib3_init)
+        return metrics.KeepaliveUrllib3HttpNode(config=None)
+
+    def test_enables_so_keepalive(self, monkeypatch):
+        node = self._make_node(monkeypatch)
+        assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
+
+    def test_preserves_existing_socket_options(self, monkeypatch):
+        sentinel = (socket.IPPROTO_TCP, 200, 42)
+        node = self._make_node(monkeypatch, conn_kw={"socket_options": [sentinel]})
+        assert sentinel in node.pool.conn_kw["socket_options"]
+        assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
+
+    def test_does_not_mutate_original_socket_options_list(self, monkeypatch):
+        # Pass the original list object directly (no copy) so mutation is detectable.
+        original = []
+        node = self._make_node(monkeypatch, conn_kw={"socket_options": original})
+        assert original == []  # the production code must not mutate the original list in-place
+        assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
+
+    def test_includes_tcp_nodelay_from_urllib3_default(self, monkeypatch):
+        # When conn_kw starts without socket_options the implementation must seed from
+        # urllib3's default (which carries TCP_NODELAY) before appending keepalive opts.
+        node = self._make_node(monkeypatch, conn_kw={})
+        opts = node.pool.conn_kw["socket_options"]
+        for default_opt in urllib3.connection.HTTPConnection.default_socket_options:
+            assert default_opt in opts, f"Expected urllib3 default socket option {default_opt} to be preserved"
+
+    def test_platform_specific_keepalive_options(self, monkeypatch):
+        node = self._make_node(monkeypatch)
+        opts = node.pool.conn_kw["socket_options"]
+        if sys.platform == "linux" and hasattr(socket, "TCP_KEEPIDLE"):
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60) in opts
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10) in opts
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6) in opts
+        elif sys.platform == "darwin" and hasattr(socket, "TCP_KEEPALIVE"):
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60) in opts
+
+    def test_socket_options_applied_to_real_connection(self):
+        # Verify urllib3 actually applies conn_kw["socket_options"] to a real socket.
+        listener = socket.socket()
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        conn = None
+        try:
+            node = metrics.KeepaliveUrllib3HttpNode(NodeConfig(scheme="http", host="127.0.0.1", port=port))
+            conn = node.pool._new_conn()
+            conn.connect()
+            assert conn.sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE) != 0
+        finally:
+            if conn is not None:
+                conn.close()
+            listener.close()
 
 
 class TestIndexTemplateProvider:
