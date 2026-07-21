@@ -95,18 +95,14 @@ jobs:
         with:
           version: "0.11.19"
       - name: Free Disk Space
-        continue-on-error: true
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-          tool-cache: false
-      - name: Check disk space before
-        run: df -h
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo apt-get clean
+          df -h
       - name: Run tests
         run: make it_tracks_compat
         timeout-minutes: 160
