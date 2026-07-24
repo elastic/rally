@@ -61,7 +61,7 @@ class ConfigFile:
         config = configparser.ConfigParser()
         with open(self.location, encoding="utf-8") as src:
             contents = src.read()
-        contents = Template(contents).safe_substitute({"CONFIG_DIR": self.config_dir, **os.environ})
+        contents = Template(contents).substitute({"RALLY_CONFIG_DIR": self.config_dir, **os.environ})
         config.read_string(contents, source=self.location)
         return config
 
