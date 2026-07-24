@@ -16,6 +16,7 @@
 # under the License.
 
 import configparser
+from pathlib import Path
 
 import pytest
 
@@ -76,6 +77,32 @@ class InMemoryConfigStore:
     def load(self, interpolation=None):
         # interpolation is not supported in tests, we just mimic the interface
         return self.config
+
+
+class TestConfigFile:
+    def test_load_substitutes_rally_config_dir_from_environment(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("RALLY_HOME", str(tmp_path / "home"))
+        monkeypatch.setenv("RALLY_CONFIG_DIR", "/custom/config")
+
+        config_file = config.ConfigFile(config_name="unittest")
+        config_path = Path(config_file.location)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text("[node]\nroot.dir = ${RALLY_CONFIG_DIR}/benchmarks\n", encoding="utf-8")
+
+        loaded_config = config_file.load()
+
+        assert loaded_config.get("node", "root.dir") == "/custom/config/benchmarks"
+
+    def test_load_raises_when_a_placeholder_is_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("RALLY_HOME", str(tmp_path / "home"))
+
+        config_file = config.ConfigFile(config_name="unittest")
+        config_path = Path(config_file.location)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text("[node]\nroot.dir = ${MISSING_IDENTIFIER}/benchmarks\n", encoding="utf-8")
+
+        with pytest.raises(KeyError, match="MISSING_IDENTIFIER"):
+            config_file.load()
 
 
 class TestConfig:
