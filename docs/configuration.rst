@@ -10,6 +10,8 @@ Rally stores its configuration in the file ``~/.rally/rally.ini`` which is autom
   The configuration file can use `${RALLY_CONFIG_DIR}` to refer to the directory where Rally stores its configuration files. This is useful for configuring Rally in a portable way.
   It resolves to `~/.rally` by default and follows the value selected by the `RALLY_HOME` environment variable in your shell.
 
+  In addition to `${RALLY_CONFIG_DIR}`, the configuration file can also use environment variables.
+
 
 actor
 ~~~~~
