@@ -25,7 +25,7 @@ TRACK_PATH = os.path.join(os.path.dirname(__file__), "resources", "track_with_va
 
 def _run(cfg, command_line):
     cmd = it.esrally_command_line_for(cfg, command_line)
-    return subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return subprocess.run(cmd, shell=True, check=False, capture_output=True, text=True)
 
 
 @it.rally_in_mem
@@ -35,8 +35,8 @@ def test_validate_track_succeeds_with_valid_params(cfg):
         f"validate-track --track-path={TRACK_PATH} --challenge=validated --track-params='ok:1' --no-quiet",
     )
     assert result.returncode == 0
-        assert "Track parameters for challenge [validated] are valid." in result.stdout
-        assert "validator" in result.stdout
+    assert "Track parameters for challenge [validated] are valid." in result.stdout
+    assert "validator" in result.stdout
 
 
 @it.rally_in_mem
