@@ -151,6 +151,26 @@ def list_tracks(cfg: types.Config):
     available_tracks = tracks(cfg)
     only_auto_generated_challenges = all(t.default_challenge.auto_generated for t in available_tracks)
 
+    output_format = cfg.opts("system", "list.format", mandatory=False, default_value="text")
+    if output_format == "json":
+        data = []
+        for t in sorted(available_tracks, key=lambda t: t.name):
+            entry = {
+                "name": t.name,
+                "description": t.description,
+                "documents": t.number_of_documents,
+                "compressed-size-in-bytes": t.compressed_size_in_bytes,
+                "uncompressed-size-in-bytes": t.uncompressed_size_in_bytes,
+            }
+            if not only_auto_generated_challenges:
+                entry["default-challenge"] = str(t.default_challenge)
+                entry["challenges"] = sorted(map(str, t.challenges))
+            data.append(entry)
+        console.println(json.dumps({"tracks": data}, indent=2))
+        return
+    if output_format != "text":
+        raise exceptions.RallyAssertionError(f"Unknown output format [{output_format}]")
+
     data = []
     for t in available_tracks:
         line = [

@@ -1209,6 +1209,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.format", args.format)
+            cfg.add(config.Scope.applicationOverride, "system", "list.format", args.format)
             cfg.add(config.Scope.applicationOverride, "system", "list.races.user_tags", opts.to_dict(args.user_tags))
             cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
             cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)

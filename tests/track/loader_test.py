@@ -17,6 +17,7 @@
 
 import copy
 import dataclasses
+import json
 import os
 import random
 import re
@@ -165,6 +166,31 @@ class TestGitRepository:
         assert repo.track_names == ["unittest", "unittest2", "unittest3", "unittest3/nested"]
         assert repo.track_dir("unittest") == "/tmp/tracks/default/unittest"
         assert repo.track_file("unittest") == "/tmp/tracks/default/unittest/track.json"
+
+
+class TestListTracks:
+    @mock.patch("esrally.track.loader.tracks")
+    def test_list_tracks_json_format(self, mock_tracks, capsys):
+        challenge = track.Challenge(name="default", default=True, auto_generated=True, schedule=[])
+        mock_tracks.return_value = [track.Track(name="unittest", description="unit test track", challenges=[challenge])]
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "list.format", "json")
+
+        loader.list_tracks(cfg)
+
+        captured = capsys.readouterr()
+        assert json.loads(captured.out) == {
+            "tracks": [
+                {
+                    "name": "unittest",
+                    "description": "unit test track",
+                    "documents": 0,
+                    "compressed-size-in-bytes": 0,
+                    "uncompressed-size-in-bytes": 0,
+                }
+            ]
+        }
 
 
 class TestRenderTrack:
