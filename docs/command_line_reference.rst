@@ -90,6 +90,23 @@ You can also pass track parameters to see how they affect the rendered output::
 
 It is also possible to refer to a track via its path (``--track-path``) or use a different track repository (``--track-repository``).
 
+.. _clr_validate_track:
+
+``validate-track``
+~~~~~~~~~~~~~~~~~~
+
+The ``validate-track`` subcommand loads a track and runs any registered challenge validators without starting a benchmark or contacting a cluster. Use it to fail fast on invalid track parameters (for example from automation before provisioning load drivers).
+
+It resolves the challenge the same way ``race`` does: an explicit ``--challenge``, or the track's default challenge when ``--challenge`` is omitted. An unknown challenge name fails with a non-zero exit code. Loading includes Jinja rendering, schema checks, unused-parameter checks, track plugins, and installing any track ``dependencies``. It does **not** download corpora or provision nodes. Track repository git fetch/update may still occur unless you pass ``--offline``.
+
+Unlike ``race`` (which detects build flavor from the target cluster), ``validate-track`` defaults to the ``default`` build flavor. For tracks whose Jinja templates depend on serverless conditionals, pass ``--build-flavor=serverless`` and optionally ``--serverless-operator`` so rendering matches the intended race environment.
+
+Example with a local track that registers validators (see :ref:`adding_tracks_custom_validators`)::
+
+    esrally validate-track --track-path=/path/to/my-track --challenge=autoscaling --track-params='{"scheduling": [1]}' --build-flavor=serverless --no-quiet
+
+On success the process exits zero. Confirmation text is suppressed by default (``--quiet``); pass ``--no-quiet`` to see whether validators ran. Exit code 0 with no registered validators for the resolved challenge means the track loaded successfully, **not** that custom parameter checks passed — only that there was nothing to validate. On failure it exits non-zero and prints the error (for example a ``TrackConfigError`` from a validator).
+
 ``compare``
 ~~~~~~~~~~~
 

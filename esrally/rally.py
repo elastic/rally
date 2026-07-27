@@ -283,6 +283,42 @@ def create_arg_parser():
         default=None,
     )
 
+    validate_track_parser = subparsers.add_parser(
+        "validate-track",
+        help="Load a track and run registered challenge validators without running a benchmark",
+    )
+    add_track_source(validate_track_parser)
+    validate_track_parser.add_argument(
+        "--track",
+        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`.",
+    )
+    validate_track_parser.add_argument(
+        "--track-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
+        default="",
+    )
+    validate_track_parser.add_argument(
+        "--ignore-unused-track-params",
+        help="Only warn (instead of failing) when track parameters are given that are not used by the track.",
+        action="store_true",
+        default=False,
+    )
+    validate_track_parser.add_argument(
+        "--challenge",
+        help=f"Define the challenge to validate. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`.",
+    )
+    validate_track_parser.add_argument(
+        "--build-flavor",
+        help="Define the build flavor to load/validate the track for (affects Jinja rendering).",
+        choices=["default", "serverless"],
+    )
+    validate_track_parser.add_argument(
+        "--serverless-operator",
+        help="Whether to load/validate the track for a serverless operator (affects Jinja rendering).",
+        default=False,
+        action="store_true",
+    )
+
     create_track_parser = subparsers.add_parser("create-track", help="Create a Rally track from existing data")
     create_track_parser.add_argument(
         "--track",
@@ -927,6 +963,7 @@ def create_arg_parser():
         stop_parser,
         info_parser,
         render_track_parser,
+        validate_track_parser,
         create_track_parser,
     ]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -937,8 +974,8 @@ def create_arg_parser():
         )
         p.add_argument(
             "--quiet",
-            help=f"Suppress as much output as possible (default: {str(p is render_track_parser).lower()}).",
-            default=p is render_track_parser,  # disable output for render-track
+            help=f"Suppress as much output as possible (default: {str(p is render_track_parser or p is validate_track_parser).lower()}).",
+            default=p is render_track_parser or p is validate_track_parser,  # disable output for render/validate-track
             action=argparse.BooleanOptionalAction,
         )
         p.add_argument(
@@ -1333,6 +1370,17 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             track.render_track(
                 cfg, build_flavor=args.build_flavor, serverless_operator=args.serverless_operator, output_path=args.output_path
             )
+        elif sub_command == "validate-track":
+            # Same track-source wiring as ``render-track`` (no task filters); challenge/params set explicitly.
+            configure_track_params(arg_parser, args, cfg, command_requires_track_details=False)
+            cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
+            cfg.add(config.Scope.applicationOverride, "track", "params.ignore_unused", args.ignore_unused_track_params)
+            cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
+            # TrackFileReader renders Jinja from these cfg keys (race sets them from the cluster probe).
+            if args.build_flavor:
+                cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.flavor", args.build_flavor)
+            cfg.add(config.Scope.applicationOverride, "driver", "serverless.operator", args.serverless_operator)
+            track.validate_track(cfg)
         else:
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
         return ExitStatus.SUCCESSFUL

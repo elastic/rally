@@ -39,7 +39,6 @@ from esrally import (
     types,
     version,
 )
-from esrally.track import params
 from esrally.utils import console, opts, versions
 
 pipelines = collections.OrderedDict()
@@ -240,19 +239,13 @@ class BenchmarkCoordinator:
                         f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]"
                     )
 
-        self.current_track = track.load_track(self.cfg, install_dependencies=True)
+        loaded_track = track.load_track(self.cfg, install_dependencies=True)
+        self.current_track = loaded_track
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)
-        challenge_name = self.cfg.opts("track", "challenge.name")
-        self.current_challenge = self.current_track.find_challenge_or_default(challenge_name)
-        if self.current_challenge is None:
-            raise exceptions.SystemSetupError(
-                "Track [{}] does not provide challenge [{}]. List the available tracks with {} list tracks.".format(
-                    self.current_track.name, challenge_name, PROGRAM_NAME
-                )
-            )
-        # Validate track parameters for the selected challenge before provisioning the engine so that invalid
-        # parameters fail fast. Track plugins were loaded (and any validators registered) during load_track above.
-        params.invoke_validators(self.current_challenge.name, self.cfg.opts("track", "params", mandatory=False, default_value={}))
+        # Resolve the challenge and validate track parameters before provisioning the engine so that
+        # invalid parameters fail fast. Track plugins were loaded (and any validators registered)
+        # during load_track above. Shared with ``esrally validate-track``.
+        self.current_challenge = track.resolve_challenge_and_invoke_validators(loaded_track, self.cfg)
         if self.current_challenge.user_info:
             console.info(self.current_challenge.user_info)
         for message in self.current_challenge.serverless_info:
