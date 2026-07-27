@@ -61,6 +61,7 @@ class ConfigFile:
         config = configparser.ConfigParser()
         with open(self.location, encoding="utf-8") as src:
             contents = src.read()
+        # TODO: replace CONFIG_DIR with RALLY_CONFIG_DIR via migrate(), for now keep CONFIG_DIR for BWC
         contents = Template(contents).substitute({"CONFIG_DIR": self.config_dir, "RALLY_CONFIG_DIR": self.config_dir, **os.environ})
         config.read_string(contents, source=self.location)
         return config
