@@ -35,8 +35,7 @@ def test_validate_track_succeeds_with_valid_params(cfg):
         f"validate-track --track-path={TRACK_PATH} --challenge=validated --track-params='ok:1' --no-quiet",
     )
     assert result.returncode == 0
-    assert "Track parameters for challenge [validated] are valid." in result.stdout
-    assert "validator" in result.stdout
+    assert "Track parameters for challenge [validated] are valid (1 validator ran)." in result.stdout
 
 
 @it.rally_in_mem
