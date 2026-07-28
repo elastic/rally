@@ -91,6 +91,10 @@ def invoke_validators(challenge_name: str, track_params: dict) -> None:
             raise exceptions.TrackConfigError(f"Validator [{validator_name}] for challenge [{challenge_name}] failed: {e}") from e
 
 
+def registered_validator_count(challenge_name: str) -> int:
+    return len(__VALIDATORS_BY_CHALLENGE.get(challenge_name, []))
+
+
 # only intended for tests
 def _unregister_validators_for_challenge(challenge_name: str) -> None:
     __VALIDATORS_BY_CHALLENGE.pop(challenge_name, None)

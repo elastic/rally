@@ -197,6 +197,62 @@ def render_track(cfg: types.Config, build_flavor=None, serverless_operator=False
         print(rendered_json)
 
 
+def resolve_challenge_and_invoke_validators(t: track.Track, cfg: types.Config):
+    """
+    Resolve the challenge the same way ``race`` does and run registered validators.
+
+    Uses ``find_challenge_or_default`` so an omitted challenge name selects the track's
+    default challenge, and an unknown challenge name raises ``InvalidName``.
+
+    :return: The resolved challenge.
+    """
+    challenge_name = cfg.opts("track", "challenge.name", mandatory=False)
+    challenge = t.find_challenge_or_default(challenge_name)
+    if challenge is None:
+        raise exceptions.SystemSetupError(
+            "Track [{}] does not provide challenge [{}]. List the available tracks with {} list tracks.".format(
+                t.name, challenge_name, PROGRAM_NAME
+            )
+        )
+    track_params = cfg.opts("track", "params", mandatory=False, default_value={})
+    params.invoke_validators(challenge.name, track_params)
+    return challenge
+
+
+def validate_track(cfg: types.Config):
+    """
+    Load a track and run registered challenge validators without starting a race.
+
+    Intended as a fast, machine-friendly check for automation (e.g. fail before provisioning
+    a benchmark environment). Loads the track (Jinja rendering, schema checks, unused-parameter
+    checks, track plugins, and track dependency installation) and invokes validators for the
+    resolved challenge (explicit ``--challenge`` or the track's default). Does not download
+    corpora, provision nodes, or contact a cluster. Track repository git fetch/update may
+    still occur unless ``--offline`` is set.
+
+    Jinja rendering uses ``mechanic.distribution.flavor`` (default ``default``) and
+    ``driver.serverless.operator`` from the config — set via ``--build-flavor`` /
+    ``--serverless-operator`` on the CLI so serverless-conditioned tracks match ``race``.
+
+    Exit code 0 means the track loaded and any registered validators for the resolved
+    challenge succeeded. If no validators are registered for that challenge, exit code 0
+    still means success, but no custom parameter checks ran.
+    """
+    t = load_track(cfg, install_dependencies=True)
+    challenge = resolve_challenge_and_invoke_validators(t, cfg)
+    validator_count = params.registered_validator_count(challenge.name)
+    # Quiet by default: confirmation is suppressed unless the user passes --no-quiet.
+    if validator_count:
+        console.println(
+            f"Track parameters for challenge [{challenge.name}] are valid "
+            f"({validator_count} validator{'s' if validator_count != 1 else ''} ran)."
+        )
+    else:
+        console.println(
+            f"Track [{t.name}] challenge [{challenge.name}] loaded successfully; " f"no validators are registered for this challenge."
+        )
+
+
 def track_info(cfg: types.Config):
     def format_task(t, indent="", num="", suffix=""):
         msg = f"{indent}{num}{str(t)}"

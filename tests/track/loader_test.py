@@ -222,6 +222,175 @@ class TestRenderTrack:
             loader.render_track(cfg)
 
 
+class TestValidateTrack:
+    def _track_with_challenges(self, *challenge_specs):
+        """
+        Build a track from (name, default) pairs. Challenges are not marked selected;
+        validation resolves via find_challenge_or_default like race.
+        """
+        challenges = [track.Challenge(name, default=default, schedule=[]) for name, default in challenge_specs]
+        return track.Track(name="unittest", challenges=challenges)
+
+    def _cfg(self, challenge_name=None, track_params=None):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "challenge.name", challenge_name)
+        cfg.add(config.Scope.application, "track", "params", track_params or {})
+        return cfg
+
+    def teardown_method(self, method):
+        params._clear_validators()  # pylint: disable=protected-access
+
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_invokes_validators_for_explicit_challenge(self, load_track):
+        load_track.return_value = self._track_with_challenges(("validated", True), ("other", False))
+        cfg = self._cfg("validated", {"scheduling": [1, 2, 3]})
+
+        received = []
+
+        def validator(track_params):
+            received.append(track_params)
+            raise exceptions.TrackConfigError("'scheduling' must have 1 or 2 elements but had 3.")
+
+        params.register_validator("validated", validator)
+        with pytest.raises(exceptions.TrackConfigError, match="'scheduling' must have 1 or 2 elements but had 3."):
+            loader.validate_track(cfg)
+
+        assert received == [{"scheduling": [1, 2, 3]}]
+        load_track.assert_called_once_with(cfg, install_dependencies=True)
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_succeeds_when_validators_pass(self, load_track, println):
+        load_track.return_value = self._track_with_challenges(("validated", True))
+        cfg = self._cfg("validated", {"scheduling": [1]})
+
+        calls = []
+
+        def mark_ok(_):
+            calls.append("ok")
+
+        params.register_validator("validated", mark_ok)
+
+        loader.validate_track(cfg)
+
+        assert calls == ["ok"]
+        println.assert_called_once_with("Track parameters for challenge [validated] are valid (1 validator ran).")
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_uses_default_challenge_when_challenge_omitted(self, load_track, println):
+        load_track.return_value = self._track_with_challenges(("default-challenge", True), ("other", False))
+        cfg = self._cfg(None, {"scheduling": [1]})
+
+        calls = []
+
+        def mark_default(_):
+            calls.append("default")
+
+        def mark_other(_):
+            calls.append("other")
+
+        params.register_validator("default-challenge", mark_default)
+        params.register_validator("other", mark_other)
+
+        loader.validate_track(cfg)
+
+        assert calls == ["default"]
+        println.assert_called_once_with("Track parameters for challenge [default-challenge] are valid (1 validator ran).")
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_reports_when_no_validators_registered(self, load_track, println):
+        load_track.return_value = self._track_with_challenges(("validated", True))
+        cfg = self._cfg("validated", {})
+
+        loader.validate_track(cfg)
+
+        println.assert_called_once_with(
+            "Track [unittest] challenge [validated] loaded successfully; no validators are registered for this challenge."
+        )
+
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_fails_on_unknown_challenge(self, load_track):
+        load_track.return_value = self._track_with_challenges(("default-challenge", True), ("other", False))
+        cfg = self._cfg("typo-challenge", {})
+
+        def noop(_):
+            return None
+
+        params.register_validator("default-challenge", noop)
+
+        with pytest.raises(exceptions.InvalidName, match="Unknown challenge \\[typo-challenge\\] for track \\[unittest\\]"):
+            loader.validate_track(cfg)
+
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_fails_when_track_has_no_challenges(self, load_track):
+        load_track.return_value = track.Track(name="unittest", challenges=[])
+        cfg = self._cfg(None, {})
+
+        with pytest.raises(exceptions.SystemSetupError, match="Track \\[unittest\\] does not provide challenge"):
+            loader.validate_track(cfg)
+
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_wraps_unexpected_validator_errors(self, load_track):
+        load_track.return_value = self._track_with_challenges(("validated", True))
+        cfg = self._cfg("validated", {})
+
+        def boom(_):
+            raise ValueError("boom")
+
+        params.register_validator("validated", boom)
+        with pytest.raises(exceptions.TrackConfigError, match="Validator \\[boom\\] for challenge \\[validated\\] failed: boom"):
+            loader.validate_track(cfg)
+
+    def test_resolve_challenge_and_invoke_validators_matches_race_semantics(self):
+        t = self._track_with_challenges(("default-challenge", True), ("other", False))
+        cfg = self._cfg(None, {"x": 1})
+
+        received = []
+        params.register_validator("default-challenge", received.append)
+
+        challenge = loader.resolve_challenge_and_invoke_validators(t, cfg)
+
+        assert challenge.name == "default-challenge"
+        assert received == [{"x": 1}]
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.load_track")
+    def test_track_info_does_not_invoke_validators(self, load_track, println):
+        load_track.return_value = self._track_with_challenges(("validated", True))
+        # Mark selected so info prints a single challenge schedule without needing full corpora metadata.
+        load_track.return_value.challenges[0].selected = True
+        cfg = self._cfg("validated", {"scheduling": [1, 2, 3]})
+
+        called = []
+
+        def mark(_):
+            called.append(True)
+
+        params.register_validator("validated", mark)
+
+        loader.track_info(cfg)
+
+        assert called == []
+        load_track.assert_called_once_with(cfg)
+
+    def test_validate_track_loads_plugin_validators_from_track_path(self):
+        track_path = os.path.join(os.path.dirname(__file__), "..", "..", "it", "resources", "track_with_validator")
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
+        cfg.add(config.Scope.application, "track", "track.path", os.path.abspath(track_path))
+        cfg.add(config.Scope.application, "track", "challenge.name", "validated")
+        cfg.add(config.Scope.application, "track", "params", {"ok": 1})
+        cfg.add(config.Scope.application, "track", "params.ignore_unused", False)
+
+        loader.validate_track(cfg)
+
+        cfg.add(config.Scope.application, "track", "params", {"ok": 0})
+        with pytest.raises(exceptions.TrackConfigError, match="Track parameter 'ok' must be set to 1."):
+            loader.validate_track(cfg)
+
+
 class TestTrackPreparation:
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")

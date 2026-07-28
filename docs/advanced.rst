@@ -308,6 +308,12 @@ Note the following:
 * Raise ``TrackConfigError`` to abort the benchmark. Rally runs the validators after loading the track and selecting the challenge, but before provisioning nodes or starting the benchmark, so a misconfigured parameter is reported without waiting for the engine to start.
 * You may register more than one validator for the same challenge; Rally invokes them in registration order.
 
+To check track parameters without running a benchmark, use the ``validate-track`` subcommand::
+
+    esrally validate-track --track-path=/path/to/my-track --challenge=autoscaling --track-params='{"scheduling": [1]}' --build-flavor=serverless --no-quiet
+
+See the :ref:`command line reference <clr_validate_track>` for details, including serverless flags and scope limits.
+
 .. _adding_tracks_custom_runners:
 
 Creating Your Own Operations With Custom Runners
