@@ -312,7 +312,7 @@ To check track parameters without running a benchmark, use the ``validate-track`
 
     esrally validate-track --track-path=/path/to/my-track --challenge=autoscaling --track-params='{"scheduling": [1]}' --build-flavor=serverless --no-quiet
 
-This loads the track (including Jinja rendering, schema checks, plugins, and any track ``dependencies``), resolves the challenge the same way ``race`` does (explicit ``--challenge`` or the default), runs validators registered for that challenge, and exits. Use ``--build-flavor`` / ``--serverless-operator`` when the track's templates depend on serverless conditionals (``validate-track`` cannot probe a cluster the way ``race`` does). On success the exit code is zero; confirmation text is silent by default unless you pass ``--no-quiet``. If no validators are registered for the resolved challenge, exit code 0 still means the track loaded, but no custom parameter checks ran. On failure it exits non-zero with the ``TrackConfigError`` message. See the :ref:`command line reference <clr_validate_track>` for scope limits (no corpora download; use ``--offline`` to skip track-repo updates).
+See the :ref:`command line reference <clr_validate_track>` for details, including serverless flags and scope limits.
 
 .. _adding_tracks_custom_runners:
 
