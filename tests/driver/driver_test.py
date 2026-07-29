@@ -16,6 +16,7 @@
 # under the License.
 
 import collections
+import copy
 import io
 import threading
 import time
@@ -57,6 +58,34 @@ class DriverTestParamSource:
             raise StopIteration()
         self._current += 1
         return self._params
+
+
+class TestEsClients:
+    def test_returns_default_client(self):
+        default_client = object()
+        clients = driver.EsClients({"other": object(), "default": default_client})
+
+        assert clients.default is default_client
+
+    def test_returns_first_client_when_default_is_missing(self):
+        first_client = object()
+        clients = driver.EsClients({"first": first_client, "second": object()})
+
+        assert clients.default is first_client
+
+    def test_returns_none_when_empty(self):
+        assert driver.EsClients().default is None
+
+    def test_shallow_copy_can_be_mutated_without_changing_original(self):
+        local_client = object()
+        remote_client = object()
+        clients = driver.EsClients({"local": local_client, "remote": remote_client})
+
+        remaining_clients = copy.copy(clients)
+
+        assert remaining_clients.pop("local") is local_client
+        assert remaining_clients == {"remote": remote_client}
+        assert clients == {"local": local_client, "remote": remote_client}
 
 
 class TestDriver:
