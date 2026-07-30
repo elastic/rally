@@ -579,32 +579,19 @@ class ClientContext:
     api_key: Optional[ApiKey] = None
 
 
-class EsClients:
+class EsClients(dict):
     """
-    Wraps the cluster-name-to-client dict returned by create_es_clients().
+    A cluster-name-to-client dict returned by create_es_clients().
     Exposes a ``default`` property that returns the 'default' client, or the
     first available client when no 'default' key is present (multi-cluster mode
     with named clusters).
     """
 
-    def __init__(self, clients):
-        self._clients = clients
-
     @property
     def default(self):
-        return self._clients.get("default") or next(iter(self._clients.values()), None)
-
-    def __getitem__(self, key):
-        return self._clients[key]
-
-    def keys(self):
-        return self._clients.keys()
-
-    def values(self):
-        return self._clients.values()
-
-    def items(self):
-        return self._clients.items()
+        if "default" in self:
+            return self["default"]
+        return next(iter(self.values()), None)
 
 
 class Driver:
