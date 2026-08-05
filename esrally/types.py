@@ -98,6 +98,7 @@ Key = Literal[
     "list.challenge",
     "list.config.option",
     "list.from_date",
+    "list.format",
     "list.max_results",
     "list.races.benchmark_name",
     "list.races.format",
