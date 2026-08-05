@@ -17,22 +17,26 @@ export DEBIAN_FRONTEND=noninteractive
 sudo mkdir -p /etc/needrestart
 echo "\$nrconf{restart} = 'a';" | sudo tee -a /etc/needrestart/needrestart.conf > /dev/null
 
-export PY_VERSION="$1"
+PY_SHORT_VERSION="$1"
 TEST_NAME="$2"
 
 echo "--- System dependencies"
 
-retry 5 sudo add-apt-repository --yes ppa:deadsnakes/ppa
 retry 5 sudo apt-get update
 retry 5 sudo apt-get install -y \
-    "python${PY_VERSION}" "python${PY_VERSION}-dev" "python${PY_VERSION}-venv" \
-    make \
+    make jq \
     dnsutils # provides nslookup
+
+export PY_VERSION=$(jq -r ".python_versions.PY$(echo "${PY_SHORT_VERSION}" | tr -d '.')" .ci/variables.json)
 
 echo "--- Install UV"
 
 curl -LsSf https://astral.sh/uv/0.11.19/install.sh | env UV_UNMANAGED_INSTALL="${HOME}/.local/bin" sh
 export PATH="${HOME}/.local/bin:${PATH}"
+
+echo "--- Install Python ${PY_VERSION}"
+
+uv python install "${PY_VERSION}"
 
 echo "--- Create virtual environment"
 

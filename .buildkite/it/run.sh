@@ -27,20 +27,25 @@ cat /proc/cpuinfo
 
 echo "--- System dependencies"
 
-export PY_VERSION="$1"
-retry 5 sudo add-apt-repository --yes ppa:deadsnakes/ppa
+PY_SHORT_VERSION="$1"
+
 retry 5 sudo apt-get update
 retry 5 sudo apt-get install -y \
-    "python${PY_VERSION}" "python${PY_VERSION}-dev" "python${PY_VERSION}-venv" \
-    git make jq docker \
+    git make jq \
     openjdk-21-jdk-headless openjdk-11-jdk-headless
 export JAVA11_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 export JAVA21_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+
+export PY_VERSION=$(jq -r ".python_versions.PY$(echo "${PY_SHORT_VERSION}" | tr -d '.')" .ci/variables.json)
 
 echo "--- Install UV"
 
 curl -LsSf https://astral.sh/uv/0.11.19/install.sh | env UV_UNMANAGED_INSTALL="${HOME}/.local/bin" sh
 export PATH="${HOME}/.local/bin:${PATH}"
+
+echo "--- Install Python ${PY_VERSION}"
+
+uv python install "${PY_VERSION}"
 
 echo "--- Create virtual environment"
 

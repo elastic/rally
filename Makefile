@@ -22,7 +22,7 @@ VIRTUAL_ENV := $(or $(VIRTUAL_ENV),.venv$(if $(PY_VERSION),-$(PY_VERSION)))
 VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
 VENV_ACTIVATE := source $(VENV_ACTIVATE_FILE)
 
-PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
+PY_VERSION ?= $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
 export UV_PYTHON := $(PY_VERSION)
 export UV_PROJECT_ENVIRONMENT := $(VIRTUAL_ENV)
 
