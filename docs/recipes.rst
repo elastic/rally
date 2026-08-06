@@ -209,11 +209,11 @@ Consider a simple example Rally operation::
 
 This query requires the field ``source.geo.location`` to be mapped as a ``geo_point`` type. If incorrectly mapped, Elasticsearch will respond with an error. 
 
-Rally will not exit on errors (unless fatal e.g. `ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_) by default, instead reporting errors in the summary report via the :ref:`Error Rate <summary_report_error_rate>` statistic. This can potentially leading to misleading results. This behavior is by design and consistent with other load testing tools such as JMeter i.e. In most cases it is desirable that a large long running benchmark should not fail because of a single error response.
+Rally will abort on the first request error by default. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`. For a more lenient behavior, use ``--on-error=continue`` to only record errors in the summary report via the :ref:`Error Rate <summary_report_error_rate>` statistic instead of aborting.
 
-This behavior can also be changed, by invoking Rally with the :ref:`--on-error <command_line_reference_on_error>` switch e.g.::
+This behavior can be changed, by invoking Rally with the :ref:`--on-error <command_line_reference_on_error>` switch e.g.::
 
-	esrally race --track=geonames --on-error=abort
+	esrally race --track=geonames --on-error=continue
 	
 Checking Queries and Responses
 ------------------------------
