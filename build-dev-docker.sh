@@ -22,7 +22,7 @@
 # Logged in on Docker Hub (docker login)
 
 # fail this script immediately if any command fails with a non-zero exit code
-set -eu
+set -euo pipefail
 
 function push_failed {
     echo "Error while pushing Docker image. Did you \`docker login\`?"
@@ -58,8 +58,8 @@ if [[ "${RALLY_BRANCH}" =~ .*\/.* ]]; then
 else
   branch_name="${RALLY_BRANCH}"
 fi
-export RALLY_VERSION="${branch_name}-${GIT_SHA}-${DATE}-${ARCH}"
-export RALLY_VERSION_TAG="${RALLY_VERSION}"
+export RALLY_VERSION=$(hatch version)
+export RALLY_VERSION_TAG="${branch_name}-${GIT_SHA}-${DATE}-${ARCH}"
 MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
 if [[ "$RALLY_BRANCH" == "$MAIN_BRANCH" ]]; then
