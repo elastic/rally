@@ -469,6 +469,25 @@ The ``schedule`` element contains a list of tasks that are executed by Rally, i.
 * ``target-interval`` (optional): This is just ``1 / target-throughput`` (in seconds) and may be more convenient for cases where the throughput is less than one operation per second. Define either ``target-throughput`` or ``target-interval`` but not both (otherwise Rally will raise an error).
 * ``ignore-response-error-level`` (optional): Controls whether to ignore errors encountered during task execution when the benchmark is run with :ref:`on-error=abort <command_line_reference_on_error>`. The only allowable value is ``non-fatal`` which, combined with the cli option ``--on-error=abort``, will ignore non-fatal errors during the execution of the task.
 * ``run-on-serverless`` (optional, default to unset): By default, Rally skips operations that are not supported in `Elastic Serverless <https://docs.elastic.co/serverless>`_, such as :ref:`node-stats<operation_node_stats>`. Setting this option to ``true`` or ``false`` will override that detection.
+* ``before-each`` (optional): The name of an operation defined in the ``operations`` section. When set, Rally executes that operation once immediately before every invocation of this task's operation, including warmup iterations. The before-each operation runs on the same client as the benchmarked request. Its execution time is entirely excluded from ``service_time``, ``latency``, and ``processing_time`` and is never recorded in the metrics store — it is pure setup, analogous to JUnit's ``@Before``. Errors in the before-each operation follow the task's ``on-error`` behaviour: with ``abort`` the task fails and the benchmarked request does not execute for that invocation; with ``continue`` a warning is logged and the benchmarked request proceeds. The throughput throttle (``target-throughput`` / ``target-interval``) is unaware of the before-each request and paces only the benchmarked operation; if setup and operation together exceed the target interval, the client cannot sustain the requested throughput. The referenced operation must use a non-exhausting parameter source. Example::
+
+    {
+      "operations": [
+        {"name": "term-query",   "operation-type": "search"},
+        {"name": "clear-cache",  "operation-type": "indices-clear-cache"}
+      ],
+      "challenge": {
+        "name": "default-challenge",
+        "schedule": [
+          {
+            "operation":     "term-query",
+            "before-each":   "clear-cache",
+            "clients":       8,
+            "target-throughput": 100
+          }
+        ]
+      }
+    }
 
     .. note::
 
@@ -609,7 +628,7 @@ All tasks in the ``schedule`` list are executed sequentially in the order in whi
 * ``warmup-iterations`` (optional, defaults to 0): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``iterations`` (optional, defaults to 1): Allows to define a default value for all tasks of the ``parallel`` element.
 * ``completed-by`` (optional): Allows to define the name of one task in the ``tasks`` list, or the value ``any``. If a specific task name has been provided then as soon as the named task has completed, the whole ``parallel`` task structure is considered completed. If the value ``any`` is provided, then any task that is first to complete will render the ``parallel`` structure complete. If this property is not explicitly defined, the ``parallel`` task structure is considered completed as soon as all its subtasks have completed (NOTE: this is _not_ true if ``any`` is specified, see below warning and example).
-* ``tasks`` (mandatory): Defines a list of tasks that should be executed concurrently. Each task in the list can define the following properties that have been defined above: ``clients``, ``warmup-time-period``, ``time-period``, ``warmup-iterations`` and ``iterations``.
+* ``tasks`` (mandatory): Defines a list of tasks that should be executed concurrently. Each task in the list can define the following properties that have been defined above: ``clients``, ``warmup-time-period``, ``time-period``, ``warmup-iterations``, ``iterations``, and ``before-each``.
 
 .. note::
 

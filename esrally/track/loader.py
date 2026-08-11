@@ -527,12 +527,19 @@ class SimpleTrackRepository:
         return self._track_file
 
 
-def operation_parameters(t, task):
-    op = task.operation
+def _params_for_operation(t, op, task_name):
     if op.param_source:
         return params.param_source_for_name(op.param_source, t, op.params)
     else:
-        return params.param_source_for_operation(op.type, t, op.params, task.name)
+        return params.param_source_for_operation(op.type, t, op.params, task_name)
+
+
+def operation_parameters(t, task):
+    return _params_for_operation(t, task.operation, task.name)
+
+
+def before_each_parameters(t, task):
+    return _params_for_operation(t, task.before_each, task.name)
 
 
 def used_corpora(t):
@@ -546,6 +553,11 @@ def used_corpora(t):
                     for c in param_source.corpora:
                         # We might have the same corpus *but* they contain different doc sets. Therefore also need to union over doc sets.
                         corpora[c.name] = corpora.get(c.name, c).union(c)
+                if sub_task.before_each is not None:
+                    before_each_param_source = before_each_parameters(t, sub_task)
+                    if hasattr(before_each_param_source, "corpora"):
+                        for c in before_each_param_source.corpora:
+                            corpora[c.name] = corpora.get(c.name, c).union(c)
     return corpora.values()
 
 
@@ -1068,7 +1080,9 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
             for task in challenge.schedule:
                 if isinstance(task, Parallel):
                     challenge.serverless_info.append(f"Treating parallel task in challenge [{challenge}] as public.")
-                elif self._is_filtered_task(task.operation):
+                elif self._is_filtered_task(task.operation) or (
+                    task.before_each is not None and self._is_filtered_task(task.before_each)
+                ):
                     tasks_to_remove.append(task)
             for task in tasks_to_remove:
                 challenge.remove_task(task)
@@ -1838,6 +1852,22 @@ class TrackSpecificationReader:
         schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False)
         task_name = self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name)
 
+        before_each_name = self._r(task_spec, "before-each", error_ctx=op.name, mandatory=False)
+        before_each_op = None
+        if before_each_name is not None:
+            if not isinstance(before_each_name, str):
+                self._error(
+                    f"'before-each' for operation '{op.name}' in challenge '{challenge_name}' must be the name of an "
+                    f"operation in the 'operations' section but was [{before_each_name}]."
+                )
+            elif before_each_name not in ops:
+                self._error(
+                    f"'before-each' for operation '{op.name}' in challenge '{challenge_name}' references unknown "
+                    f"operation '{before_each_name}'. Declare it in the 'operations' section."
+                )
+            else:
+                before_each_op = ops[before_each_name]
+
         task = track.Task(
             name=task_name,
             operation=op,
@@ -1860,6 +1890,7 @@ class TrackSpecificationReader:
             schedule=schedule,
             # this is to provide scheduler-specific parameters for custom schedulers.
             params=task_spec,
+            before_each=before_each_op,
         )
         if task.warmup_iterations is not None and task.time_period is not None:
             self._error(

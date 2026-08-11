@@ -997,6 +997,7 @@ class Task:
         any_completes_parent=False,
         schedule=None,
         params=None,
+        before_each=None,
     ):
         self.name = name
         self.operation = operation
@@ -1018,6 +1019,7 @@ class Task:
         self.schedule = schedule
         self.params = params if params else {}
         self.nested = False
+        self.before_each = before_each
 
     def matches(self, task_filter):
         return task_filter.matches(self)
@@ -1105,6 +1107,7 @@ class Task:
             ^ hash(self.schedule)
             ^ hash(self.completes_parent)
             ^ hash(self.any_completes_parent)
+            ^ hash(self.before_each)
         )
 
     def __eq__(self, other):
@@ -1121,6 +1124,7 @@ class Task:
             self.schedule,
             self.completes_parent,
             self.any_completes_parent,
+            self.before_each,
         ) == (
             other.name,
             other.operation,
@@ -1133,6 +1137,7 @@ class Task:
             other.schedule,
             other.completes_parent,
             other.any_completes_parent,
+            other.before_each,
         )
 
     def __iter__(self):

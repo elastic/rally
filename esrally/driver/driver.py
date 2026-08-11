@@ -1890,13 +1890,21 @@ class AsyncIoAdapter:
             # Multi-cluster: run all clusters in parallel for this step
             for cluster_name in all_hosts:
                 params_per_task = {}
+                before_each_params_per_task = {}
                 for (client_id, task_allocation), es in zip(self.task_allocations, clients):
                     task = task_allocation.task
                     if task not in params_per_task:
                         param_source = track.operation_parameters(self.track, task)
                         params_per_task[task] = param_source
+                    if task.before_each is not None and task not in before_each_params_per_task:
+                        before_each_params_per_task[task] = track.before_each_parameters(self.track, task)
                     schedule = schedule_for(task_allocation, params_per_task[task])
                     es_single = EsClients({"default": es[cluster_name]})
+                    before_each = (
+                        before_each_for(task_allocation, before_each_params_per_task[task])
+                        if task.before_each is not None
+                        else None
+                    )
                     async_executor = AsyncExecutor(
                         client_id,
                         task,
@@ -1907,6 +1915,7 @@ class AsyncIoAdapter:
                         self.complete,
                         task.error_behavior(self.on_error),
                         cluster_name=cluster_name,
+                        before_each=before_each,
                     )
                     final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                     awaitables.append(final_executor())
@@ -1919,12 +1928,20 @@ class AsyncIoAdapter:
         else:
             # Single cluster: current behavior
             params_per_task = {}
+            before_each_params_per_task = {}
             for (client_id, task_allocation), es in zip(self.task_allocations, clients):
                 task = task_allocation.task
                 if task not in params_per_task:
                     param_source = track.operation_parameters(self.track, task)
                     params_per_task[task] = param_source
+                if task.before_each is not None and task not in before_each_params_per_task:
+                    before_each_params_per_task[task] = track.before_each_parameters(self.track, task)
                 schedule = schedule_for(task_allocation, params_per_task[task])
+                before_each = (
+                    before_each_for(task_allocation, before_each_params_per_task[task])
+                    if task.before_each is not None
+                    else None
+                )
                 async_executor = AsyncExecutor(
                     client_id,
                     task,
@@ -1935,6 +1952,7 @@ class AsyncIoAdapter:
                     self.complete,
                     task.error_behavior(self.on_error),
                     cluster_name=None,
+                    before_each=before_each,
                 )
                 final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                 awaitables.append(final_executor())
@@ -2004,6 +2022,7 @@ class AsyncExecutor:
         complete,
         on_error: OnErrorBehavior,
         cluster_name=None,
+        before_each=None,
     ):
         """
         Executes tasks according to the schedule for a given operation.
@@ -2016,6 +2035,7 @@ class AsyncExecutor:
         :param complete: A shared boolean that indicates we need to prematurely complete execution.
         :param on_error: An Enum of type `OnErrorBehaviour` specifying how the load generator should behave on errors.
         :param cluster_name: Optional name of the target cluster (for multi-cluster reporting).
+        :param before_each: Optional BeforeEach handle whose operation runs before every benchmarked invocation.
         """
         self.client_id = client_id
         self.task = task
@@ -2027,6 +2047,7 @@ class AsyncExecutor:
         self.complete = complete
         self.on_error = on_error
         self.cluster_name = cluster_name
+        self.before_each = before_each
         self.logger = logging.getLogger(__name__)
 
     async def __call__(self, *args, **kwargs):
@@ -2057,10 +2078,31 @@ class AsyncExecutor:
                     if rest > 0:
                         await asyncio.sleep(rest)
 
+                es_client = self.es.default
+                # Run the before-each setup operation in its own discarded request context.
+                # It must be a sibling top-level context (not nested inside the benchmarked
+                # one) so that timing callbacks cannot leak into the benchmarked request's
+                # request_start / request_end values (context.py update_request_start is
+                # first-wins; __exit__ propagates only when token.old_value is not MISSING).
+                setup_duration = 0.0
+                if self.before_each is not None:
+                    setup_start = time.perf_counter()
+                    with es_client.new_request_context():
+                        _, _, setup_meta = await execute_single(
+                            self.before_each.op_runner, self.es, self.before_each.params(), self.on_error
+                        )
+                    if setup_meta and not setup_meta.get("success", True):
+                        self.logger.warning(
+                            "before-each operation [%s] of task [%s] failed: %s",
+                            self.before_each.operation,
+                            self.task,
+                            setup_meta.get("error-description"),
+                        )
+                    setup_duration = time.perf_counter() - setup_start
+
                 absolute_processing_start = time.time()
                 processing_start = time.perf_counter()
                 self.schedule_handle.before_request(processing_start)
-                es_client = self.es.default
                 with es_client.new_request_context() as request_context:
                     total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                     request_start = request_context.request_start
@@ -2083,7 +2125,9 @@ class AsyncExecutor:
                 #
                 throughput = request_meta_data.pop("throughput", None)
                 # Do not calculate latency separately when we run unthrottled. This metric is just confusing then.
-                latency = request_end - absolute_expected_schedule_time if throughput_throttled else service_time
+                # Offset absolute_expected_schedule_time by setup_duration so the before-each
+                # request does not inflate latency for throughput-throttled tasks.
+                latency = request_end - (absolute_expected_schedule_time + setup_duration) if throughput_throttled else service_time
                 # If this task completes the parent task we should *not* check for completion by another client but
                 # instead continue until our own runner has completed. We need to do this because the current
                 # worker (process) could run multiple clients that execute the same task. We do not want all clients to
@@ -2471,6 +2515,28 @@ class Allocator:
 # Scheduler related stuff
 #
 #######################################
+
+
+class BeforeEach:
+    def __init__(self, operation, op_runner, param_source):
+        self.operation = operation
+        self.op_runner = op_runner
+        self.param_source = param_source
+
+    def params(self):
+        p = self.param_source.params()
+        p.update({"operation-type": self.operation.type})
+        return p
+
+
+def before_each_for(task_allocation, parameter_source):
+    task = task_allocation.task
+    op = task.before_each
+    return BeforeEach(
+        op,
+        runner.runner_for(op.type),
+        parameter_source.partition(task_allocation.client_index_in_task, task.clients),
+    )
 
 
 # Runs a concrete schedule on one worker client

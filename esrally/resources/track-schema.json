@@ -123,6 +123,10 @@
                     "run-on-serverless": {
                       "type": "boolean",
                       "description": "Overrides automatic skip of unsupported serverless operations. Can be set to true or false."
+                    },
+                    "before-each": {
+                      "type": "string",
+                      "description": "The name of an operation, defined in the 'operations' section, that Rally executes once immediately before each invocation of this task's operation (warmup included). Its execution time is excluded from all measurements and is not recorded."
                     }
                   },
                   "required": [
@@ -191,6 +195,10 @@
             "type": "number",
             "minimum": 0,
             "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
+          },
+          "before-each": {
+            "type": "string",
+            "description": "The name of an operation, defined in the 'operations' section, that Rally executes once immediately before each invocation of this task's operation (warmup included). Its execution time is excluded from all measurements and is not recorded."
           }
         }
       }

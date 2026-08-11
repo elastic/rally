@@ -2495,6 +2495,243 @@ class TestAsyncExecutor:
         assert "handling_cluster" not in request_meta_data
 
 
+class TestBeforeEach:
+    class NoopContextManager:
+        def __init__(self, mock):
+            self.mock = mock
+
+        @property
+        def completed(self):
+            return False
+
+        @property
+        def percent_completed(self):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __call__(self, *args):
+            return await self.mock(*args)
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    class StaticRequestTiming:
+        def __init__(self, task_start):
+            self.task_start = task_start
+            self.current_request_start = self.task_start
+
+        def __enter__(self):
+            self.current_request_start += 5
+            return self
+
+        @property
+        def request_start(self):
+            return self.current_request_start
+
+        @property
+        def request_end(self):
+            return self.current_request_start + 0.05
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+    class SimpleScheduleHandle:
+        def __init__(self, invocations):
+            self.invocations = invocations
+            self.ramp_up_wait_time = 0
+
+        def before_request(self, now):
+            pass
+
+        def after_request(self, now, weight, unit, meta_data):
+            pass
+
+        def start(self):
+            pass
+
+        async def __call__(self):
+            for inv in self.invocations:
+                yield inv
+
+    class ConstantParamSource:
+        def partition(self, partition_index, total_partitions):
+            return self
+
+        def params(self):
+            return {}
+
+    @staticmethod
+    def context_managed(mock):
+        return TestBeforeEach.NoopContextManager(mock)
+
+    def setup_method(self, method):
+        runner.register_default_runners()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_before_each_runs_before_each_invocation_and_produces_no_extra_samples(self, es):
+        task_start = time.perf_counter()
+        es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
+
+        call_order = []
+
+        async def setup_fn(es, params):
+            call_order.append("setup")
+
+        async def main_fn(es, params):
+            call_order.append("main")
+
+        main_mock = mock.AsyncMock(side_effect=main_fn)
+        setup_mock = mock.AsyncMock(side_effect=setup_fn)
+
+        invocations = [
+            (0, metrics.SampleType.Warmup, 0.5, self.context_managed(main_mock), None),
+            (0, metrics.SampleType.Normal, 1.0, self.context_managed(main_mock), None),
+        ]
+        task = track.Task(
+            "test-task",
+            track.Operation("test-op", track.OperationType.Bulk.to_hyphenated_string()),
+            warmup_iterations=1,
+            iterations=1,
+            clients=1,
+        )
+        setup_op = track.Operation("setup-op", "clear-cache")
+        before_each = driver.BeforeEach(
+            operation=setup_op,
+            op_runner=self.context_managed(setup_mock),
+            param_source=self.ConstantParamSource(),
+        )
+        sampler = driver.Sampler(start_timestamp=task_start)
+        cancel = threading.Event()
+        complete = threading.Event()
+
+        execute_schedule = driver.AsyncExecutor(
+            client_id=0,
+            task=task,
+            schedule=self.SimpleScheduleHandle(invocations),
+            es=driver.EsClients({"default": es}),
+            sampler=sampler,
+            cancel=cancel,
+            complete=complete,
+            on_error=OnErrorBehavior.CONTINUE,
+            before_each=before_each,
+        )
+        await execute_schedule()
+
+        assert call_order == ["setup", "main", "setup", "main"]
+        assert len(sampler.samples) == 2
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_before_each_failure_with_abort_fails_task_and_skips_main_op(self, es):
+        task_start = time.perf_counter()
+        es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
+
+        main_called = []
+
+        async def main_fn(es, params):
+            main_called.append(True)
+
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=500,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+        setup_mock = mock.AsyncMock(
+            side_effect=elasticsearch.ApiError(message="setup failed", meta=error_meta, body="")
+        )
+        main_mock = mock.AsyncMock(side_effect=main_fn)
+
+        invocations = [
+            (0, metrics.SampleType.Normal, 1.0, self.context_managed(main_mock), None),
+        ]
+        task = track.Task(
+            "test-task",
+            track.Operation("test-op", track.OperationType.Bulk.to_hyphenated_string()),
+            iterations=1,
+            clients=1,
+        )
+        setup_op = track.Operation("setup-op", "clear-cache")
+        before_each = driver.BeforeEach(
+            operation=setup_op,
+            op_runner=self.context_managed(setup_mock),
+            param_source=self.ConstantParamSource(),
+        )
+        sampler = driver.Sampler(start_timestamp=task_start)
+        cancel = threading.Event()
+        complete = threading.Event()
+
+        execute_schedule = driver.AsyncExecutor(
+            client_id=0,
+            task=task,
+            schedule=self.SimpleScheduleHandle(invocations),
+            es=driver.EsClients({"default": es}),
+            sampler=sampler,
+            cancel=cancel,
+            complete=complete,
+            on_error=OnErrorBehavior.ABORT,
+            before_each=before_each,
+        )
+
+        with pytest.raises(exceptions.RallyError):
+            await execute_schedule()
+
+        assert main_called == [], "main op must not run after an aborting setup failure"
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_before_each_failure_with_continue_still_runs_main_op(self, es):
+        task_start = time.perf_counter()
+        es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
+
+        main_called = []
+
+        async def main_fn(es, params):
+            main_called.append(True)
+
+        setup_mock = mock.AsyncMock(return_value={"success": False, "error-description": "setup failed"})
+        main_mock = mock.AsyncMock(side_effect=main_fn)
+
+        invocations = [
+            (0, metrics.SampleType.Normal, 1.0, self.context_managed(main_mock), None),
+        ]
+        task = track.Task(
+            "test-task",
+            track.Operation("test-op", track.OperationType.Bulk.to_hyphenated_string()),
+            iterations=1,
+            clients=1,
+        )
+        setup_op = track.Operation("setup-op", "clear-cache")
+        before_each = driver.BeforeEach(
+            operation=setup_op,
+            op_runner=self.context_managed(setup_mock),
+            param_source=self.ConstantParamSource(),
+        )
+        sampler = driver.Sampler(start_timestamp=task_start)
+        cancel = threading.Event()
+        complete = threading.Event()
+
+        execute_schedule = driver.AsyncExecutor(
+            client_id=0,
+            task=task,
+            schedule=self.SimpleScheduleHandle(invocations),
+            es=driver.EsClients({"default": es}),
+            sampler=sampler,
+            cancel=cancel,
+            complete=complete,
+            on_error=OnErrorBehavior.CONTINUE,
+            before_each=before_each,
+        )
+        await execute_schedule()
+
+        assert main_called == [True], "main op must still run after a non-aborting setup failure"
+        assert len(sampler.samples) == 1
+
+
 class TestAsyncProfiler:
     @pytest.mark.asyncio
     async def test_profiler_is_a_transparent_wrapper(self):

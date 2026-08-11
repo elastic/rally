@@ -2224,6 +2224,29 @@ class TestServerlessTrackFilter:
         assert schedule[4].name == "cluster-stats"
         assert schedule[5].name == "load-posts"
 
+    def test_filters_task_whose_before_each_is_serverless_incompatible(self):
+        track_specification = {
+            "operations": [
+                {"name": "term-query", "operation-type": "search"},
+                # shrink-index is not supported on serverless
+                {"name": "shrink-before", "operation-type": "shrink-index"},
+            ],
+            "challenges": [
+                {
+                    "name": "default-challenge",
+                    "schedule": [
+                        {"operation": "term-query", "before-each": "shrink-before", "iterations": 1},
+                    ],
+                }
+            ],
+        }
+        reader = loader.TrackSpecificationReader()
+        full_track = reader("unittest", track_specification, "/mappings")
+        assert len(full_track.challenges[0].schedule) == 1
+
+        filtered_track = self.filter(full_track, serverless_mode=True, serverless_operator=False)
+        assert len(filtered_track.challenges[0].schedule) == 0
+
 
 # pylint: disable=too-many-public-methods
 class TestTrackSpecificationReader:
@@ -4525,6 +4548,125 @@ class TestTrackSpecificationReader:
         reader = loader.TrackSpecificationReader()
         with pytest.raises(loader.TrackSyntaxError, match=r"Operation 'match-all' specifies 'type'"):
             reader("unittest", track_specification, "/mappings")
+
+    def test_before_each_resolves_to_operation(self):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [
+                {"name": "term-query", "operation-type": "search"},
+                {"name": "clear-cache", "operation-type": "clear-cache"},
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "term-query",
+                        "before-each": "clear-cache",
+                        "iterations": 5,
+                    },
+                ],
+            },
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings")
+
+        task = resulting_track.challenges[0].schedule[0]
+        assert task.before_each is not None
+        assert task.before_each.name == "clear-cache"
+        assert task.before_each.type == "clear-cache"
+
+    def test_before_each_on_parallel_task_resolves_to_operation(self):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [
+                {"name": "term-query", "operation-type": "search"},
+                {"name": "clear-cache", "operation-type": "clear-cache"},
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "parallel": {
+                            "tasks": [
+                                {
+                                    "operation": "term-query",
+                                    "before-each": "clear-cache",
+                                    "iterations": 3,
+                                }
+                            ]
+                        }
+                    },
+                ],
+            },
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings")
+
+        parallel = resulting_track.challenges[0].schedule[0]
+        task = parallel.tasks[0]
+        assert task.before_each is not None
+        assert task.before_each.name == "clear-cache"
+
+    def test_before_each_unknown_operation_raises_error(self):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [
+                {"name": "term-query", "operation-type": "search"},
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "term-query",
+                        "before-each": "does-not-exist",
+                        "iterations": 5,
+                    },
+                ],
+            },
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"references unknown operation 'does-not-exist'"):
+            reader("unittest", track_specification, "/mappings")
+
+    def test_before_each_non_string_raises_error(self):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [
+                {"name": "term-query", "operation-type": "search"},
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": "term-query",
+                        "before-each": {"operation-type": "clear-cache"},
+                        "iterations": 5,
+                    },
+                ],
+            },
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"must be the name of an operation"):
+            reader("unittest", track_specification, "/mappings")
+
+    def test_no_before_each_leaves_attribute_none(self):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [
+                {"name": "term-query", "operation-type": "search"},
+            ],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {"operation": "term-query", "iterations": 5},
+                ],
+            },
+        }
+        reader = loader.TrackSpecificationReader()
+        resulting_track = reader("unittest", track_specification, "/mappings")
+
+        task = resulting_track.challenges[0].schedule[0]
+        assert task.before_each is None
 
 
 class TestTrackPluginReader:
