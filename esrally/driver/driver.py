@@ -1901,9 +1901,7 @@ class AsyncIoAdapter:
                     schedule = schedule_for(task_allocation, params_per_task[task])
                     es_single = EsClients({"default": es[cluster_name]})
                     before_each = (
-                        before_each_for(task_allocation, before_each_params_per_task[task])
-                        if task.before_each is not None
-                        else None
+                        before_each_for(task_allocation, before_each_params_per_task[task]) if task.before_each is not None else None
                     )
                     async_executor = AsyncExecutor(
                         client_id,
@@ -1937,11 +1935,7 @@ class AsyncIoAdapter:
                 if task.before_each is not None and task not in before_each_params_per_task:
                     before_each_params_per_task[task] = track.before_each_parameters(self.track, task)
                 schedule = schedule_for(task_allocation, params_per_task[task])
-                before_each = (
-                    before_each_for(task_allocation, before_each_params_per_task[task])
-                    if task.before_each is not None
-                    else None
-                )
+                before_each = before_each_for(task_allocation, before_each_params_per_task[task]) if task.before_each is not None else None
                 async_executor = AsyncExecutor(
                     client_id,
                     task,

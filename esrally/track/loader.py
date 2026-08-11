@@ -542,22 +542,22 @@ def before_each_parameters(t, task):
     return _params_for_operation(t, task.before_each, task.name)
 
 
+def _merge_corpora(param_source, corpora):
+    if hasattr(param_source, "corpora"):
+        for c in param_source.corpora:
+            # We might have the same corpus *but* they contain different doc sets. Therefore also need to union over doc sets.
+            corpora[c.name] = corpora.get(c.name, c).union(c)
+
+
 def used_corpora(t):
     corpora = {}
     if t.corpora:
         challenge = t.selected_challenge_or_default
         for task in challenge.schedule:
             for sub_task in task:
-                param_source = operation_parameters(t, sub_task)
-                if hasattr(param_source, "corpora"):
-                    for c in param_source.corpora:
-                        # We might have the same corpus *but* they contain different doc sets. Therefore also need to union over doc sets.
-                        corpora[c.name] = corpora.get(c.name, c).union(c)
+                _merge_corpora(operation_parameters(t, sub_task), corpora)
                 if sub_task.before_each is not None:
-                    before_each_param_source = before_each_parameters(t, sub_task)
-                    if hasattr(before_each_param_source, "corpora"):
-                        for c in before_each_param_source.corpora:
-                            corpora[c.name] = corpora.get(c.name, c).union(c)
+                    _merge_corpora(before_each_parameters(t, sub_task), corpora)
     return corpora.values()
 
 
@@ -1080,9 +1080,7 @@ class ServerlessFilterTrackProcessor(TrackProcessor):
             for task in challenge.schedule:
                 if isinstance(task, Parallel):
                     challenge.serverless_info.append(f"Treating parallel task in challenge [{challenge}] as public.")
-                elif self._is_filtered_task(task.operation) or (
-                    task.before_each is not None and self._is_filtered_task(task.before_each)
-                ):
+                elif self._is_filtered_task(task.operation) or (task.before_each is not None and self._is_filtered_task(task.before_each)):
                     tasks_to_remove.append(task)
             for task in tasks_to_remove:
                 challenge.remove_task(task)

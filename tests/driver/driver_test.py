@@ -2641,9 +2641,7 @@ class TestBeforeEach:
             duration=0.0,
             node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
         )
-        setup_mock = mock.AsyncMock(
-            side_effect=elasticsearch.ApiError(message="setup failed", meta=error_meta, body="")
-        )
+        setup_mock = mock.AsyncMock(side_effect=elasticsearch.ApiError(message="setup failed", meta=error_meta, body=""))
         main_mock = mock.AsyncMock(side_effect=main_fn)
 
         invocations = [
@@ -2730,6 +2728,80 @@ class TestBeforeEach:
 
         assert main_called == [True], "main op must still run after a non-aborting setup failure"
         assert len(sampler.samples) == 1
+
+    def test_before_each_for_partitions_param_source_and_injects_operation_type(self):
+        partition_calls = []
+
+        class SpyParamSource:
+            def partition(self, partition_index, total_partitions):
+                partition_calls.append((partition_index, total_partitions))
+                return self
+
+            def params(self):
+                return {"foo": "bar"}
+
+        setup_op = track.Operation("setup-op", "raw-request")
+        task = track.Task(
+            "test-task",
+            track.Operation("main-op", track.OperationType.Bulk.to_hyphenated_string()),
+            clients=8,
+            before_each=setup_op,
+        )
+        task_allocation = driver.TaskAllocation(task=task, client_index_in_task=3, global_client_index=3, total_clients=8)
+        before_each = driver.before_each_for(task_allocation, SpyParamSource())
+
+        assert partition_calls == [(3, 8)]
+        result = before_each.params()
+        assert result["foo"] == "bar"
+        assert result["operation-type"] == "raw-request"
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_before_each_does_not_inflate_unthrottled_latency(self, es):
+        task_start = time.perf_counter()
+        es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
+
+        setup_mock = mock.AsyncMock()
+        main_mock = mock.AsyncMock()
+
+        invocations = [
+            (0, metrics.SampleType.Normal, 1.0, self.context_managed(main_mock), None),
+            (0, metrics.SampleType.Normal, 1.0, self.context_managed(main_mock), None),
+        ]
+        task = track.Task(
+            "test-task",
+            track.Operation("test-op", track.OperationType.Bulk.to_hyphenated_string()),
+            iterations=2,
+            clients=1,
+        )
+        setup_op = track.Operation("setup-op", "raw-request")
+        before_each = driver.BeforeEach(
+            operation=setup_op,
+            op_runner=self.context_managed(setup_mock),
+            param_source=self.ConstantParamSource(),
+        )
+        sampler = driver.Sampler(start_timestamp=task_start)
+        cancel = threading.Event()
+        complete = threading.Event()
+
+        execute_schedule = driver.AsyncExecutor(
+            client_id=0,
+            task=task,
+            schedule=self.SimpleScheduleHandle(invocations),
+            es=driver.EsClients({"default": es}),
+            sampler=sampler,
+            cancel=cancel,
+            complete=complete,
+            on_error=OnErrorBehavior.CONTINUE,
+            before_each=before_each,
+        )
+        await execute_schedule()
+
+        assert len(sampler.samples) == 2
+        for sample in sampler.samples:
+            assert (
+                sample.latency == sample.service_time
+            ), f"unthrottled latency must equal service_time but got latency={sample.latency} service_time={sample.service_time}"
 
 
 class TestAsyncProfiler:

@@ -17,6 +17,7 @@
 
 import copy
 import dataclasses
+import json
 import os
 import random
 import re
@@ -26,6 +27,7 @@ import textwrap
 import urllib.error
 from unittest import mock
 
+import jsonschema
 import pytest
 
 from esrally import config, exceptions, paths
@@ -4773,6 +4775,47 @@ class TestTrackProcessorRegistry:
         ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         assert len(expected_processors) == len(actual_processors)
+
+
+class TestTrackSchemaBeforeEach:
+    """Verify that track-schema.json accepts and correctly types the before-each property."""
+
+    @staticmethod
+    def _load_schema():
+        schema_path = os.path.join(paths.rally_root(), "resources", "track-schema.json")
+        with open(schema_path, encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_schema_accepts_before_each_on_top_level_task(self):
+        schema = self._load_schema()
+        spec = {
+            "challenge": {
+                "name": "c",
+                "schedule": [{"operation": "bulk", "before-each": "clear-cache"}],
+            }
+        }
+        jsonschema.validate(spec, schema)
+
+    def test_schema_accepts_before_each_on_parallel_task(self):
+        schema = self._load_schema()
+        spec = {
+            "challenge": {
+                "name": "c",
+                "schedule": [{"parallel": {"tasks": [{"operation": "bulk", "before-each": "clear-cache"}]}}],
+            }
+        }
+        jsonschema.validate(spec, schema)
+
+    def test_schema_rejects_non_string_before_each(self):
+        schema = self._load_schema()
+        spec = {
+            "challenge": {
+                "name": "c",
+                "schedule": [{"operation": "bulk", "before-each": 123}],
+            }
+        }
+        with pytest.raises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(spec, schema)
 
 
 @dataclasses.dataclass

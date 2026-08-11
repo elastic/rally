@@ -473,8 +473,8 @@ The ``schedule`` element contains a list of tasks that are executed by Rally, i.
 
     {
       "operations": [
-        {"name": "term-query",   "operation-type": "search"},
-        {"name": "clear-cache",  "operation-type": "indices-clear-cache"}
+        {"name": "term-query",  "operation-type": "search"},
+        {"name": "clear-cache", "operation-type": "raw-request", "method": "POST", "path": "/_cache/clear"}
       ],
       "challenge": {
         "name": "default-challenge",
