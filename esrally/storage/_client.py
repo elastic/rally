@@ -31,6 +31,7 @@ from typing_extensions import Self
 from esrally import types
 from esrally.storage._adapter import (
     AdapterRegistry,
+    ClientUnavailableError,
     GetResponse,
     Head,
     ServiceUnavailableError,
@@ -237,7 +238,7 @@ class Client:
             - document_length: the document length of the file to transfer.
             - crc32c: the crc32c checksum of the file to transfer.
             - ranges: the portion of the file to transfer.
-        :raises ServiceUnavailableError: in case on temporary service failure.
+        :raises ServiceUnavailableError: in case of temporary service failure, once no more mirrors are left to try.
         """
         if check_head is None:
             resolve_head = None
@@ -265,6 +266,12 @@ class Client:
                 with self._lock:
                     # It corrects the maximum number of connections for this server.
                     wg.max_count = max(1, wg.count)
+                wg.done()
+                continue
+            except ClientUnavailableError as ex:
+                # Unlike ServiceUnavailableError, this does not indicate that the server is overwhelmed, so it
+                # does not reduce the number of concurrent connections allowed for it.
+                LOG.warning("client unavailable error received: url='%s' %s", url, ex)
                 wg.done()
                 continue
 

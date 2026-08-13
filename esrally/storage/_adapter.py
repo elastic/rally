@@ -38,6 +38,17 @@ class ServiceUnavailableError(Exception):
     """It is raised when an adapter refuses providing service for example because of too many requests"""
 
 
+class ClientUnavailableError(Exception):
+    """It is raised when an adapter cannot serve a request because of a local/client-side problem, for example
+    missing or invalid credentials, or being unable to reach the remote endpoint at all.
+
+    Unlike `ServiceUnavailableError`, which signals that the remote service itself is temporarily overwhelmed (and
+    is therefore met with a reduction of the number of concurrent connections to it), this error does not imply
+    anything about the remote service's capacity. `Client` still treats it as a reason to fail over to another
+    mirror (or the source URL), but without adjusting the connection count for the affected server.
+    """
+
+
 _HEAD_CHECK_IGNORE = frozenset(["url"])
 
 

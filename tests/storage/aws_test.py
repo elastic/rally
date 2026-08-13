@@ -28,7 +28,7 @@ import pytest
 from typing_extensions import Self
 
 from esrally.storage import Head, StorageConfig, rangeset
-from esrally.storage._adapter import ServiceUnavailableError
+from esrally.storage._adapter import ClientUnavailableError, ServiceUnavailableError
 from esrally.storage.aws import S3Adapter, S3Client, head_from_response
 from esrally.utils.cases import cases
 
@@ -208,33 +208,42 @@ def _client_error(code: str, status_code: int = 400, operation_name: str = "GetO
 @dataclasses.dataclass
 class TransientErrorCase:
     error: Exception
+    want_error: type[Exception] = ServiceUnavailableError
 
 
 @cases(
-    no_credentials=TransientErrorCase(botocore.exceptions.NoCredentialsError()),
-    endpoint_connection=TransientErrorCase(botocore.exceptions.EndpointConnectionError(endpoint_url=SOME_URL)),
-    throttling=TransientErrorCase(_client_error("SlowDown")),
-    internal_error=TransientErrorCase(_client_error("InternalError")),
-    server_error_status=TransientErrorCase(_client_error("SomeOtherCode", status_code=503)),
+    # Genuine transient failures of the S3 service itself: `Client` fails over to another mirror, and additionally
+    # reduces the number of concurrent connections allowed to this server, assuming it is overwhelmed.
+    throttling=TransientErrorCase(_client_error("SlowDown"), want_error=ServiceUnavailableError),
+    internal_error=TransientErrorCase(_client_error("InternalError"), want_error=ServiceUnavailableError),
+    server_error_status=TransientErrorCase(_client_error("SomeOtherCode", status_code=503), want_error=ServiceUnavailableError),
+    # Local/client-side connectivity or credentials problems: `Client` still fails over to another mirror, but does
+    # not assume the server itself is overwhelmed, so it leaves the connection count for this server untouched.
+    no_credentials=TransientErrorCase(botocore.exceptions.NoCredentialsError(), want_error=ClientUnavailableError),
+    endpoint_connection=TransientErrorCase(
+        botocore.exceptions.EndpointConnectionError(endpoint_url=SOME_URL), want_error=ClientUnavailableError
+    ),
 )
 def test_head_translates_transient_errors(case: TransientErrorCase, s3_client) -> None:
     s3_client.head_object.side_effect = case.error
     adapter = S3Adapter(s3_client=s3_client)
-    with pytest.raises(ServiceUnavailableError):
+    with pytest.raises(case.want_error):
         adapter.head(SOME_URL)
 
 
 @cases(
-    no_credentials=TransientErrorCase(botocore.exceptions.NoCredentialsError()),
-    endpoint_connection=TransientErrorCase(botocore.exceptions.EndpointConnectionError(endpoint_url=SOME_URL)),
-    throttling=TransientErrorCase(_client_error("SlowDown")),
-    internal_error=TransientErrorCase(_client_error("InternalError")),
-    server_error_status=TransientErrorCase(_client_error("SomeOtherCode", status_code=503)),
+    throttling=TransientErrorCase(_client_error("SlowDown"), want_error=ServiceUnavailableError),
+    internal_error=TransientErrorCase(_client_error("InternalError"), want_error=ServiceUnavailableError),
+    server_error_status=TransientErrorCase(_client_error("SomeOtherCode", status_code=503), want_error=ServiceUnavailableError),
+    no_credentials=TransientErrorCase(botocore.exceptions.NoCredentialsError(), want_error=ClientUnavailableError),
+    endpoint_connection=TransientErrorCase(
+        botocore.exceptions.EndpointConnectionError(endpoint_url=SOME_URL), want_error=ClientUnavailableError
+    ),
 )
 def test_get_translates_transient_errors(case: TransientErrorCase, s3_client) -> None:
     s3_client.get_object.side_effect = case.error
     adapter = S3Adapter(s3_client=s3_client)
-    with pytest.raises(ServiceUnavailableError):
+    with pytest.raises(case.want_error):
         adapter.get(SOME_URL)
 
 
@@ -329,6 +338,6 @@ def test_s3_client_creation_survives_credentials_warm_up_failure(monkeypatch) ->
 
     adapter = S3Adapter()
     # Warming up credentials must never prevent the client from being created: any persistent credentials problem
-    # will simply surface (and be translated to `ServiceUnavailableError`) on the first real request instead.
+    # will simply surface (and be translated to `ClientUnavailableError`) on the first real request instead.
     client = adapter._s3
     assert client is session.client.return_value

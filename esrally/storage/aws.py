@@ -30,7 +30,7 @@ from typing_extensions import Self
 
 from esrally import types
 from esrally.storage import Adapter, GetResponse, Head, StorageConfig
-from esrally.storage._adapter import ServiceUnavailableError
+from esrally.storage._adapter import ClientUnavailableError, ServiceUnavailableError
 from esrally.storage.http import (
     head_to_headers,
     parse_accept_ranges,
@@ -40,22 +40,17 @@ from esrally.storage.http import (
 
 LOG = logging.getLogger(__name__)
 
-# botocore error codes that represent a transient/retryable failure of the S3 service (as opposed to e.g. an
-# invalid request or a missing object). They are translated to `ServiceUnavailableError` so that `Client` can fail
-# over to another mirror (or the unauthenticated source URL) instead of aborting the whole transfer.
+# botocore error codes that represent a transient/retryable failure of the S3 service itself (as opposed to e.g. an
+# invalid request, a missing object, or a client-side connectivity/credentials problem). They are translated to
+# `ServiceUnavailableError` so that `Client` can fail over to another mirror (or the unauthenticated source URL)
+# instead of aborting the whole transfer. This list only contains error codes that are actually documented for the
+# S3 REST API, see https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html#RESTErrorResponses
 _RETRYABLE_CLIENT_ERROR_CODES = frozenset(
     {
         "InternalError",
         "RequestTimeout",
-        "RequestTimeoutException",
-        "PriorRequestNotComplete",
         "ServiceUnavailable",
         "SlowDown",
-        "Throttling",
-        "ThrottlingException",
-        "ThrottledException",
-        "RequestLimitExceeded",
-        "TooManyRequestsException",
     }
 )
 
@@ -95,7 +90,7 @@ class S3Adapter(Adapter):
         except botocore.exceptions.ClientError as ex:
             raise _translate_client_error(ex) from ex
         except (botocore.exceptions.NoCredentialsError, botocore.exceptions.EndpointConnectionError) as ex:
-            raise ServiceUnavailableError(str(ex)) from ex
+            raise ClientUnavailableError(str(ex)) from ex
         return head_from_response(url, res)
 
     def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
@@ -108,11 +103,14 @@ class S3Adapter(Adapter):
         except botocore.exceptions.ClientError as ex:
             raise _translate_client_error(ex) from ex
         except (botocore.exceptions.NoCredentialsError, botocore.exceptions.EndpointConnectionError) as ex:
-            # Getting credentials can intermittently fail when many threads are requesting them at the same time
-            # (for example while downloading many parts of the same file concurrently via the multipart transfer
-            # manager). It is treated as a transient failure so that `Client` can fail over to another mirror (or
-            # to the unauthenticated source URL) instead of aborting the whole transfer.
-            raise ServiceUnavailableError(str(ex)) from ex
+            # Resolving credentials can intermittently fail when many threads request them at the same time (for
+            # example while downloading many parts of the same file concurrently via the multipart transfer
+            # manager), and the remote endpoint can also be momentarily unreachable. Neither of these indicates
+            # that the S3 service itself is overwhelmed, so they are raised as `ClientUnavailableError` (rather
+            # than `ServiceUnavailableError`): `Client` still fails over to another mirror (or the unauthenticated
+            # source URL) instead of aborting the whole transfer, but without reducing the number of concurrent
+            # connections allowed to this server.
+            raise ClientUnavailableError(str(ex)) from ex
 
         body: StreamingBody | None = response.get("Body")
         if body is None:
@@ -131,7 +129,7 @@ class S3Adapter(Adapter):
                 with body:
                     yield from body.iter_chunks(self.chunk_size)
             except (botocore.exceptions.NoCredentialsError, botocore.exceptions.EndpointConnectionError) as ex:
-                raise ServiceUnavailableError(str(ex)) from ex
+                raise ClientUnavailableError(str(ex)) from ex
             except botocore.exceptions.ClientError as ex:
                 raise _translate_client_error(ex) from ex
 
