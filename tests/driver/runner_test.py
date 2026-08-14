@@ -24,6 +24,7 @@ import math
 import random
 import typing
 from unittest import mock
+from uuid import uuid4
 
 import elastic_transport
 import elasticsearch
@@ -404,6 +405,74 @@ class TestSelectiveJsonParser:
             "supporters": True,
         }
 
+    def test_parse_returns_only_found_props(self):
+        doc = self.doc_as_text(
+            {
+                "num_reduce_phases": 3,
+                "hits": {"total": {"value": 10}},
+                "_clusters": {"total": 2, "successful": 2},
+            }
+        )
+        found = runner.parse(
+            doc,
+            ["hits.total.value", "num_reduce_phases", "_clusters.total", "_clusters.successful", "nonexistent"],
+        )
+        assert found == {
+            "hits.total.value": 10,
+            "num_reduce_phases": 3,
+            "_clusters.total": 2,
+            "_clusters.successful": 2,
+        }
+        assert "nonexistent" not in found
+
+    def test_parse_missing_props_not_in_result(self):
+        doc = self.doc_as_text({"a": 1, "b": 2})
+        found = runner.parse(doc, ["a", "x", "y.z"])
+        assert found == {"a": 1}
+        assert "x" not in found
+        assert "y.z" not in found
+
+    def test_parse_with_cluster_details(self):
+        doc = self.doc_as_text(
+            {
+                "_clusters": {
+                    "total": 2,
+                    "details": {
+                        "c1": {
+                            "status": "successful",
+                            "indices": "idx1",
+                            "took": 5,
+                            "timed_out": False,
+                            "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                        },
+                        "c2": {
+                            "status": "successful",
+                            "indices": "idx2",
+                            "took": 10,
+                            "timed_out": False,
+                        },
+                    },
+                }
+            }
+        )
+        result = runner.parse(doc, ["_clusters.total"], with_cluster_details=True)
+        assert result["_clusters.total"] == 2
+        details = result["_clusters.details"]
+        assert isinstance(details, list)
+        assert len(details) == 2
+        c1 = next(d for d in details if d["name"] == "c1")
+        c2 = next(d for d in details if d["name"] == "c2")
+        assert c1["took"] == 5
+        assert c1["_shards"] == {"total": 1, "successful": 1, "skipped": 0, "failed": 0}
+        assert c2["took"] == 10
+        assert "_shards" not in c2
+
+    def test_parse_with_cluster_details_empty_when_absent(self):
+        doc = self.doc_as_text({"hits": {"total": {"value": 0}}})
+        result = runner.parse(doc, ["hits.total.value"], with_cluster_details=True)
+        assert result == {"hits.total.value": 0}
+        assert "_clusters.details" not in result
+
 
 def _build_bulk_body(*lines):
     return "".join(line + "\n" for line in lines)
@@ -556,7 +625,6 @@ class TestBulkIndexRunner:
                 "index_line",
             ),
             "action-metadata-present": False,
-            "type": "_doc",
             "index": "test1",
             "request-timeout": 3.0,
             "headers": {"x-test-id": "1234"},
@@ -580,7 +648,6 @@ class TestBulkIndexRunner:
         }
 
         es.bulk.assert_awaited_with(
-            doc_type="_doc",
             params={},
             body="index_line\nindex_line\nindex_line\n",
             headers={"x-test-id": "1234"},
@@ -591,48 +658,7 @@ class TestBulkIndexRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_bulk_index_success_without_metadata_with_doc_type(self, es):
-        bulk_response = {
-            "errors": False,
-            "took": 8,
-        }
-        es.bulk = mock.AsyncMock(
-            return_value=ApiResponse(body=io.BytesIO(json.dumps(bulk_response).encode()), meta=self.BULK_RESPONSE_META)
-        )
-        bulk = runner.BulkIndex()
-
-        bulk_params = {
-            "body": _build_bulk_body(
-                "index_line",
-                "index_line",
-                "index_line",
-            ),
-            "action-metadata-present": False,
-            "bulk-size": 3,
-            "unit": "docs",
-            "index": "test-index",
-            "type": "_doc",
-        }
-
-        result = await bulk(es, bulk_params)
-
-        assert result == {
-            "request-status": 200,
-            "max-doc-status": 200,
-            "took": 8,
-            "index": "test-index",
-            "weight": 3,
-            "unit": "docs",
-            "success": True,
-            "success-count": 3,
-            "error-count": 0,
-        }
-
-        es.bulk.assert_awaited_with(body=bulk_params["body"], index="test-index", doc_type="_doc", params={})
-
-    @mock.patch("elasticsearch.Elasticsearch")
-    @pytest.mark.asyncio
-    async def test_bulk_index_success_without_metadata_and_without_doc_type(self, es):
+    async def test_bulk_index_success_without_metadata(self, es):
         bulk_response = {
             "errors": False,
             "took": 8,
@@ -668,7 +694,7 @@ class TestBulkIndexRunner:
             "error-count": 0,
         }
 
-        es.bulk.assert_awaited_with(body=bulk_params["body"], index="test-index", doc_type=None, params={})
+        es.bulk.assert_awaited_with(body=bulk_params["body"], index="test-index", params={})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -1468,7 +1494,6 @@ class TestBulkIndexRunner:
             "body": _build_bulk_body("index_line"),
             "index": "test",
             "action-metadata-present": False,
-            "type": "_doc",
             "bulk-size": 1,
             "unit": "docs",
             "detailed-results": True,
@@ -1493,7 +1518,7 @@ class TestBulkIndexRunner:
             "total-document-size-bytes": 10,
         }
 
-        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "false"})
+        es.bulk.assert_awaited_with(index="test", body=bulk_params["body"], params={"refresh": "false"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -1511,7 +1536,6 @@ class TestBulkIndexRunner:
             "body": _build_bulk_body("index_line"),
             "index": "test",
             "action-metadata-present": False,
-            "type": "_doc",
             "bulk-size": 1,
             "unit": "docs",
             "detailed-results": True,
@@ -1536,7 +1560,7 @@ class TestBulkIndexRunner:
             "total-document-size-bytes": 10,
         }
 
-        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "true"})
+        es.bulk.assert_awaited_with(index="test", body=bulk_params["body"], params={"refresh": "true"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -1555,7 +1579,6 @@ class TestBulkIndexRunner:
             "body": _build_bulk_body("index_line"),
             "index": "test",
             "action-metadata-present": False,
-            "type": "_doc",
             "bulk-size": 1,
             "unit": "docs",
             "refresh": "wait_for",
@@ -1575,7 +1598,7 @@ class TestBulkIndexRunner:
             "error-count": 0,
         }
 
-        es.bulk.assert_awaited_with(doc_type="_doc", index="test", body=bulk_params["body"], params={"refresh": "wait_for"})
+        es.bulk.assert_awaited_with(index="test", body=bulk_params["body"], params={"refresh": "wait_for"})
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -1584,7 +1607,6 @@ class TestBulkIndexRunner:
             "body": _build_bulk_body("index_line"),
             "index": "test",
             "action-metadata-present": False,
-            "type": "_doc",
             "bulk-size": 1,
             "unit": "docs",
             "detailed-results": True,
@@ -2545,7 +2567,91 @@ class TestQueryRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_query_match_all_doc_type_fallback(self, es):
+    async def test_query_detailed_results_with_num_reduce_phases_and_clusters(self, es):
+        es.options.return_value = es
+        search_response = {
+            "took": 38,
+            "timed_out": False,
+            "num_reduce_phases": 22,
+            "_shards": {"total": 21, "successful": 21, "skipped": 0, "failed": 0},
+            "_clusters": {
+                "total": 21,
+                "successful": 21,
+                "skipped": 0,
+                "running": 0,
+                "partial": 0,
+                "failed": 0,
+                "details": {
+                    "_origin": {
+                        "status": "successful",
+                        "indices": "cps_scaling_test_origin_2026-01-25-1",
+                        "took": 31,
+                        "timed_out": False,
+                        "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                    },
+                    "remote_cluster_1": {
+                        "status": "successful",
+                        "indices": "cps_scaling_test_*_2026-01-25-1",
+                        "took": 1,
+                        "timed_out": False,
+                        "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+                    },
+                },
+            },
+            "hits": {
+                "total": {"value": 10000, "relation": "gte"},
+                "max_score": None,
+                "hits": [],
+            },
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        query_runner = runner.Query()
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert result["num_reduce_phases"] == 22
+        assert result["clusters"]["total"] == 21
+        assert result["clusters"]["successful"] == 21
+        assert result["clusters"]["skipped"] == 0
+        assert result["clusters"]["running"] == 0
+        assert result["clusters"]["partial"] == 0
+        assert result["clusters"]["failed"] == 0
+        assert isinstance(result["clusters"]["details"], list)
+        assert len(result["clusters"]["details"]) == 2
+        origin = next(d for d in result["clusters"]["details"] if d["name"] == "_origin")
+        remote = next(d for d in result["clusters"]["details"] if d["name"] == "remote_cluster_1")
+        assert origin == {
+            "name": "_origin",
+            "status": "successful",
+            "indices": "cps_scaling_test_origin_2026-01-25-1",
+            "took": 31,
+            "timed_out": False,
+            "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+        }
+        assert remote == {
+            "name": "remote_cluster_1",
+            "status": "successful",
+            "indices": "cps_scaling_test_*_2026-01-25-1",
+            "took": 1,
+            "timed_out": False,
+            "_shards": {"total": 1, "successful": 1, "skipped": 0, "failed": 0},
+        }
+        assert result["hits"] == 10000
+        assert result["took"] == 38
+        assert result["shards"] == {"total": 21, "successful": 21, "skipped": 0, "failed": 0}
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_detailed_results_without_optional_fields(self, es):
+        """When response has no num_reduce_phases or _clusters, result must not include those keys."""
         es.options.return_value = es
         search_response = {
             "timed_out": False,
@@ -2559,46 +2665,66 @@ class TestQueryRunner:
                 ],
             },
         }
-
         es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
 
         query_runner = runner.Query()
-
         params = {
             "operation-type": "search",
-            "index": "unittest",
-            "type": "type",
+            "index": "_all",
             "detailed-results": True,
-            "cache": None,
-            "body": {
-                "query": {
-                    "match_all": {},
-                },
-            },
+            "body": {"query": {"match_all": {}}},
         }
 
         async with query_runner:
             result = await query_runner(es, params)
 
-        assert result == {
-            "weight": 1,
-            "unit": "ops",
-            "success": True,
-            "hits": 2,
-            "hits_relation": "eq",
+        assert "num_reduce_phases" not in result
+        assert "clusters" not in result
+        assert result["hits"] == 2
+        assert result["took"] == 5
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_detailed_results_clusters_summary_only(self, es):
+        """When _clusters is present but details is empty or missing, result has clusters summary only."""
+        es.options.return_value = es
+        search_response = {
+            "took": 10,
             "timed_out": False,
-            "took": 5,
-            "shards": {"total": 808, "successful": 808, "skipped": 0, "failed": 0},
+            "_shards": {"total": 2, "successful": 2, "skipped": 0, "failed": 0},
+            "_clusters": {
+                "total": 2,
+                "successful": 2,
+                "skipped": 0,
+                "running": 0,
+                "partial": 0,
+                "failed": 0,
+            },
+            "hits": {"total": {"value": 0, "relation": "eq"}, "hits": []},
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        query_runner = runner.Query()
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "detailed-results": True,
+            "body": {"query": {"match_all": {}}},
         }
 
-        es.perform_request.assert_awaited_once_with(
-            method="GET",
-            path="/unittest/type/_search",
-            body=params["body"],
-            params={},
-            headers=None,
-        )
-        es.clear_scroll.assert_not_called()
+        async with query_runner:
+            result = await query_runner(es, params)
+
+        assert "clusters" in result
+        assert result["clusters"] == {
+            "total": 2,
+            "successful": 2,
+            "skipped": 0,
+            "running": 0,
+            "partial": 0,
+            "failed": 0,
+        }
+        assert "details" not in result["clusters"]
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
@@ -7676,6 +7802,174 @@ class TestComposite:
             assert "request_end" in timing["dependent_timing"]
             assert timing["dependent_timing"]["request_end"] > timing["dependent_timing"]["request_start"]
 
+    @pytest.mark.asyncio
+    async def test_executes_nested_composite_with_shared_context(self):
+        class FixedRequestContext:
+            def __enter__(self):
+                self.request_start = 1.0
+                self.request_end = 1.1
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        es = mock.Mock()
+        es.new_request_context = mock.Mock(side_effect=FixedRequestContext)
+        es.open_point_in_time = mock.AsyncMock(return_value={"id": "pit-id"})
+        es.close_point_in_time = mock.AsyncMock()
+
+        params = {
+            "requests": [
+                {
+                    "name": "parent-pit",
+                    "operation-type": "open-point-in-time",
+                    "index": "test-index",
+                },
+                {
+                    "operation-type": "composite",
+                    "requests": [
+                        {
+                            "operation-type": "close-point-in-time",
+                            "with-point-in-time-from": "parent-pit",
+                        }
+                    ],
+                },
+            ]
+        }
+
+        r = runner.Composite()
+        response = await r(es, params)
+
+        assert len(response["dependent_timing"]) == 2
+        assert response["dependent_timing"][0]["dependent_timing"]["operation-type"] == "open-point-in-time"
+        nested_response = response["dependent_timing"][1]["dependent_timing"]
+        assert len(nested_response) == 1
+        assert nested_response[0]["dependent_timing"]["operation-type"] == "close-point-in-time"
+        es.open_point_in_time.assert_awaited_once_with(index="test-index", params=None, keep_alive="1m")
+        es.close_point_in_time.assert_awaited_once_with(body={"id": "pit-id"}, params={}, headers=None)
+
+    @pytest.mark.asyncio
+    async def test_parallel_streams_dependent_timing_equals_longest_stream(self):
+        """Two streams each holding one search run concurrently: the effective total is max, not sum.
+
+        Simulated timing (both searches start at the same wall-clock instant):
+          search-1: request_start=0.0, request_end=0.1  → service_time=0.1
+          search-2: request_start=0.0, request_end=0.3  → service_time=0.3
+
+        Because they run concurrently the elapsed span is:
+          max(request_end) - min(request_start) = 0.3 - 0.0 = 0.3 = max(service_times)
+        NOT sum(service_times) = 0.4.
+        """
+
+        timing_values = [(0.0, 0.1), (0.0, 0.3)]
+        call_count = [0]
+
+        class SimulatedParallelContext:
+            def __enter__(self):
+                self.request_start, self.request_end = timing_values[call_count[0]]
+                call_count[0] += 1
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        search_response = io.BytesIO(json.dumps({"hits": {"total": {"value": 0, "relation": "eq"}, "hits": []}}).encode())
+        es = mock.Mock()
+        es.options.return_value = es
+        es.new_request_context = mock.Mock(side_effect=SimulatedParallelContext)
+        es.perform_request = mock.AsyncMock(return_value=search_response)
+
+        params = {
+            "requests": [
+                {
+                    "stream": [
+                        {"operation-type": "search", "name": "search-1", "index": "test", "body": {"query": {"match_all": {}}}},
+                    ]
+                },
+                {
+                    "stream": [
+                        {"operation-type": "search", "name": "search-2", "index": "test", "body": {"query": {"match_all": {}}}},
+                    ]
+                },
+            ]
+        }
+
+        r = runner.Composite()
+        response = await r(es, params)
+
+        timings = response["dependent_timing"]
+        assert len(timings) == 2
+        assert {t["dependent_timing"]["operation"] for t in timings} == {"search-1", "search-2"}
+
+        request_starts = [t["dependent_timing"]["request_start"] for t in timings]
+        request_ends = [t["dependent_timing"]["request_end"] for t in timings]
+        service_times = [t["dependent_timing"]["service_time"] for t in timings]
+
+        # The span from first start to last end is the true parallel elapsed time.
+        total_elapsed = max(request_ends) - min(request_starts)  # 0.3 - 0.0 = 0.3
+        assert total_elapsed == pytest.approx(max(service_times))  # 0.3 == max(0.1, 0.3)
+        assert total_elapsed != pytest.approx(sum(service_times))  # 0.3 != 0.4
+
+    @pytest.mark.asyncio
+    async def test_single_stream_sequential_searches_dependent_timing_equals_sum(self):
+        """One stream holding two searches runs them sequentially: the effective total is the sum, not the max.
+
+        Simulated timing (search-2 starts only after search-1 finishes):
+          search-1: request_start=0.0, request_end=0.1  → service_time=0.1
+          search-2: request_start=0.1, request_end=0.4  → service_time=0.3
+
+        Because they run sequentially the elapsed span is:
+          max(request_end) - min(request_start) = 0.4 - 0.0 = 0.4 = sum(service_times)
+        NOT max(service_times) = 0.3.
+        """
+
+        timing_values = [(0.0, 0.1), (0.1, 0.4)]
+        call_count = [0]
+
+        class SimulatedSequentialContext:
+            def __enter__(self):
+                self.request_start, self.request_end = timing_values[call_count[0]]
+                call_count[0] += 1
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        search_response = io.BytesIO(json.dumps({"hits": {"total": {"value": 0, "relation": "eq"}, "hits": []}}).encode())
+        es = mock.Mock()
+        es.options.return_value = es
+        es.new_request_context = mock.Mock(side_effect=SimulatedSequentialContext)
+        es.perform_request = mock.AsyncMock(return_value=search_response)
+
+        params = {
+            "requests": [
+                {
+                    "stream": [
+                        {"operation-type": "search", "name": "search-1", "index": "test", "body": {"query": {"match_all": {}}}},
+                        {"operation-type": "search", "name": "search-2", "index": "test", "body": {"query": {"match_all": {}}}},
+                    ]
+                }
+            ]
+        }
+
+        r = runner.Composite()
+        response = await r(es, params)
+
+        timings = response["dependent_timing"]
+        assert len(timings) == 2
+        # Sequential order is deterministic: search-1 runs first, search-2 second.
+        assert timings[0]["dependent_timing"]["operation"] == "search-1"
+        assert timings[1]["dependent_timing"]["operation"] == "search-2"
+
+        request_starts = [t["dependent_timing"]["request_start"] for t in timings]
+        request_ends = [t["dependent_timing"]["request_end"] for t in timings]
+        service_times = [t["dependent_timing"]["service_time"] for t in timings]
+
+        # The span from first start to last end is the true sequential elapsed time.
+        total_elapsed = max(request_ends) - min(request_starts)  # 0.4 - 0.0 = 0.4
+        assert total_elapsed == pytest.approx(sum(service_times))  # 0.4 == 0.1 + 0.3
+        assert total_elapsed != pytest.approx(max(service_times))  # 0.4 != 0.3
+
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
     async def test_limits_connections(self, es):
@@ -7715,6 +8009,55 @@ class TestComposite:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
+    async def test_nested_composite_reuses_parent_connection_limit(self, es):
+        class FixedRequestContext:
+            def __enter__(self):
+                self.request_start = 1.0
+                self.request_end = 1.1
+                return self
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        in_flight = 0
+        max_in_flight = 0
+        lock = asyncio.Lock()
+
+        async def perform_request(*args, **kwargs):
+            nonlocal in_flight, max_in_flight
+            async with lock:
+                in_flight += 1
+                max_in_flight = max(max_in_flight, in_flight)
+            await asyncio.sleep(0.1)
+            async with lock:
+                in_flight -= 1
+            return io.BytesIO(json.dumps({"hits": {"total": {"value": 0, "relation": "eq"}, "hits": []}}).encode())
+
+        es.options.return_value = es
+        es.new_request_context = mock.Mock(side_effect=FixedRequestContext)
+        es.perform_request = mock.AsyncMock(side_effect=perform_request)
+
+        params = {
+            "max-connections": 2,
+            "requests": [
+                {
+                    "operation-type": "composite",
+                    "requests": [
+                        {"stream": [{"operation-type": "search", "index": "test", "body": {"query": {"match_all": {}}}}]},
+                        {"stream": [{"operation-type": "search", "index": "test", "body": {"query": {"match_all": {}}}}]},
+                        {"stream": [{"operation-type": "search", "index": "test", "body": {"query": {"match_all": {}}}}]},
+                    ],
+                }
+            ],
+        }
+
+        r = runner.Composite()
+        await r(es, params)
+
+        assert max_in_flight == 2
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
     async def test_rejects_invalid_stream(self, es):
         # params contains a "streams" property (plural) but it should be "stream" (singular)
         params = {
@@ -7738,7 +8081,7 @@ class TestComposite:
             await r(es, params)
 
         assert exc.value.args[0] == (
-            "Unsupported operation-type [bulk]. Use one of [open-point-in-time, close-point-in-time, "
+            "Unsupported operation-type [bulk]. Use one of [composite, open-point-in-time, close-point-in-time, "
             "search, paginated-search, composite-agg, raw-request, sleep, submit-async-search, get-async-search, "
             "delete-async-search, field-caps]."
         )
@@ -8387,3 +8730,44 @@ class TestEsqlProfileRunner:
         assert result["node_reduction.logical_optimization.took_ms"] == 1.0
         assert result["node_reduction.physical_optimization.took_ms"] == 2.0
         assert result["node_reduction.reduction.took_ms"] == 0.5
+
+
+class TestEnrichPolicy:
+
+    @pytest.mark.asyncio
+    async def test_call(self):
+        policy_count = 5
+        policy_data = {uuid4().hex: mock.MagicMock() for _ in range(policy_count)}
+        params = {"policies": policy_data}
+        es = mock.AsyncMock()
+
+        await runner.EnrichPolicy()(es, params)
+
+        es.enrich.delete_policy.assert_has_awaits(
+            [mock.call(name=policy_name, ignore=[404]) for policy_name in policy_data], any_order=True
+        )
+        es.enrich.put_policy.assert_has_awaits(
+            [mock.call(name=policy, **req_params) for policy, req_params in policy_data.items()], any_order=True
+        )
+        es.indices.refresh.assert_awaited_once_with(index="_all")
+        es.enrich.execute_policy.assert_has_awaits(
+            [mock.call(name=policy_name, wait_for_completion=True) for policy_name in policy_data], any_order=True
+        )
+
+    @mock.patch("esrally.driver.runner.EnrichPolicy._execute_enrich_policy", new_callable=mock.AsyncMock)
+    @mock.patch("esrally.driver.runner.EnrichPolicy._refresh_indices", new_callable=mock.AsyncMock)
+    @mock.patch("esrally.driver.runner.EnrichPolicy._create_enrich_policy", new_callable=mock.AsyncMock)
+    @pytest.mark.asyncio
+    async def test_delete_is_false(self, create_mock, refresh_mock, exec_mock):
+        es = mock.AsyncMock()
+        params = {"policies": {uuid4().hex: {}}, "delete": False}
+
+        await runner.EnrichPolicy()(es, params)
+
+        es.enrich.delete_policy.assert_not_awaited()
+        create_mock.assert_awaited()
+        refresh_mock.assert_awaited()
+        exec_mock.assert_awaited()
+
+    def test_str(self):
+        assert str(runner.EnrichPolicy()) == "enrich-policy"

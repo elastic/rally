@@ -498,7 +498,7 @@ class TrackPreparationActor(actor.RallyActor):
         # load node-specific config to have correct paths available
         self.cfg = load_local_config(msg.config)
         # this instance of load_track occurs once per host, so install dependencies if necessary
-        load_track(self.cfg, install_dependencies=False)
+        load_track(self.cfg, install_dependencies=True)
         self.send(self.driver_actor, ReadyForWork())
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
@@ -579,6 +579,21 @@ class ClientContext:
     api_key: Optional[ApiKey] = None
 
 
+class EsClients(dict):
+    """
+    A cluster-name-to-client dict returned by create_es_clients().
+    Exposes a ``default`` property that returns the 'default' client, or the
+    first available client when no 'default' key is present (multi-cluster mode
+    with named clusters).
+    """
+
+    @property
+    def default(self):
+        if "default" in self:
+            return self["default"]
+        return next(iter(self.values()), None)
+
+
 class Driver:
     def __init__(self, driver_actor, config: types.Config, es_client_factory_class=client.EsClientFactory):
         """
@@ -625,25 +640,24 @@ class Driver:
         all_hosts = self.config.opts("client", "hosts").all_hosts
         distribution_version = self.config.opts("mechanic", "distribution.version", mandatory=False)
         distribution_flavor = self.config.opts("mechanic", "distribution.flavor", mandatory=False)
+        all_client_options = self.config.opts("client", "options").all_client_options
         es = {}
         for cluster_name, cluster_hosts in all_hosts.items():
-            all_client_options = self.config.opts("client", "options").all_client_options
             cluster_client_options = dict(all_client_options[cluster_name])
             # Use retries to avoid aborts on long living connections for telemetry devices
             cluster_client_options["retry_on_timeout"] = True
             es[cluster_name] = self.es_client_factory(
                 cluster_hosts, cluster_client_options, distribution_version=distribution_version, distribution_flavor=distribution_flavor
             ).create()
-        return es
+        return EsClients(es)
 
     def prepare_telemetry(self, es, enable, index_names, data_stream_names, build_hash, serverless_mode, serverless_operator):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
 
-        es_default = es["default"]
-        all_client_options = self.config.opts("client", "options").all_client_options
-        default_client_options = all_client_options.get("default", {})
+        es_default = es.default
+        default_client_options = self.config.opts("client", "options").default_or_first
 
         if enable:
             devices = [
@@ -676,7 +690,7 @@ class Driver:
         )
 
     def wait_for_rest_api(self, es):
-        es_default = es["default"]
+        es_default = es.default
         self.logger.info("Checking if REST API is available.")
         if client.wait_for_rest_layer(es_default, max_attempts=40):
             self.logger.info("REST API is available.")
@@ -686,14 +700,18 @@ class Driver:
 
     def retrieve_cluster_info(self, es):
         try:
-            return es["default"].info()
+            es_default = es.default
+            return es_default.info() if es_default else None
         except BaseException:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
     def retrieve_build_hash_from_nodes_info(self, es):
         try:
-            nodes_info = es["default"].nodes.info(filter_path="**.build_hash")
+            es_default = es.default
+            if not es_default:
+                return None
+            nodes_info = es_default.nodes.info(filter_path="**.build_hash")
             nodes = nodes_info["nodes"]
             # assumption: build hash is the same across all the nodes
             first_node_id = next(iter(nodes))
@@ -726,10 +744,11 @@ class Driver:
         )
 
         es_clients = self.create_es_clients()
-        self.default_sync_es_client = es_clients["default"]
+        self.default_sync_es_client = es_clients.default
 
         skip_rest_api_check = self.config.opts("mechanic", "skip.rest.api.check")
         uses_static_responses = self.config.opts("client", "options").uses_static_responses
+        multi_cluster = self.config.opts("driver", "multi.cluster", mandatory=False)
         serverless_mode = convert.to_bool(self.config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
         serverless_operator = convert.to_bool(self.config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
         build_hash = None
@@ -767,7 +786,7 @@ class Driver:
                 self.driver_actor.target_platform = target_platform
 
             # Determine target_auth_type from default client options
-            default_client_options = self.config.opts("client", "options").all_client_options.get("default", {})
+            default_client_options = self.config.opts("client", "options").default_or_first
             if default_client_options.get("api_key"):
                 self.driver_actor.target_auth_type = "api_key"
             elif default_client_options.get("basic_auth_user") or default_client_options.get("basic_auth"):
@@ -777,7 +796,7 @@ class Driver:
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
         self.prepare_telemetry(
             es_clients,
-            enable=not uses_static_responses,
+            enable=not uses_static_responses and not multi_cluster,
             index_names=self.track.index_names(),
             data_stream_names=self.track.data_stream_names(),
             build_hash=build_hash,
@@ -821,7 +840,7 @@ class Driver:
         if allocator.clients < 128:
             self.logger.debug("Allocation matrix:\n%s", "\n".join([str(a) for a in self.allocations]))
 
-        create_api_keys = self.config.opts("client", "options").all_client_options["default"].get("create_api_key_per_client", None)
+        create_api_keys = self.config.opts("client", "options").default_or_first.get("create_api_key_per_client", None)
         worker_assignments = calculate_worker_assignments(self.load_driver_hosts, allocator.clients)
         worker_id = 0
         for assignment in worker_assignments:
@@ -1052,6 +1071,20 @@ class SamplePostprocessor:
         self.throughput_calculator = ThroughputCalculator()
         self.downsample_factor = downsample_factor
 
+    def put_sample(self, sample, name, unit, meta_data):
+        self.metrics_store.put_value_cluster_level(
+            name=name,
+            value=convert.seconds_to_ms(getattr(sample, name)),
+            unit=unit,
+            task=sample.task.name,
+            operation=sample.operation_name,
+            operation_type=sample.operation_type,
+            sample_type=sample.sample_type,
+            absolute_time=sample.absolute_time,
+            relative_time=sample.relative_time,
+            meta_data=meta_data,
+        )
+
     def __call__(self, raw_samples):
         if len(raw_samples) == 0:
             return
@@ -1070,58 +1103,31 @@ class SamplePostprocessor:
                     sample.request_meta_data,
                     client_id_meta_data,
                 )
-
-                self.metrics_store.put_value_cluster_level(
-                    name="latency",
-                    value=convert.seconds_to_ms(sample.latency),
-                    unit="ms",
-                    task=sample.task.name,
-                    operation=sample.operation_name,
-                    operation_type=sample.operation_type,
-                    sample_type=sample.sample_type,
-                    absolute_time=sample.absolute_time,
-                    relative_time=sample.relative_time,
-                    meta_data=meta_data,
+                self.put_sample(
+                    sample,
+                    "latency",
+                    "ms",
+                    meta_data,
                 )
-
-                self.metrics_store.put_value_cluster_level(
-                    name="service_time",
-                    value=convert.seconds_to_ms(sample.service_time),
-                    unit="ms",
-                    task=sample.task.name,
-                    operation=sample.operation_name,
-                    operation_type=sample.operation_type,
-                    sample_type=sample.sample_type,
-                    absolute_time=sample.absolute_time,
-                    relative_time=sample.relative_time,
-                    meta_data=meta_data,
+                self.put_sample(
+                    sample,
+                    "service_time",
+                    "ms",
+                    meta_data,
                 )
-
-                self.metrics_store.put_value_cluster_level(
-                    name="processing_time",
-                    value=convert.seconds_to_ms(sample.processing_time),
-                    unit="ms",
-                    task=sample.task.name,
-                    operation=sample.operation_name,
-                    operation_type=sample.operation_type,
-                    sample_type=sample.sample_type,
-                    absolute_time=sample.absolute_time,
-                    relative_time=sample.relative_time,
-                    meta_data=meta_data,
+                self.put_sample(
+                    sample,
+                    "processing_time",
+                    "ms",
+                    meta_data,
                 )
 
                 for timing in sample.dependent_timings:
-                    self.metrics_store.put_value_cluster_level(
-                        name="service_time",
-                        value=convert.seconds_to_ms(timing.service_time),
-                        unit="ms",
-                        task=timing.task.name,
-                        operation=timing.operation_name,
-                        operation_type=timing.operation_type,
-                        sample_type=timing.sample_type,
-                        absolute_time=timing.absolute_time,
-                        relative_time=timing.relative_time,
-                        meta_data=self.merge(timing.request_meta_data, client_id_meta_data),
+                    self.put_sample(
+                        timing,
+                        "service_time",
+                        "ms",
+                        self.merge(timing.request_meta_data, client_id_meta_data),
                     )
 
         end = time.perf_counter()
@@ -1131,8 +1137,9 @@ class SamplePostprocessor:
         end = time.perf_counter()
         self.logger.debug("Calculating throughput took [%f] seconds.", (end - start))
         start = end
-        for task, samples in aggregates.items():
-            meta_data = self.merge(self.track_meta_data, self.challenge_meta_data, task.operation.meta_data, task.meta_data)
+        for (task, cluster_name), samples in aggregates.items():
+            cluster_meta = {"cluster": cluster_name} if cluster_name is not None else {}
+            meta_data = self.merge(self.track_meta_data, self.challenge_meta_data, task.operation.meta_data, task.meta_data, cluster_meta)
             for absolute_time, relative_time, sample_type, throughput, throughput_unit in samples:
                 self.metrics_store.put_value_cluster_level(
                     name="throughput",
@@ -1578,28 +1585,45 @@ class Sample:
     def dependent_timings(self):
         if self._dependent_timing:
             for t in self._dependent_timing:
-                timing = t.pop("dependent_timing")
-                meta_data = self._merge(self.request_meta_data, t)
-                yield Sample(
-                    self.client_id,
-                    timing["absolute_time"],
-                    timing["request_start"],
-                    self.task_start,
-                    self.task,
-                    self.sample_type,
-                    meta_data,
-                    0,
-                    timing["service_time"],
-                    0,
-                    0,
-                    self.total_ops,
-                    self.total_ops_unit,
-                    self.time_period,
-                    self.percent_completed,
-                    None,
-                    timing["operation"],
-                    timing["operation-type"],
-                )
+                if t:
+                    yield from self._dependent_sample(t, self.request_meta_data)
+
+    def _dependent_sample(self, dependent_timing, meta_data):
+        """Recursively flatten dependent timings while accumulating parent-level metadata."""
+        if not isinstance(dependent_timing, dict):
+            return
+        timing = dependent_timing.get("dependent_timing")
+        current_meta_data = self._merge(meta_data, self._metadata_without_dependent_timing(dependent_timing))
+
+        if isinstance(timing, dict):
+            yield Sample(
+                self.client_id,
+                timing["absolute_time"],
+                timing["request_start"],
+                self.task_start,
+                self.task,
+                self.sample_type,
+                current_meta_data,
+                0,
+                timing["service_time"],
+                0,
+                0,
+                self.total_ops,
+                self.total_ops_unit,
+                self.time_period,
+                self.percent_completed,
+                None,
+                timing["operation"],
+                timing["operation-type"],
+            )
+        elif timing:
+            for sub_timing in timing:
+                if sub_timing:
+                    yield from self._dependent_sample(sub_timing, current_meta_data)
+
+    def _metadata_without_dependent_timing(self, dependent_timing):
+        """Extract metadata fields, excluding the nested dependent timing payload."""
+        return {k: v for k, v in dependent_timing.items() if k != "dependent_timing"}
 
     def __repr__(self, *args, **kwargs):
         return (
@@ -1675,7 +1699,8 @@ class ThroughputCalculator:
 
     def calculate(self, samples, bucket_interval_secs=1):
         """
-        Calculates global throughput based on samples gathered from multiple load generators.
+            Calculates global throughput based on samples gathered from multiple load generators.
+            Samples are grouped by task, and in case of multi-cluster mode additionally by cluster.
 
         :param samples: A list containing all samples from all load generators.
         :param bucket_interval_secs: The bucket interval for aggregations.
@@ -1683,9 +1708,10 @@ class ThroughputCalculator:
         """
 
         samples_per_task = {}
-        # first we group all samples by task (operation).
+        # Group samples by (task, cluster_name) so multi-cluster throughput is calculated per cluster.
         for sample in samples:
-            k = sample.task
+            cluster_name = sample.request_meta_data.get("cluster") if sample.request_meta_data else None
+            k = (sample.task, cluster_name)
             if k not in samples_per_task:
                 samples_per_task[k] = []
             samples_per_task[k].append(sample)
@@ -1694,12 +1720,11 @@ class ThroughputCalculator:
         # with open("raw_samples_new.csv", "a") as sample_log:
         # print("client_id,absolute_time,relative_time,operation,sample_type,total_ops,time_period", file=sample_log)
         for k, v in samples_per_task.items():
-            task = k
-            if task not in global_throughput:
-                global_throughput[task] = []
+            if k not in global_throughput:
+                global_throughput[k] = []
             # sort all samples by time
-            if task in self.task_stats:
-                samples = itertools.chain(v, self.task_stats[task].unprocessed)
+            if k in self.task_stats:
+                samples = itertools.chain(v, self.task_stats[k].unprocessed)
             else:
                 samples = v
             current_samples = sorted(samples, key=lambda s: s.absolute_time)
@@ -1708,24 +1733,24 @@ class ThroughputCalculator:
             # only transform the values into the expected structure.
             first_sample = current_samples[0]
             if first_sample.throughput is None:
-                task_throughput = self.calculate_task_throughput(task, current_samples, bucket_interval_secs)
+                task_throughput = self.calculate_task_throughput(k, current_samples, bucket_interval_secs)
             else:
                 task_throughput = self.map_task_throughput(current_samples)
-            global_throughput[task].extend(task_throughput)
+            global_throughput[k].extend(task_throughput)
 
         return global_throughput
 
-    def calculate_task_throughput(self, task, current_samples, bucket_interval_secs):
+    def calculate_task_throughput(self, task_key, current_samples, bucket_interval_secs):
         task_throughput = []
 
-        if task not in self.task_stats:
+        if task_key not in self.task_stats:
             first_sample = current_samples[0]
-            self.task_stats[task] = ThroughputCalculator.TaskStats(
+            self.task_stats[task_key] = ThroughputCalculator.TaskStats(
                 bucket_interval=bucket_interval_secs,
                 sample_type=first_sample.sample_type,
                 start_time=first_sample.absolute_time - first_sample.time_period,
             )
-        current = self.task_stats[task]
+        current = self.task_stats[task_key]
         count = current.total_count
         last_sample = None
         for sample in current_samples:
@@ -1835,51 +1860,103 @@ class AsyncIoAdapter:
                     distribution_version=distribution_version,
                     distribution_flavor=distribution_flavor,
                 ).create_async(api_key=api_key, client_id=client_id)
-            return es
+            return EsClients(es)
 
         if self.assertions_enabled:
             self.logger.info("Task assertions enabled")
         runner.enable_assertions(self.assertions_enabled)
 
+        all_hosts = self.cfg.opts("client", "hosts").all_hosts
+        client_options = self.cfg.opts("client", "options")
+        distribution_version = self.cfg.opts("mechanic", "distribution.version", mandatory=False)
+        distribution_flavor = self.cfg.opts("mechanic", "distribution.flavor", mandatory=False)
+        all_client_options = client_options.all_client_options
+
         clients = []
-        awaitables = []
-        # A parameter source should only be created once per task - it is partitioned later on per client.
-        params_per_task = {}
         for client_id, task_allocation in self.task_allocations:
-            task = task_allocation.task
-            if task not in params_per_task:
-                param_source = track.operation_parameters(self.track, task)
-                params_per_task[task] = param_source
-            schedule = schedule_for(task_allocation, params_per_task[task])
             es = es_clients(
                 client_id,
-                self.cfg.opts("client", "hosts").all_hosts,
-                self.cfg.opts("client", "options"),
-                self.cfg.opts("mechanic", "distribution.version", mandatory=False),
-                self.cfg.opts("mechanic", "distribution.flavor", mandatory=False),
+                all_hosts,
+                all_client_options,
+                distribution_version=distribution_version,
+                distribution_flavor=distribution_flavor,
             )
             clients.append(es)
-            async_executor = AsyncExecutor(
-                client_id, task, schedule, es, self.sampler, self.cancel, self.complete, task.error_behavior(self.on_error)
-            )
-            final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
-            awaitables.append(final_executor())
+
         task_names = [t.task.task.name for t in self.task_allocations]
-        self.logger.info("Worker[%s] executing tasks: %s", self.parent_worker_id, task_names)
+
+        awaitables = []
+        if self.cfg.opts("driver", "multi.cluster", mandatory=False) and len(all_hosts) > 1:
+            # Multi-cluster: run all clusters in parallel for this step
+            for cluster_name in all_hosts:
+                params_per_task = {}
+                for (client_id, task_allocation), es in zip(self.task_allocations, clients):
+                    task = task_allocation.task
+                    if task not in params_per_task:
+                        param_source = track.operation_parameters(self.track, task)
+                        params_per_task[task] = param_source
+                    schedule = schedule_for(task_allocation, params_per_task[task])
+                    es_single = EsClients({"default": es[cluster_name]})
+                    async_executor = AsyncExecutor(
+                        client_id,
+                        task,
+                        schedule,
+                        es_single,
+                        self.sampler,
+                        self.cancel,
+                        self.complete,
+                        task.error_behavior(self.on_error),
+                        cluster_name=cluster_name,
+                    )
+                    final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
+                    awaitables.append(final_executor())
+            self.logger.info(
+                "Worker[%s] executing tasks %s against clusters [%s] in parallel",
+                self.parent_worker_id,
+                task_names,
+                ", ".join(all_hosts),
+            )
+        else:
+            # Single cluster: current behavior
+            params_per_task = {}
+            for (client_id, task_allocation), es in zip(self.task_allocations, clients):
+                task = task_allocation.task
+                if task not in params_per_task:
+                    param_source = track.operation_parameters(self.track, task)
+                    params_per_task[task] = param_source
+                schedule = schedule_for(task_allocation, params_per_task[task])
+                async_executor = AsyncExecutor(
+                    client_id,
+                    task,
+                    schedule,
+                    es,
+                    self.sampler,
+                    self.cancel,
+                    self.complete,
+                    task.error_behavior(self.on_error),
+                    cluster_name=None,
+                )
+                final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
+                awaitables.append(final_executor())
+            self.logger.info("Worker[%s] executing tasks: %s", self.parent_worker_id, task_names)
+
         run_start = time.perf_counter()
         try:
-            _ = await asyncio.gather(*awaitables)
+            await asyncio.gather(*awaitables)
         finally:
             run_end = time.perf_counter()
             self.logger.info(
-                "Worker[%s] finished executing tasks %s in %f seconds", self.parent_worker_id, task_names, (run_end - run_start)
+                "Worker[%s] finished executing tasks %s in %f seconds",
+                self.parent_worker_id,
+                task_names,
+                (run_end - run_start),
             )
             await asyncio.get_event_loop().shutdown_asyncgens()
             shutdown_asyncgens_end = time.perf_counter()
             self.logger.debug("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
             for c in clients:
-                for es in c.values():
-                    await es.close()
+                for conn in c.values():
+                    await conn.close()
             transport_close_end = time.perf_counter()
             self.logger.debug("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
 
@@ -1916,7 +1993,18 @@ class AsyncProfiler:
 
 
 class AsyncExecutor:
-    def __init__(self, client_id, task, schedule, es, sampler, cancel, complete, on_error: OnErrorBehavior):
+    def __init__(
+        self,
+        client_id,
+        task,
+        schedule,
+        es,
+        sampler,
+        cancel,
+        complete,
+        on_error: OnErrorBehavior,
+        cluster_name=None,
+    ):
         """
         Executes tasks according to the schedule for a given operation.
 
@@ -1927,6 +2015,7 @@ class AsyncExecutor:
         :param cancel: A shared boolean that indicates we need to cancel execution.
         :param complete: A shared boolean that indicates we need to prematurely complete execution.
         :param on_error: An Enum of type `OnErrorBehaviour` specifying how the load generator should behave on errors.
+        :param cluster_name: Optional name of the target cluster (for multi-cluster reporting).
         """
         self.client_id = client_id
         self.task = task
@@ -1937,6 +2026,7 @@ class AsyncExecutor:
         self.cancel = cancel
         self.complete = complete
         self.on_error = on_error
+        self.cluster_name = cluster_name
         self.logger = logging.getLogger(__name__)
 
     async def __call__(self, *args, **kwargs):
@@ -1970,7 +2060,8 @@ class AsyncExecutor:
                 absolute_processing_start = time.time()
                 processing_start = time.perf_counter()
                 self.schedule_handle.before_request(processing_start)
-                with self.es["default"].new_request_context() as request_context:
+                es_client = self.es.default
+                with es_client.new_request_context() as request_context:
                     total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
                     request_start = request_context.request_start
                     request_end = request_context.request_end
@@ -2010,11 +2101,14 @@ class AsyncExecutor:
                 else:
                     progress = percent_completed
 
+                sample_meta = dict(request_meta_data) if request_meta_data else {}
+                if self.cluster_name is not None:
+                    sample_meta["cluster"] = self.cluster_name
                 self.sampler.add(
                     self.task,
                     self.client_id,
                     sample_type,
-                    request_meta_data,
+                    sample_meta,
                     absolute_processing_start,
                     request_start,
                     latency,
@@ -2129,16 +2223,19 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
         # Some runners return a raw response, causing the 'error' property to be a string literal of the bytes/BytesIO object,
         # we should avoid bubbling that up
         # e.g. ApiError(413, '<_io.BytesIO object at 0xffffaf146a70>')
+        # errors="replace" so binary response bodies (e.g. OTLP ingest returns binary protobuf
+        # error frames) don't crash the driver with UnicodeDecodeError. Undecodable bytes become
+        # U+FFFD in the logged/recorded message.
         if isinstance(e.body, bytes):
             # could be an empty body
-            if error_body := e.body.decode("utf-8"):
+            if error_body := e.body.decode("utf-8", errors="replace"):
                 error_message = error_body
             else:
                 # to be consistent with an empty 'e.error'
                 error_message = str(None)
         elif isinstance(e.body, BytesIO):
             # could be an empty body
-            if error_body := e.body.read().decode("utf-8"):
+            if error_body := e.body.read().decode("utf-8", errors="replace"):
                 error_message = error_body
             else:
                 # to be consistent with an empty 'e.error'
@@ -2146,17 +2243,17 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
         # fallback to 'error' property if the body isn't bytes/BytesIO
         else:
             if isinstance(e.error, bytes):
-                error_message = e.error.decode("utf-8")
+                error_message = e.error.decode("utf-8", errors="replace")
             elif isinstance(e.error, BytesIO):
-                error_message = e.error.read().decode("utf-8")
+                error_message = e.error.read().decode("utf-8", errors="replace")
             else:
                 # if the 'error' is empty, we get back str(None)
                 error_message = e.error
 
         if isinstance(e.info, bytes):
-            error_info = e.info.decode("utf-8")
+            error_info = e.info.decode("utf-8", errors="replace")
         elif isinstance(e.info, BytesIO):
-            error_info = e.info.read().decode("utf-8")
+            error_info = e.info.read().decode("utf-8", errors="replace")
         else:
             error_info = e.info
 

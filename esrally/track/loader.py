@@ -197,6 +197,62 @@ def render_track(cfg: types.Config, build_flavor=None, serverless_operator=False
         print(rendered_json)
 
 
+def resolve_challenge_and_invoke_validators(t: track.Track, cfg: types.Config):
+    """
+    Resolve the challenge the same way ``race`` does and run registered validators.
+
+    Uses ``find_challenge_or_default`` so an omitted challenge name selects the track's
+    default challenge, and an unknown challenge name raises ``InvalidName``.
+
+    :return: The resolved challenge.
+    """
+    challenge_name = cfg.opts("track", "challenge.name", mandatory=False)
+    challenge = t.find_challenge_or_default(challenge_name)
+    if challenge is None:
+        raise exceptions.SystemSetupError(
+            "Track [{}] does not provide challenge [{}]. List the available tracks with {} list tracks.".format(
+                t.name, challenge_name, PROGRAM_NAME
+            )
+        )
+    track_params = cfg.opts("track", "params", mandatory=False, default_value={})
+    params.invoke_validators(challenge.name, track_params)
+    return challenge
+
+
+def validate_track(cfg: types.Config):
+    """
+    Load a track and run registered challenge validators without starting a race.
+
+    Intended as a fast, machine-friendly check for automation (e.g. fail before provisioning
+    a benchmark environment). Loads the track (Jinja rendering, schema checks, unused-parameter
+    checks, track plugins, and track dependency installation) and invokes validators for the
+    resolved challenge (explicit ``--challenge`` or the track's default). Does not download
+    corpora, provision nodes, or contact a cluster. Track repository git fetch/update may
+    still occur unless ``--offline`` is set.
+
+    Jinja rendering uses ``mechanic.distribution.flavor`` (default ``default``) and
+    ``driver.serverless.operator`` from the config — set via ``--build-flavor`` /
+    ``--serverless-operator`` on the CLI so serverless-conditioned tracks match ``race``.
+
+    Exit code 0 means the track loaded and any registered validators for the resolved
+    challenge succeeded. If no validators are registered for that challenge, exit code 0
+    still means success, but no custom parameter checks ran.
+    """
+    t = load_track(cfg, install_dependencies=True)
+    challenge = resolve_challenge_and_invoke_validators(t, cfg)
+    validator_count = params.registered_validator_count(challenge.name)
+    # Quiet by default: confirmation is suppressed unless the user passes --no-quiet.
+    if validator_count:
+        console.println(
+            f"Track parameters for challenge [{challenge.name}] are valid "
+            f"({validator_count} validator{'s' if validator_count != 1 else ''} ran)."
+        )
+    else:
+        console.println(
+            f"Track [{t.name}] challenge [{challenge.name}] loaded successfully; " f"no validators are registered for this challenge."
+        )
+
+
 def track_info(cfg: types.Config):
     def format_task(t, indent="", num="", suffix=""):
         msg = f"{indent}{num}{str(t)}"
@@ -276,7 +332,12 @@ def _load_single_track(cfg: types.Config, track_repository, track_name, install_
         tpr = TrackProcessorRegistry(cfg)
         if install_dependencies:
             _install_dependencies(current_track.dependencies)
-        has_plugins = load_track_plugins(cfg, track_name, register_track_processor=tpr.register_track_processor)
+        has_plugins = load_track_plugins(
+            cfg,
+            track_name,
+            register_track_processor=tpr.register_track_processor,
+            register_validator=params.register_validator,
+        )
         current_track.has_plugins = has_plugins
         for processor in tpr.processors:
             processor.on_after_load_track(current_track)
@@ -298,6 +359,7 @@ def load_track_plugins(
     register_scheduler=None,
     register_track_processor=None,
     force_update=False,
+    register_validator=None,
 ):
     """
     Loads plugins that are defined for the current track (as specified by the configuration).
@@ -309,12 +371,13 @@ def load_track_plugins(
     :param register_track_processor: An optional function where track processors can be registered.
     :param force_update: If set to ``True`` this ensures that the track is first updated from the remote repository.
                          Defaults to ``False``.
+    :param register_validator: An optional function where challenge validators can be registered.
     :return: True iff this track defines plugins and they have been loaded.
     """
     repo = track_repo(cfg, fetch=force_update, update=force_update)
     track_plugin_path = repo.track_dir(track_name)
     LOG.debug("Invoking plugin_reader with name [%s] resolved to path [%s]", track_name, track_plugin_path)
-    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor)
+    plugin_reader = TrackPluginReader(track_plugin_path, register_runner, register_scheduler, register_track_processor, register_validator)
 
     if plugin_reader.can_load():
         plugin_reader.load()
@@ -643,9 +706,9 @@ class DocumentSetPreparator:
     def has_expected_size(self, file_name, expected_size):
         return expected_size is None or os.path.getsize(file_name) == expected_size
 
-    def create_file_offset_table(self, document_file_path, expected_number_of_lines):
+    def create_file_offset_table(self, document_file_path, expected_number_of_lines, corpus_base_url=None):
         # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
-        lines_read = io.prepare_file_offset_table(document_file_path)
+        lines_read = io.prepare_file_offset_table(document_file_path, corpus_base_url)
         if lines_read and lines_read != expected_number_of_lines:
             io.remove_file_offset_table(document_file_path)
             raise exceptions.DataError(
@@ -702,7 +765,7 @@ class DocumentSetPreparator:
                         ) from None
                     raise
 
-        self.create_file_offset_table(doc_path, document_set.number_of_lines)
+        self.create_file_offset_table(doc_path, document_set.number_of_lines, document_set.base_url)
 
     def prepare_bundled_document_set(self, document_set, data_root):
         """
@@ -729,7 +792,7 @@ class DocumentSetPreparator:
         while True:
             if self.is_locally_available(doc_path):
                 if self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
-                    self.create_file_offset_table(doc_path, document_set.number_of_lines)
+                    self.create_file_offset_table(doc_path, document_set.number_of_lines, document_set.base_url)
                     return True
                 else:
                     raise exceptions.DataError(
@@ -1272,10 +1335,13 @@ class TrackPluginReader:
     Loads track plugins
     """
 
-    def __init__(self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None):
+    def __init__(
+        self, track_plugin_path, runner_registry=None, scheduler_registry=None, track_processor_registry=None, validator_registry=None
+    ):
         self.runner_registry = runner_registry
         self.scheduler_registry = scheduler_registry
         self.track_processor_registry = track_processor_registry
+        self.validator_registry = validator_registry
         self.loader = modules.ComponentLoader(root_path=track_plugin_path, component_entry_point="track")
 
     def can_load(self):
@@ -1309,6 +1375,10 @@ class TrackPluginReader:
     def register_track_processor(self, track_processor):
         if self.track_processor_registry:
             self.track_processor_registry(track_processor)
+
+    def register_validator(self, challenge_name, fn):
+        if self.validator_registry:
+            self.validator_registry(challenge_name, fn)
 
     @property
     def meta_data(self):
@@ -1419,7 +1489,13 @@ class TrackSpecificationReader:
         else:
             body = None
 
-        return track.Index(name=index_name, body=body, types=self._r(index_spec, "types", mandatory=False, default_value=[]))
+        if "types" in index_spec:
+            raise TrackSyntaxError(
+                f"Track index '{index_name}' specifies 'types', which is no longer supported by Rally "
+                "(document types were removed in Elasticsearch 7.0). Remove the 'types' key."
+            )
+
+        return track.Index(name=index_name, body=body)
 
     def _create_data_stream(self, data_stream_spec):
         return track.DataStream(name=self._r(data_stream_spec, "name"))
@@ -1492,7 +1568,6 @@ class TrackSpecificationReader:
             default_action_and_meta_data = self._r(corpus_spec, "includes-action-and-meta-data", mandatory=False, default_value=False)
             corpus_target_idx = None
             corpus_target_ds = None
-            corpus_target_type = None
 
             if len(indices) == 1:
                 corpus_target_idx = self._r(corpus_spec, "target-index", mandatory=False, default_value=indices[0].name)
@@ -1504,10 +1579,11 @@ class TrackSpecificationReader:
             elif len(data_streams) > 0:
                 corpus_target_ds = self._r(corpus_spec, "target-data-stream", mandatory=False)
 
-            if len(indices) == 1 and len(indices[0].types) == 1:
-                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False, default_value=indices[0].types[0])
-            elif len(indices) > 0:
-                corpus_target_type = self._r(corpus_spec, "target-type", mandatory=False)
+            if "target-type" in corpus_spec:
+                raise TrackSyntaxError(
+                    f"Track corpus '{name}' specifies 'target-type', which is no longer supported by Rally "
+                    "(document types were removed in Elasticsearch 7.0). Remove the 'target-type' key."
+                )
 
             for doc_spec in self._r(corpus_spec, "documents"):
                 base_url = self._r(doc_spec, "base-url", mandatory=False, default_value=default_base_url)
@@ -1529,13 +1605,15 @@ class TrackSpecificationReader:
                     includes_action_and_meta_data = self._r(
                         doc_spec, "includes-action-and-meta-data", mandatory=False, default_value=default_action_and_meta_data
                     )
+                    if "target-type" in doc_spec:
+                        raise TrackSyntaxError(
+                            f"Track document set '{docs}' in corpus '{name}' specifies 'target-type', which is no longer "
+                            "supported by Rally (document types were removed in Elasticsearch 7.0). Remove the 'target-type' key."
+                        )
                     if includes_action_and_meta_data:
                         target_idx = None
-                        target_type = None
                         target_ds = None
                     else:
-                        target_type = self._r(doc_spec, "target-type", mandatory=False, default_value=corpus_target_type, error_ctx=docs)
-
                         # require to be specified if we're using data streams and we have no default
                         target_ds = self._r(
                             doc_spec,
@@ -1547,9 +1625,6 @@ class TrackSpecificationReader:
                         if target_ds and len(indices) > 0:
                             # if indices are in use we error
                             raise TrackSyntaxError("target-data-stream cannot be used when using indices")
-
-                        if target_ds and target_type:
-                            raise TrackSyntaxError("target-type cannot be used when using data-streams")
 
                         # need an index if we're using indices and no meta-data are present and we don't have a default
                         target_idx = self._r(
@@ -1580,7 +1655,6 @@ class TrackSpecificationReader:
                         compressed_size_in_bytes=compressed_bytes,
                         uncompressed_size_in_bytes=uncompressed_bytes,
                         target_index=target_idx,
-                        target_type=target_type,
                         target_data_stream=target_ds,
                         meta_data=doc_meta_data,
                     )
@@ -1854,6 +1928,11 @@ class TrackSpecificationReader:
 
         try:
             op = track.OperationType.from_hyphenated_string(op_type_name)
+            if op in (track.OperationType.Search, track.OperationType.ScrollSearch) and "type" in params:
+                self._error(
+                    f"Operation '{op_name}' specifies 'type', which is no longer supported by Rally "
+                    "(document types were removed in Elasticsearch 7.0). Remove the 'type' parameter."
+                )
             if "include-in-reporting" not in params:
                 params["include-in-reporting"] = not op.admin_op
             LOG.debug("Using built-in operation type [%s] for operation [%s].", op_type_name, op_name)

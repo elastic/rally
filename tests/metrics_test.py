@@ -22,6 +22,8 @@ import json
 import logging
 import os
 import random
+import socket
+import sys
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -30,6 +32,8 @@ from unittest import mock
 import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
+import urllib3.connection
+from elastic_transport import NodeConfig
 
 from esrally import client, config, exceptions, metrics, paths, time, track
 from esrally.metrics import GlobalStatsCalculator
@@ -156,6 +160,9 @@ class TestEsClient:
         def __init__(self, hosts):
             self.transport = TestEsClient.TransportMock(hosts)
 
+        def options(self, **kwargs):
+            return self
+
     @pytest.mark.parametrize("password_configuration", [None, "config", "environment"])
     def test_config_opts_parsing_basic(self, password_configuration, monkeypatch):
         cfg = config.Config()
@@ -201,6 +208,7 @@ class TestEsClient:
             "basic_auth_user": _datastore_user,
             "basic_auth_password": _datastore_password,
             "verify_certs": _datastore_verify_certs,
+            "node_class": metrics.KeepaliveUrllib3HttpNode,
         }
 
         client_factory.assert_called_with(
@@ -251,6 +259,7 @@ class TestEsClient:
             "timeout": 120,
             "verify_certs": _datastore_verify_certs,
             "api_key": _datastore_apikey,
+            "node_class": metrics.KeepaliveUrllib3HttpNode,
         }
 
         client_factory.assert_called_with(
@@ -439,10 +448,10 @@ class TestEsClient:
             BulkIndexError(bulk_index_errors),
         ]
 
-        max_retry = 10
+        max_retry = 3
 
-        # The sec to sleep for 10 transport errors is
-        # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
+        # Sleep slots for 3 retries: [1, 2, 4] ~> 7s total.
+        # Reduced from 10 to prevent blocking the Thespian actor event loop for ~39 minutes.
         sleep_slots = [float(2**i) for i in range(0, max_retry)]
 
         # we want deterministic timings to assess logging statements
@@ -565,6 +574,128 @@ class TestEsClient:
             match=(r"Unretryable error encountered when sending metrics to remote metrics store: \[version_conflict_engine_exception\]"),
         ):
             client.guarded(raise_bulk_index_error)
+
+    @mock.patch("random.random")
+    @mock.patch("esrally.time.sleep")
+    def test_bulk_index_error_retryable_via_create_key(self, mocked_sleep, mocked_random):
+        # When data streams are in use, Elasticsearch structures bulk errors under "create",
+        # not "index". A retryable status (429) must still be retried, not treated as fatal.
+        mocked_random.return_value = 0
+
+        bulk_index_errors = [
+            {
+                "create": {
+                    "_index": "rally-metrics-v1",
+                    "_id": None,
+                    "status": 429,
+                    "error": {"type": "circuit_breaking_exception", "reason": "Data too large"},
+                }
+            }
+        ]
+
+        call_count = 0
+
+        def raise_then_succeed():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise elasticsearch.helpers.BulkIndexError("1 document(s) failed to index", bulk_index_errors)
+
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        client.guarded(raise_then_succeed)
+        assert call_count == 2
+        mocked_sleep.assert_called_once_with(1)
+
+    def test_bulk_index_error_unretryable_via_create_key(self):
+        # An unretryable error under "create" must raise RallyError immediately.
+        bulk_index_errors = [
+            {
+                "create": {
+                    "_index": "rally-metrics-v1",
+                    "_id": None,
+                    "status": 409,
+                    "error": {"type": "version_conflict_engine_exception"},
+                }
+            }
+        ]
+
+        def raise_bulk_index_error():
+            raise elasticsearch.helpers.BulkIndexError("1 document(s) failed to index", bulk_index_errors)
+
+        client = metrics.EsClient(self.ClientMock([{"host": "127.0.0.1", "port": "9243"}]))
+        with pytest.raises(
+            exceptions.RallyError,
+            match=r"Unretryable error encountered when sending metrics to remote metrics store: \[version_conflict_engine_exception\]",
+        ):
+            client.guarded(raise_bulk_index_error)
+
+
+class TestKeepaliveUrllib3HttpNode:
+    """Tests for the TCP keepalive node subclass."""
+
+    def _make_node(self, monkeypatch, conn_kw=None):
+        """Return a KeepaliveUrllib3HttpNode with a mocked pool, bypassing real network setup."""
+        pool = mock.MagicMock()
+        pool.conn_kw = conn_kw if conn_kw is not None else {}
+
+        def fake_urllib3_init(self, config):
+            self.pool = pool
+
+        monkeypatch.setattr(metrics.Urllib3HttpNode, "__init__", fake_urllib3_init)
+        return metrics.KeepaliveUrllib3HttpNode(config=None)
+
+    def test_enables_so_keepalive(self, monkeypatch):
+        node = self._make_node(monkeypatch)
+        assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
+
+    def test_preserves_existing_socket_options(self, monkeypatch):
+        sentinel = (socket.IPPROTO_TCP, 200, 42)
+        node = self._make_node(monkeypatch, conn_kw={"socket_options": [sentinel]})
+        assert sentinel in node.pool.conn_kw["socket_options"]
+        assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
+
+    def test_does_not_mutate_original_socket_options_list(self, monkeypatch):
+        # Pass the original list object directly (no copy) so mutation is detectable.
+        original = []
+        node = self._make_node(monkeypatch, conn_kw={"socket_options": original})
+        assert original == []  # the production code must not mutate the original list in-place
+        assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
+
+    def test_includes_tcp_nodelay_from_urllib3_default(self, monkeypatch):
+        # When conn_kw starts without socket_options the implementation must seed from
+        # urllib3's default (which carries TCP_NODELAY) before appending keepalive opts.
+        node = self._make_node(monkeypatch, conn_kw={})
+        opts = node.pool.conn_kw["socket_options"]
+        for default_opt in urllib3.connection.HTTPConnection.default_socket_options:
+            assert default_opt in opts, f"Expected urllib3 default socket option {default_opt} to be preserved"
+
+    def test_platform_specific_keepalive_options(self, monkeypatch):
+        node = self._make_node(monkeypatch)
+        opts = node.pool.conn_kw["socket_options"]
+        if sys.platform == "linux" and hasattr(socket, "TCP_KEEPIDLE"):
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60) in opts
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10) in opts
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6) in opts
+        elif sys.platform == "darwin" and hasattr(socket, "TCP_KEEPALIVE"):
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60) in opts
+
+    def test_socket_options_applied_to_real_connection(self):
+        # Verify urllib3 actually applies conn_kw["socket_options"] to a real socket.
+        listener = socket.socket()
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        conn = None
+        try:
+            node = metrics.KeepaliveUrllib3HttpNode(NodeConfig(scheme="http", host="127.0.0.1", port=port))
+            conn = node.pool._new_conn()
+            conn.connect()
+            assert conn.sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE) != 0
+        finally:
+            if conn is not None:
+                conn.close()
+            listener.close()
 
 
 class TestIndexTemplateProvider:
@@ -712,6 +843,15 @@ class TestComponentTemplateProvider:
         custom_tmpl = json.loads(components[custom_key])
         assert custom_tmpl["template"] == {}
 
+    def test_component_template_structure_serverless(self):
+        provider = self._make_provider()
+        for store_name in ["metrics", "races", "results"]:
+            es_store_type = metrics.EsStoreType[store_name]
+            components = json.loads(provider.get_template(es_store_type, include_ilm=False))
+            versioned_name = f"{es_store_type.index_prefix}{es_store_type.data_stream_version}"
+            main_tmpl = json.loads(components[versioned_name])
+            assert "lifecycle" not in main_tmpl["template"]["settings"]["index"]
+
     def test_shard_settings_ignored_for_component_templates(self):
         provider = self._make_provider(number_of_shards=3, number_of_replicas=2)
 
@@ -750,6 +890,7 @@ class TestIndexHandler:
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
         self.client = mock.create_autospec(metrics.EsClient)
+        self.client.is_serverless = False
 
     def test_data_stream_template(self):
         self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", True)
@@ -971,6 +1112,30 @@ class TestIndexHandler:
             expect_get_template=case.expect_get_template,
             expect_put_template=case.expect_put_template,
         )
+
+    def test_ensure_index_template_data_stream_serverless(self):
+        self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", True)
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.overwrite_existing_templates", False)
+        self.client.is_serverless = True
+
+        handler = metrics.IndexHandler(self.cfg, self.client, metrics.EsStoreType.metrics)
+        self.client.component_template_exists.return_value = False
+        self.client.index_template_exists.return_value = False
+
+        handler.ensure_index_template(create=True)
+
+        self.client.get_lifecycle.assert_not_called()
+        self.client.put_lifecycle.assert_not_called()
+
+        # component template should be created without lifecycle settings
+        assert self.client.put_component_template.call_count == 2
+        for call_args in self.client.put_component_template.call_args_list:
+            name, tmpl = call_args.args
+            if metrics.ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX not in name:
+                tmpl_body = json.loads(tmpl)
+                assert "lifecycle" not in tmpl_body["template"]["settings"]["index"]
+
+        self._assert_index_template_calls(True, metrics.EsStoreType.metrics, expect_get_template=False, expect_put_template=True)
 
     @cases.cases(
         fresh_create=DateBasedEnsureTemplateCase(),
@@ -1754,6 +1919,183 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         )
         return actual_error_rate
 
+    def test_flush_snapshots_docs_before_bulk_index(self):
+        # flush() must snapshot and reset self._docs before calling bulk_index so that
+        # docs added concurrently by background sampler threads land in the next flush,
+        # not in the current one where they would be sent without _op_type="create".
+        ms, es_mock = self._make_metrics_store(use_data_streams=True)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        doc_before = {"name": "before"}
+        doc_during = {"name": "during"}
+        ms._add(doc_before)
+
+        captured_items = []
+
+        def bulk_index_side_effect(*, index, items, use_data_streams):
+            # Simulate a background thread appending during bulk_index.
+            ms._add(doc_during)
+            captured_items.extend(items)
+
+        es_mock.bulk_index.side_effect = bulk_index_side_effect
+        ms.flush(refresh=False)
+
+        # Only doc_before should have been sent in this flush.
+        assert captured_items == [doc_before]
+        # doc_during must be buffered for the next flush, not lost.
+        assert ms._docs == [doc_during]
+
+        # A second flush sends doc_during.
+        es_mock.bulk_index.side_effect = None
+        ms.flush(refresh=False)
+        es_mock.bulk_index.assert_called_with(
+            index=ms._index_handler.index_name(self.RACE_TIMESTAMP),
+            items=[doc_during],
+            use_data_streams=True,
+        )
+
+    # ------------------------------------------------------------------ #
+    #  flush() error-path tests                                           #
+    # ------------------------------------------------------------------ #
+
+    def test_flush_requeues_docs_on_transient_error(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        doc = {"name": "metric"}
+        ms._add(doc)
+        es_mock.bulk_index.side_effect = exceptions.RallyError("connection failed")
+        es_mock.refresh.reset_mock()  # ignore the refresh issued by open()
+
+        ms.flush()  # must not raise
+
+        assert ms._flush_consecutive_failures == 1
+        assert ms._docs == [doc]
+        ms.logger.warning.assert_called_once()
+        es_mock.refresh.assert_not_called()  # nothing was indexed, so no refresh
+
+    def test_flush_increments_counter_across_cycles(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        es_mock.bulk_index.side_effect = exceptions.RallyError("timeout")
+        for i in range(1, 4):
+            ms._add({"name": f"doc{i}"})
+            ms.flush()
+            assert ms._flush_consecutive_failures == i
+
+    def test_flush_raises_after_max_consecutive_failures(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        original = exceptions.RallyError("unreachable")
+        es_mock.bulk_index.side_effect = original
+        ms._flush_consecutive_failures = metrics.EsMetricsStore._MAX_FLUSH_FAILURES - 1
+        ms._add({"name": "doc"})
+
+        with pytest.raises(exceptions.RallyError) as exc_info:
+            ms.flush()
+
+        # Context is in the exception; the cause is chained for both tracebacks and full_message.
+        assert "consecutive flush failures" in str(exc_info.value)
+        assert exc_info.value.__cause__ is original
+        assert exc_info.value.cause is original
+        assert "unreachable" in exc_info.value.full_message
+        assert ms._flush_consecutive_failures == metrics.EsMetricsStore._MAX_FLUSH_FAILURES
+
+    def test_flush_resets_counter_on_empty_cycle(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._flush_consecutive_failures = 7
+        # No docs added — quiet cycle.
+        ms.flush()
+
+        assert ms._flush_consecutive_failures == 0
+        es_mock.bulk_index.assert_not_called()
+
+    def test_flush_resets_counter_on_success(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._flush_consecutive_failures = 7
+        ms._add({"name": "doc"})
+        es_mock.bulk_index.side_effect = None
+        es_mock.refresh.reset_mock()  # ignore the refresh issued by open()
+
+        ms.flush()
+
+        assert ms._flush_consecutive_failures == 0
+        es_mock.refresh.assert_called_once()  # indexed docs are refreshed
+
+    def test_flush_reraises_system_setup_error_immediately(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        es_mock.bulk_index.side_effect = exceptions.SystemSetupError("auth failed")
+
+        with pytest.raises(exceptions.SystemSetupError):
+            ms.flush()
+
+        # Docs must not be re-queued — a config error is not transient.
+        assert ms._docs == []
+
+    def test_flush_closing_raises_and_chains_error(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        original = exceptions.RallyError("gone")
+        es_mock.bulk_index.side_effect = original
+
+        # On close there is no next cycle, so the failure must surface rather than be dropped.
+        with pytest.raises(exceptions.RallyError) as exc_info:
+            ms.flush(closing=True)
+
+        assert "on close" in str(exc_info.value)
+        assert exc_info.value.__cause__ is original
+        assert exc_info.value.cause is original
+        assert "gone" in exc_info.value.full_message
+        # Closing raises before the counter increment, so it is left untouched.
+        assert ms._flush_consecutive_failures == 0
+
+    def test_flush_closing_without_docs_is_noop(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        # A normal close with an already-drained buffer must not raise or hit the store.
+        ms.flush(closing=True)
+
+        es_mock.bulk_index.assert_not_called()
+
+    def test_flush_closing_reraises_system_setup_error_unwrapped(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        original = exceptions.SystemSetupError("auth failed")
+        es_mock.bulk_index.side_effect = original
+
+        # A config/auth error must propagate as-is, not be wrapped in the "on close" error.
+        with pytest.raises(exceptions.SystemSetupError) as exc_info:
+            ms.flush(closing=True)
+
+        assert exc_info.value is original
+
+    def test_flush_refresh_failure_is_warned_not_raised(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        es_mock.bulk_index.side_effect = None
+        es_mock.refresh.side_effect = exceptions.RallyError("refresh timed out")
+
+        ms.flush()  # must not raise
+
+        ms.logger.warning.assert_called_once()
+        assert ms._flush_consecutive_failures == 0  # bulk succeeded, counter stays at 0
+
 
 class TestEsRaceStore:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
@@ -1875,7 +2217,7 @@ class TestEsRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -1923,6 +2265,7 @@ class TestEsRaceStore:
             "race-timestamp": "20160131T000000Z",
             "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
             "pipeline": "from-sources",
+            "multi-cluster": False,
             "user-tags": {"os": "Linux"},
             "track": "unittest",
             "track-params": {"shard-count": 3},
@@ -1975,7 +2318,7 @@ class TestEsRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2044,7 +2387,7 @@ class TestEsRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2233,7 +2576,7 @@ class TestEsResultsStore:
 
         t = track.Track(
             name="unittest-track",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
             meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"},
         )
@@ -2382,7 +2725,7 @@ class TestEsResultsStore:
 
         t = track.Track(
             name="unittest-track",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, meta_data={"saturation": "70% saturated"}, schedule=schedule)],
             meta_data={"track-type": "saturation-degree", "saturation": "oversaturation"},
         )
@@ -2809,7 +3152,7 @@ class TestFileRaceStore:
 
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True, schedule=schedule)],
         )
 
@@ -2862,7 +3205,7 @@ class TestFileRaceStore:
     def test_filter_race(self):
         t = track.Track(
             name="unittest",
-            indices=[track.Index(name="tests", types=["_doc"])],
+            indices=[track.Index(name="tests")],
             challenges=[track.Challenge(name="index", default=True)],
         )
 

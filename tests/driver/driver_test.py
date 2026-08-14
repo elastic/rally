@@ -16,6 +16,7 @@
 # under the License.
 
 import collections
+import copy
 import io
 import threading
 import time
@@ -59,12 +60,46 @@ class DriverTestParamSource:
         return self._params
 
 
+class TestEsClients:
+    def test_returns_default_client(self):
+        default_client = object()
+        clients = driver.EsClients({"other": object(), "default": default_client})
+
+        assert clients.default is default_client
+
+    def test_returns_first_client_when_default_is_missing(self):
+        first_client = object()
+        clients = driver.EsClients({"first": first_client, "second": object()})
+
+        assert clients.default is first_client
+
+    def test_returns_none_when_empty(self):
+        assert driver.EsClients().default is None
+
+    def test_shallow_copy_can_be_mutated_without_changing_original(self):
+        local_client = object()
+        remote_client = object()
+        clients = driver.EsClients({"local": local_client, "remote": remote_client})
+
+        remaining_clients = copy.copy(clients)
+
+        assert remaining_clients.pop("local") is local_client
+        assert remaining_clients == {"remote": remote_client}
+        assert clients == {"local": local_client, "remote": remote_client}
+
+
 class TestDriver:
     class Holder:
         def __init__(self, all_hosts=None, all_client_options=None):
             self.all_hosts = all_hosts
             self.all_client_options = all_client_options
             self.uses_static_responses = False
+
+        @property
+        def default_or_first(self):
+            if not self.all_client_options:
+                return {}
+            return self.all_client_options.get("default") or next(iter(self.all_client_options.values()), {})
 
     class StaticClientFactory:
         PATCHER = None
@@ -217,6 +252,15 @@ class TestDriver:
             "tagline": "You Know, for Search",
         }
 
+    def test_telemetry_disabled_for_multi_cluster(self):
+        self.cfg.add(config.Scope.applicationOverride, "driver", "multi.cluster", True)
+
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        d.prepare_benchmark(t=self.track)
+
+        assert d.telemetry.devices == []
+
     def test_assign_drivers_round_robin(self):
         worker_id = [0, 1, 2, 3]
         driver_actor = self.create_test_driver_actor()
@@ -349,6 +393,31 @@ class TestDriver:
         )
         # Were the right API keys deleted?
         delete.assert_called_once_with(d.default_sync_es_client, d.generated_api_key_ids)
+
+
+class TestTrackPreparationActor:
+    @mock.patch("esrally.actor.log.post_configure_actor_logging")
+    @mock.patch("esrally.driver.driver.load_track")
+    @mock.patch("esrally.driver.driver.load_local_config")
+    def test_bootstrap_installs_track_dependencies(self, load_local_config, load_track, post_configure_actor_logging):
+        local_cfg = mock.sentinel.local_cfg
+        load_local_config.return_value = local_cfg
+        driver_actor = mock.sentinel.driver_actor
+        coordinator_cfg = mock.sentinel.coordinator_cfg
+        actor_under_test = driver.TrackPreparationActor()
+        actor_under_test.send = mock.Mock()
+
+        actor_under_test.receiveMsg_Bootstrap(driver.Bootstrap(coordinator_cfg), driver_actor)
+
+        post_configure_actor_logging.assert_called_once_with()
+        load_local_config.assert_called_once_with(coordinator_cfg)
+        load_track.assert_called_once_with(local_cfg, install_dependencies=True)
+        actor_under_test.send.assert_called_once()
+        sent_driver_actor, ready_msg = actor_under_test.send.call_args.args
+        assert sent_driver_actor is driver_actor
+        assert isinstance(ready_msg, driver.ReadyForWork)
+        assert actor_under_test.driver_actor is driver_actor
+        assert actor_under_test.cfg is local_cfg
 
 
 def op(name, operation_type):
@@ -502,6 +571,82 @@ class TestSamplePostprocessor:
             self.service_time(38601, 25, 50.0, meta_data_with_key),
             self.service_time(38602, 26, 80.0, meta_data_with_key),
             # we don't currently calculate dependent throughput
+            self.throughput(38598, 24, 5000),
+        ]
+        metrics_store.put_value_cluster_level.assert_has_calls(calls)
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_multi_layer_dependent_samples(self, metrics_store):
+        post_process = driver.SamplePostprocessor(metrics_store, downsample_factor=1, track_meta_data={}, challenge_meta_data={})
+
+        task = track.Task("index", track.Operation("index-op", "bulk", param_source="driver-test-param-source"))
+        samples = [
+            driver.Sample(
+                0,
+                38598,
+                24,
+                0,
+                task,
+                metrics.SampleType.Normal,
+                None,
+                0.01,
+                0.007,
+                0.009,
+                None,
+                5000,
+                "docs",
+                1,
+                1 / 2,
+                dependent_timing=[
+                    {
+                        "meta_key_1": "meta_value_1",
+                        "dependent_timing": [
+                            {
+                                "meta_key_2": "meta_value_2",
+                                "dependent_timing": {
+                                    "absolute_time": 38601,
+                                    "request_start": 25,
+                                    "service_time": 0.05,
+                                    "operation": "index-op",
+                                    "operation-type": "bulk",
+                                },
+                            },
+                            {
+                                "meta_key_2": "meta_value_2_override",
+                                "dependent_timing": [
+                                    {
+                                        "meta_key_3": "meta_value_3",
+                                        "dependent_timing": {
+                                            "absolute_time": 38602,
+                                            "request_start": 26,
+                                            "service_time": 0.08,
+                                            "operation": "index-op",
+                                            "operation-type": "bulk",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            ),
+        ]
+
+        post_process(samples)
+        meta_data = {"client_id": 0}
+        first_meta_data = {"client_id": 0, "meta_key_1": "meta_value_1", "meta_key_2": "meta_value_2"}
+        second_meta_data = {
+            "client_id": 0,
+            "meta_key_1": "meta_value_1",
+            "meta_key_2": "meta_value_2_override",
+            "meta_key_3": "meta_value_3",
+        }
+        calls = [
+            self.latency(38598, 24, 10.0, meta_data),
+            self.service_time(38598, 24, 7.0, meta_data),
+            self.processing_time(38598, 24, 9.0, meta_data),
+            self.service_time(38601, 25, 50.0, first_meta_data),
+            self.service_time(38602, 26, 80.0, second_meta_data),
             self.throughput(38598, 24, 5000),
         ]
         metrics_store.put_value_cluster_level.assert_has_calls(calls)
@@ -902,10 +1047,10 @@ class TestMetricsAggregation:
 
         aggregated = self.calculate_global_throughput(samples)
 
-        assert op in aggregated
+        assert (op, None) in aggregated
         assert len(aggregated) == 1
 
-        throughput = aggregated[op]
+        throughput = aggregated[(op, None)]
         assert len(throughput) == 2
         assert throughput[0] == (1470838595, 21, metrics.SampleType.Warmup, 3000, "docs/s")
         assert throughput[1] == (1470838595.5, 21.5, metrics.SampleType.Normal, 3666.6666666666665, "docs/s")
@@ -927,10 +1072,10 @@ class TestMetricsAggregation:
 
         aggregated = self.calculate_global_throughput(samples)
 
-        assert op in aggregated
+        assert (op, None) in aggregated
         assert len(aggregated) == 1
 
-        throughput = aggregated[op]
+        throughput = aggregated[(op, None)]
         assert len(throughput) == 6
         assert throughput[0] == (38595, 21, metrics.SampleType.Normal, 5000, "docs/s")
         assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 5000, "docs/s")
@@ -950,10 +1095,10 @@ class TestMetricsAggregation:
 
         aggregated = self.calculate_global_throughput(samples)
 
-        assert op in aggregated
+        assert (op, None) in aggregated
         assert len(aggregated) == 1
 
-        throughput = aggregated[op]
+        throughput = aggregated[(op, None)]
         assert len(throughput) == 3
         assert throughput[0] == (38595, 21, metrics.SampleType.Normal, 8000, "byte/s")
         assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 8000, "byte/s")
@@ -1430,6 +1575,36 @@ class TestAsyncExecutor:
         def __exit__(self, exc_type, exc_val, exc_tb):
             return False
 
+    class VirtualClock:
+        def __init__(self):
+            self.now = 0.0
+            self.sleeps = []
+
+        def perf_counter(self):
+            return self.now
+
+        def time(self):
+            return self.now
+
+        async def sleep(self, seconds):
+            self.sleeps.append(seconds)
+            self.now += seconds
+
+    class VirtualRequestTiming:
+        def __init__(self, clock):
+            self.clock = clock
+            self.request_start = None
+            self.request_end = None
+
+        def __enter__(self):
+            # Requests are instantaneous in this test; only scheduler sleeps advance virtual time.
+            self.request_start = self.clock.perf_counter()
+            self.request_end = self.request_start
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
     class RunnerWithProgress:
         def __init__(self, iterations=5):
             self.iterations_left = iterations
@@ -1508,7 +1683,7 @@ class TestAsyncExecutor:
             client_id=2,
             task=task,
             schedule=schedule,
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1572,7 +1747,7 @@ class TestAsyncExecutor:
             client_id=2,
             task=task,
             schedule=schedule,
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1641,7 +1816,7 @@ class TestAsyncExecutor:
             client_id=0,
             task=task,
             schedule=schedule,
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1667,12 +1842,11 @@ class TestAsyncExecutor:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_execute_schedule_throughput_throttled(self, es):
+    async def test_execute_schedule_throughput_throttled(self, es, monkeypatch):
         async def perform_request(*args, **kwargs):
             return None
 
         es.options.return_value = es
-        es.init_request_context.return_value = {"request_start": 0, "request_end": 10}
         # as this method is called several times we need to return a fresh instance every time as the previous
         # one has been "consumed".
         es.perform_request.side_effect = perform_request
@@ -1681,7 +1855,13 @@ class TestAsyncExecutor:
         test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
 
         # in one second (0.5 warmup + 0.5 measurement) we should get 1000 [ops/s] / 4 [clients] = 250 samples
-        for target_throughput, bounds in {10: [2, 4], 100: [24, 26], 1000: [220, 280]}.items():
+        # plus one unthrottled request because the unit-aware scheduler needs the runner's weight before it can
+        # calculate the per-client target throughput.
+        for target_throughput, expected_samples in {10: 4, 100: 26, 1000: 251}.items():
+            clock = self.VirtualClock()
+            monkeypatch.setattr(driver, "time", mock.Mock(perf_counter=clock.perf_counter, time=clock.time))
+            monkeypatch.setattr(driver, "asyncio", mock.Mock(sleep=clock.sleep))
+            es.new_request_context.side_effect = lambda clock=clock: self.VirtualRequestTiming(clock)
             task = track.Task(
                 "time-based",
                 track.Operation(
@@ -1703,7 +1883,7 @@ class TestAsyncExecutor:
                 params={"target-throughput": target_throughput, "clients": 4},
                 completes_parent=True,
             )
-            sampler = driver.Sampler(start_timestamp=0)
+            sampler = driver.Sampler(start_timestamp=clock.perf_counter())
 
             cancel = threading.Event()
             complete = threading.Event()
@@ -1715,7 +1895,7 @@ class TestAsyncExecutor:
                 client_id=0,
                 task=task,
                 schedule=schedule,
-                es={"default": es},
+                es=driver.EsClients({"default": es}),
                 sampler=sampler,
                 cancel=cancel,
                 complete=complete,
@@ -1725,10 +1905,10 @@ class TestAsyncExecutor:
 
             samples = sampler.samples
 
-            sample_size = len(samples)
-            lower_bound = bounds[0]
-            upper_bound = bounds[1]
-            assert lower_bound <= sample_size <= upper_bound
+            assert len(samples) == expected_samples
+            assert len(clock.sleeps) == expected_samples - 1
+            per_client_throughput = target_throughput / task.clients
+            assert sum(clock.sleeps) == pytest.approx((expected_samples - 1) / per_client_throughput)
             assert complete.is_set(), "Executor should auto-complete a task that terminates its parent"
 
     @mock.patch("elasticsearch.Elasticsearch")
@@ -1767,7 +1947,7 @@ class TestAsyncExecutor:
                 client_id=0,
                 task=task,
                 schedule=schedule,
-                es={"default": es},
+                es=driver.EsClients({"default": es}),
                 sampler=sampler,
                 cancel=cancel,
                 complete=complete,
@@ -1826,7 +2006,7 @@ class TestAsyncExecutor:
             client_id=2,
             task=task,
             schedule=ScheduleHandle(),
-            es={"default": es},
+            es=driver.EsClients({"default": es}),
             sampler=sampler,
             cancel=cancel,
             complete=complete,
@@ -1961,6 +2141,25 @@ class TestAsyncExecutor:
         with pytest.raises(exceptions.RallyAssertionError) as exc:
             await driver.execute_single(self.context_managed(runner), es, params, on_error=OnErrorBehavior.ABORT)
         assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: Huge error, HTTP Status: 499")
+
+    @pytest.mark.asyncio
+    async def test_execute_single_with_http_400_with_non_utf8_raw_response_body(self):
+        es = None
+        params = None
+        body = io.BytesIO(b"\xff")
+        str_literal = str(body)
+        error_meta = elastic_transport.ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=elastic_transport.HttpHeaders(),
+            duration=0.0,
+            node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+        )
+        runner = mock.AsyncMock(side_effect=elasticsearch.ApiError(message=str_literal, meta=error_meta, body=body))
+
+        with pytest.raises(exceptions.RallyAssertionError) as exc:
+            await driver.execute_single(self.context_managed(runner), es, params, on_error=OnErrorBehavior.ABORT)
+        assert exc.value.args[0] == ("Request returned an error. Error type: api, Description: �, HTTP Status: 400")
 
     @pytest.mark.asyncio
     async def test_execute_single_with_http_400(self):

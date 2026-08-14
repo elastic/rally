@@ -35,6 +35,7 @@ from esrally.utils import io
 
 __PARAM_SOURCES_BY_OP: dict[track.OperationType, ParamSource] = {}
 __PARAM_SOURCES_BY_NAME: dict[str, ParamSource] = {}
+__VALIDATORS_BY_CHALLENGE: dict[str, list[Callable]] = collections.defaultdict(list)
 
 
 def param_source_for_operation(op_type, track, params, task_name):
@@ -67,6 +68,41 @@ def register_param_source_for_operation(op_type, param_source_class):
 def register_param_source_for_name(name, param_source_class):
     ensure_valid_param_source(param_source_class)
     __PARAM_SOURCES_BY_NAME[name] = param_source_class
+
+
+def register_validator(challenge_name: str, fn: Callable) -> None:
+    if not callable(fn):
+        raise exceptions.RallyAssertionError(f"Validator for challenge [{challenge_name}] must be callable but was [{fn}].")
+    # Registration is idempotent per function: a track's plugins may be (re)loaded more than once within a process
+    # and we must not invoke the same validator multiple times.
+    if fn not in __VALIDATORS_BY_CHALLENGE[challenge_name]:
+        __VALIDATORS_BY_CHALLENGE[challenge_name].append(fn)
+
+
+def invoke_validators(challenge_name: str, track_params: dict) -> None:
+    for validator in __VALIDATORS_BY_CHALLENGE.get(challenge_name, []):
+        try:
+            validator(track_params or {})
+        except exceptions.TrackConfigError:
+            # raised intentionally by the validator to signal invalid parameters; propagate its message as-is
+            raise
+        except Exception as e:
+            validator_name = getattr(validator, "__name__", repr(validator))
+            raise exceptions.TrackConfigError(f"Validator [{validator_name}] for challenge [{challenge_name}] failed: {e}") from e
+
+
+def registered_validator_count(challenge_name: str) -> int:
+    return len(__VALIDATORS_BY_CHALLENGE.get(challenge_name, []))
+
+
+# only intended for tests
+def _unregister_validators_for_challenge(challenge_name: str) -> None:
+    __VALIDATORS_BY_CHALLENGE.pop(challenge_name, None)
+
+
+# only intended for tests
+def _clear_validators() -> None:
+    __VALIDATORS_BY_CHALLENGE.clear()
 
 
 # only intended for tests
@@ -500,9 +536,11 @@ class SearchParamSource(ParamSource):
     def __init__(self, track, params, **kwargs):
         super().__init__(track, params, **kwargs)
         target_name = get_target(track, params)
-        type_name = params.get("type")
-        if params.get("data-stream") and type_name:
-            raise exceptions.InvalidSyntax(f"'type' not supported with 'data-stream' for operation '{kwargs.get('operation_name')}'")
+        if "type" in params:
+            raise exceptions.InvalidSyntax(
+                f"Operation '{kwargs.get('operation_name')}' specifies 'type', which is no longer supported by Rally "
+                "(document types were removed in Elasticsearch 7.0). Remove the 'type' parameter."
+            )
         request_cache = params.get("cache", None)
         detailed_results = params.get("detailed-results", False)
         query_body = params.get("body", None)
@@ -514,7 +552,6 @@ class SearchParamSource(ParamSource):
 
         self.query_params = {
             "index": target_name,
-            "type": type_name,
             "cache": request_cache,
             "detailed-results": detailed_results,
             "request-params": request_params,
@@ -989,18 +1026,17 @@ def create_default_reader(
             raise exceptions.RallyError("Conflicts cannot be generated with append only data streams")
 
     if docs.includes_action_and_meta_data:
-        return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, target, docs.target_type)
+        return SourceOnlyIndexDataReader(docs.document_file, batch_size, bulk_size, source, target)
     else:
         am_handler = GenerateActionMetaData(
             target,
-            docs.target_type,
             build_conflicting_ids(id_conflicts, num_docs, offset),
             conflict_probability,
             on_conflict,
             recency,
             use_create=use_create,
         )
-        return MetadataIndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, target, docs.target_type)
+        return MetadataIndexDataReader(docs.document_file, batch_size, bulk_size, source, am_handler, target)
 
 
 def create_readers(
@@ -1091,13 +1127,12 @@ def bounds(total_docs, start_client_index, end_client_index, num_clients, includ
 
 def bulk_generator(readers, pipeline, original_params):
     bulk_id = 0
-    for index, type, batch in readers:
+    for index, batch in readers:
         # each batch can contain of one or more bulks
         for docs_in_bulk, bulk in batch:
             bulk_id += 1
             bulk_params = {
                 "index": index,
-                "type": type,
                 # For our implementation it's always present. Either the original source file already contains this line or the generator
                 # has added it.
                 "action-metadata-present": True,
@@ -1171,7 +1206,6 @@ class GenerateActionMetaData:
     def __init__(
         self,
         index_name,
-        type_name,
         conflicting_ids=None,
         conflict_probability=None,
         on_conflict=None,
@@ -1181,15 +1215,10 @@ class GenerateActionMetaData:
         randexp=random.expovariate,
         use_create=False,
     ):
-        if type_name:
-            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % (index_name, type_name, "%s")
-            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_type": "%s", "_id": "%s"}}\n' % (index_name, type_name, "%s")
-            self.meta_data_index_no_id = '{"index": {"_index": "%s", "_type": "%s"}}\n' % (index_name, type_name)
-        else:
-            self.meta_data_index_with_id = '{"index": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
-            self.meta_data_update_with_id = '{"update": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
-            self.meta_data_index_no_id = '{"index": {"_index": "%s"}}\n' % index_name
-            self.meta_data_create_no_id = '{"create": {"_index": "%s"}}\n' % index_name
+        self.meta_data_index_with_id = '{"index": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
+        self.meta_data_update_with_id = '{"update": {"_index": "%s", "_id": "%s"}}\n' % (index_name, "%s")
+        self.meta_data_index_no_id = '{"index": {"_index": "%s"}}\n' % index_name
+        self.meta_data_create_no_id = '{"create": {"_index": "%s"}}\n' % index_name
         if use_create and conflicting_ids:
             raise exceptions.RallyError("Index mode '_create' cannot be used with conflicting ids")
         self.conflicting_ids = conflicting_ids
@@ -1308,13 +1337,12 @@ class IndexDataReader:
     is any natural number >= 1. This makes file reading more efficient for small bulk sizes.
     """
 
-    def __init__(self, data_file, batch_size, bulk_size, file_source, index_name, type_name):
+    def __init__(self, data_file, batch_size, bulk_size, file_source, index_name):
         self.data_file = data_file
         self.batch_size = batch_size
         self.bulk_size = bulk_size
         self.file_source = file_source
         self.index_name = index_name
-        self.type_name = type_name
 
     def __enter__(self):
         self.file_source.open(self.data_file, "rt", self.bulk_size)
@@ -1341,7 +1369,7 @@ class IndexDataReader:
                 batch.append((docs_in_bulk, b"".join(bulk)))
             if docs_in_batch == 0:
                 raise StopIteration()
-            return self.index_name, self.type_name, batch
+            return self.index_name, batch
         except OSError:
             logging.getLogger(__name__).exception("Could not read [%s]", self.data_file)
 
@@ -1351,8 +1379,8 @@ class IndexDataReader:
 
 
 class MetadataIndexDataReader(IndexDataReader):
-    def __init__(self, data_file, batch_size, bulk_size, file_source, action_metadata, index_name, type_name):
-        super().__init__(data_file, batch_size, bulk_size, file_source, index_name, type_name)
+    def __init__(self, data_file, batch_size, bulk_size, file_source, action_metadata, index_name):
+        super().__init__(data_file, batch_size, bulk_size, file_source, index_name)
         self.action_metadata = action_metadata
         self.action_metadata_line = None
 
@@ -1403,10 +1431,10 @@ class MetadataIndexDataReader(IndexDataReader):
 
 
 class SourceOnlyIndexDataReader(IndexDataReader):
-    def __init__(self, data_file, batch_size, bulk_size, file_source, index_name, type_name):
+    def __init__(self, data_file, batch_size, bulk_size, file_source, index_name):
         # keep batch size as it only considers documents read, not lines read but increase the bulk size as
         # documents are only on every other line.
-        super().__init__(data_file, batch_size, bulk_size * 2, file_source, index_name, type_name)
+        super().__init__(data_file, batch_size, bulk_size * 2, file_source, index_name)
 
     def read_bulk(self):
         bulk_items = next(self.file_source)

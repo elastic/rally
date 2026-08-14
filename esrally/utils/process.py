@@ -18,6 +18,7 @@
 import logging
 import os
 import shlex
+import signal
 import subprocess
 import time
 from collections.abc import Iterable, Mapping
@@ -36,24 +37,23 @@ def run_subprocess(command_line: str) -> int:
     :param command_line: The command line of the subprocess to launch.
     :return: The process' return code
     """
-    return subprocess.call(command_line, shell=True)
+    return subprocess.run(command_line, check=False, shell=True).returncode
 
 
 def run_subprocess_with_output(command_line: str, env: Optional[Mapping[str, str]] = None) -> list[str]:
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with output.", command_line)
     command_line_args = shlex.split(command_line)
-    with subprocess.Popen(command_line_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env) as command_line_process:
-        has_output = True
-        lines = []
-        while has_output:
-            assert command_line_process.stdout is not None, "stdout is None"
-            line = command_line_process.stdout.readline()
-            if line:
-                lines.append(line.decode("UTF-8").strip())
-            else:
-                has_output = False
-    return lines
+    result = subprocess.run(
+        command_line_args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    return [line.rstrip("\n") for line in result.stdout.splitlines()]
 
 
 def exit_status_as_bool(runnable: Callable[[], int], quiet: bool = False) -> bool:
@@ -79,6 +79,7 @@ def run_subprocess_with_logging(
     stdin: Optional[Union[FileId, IO[bytes]]] = None,
     env: Optional[Mapping[str, str]] = None,
     detach: bool = False,
+    timeout: Optional[float] = None,
 ) -> int:
     """
     Runs the provided command line in a subprocess. All output will be captured by a logger.
@@ -90,26 +91,45 @@ def run_subprocess_with_logging(
       (default: None).
     :param env: Use specific environment variables (default: None).
     :param detach: Whether to detach this process from its parent process (default: False).
+    :param timeout: Optional time in seconds to wait for the subprocess to finish. If exceeded, the child is killed
+      and this function returns the exit code from the killed child. ``None`` (the default) waits indefinitely.
     :return: The process exit code as an int.
     """
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with logging.", command_line)
     command_line_args = shlex.split(command_line)
-    pre_exec = os.setpgrp if detach else None
     if header is not None:
         logger.info(header)
 
-    # pylint: disable=subprocess-popen-preexec-fn
     with subprocess.Popen(
         command_line_args,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        universal_newlines=True,
+        text=True,
         env=env,
         stdin=stdin if stdin else None,
-        preexec_fn=pre_exec,
+        start_new_session=detach or timeout is not None,
     ) as command_line_process:
-        stdout, _ = command_line_process.communicate()
+        try:
+            stdout, _ = command_line_process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(command_line_process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                # the process group already exited between the timeout firing and the kill
+                pass
+            # finish handling pipes and populate the returncode attribute
+            stdout, _ = command_line_process.communicate()
+            output = f" Output: [{stdout}]" if stdout else ""
+            logger.error(
+                "Subprocess [%s] exceeded timeout of [%s]s and was terminated with return code [%s].%s",
+                command_line,
+                timeout,
+                str(command_line_process.returncode),
+                output,
+            )
+            return command_line_process.returncode
+
         if stdout:
             logger.log(level=level, msg=stdout)
 
@@ -140,7 +160,6 @@ def run_subprocess_with_logging_and_output(
     logger = logging.getLogger(__name__)
     logger.debug("Running subprocess [%s] with logging.", command_line)
     command_line_args = shlex.split(command_line)
-    pre_exec = os.setpgrp if detach else None
     if header is not None:
         logger.info(header)
 
@@ -152,7 +171,7 @@ def run_subprocess_with_logging_and_output(
         env=env,
         check=False,
         stdin=stdin if stdin else None,
-        preexec_fn=pre_exec,
+        start_new_session=detach,
     )
 
     for stdout in completed.stdout.splitlines():

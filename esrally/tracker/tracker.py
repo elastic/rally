@@ -74,8 +74,8 @@ def create_track(cfg: types.Config):
     track_name = cfg.opts("track", "track.name")
     indices = cfg.opts("generator", "indices")
     root_path = cfg.opts("generator", "output.path")
-    target_hosts = cfg.opts("client", "hosts").default
-    client_options = cfg.opts("client", "options").default
+    target_hosts = cfg.opts("client", "hosts").default_or_first
+    client_options = cfg.opts("client", "options").default_or_first
     data_streams = cfg.opts("generator", "data_streams")
     batch_size = int(cfg.opts("generator", "batch_size"))
 

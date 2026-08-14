@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import errno
 import functools
 import json
 import logging
@@ -29,15 +28,14 @@ import time
 import psutil
 import pytest
 
-from esrally import client, version
+from esrally import client
 from esrally.utils import process
 
-CONFIG_NAMES = ["in-memory-it", "es-it"]
+IT_CONFIG_NAMES = ["in-memory-it", "es-it"]
 DISTRIBUTIONS = ["8.19.13", "9.2.7"]
 TRACKS = ["geonames", "nyc_taxis", "http_logs", "nested"]
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-_LOG = logging.getLogger(__name__)
 _CLUSTER_PROBE_ATTEMPTS = 5
 _CLUSTER_PROBE_DELAY_SEC = 0.5
 _CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
@@ -46,12 +44,9 @@ _CLUSTER_PROBE_REQUEST_TIMEOUT_SEC = 5.0
 # files assume this value. Switching to a free port would require threading it through every caller and external
 # reference, so we instead clear leftovers on this port before/after tests when teardown is incomplete.
 BENCHMARK_IT_HTTP_PORT = 19200
-# Default ``--cluster-name`` for ``esrally race`` / install; keep aligned with ``esrally/rally.py``.
-RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME = "rally-benchmark"
-# Only these cluster names may be torn down on `BENCHMARK_IT_HTTP_PORT` (metrics store uses 10200).
-_BENCHMARK_CLUSTER_NAMES_ON_IT_PORT = frozenset({RALLY_DEFAULT_BENCHMARK_CLUSTER_NAME, "in-memory-it"})
+
 _DOCKER_PUBLISH_STOP_ROUNDS = 3
-_LISTENER_SIGTERM_WAIT_SEC = 8.0
+_ES_SIGTERM_WAIT_SEC = 8.0
 
 
 LOG = logging.getLogger(__name__)
@@ -59,7 +54,7 @@ LOG = logging.getLogger(__name__)
 
 def all_rally_configs(t):
     @functools.wraps(t)
-    @pytest.mark.parametrize("cfg", CONFIG_NAMES)
+    @pytest.mark.parametrize("cfg", IT_CONFIG_NAMES)
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
 
@@ -68,7 +63,7 @@ def all_rally_configs(t):
 
 def random_rally_config(t):
     @functools.wraps(t)
-    @pytest.mark.parametrize("cfg", [random.choice(CONFIG_NAMES)])
+    @pytest.mark.parametrize("cfg", [random.choice(IT_CONFIG_NAMES)])
     def wrapper(cfg, *args, **kwargs):
         t(cfg, *args, **kwargs)
 
@@ -139,23 +134,19 @@ def command_in_docker(command_line, python_version):
     return subprocess.run(docker_command, shell=True, check=True).returncode
 
 
-def wait_until_port_is_free(port_number=39200, timeout=120):
+def wait_until_port_is_free(port_number=39200, timeout=10):
     start = time.perf_counter()
     end = start + timeout
     while time.perf_counter() < end:
-        c = socket.socket()
-        connect_result = c.connect_ex(("127.0.0.1", port_number))
-        # noinspection PyBroadException
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            if connect_result == errno.ECONNREFUSED:
-                c.close()
-                return
-            else:
-                c.close()
-                time.sleep(0.5)
-        except Exception:
-            pass
-
+            s.bind(("127.0.0.1", port_number))
+            return
+        except OSError:
+            time.sleep(0.5)
+        finally:
+            s.close()
     raise TimeoutError(f"Port [{port_number}] is occupied after [{timeout}] seconds")
 
 
@@ -176,7 +167,7 @@ def cluster_name_on_port(http_port: int) -> str | None:
             last_error = e
             if attempt < _CLUSTER_PROBE_ATTEMPTS - 1:
                 time.sleep(_CLUSTER_PROBE_DELAY_SEC)
-    _LOG.debug(
+    LOG.debug(
         "cluster_name_on_port: 127.0.0.1:%s did not return cluster info: %s",
         http_port,
         last_error,
@@ -184,19 +175,11 @@ def cluster_name_on_port(http_port: int) -> str | None:
     return None
 
 
-def _tcp_port_has_listener(port: int, host: str = "127.0.0.1") -> bool:
-    sock = socket.socket()
-    try:
-        return sock.connect_ex((host, port)) != errno.ECONNREFUSED
-    finally:
-        sock.close()
-
-
 def _stop_docker_publishers(http_port: int) -> None:
     try:
         lines = process.run_subprocess_with_output(f"docker ps -q -f publish={http_port}")
     except BaseException as e:
-        _LOG.debug("docker ps for publish=%s failed: %s", http_port, e)
+        LOG.debug("docker ps for publish=%s failed: %s", http_port, e)
         return
     seen: set[str] = set()
     for line in lines:
@@ -205,117 +188,97 @@ def _stop_docker_publishers(http_port: int) -> None:
             continue
         seen.add(cid)
         if process.run_subprocess_with_logging(f"docker stop -t 30 {cid}") != 0:
-            _LOG.warning("docker stop failed for container %s", cid)
+            LOG.warning("docker stop failed for container %s", cid)
 
 
-def _listener_pids_on_port(http_port: int) -> set[int]:
-    pids: set[int] = set()
+def _is_rally_es_process(p: psutil.Process, metrics_store_install_id: str | None = None) -> bool:
+    """
+    True if ``p`` is a host-JVM Elasticsearch provisioned by Rally, identified by the bootstrap main class in its
+    cmdline and the rally install path in its working directory.
+
+    If ``metrics_store_install_id`` is provided, the session-scoped metrics store is excluded by
+    matching its installation id segment in the working directory: Rally lays out node working dirs as
+    ``…/benchmarks/races/<install-id>/<node-name>/install/elasticsearch-X.Y.Z``.
+    """
+    try:
+        if p.name().lower() != "java":
+            return False
+        if not any("org.elasticsearch.bootstrap.Elasticsearch" in arg for arg in p.cmdline()):
+            return False
+        cwd = p.cwd()
+        if "/benchmarks/races/" not in cwd:
+            return False
+        if metrics_store_install_id and f"/benchmarks/races/{metrics_store_install_id}/" in cwd:
+            return False
+        return True
+    except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+        return False
+
+
+def find_rally_es_pids(metrics_store_install_id: str | None = None) -> set[int]:
     mypid = os.getpid()
-    try:
-        for conn in psutil.net_connections(kind="inet"):
-            if conn.status != psutil.CONN_LISTEN:
-                continue
-            if conn.laddr is None or conn.laddr.port != http_port:
-                continue
-            lip = conn.laddr.ip
-            if lip not in ("127.0.0.1", "0.0.0.0", "::", "::1", ""):
-                continue
-            if conn.pid is not None and conn.pid != mypid:
-                pids.add(conn.pid)
-    except (psutil.AccessDenied, PermissionError):
-        pass
-    if pids:
-        return pids
-    try:
-        lines = process.run_subprocess_with_output(f"lsof -nP -iTCP:{http_port} -sTCP:LISTEN -t")
-    except BaseException as e:
-        _LOG.debug("lsof for port %s failed: %s", http_port, e)
-        return pids
-    for line in lines:
-        s = line.strip()
-        if s.isdigit():
-            pid = int(s)
-            if pid != mypid:
-                pids.add(pid)
+    pids: set[int] = set()
+    for p in psutil.process_iter():
+        try:
+            if p.pid != mypid and _is_rally_es_process(p, metrics_store_install_id):
+                pids.add(p.pid)
+        except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+            pass
     return pids
 
 
-def _terminate_listeners_on_port(http_port: int) -> None:
-    pids = _listener_pids_on_port(http_port)
+def _kill_rally_es_processes(metrics_store_install_id: str, wait_timeout: float = _ES_SIGTERM_WAIT_SEC) -> None:
+    """
+    Kill any host-JVM Elasticsearch provisioned by Rally that survived a previous test. Docker-provisioned ES is
+    unaffected (handled by ``_stop_docker_publishers``).
+
+    Requires ``metrics_store_install_id`` to identify the session-scoped metrics store JVM so it is not killed.
+    """
+    pids = find_rally_es_pids(metrics_store_install_id)
     if not pids:
         return
-    mypid = os.getpid()
     for pid in pids:
-        if pid == mypid:
-            continue
         try:
+            LOG.info("Sending SIGTERM to orphaned rally IT ES JVM PID %d", pid)
             os.kill(pid, signal.SIGTERM)
         except (ProcessLookupError, PermissionError):
             pass
-    deadline = time.perf_counter() + _LISTENER_SIGTERM_WAIT_SEC
+    deadline = time.perf_counter() + wait_timeout
     while time.perf_counter() < deadline:
-        remaining = _listener_pids_on_port(http_port) - {mypid}
-        if not remaining:
+        if not any(psutil.pid_exists(pid) for pid in pids):
             return
         time.sleep(0.3)
-    for pid in _listener_pids_on_port(http_port):
-        if pid == mypid:
-            continue
+    for pid in pids:
         try:
-            os.kill(pid, signal.SIGKILL)
+            if psutil.pid_exists(pid):
+                LOG.info("Sending SIGKILL to orphaned rally IT ES JVM PID %d", pid)
+                os.kill(pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
 
 
-def stop_rally_provisioned_es_on_port(http_port: int = BENCHMARK_IT_HTTP_PORT) -> None:
+def ensure_benchmark_http_port_free(
+    metrics_store_install_id: str,
+    http_port: int = BENCHMARK_IT_HTTP_PORT,
+    wait_timeout: int = 10,
+) -> int:
     """
-    If a Rally benchmark or IT ``TestCluster`` Elasticsearch is listening on ``http_port``, stop it.
-
-    Rally subprocess trees do not always exit cleanly when the test runner gets a signal (e.g. ES JVM can
-    outlive the parent), and Docker can keep a published port busy briefly after ``docker stop``. That leaves
-    ``BENCHMARK_IT_HTTP_PORT`` occupied and the next test fails with low-signal bind errors. This helper is a
-    best-effort cleanup for those cases without changing Rally's global process model in this PR.
-
-    Docker-provisioned nodes are stopped via ``docker stop``; tar / host-JVM nodes via terminating the
-    listener PIDs (after ``SIGTERM``, ``SIGKILL`` as last resort). Only clusters named
-    ``rally-benchmark`` or ``in-memory-it`` are touched; anything else raises ``AssertionError``.
-    """
-    assert http_port is not None
-    if not _tcp_port_has_listener(http_port):
-        return
-    name = cluster_name_on_port(http_port)
-    if name is None:
-        _LOG.debug(
-            "Port 127.0.0.1:%s has a listener but no Elasticsearch cluster name; skip teardown.",
-            http_port,
-        )
-        return
-    if name not in _BENCHMARK_CLUSTER_NAMES_ON_IT_PORT:
-        raise AssertionError(
-            f"127.0.0.1:{http_port} serves Elasticsearch cluster {name!r}; "
-            f"integration tests only auto-clear {_BENCHMARK_CLUSTER_NAMES_ON_IT_PORT!r}. "
-            "Free the port manually or change BENCHMARK_IT_HTTP_PORT."
-        )
-    for _ in range(_DOCKER_PUBLISH_STOP_ROUNDS):
-        _stop_docker_publishers(http_port)
-        time.sleep(0.5)
-    if _tcp_port_has_listener(http_port):
-        name2 = cluster_name_on_port(http_port)
-        if name2 in _BENCHMARK_CLUSTER_NAMES_ON_IT_PORT:
-            _terminate_listeners_on_port(http_port)
-    return
-
-
-def ensure_benchmark_http_port_free(http_port: int = BENCHMARK_IT_HTTP_PORT, wait_timeout: int = 120) -> int:
-    """
-    Stop any Rally IT benchmark cluster on ``http_port`` and wait until the port is free.
+    Stops ES processes other than metrics store, and Docker containers listening at ``http_port``. Then waits until
+    ``http_port`` is free.
 
     Used by pytest fixtures around benchmark tests so each run starts from a known state on the fixed IT port;
     see `BENCHMARK_IT_HTTP_PORT` for why the port is not chosen dynamically.
+
+    ``metrics_store_install_id`` is the session metrics store's installation id, threaded through to
+    ``_kill_rally_es_processes`` so the metrics store JVM is excluded from the orphan-JVM scan.
     """
     assert http_port is not None
-    stop_rally_provisioned_es_on_port(http_port)
+    _kill_rally_es_processes(metrics_store_install_id)
+    for _ in range(_DOCKER_PUBLISH_STOP_ROUNDS):
+        _stop_docker_publishers(http_port)
+        time.sleep(0.5)
     wait_until_port_is_free(port_number=http_port, timeout=wait_timeout)
+    LOG.info("HTTP port %d seems to be free", http_port)
     return http_port
 
 
@@ -366,6 +329,7 @@ class TestCluster:
                 )
             )
             self.installation_id = json.loads("".join(output))["installation-id"]
+            LOG.info("Elasticsearch cluster listening at port %d installed with %s ID", self.http_port, self.installation_id)
         except BaseException as e:
             raise AssertionError(f"Failed to install Elasticsearch {distribution_version}.", e)
 

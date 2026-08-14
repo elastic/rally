@@ -15,19 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from .loader import (
-    TrackProcessorRegistry,
-    list_tracks,
-    load_track,
-    load_track_plugins,
-    operation_parameters,
-    render_track,
-    resolve_challenge_and_invoke_validators,
-    set_absolute_data_path,
-    track_info,
-    track_repo,
-    validate_track,
-)
+from esrally.exceptions import TrackConfigError
 
-# expose the complete track API
-from .track import *
+
+def validate_ok(params):
+    if params.get("ok") != 1:
+        raise TrackConfigError("Track parameter 'ok' must be set to 1.")
+
+
+def register(registry):
+    registry.register_validator("default", validate_ok)
+    registry.register_validator("validated", validate_ok)

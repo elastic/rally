@@ -21,6 +21,7 @@ import math
 import random
 from unittest import mock
 
+import aiohttp
 import elastic_transport
 import pytest
 
@@ -57,6 +58,21 @@ class TestResponseMatcher:
     def assert_response_type(self, matcher, path, expected_response_type):
         response = json.loads(matcher.response(path))
         assert response["response-type"] == expected_response_type
+
+
+@pytest.mark.asyncio
+async def test_static_response_reports_request_output_size(monkeypatch):
+    matcher = asynchronous.ResponseMatcher(responses=[{"path": "*", "body": {"response-type": "default"}}])
+    monkeypatch.setattr(asynchronous.StaticRequest, "RESPONSES", matcher)
+
+    async with aiohttp.ClientSession(
+        connector=asynchronous.StaticConnector(),
+        request_class=asynchronous.StaticRequest,
+        response_class=asynchronous.StaticResponse,
+    ) as session:
+        async with session.get("http://localhost:9200/") as response:
+            assert response.output_size == 0
+            assert await response.json(content_type=None) == {"response-type": "default"}
 
 
 @pytest.mark.asyncio

@@ -65,7 +65,7 @@ class StaticSource:
 
 
 def create_reader(bulk_size):
-    metadata = params.GenerateActionMetaData(index_name="test-idx", type_name=None)
+    metadata = params.GenerateActionMetaData(index_name="test-idx")
 
     source = params.Slice(StaticSource, 0, sys.maxsize)
     reader = params.MetadataIndexDataReader(
@@ -75,7 +75,6 @@ def create_reader(bulk_size):
         file_source=source,
         action_metadata=metadata,
         index_name="test-idx",
-        type_name=None,
     )
     return reader
 

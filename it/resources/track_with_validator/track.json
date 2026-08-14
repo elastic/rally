@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "description": "Minimal track for validate-track integration tests (ok={{ ok | default(0) }})",
+  "challenges": [
+    {
+      "name": "default",
+      "default": true,
+      "schedule": [
+        {
+          "operation": {
+            "operation-type": "cluster-health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "validated",
+      "schedule": [
+        {
+          "operation": {
+            "operation-type": "cluster-health"
+          }
+        }
+      ]
+    }
+  ]
+}

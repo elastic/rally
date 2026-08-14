@@ -108,6 +108,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.CreateIlmPolicy, Retry(CreateIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.DeleteIlmPolicy, Retry(DeleteIlmPolicy()), async_runner=True)
     register_runner(track.OperationType.RunUntil, Retry(RunUntil()), async_runner=True)
+    register_runner(track.OperationType.EnrichPolicy, Retry(EnrichPolicy()), async_runner=True)
 
 
 def runner_for(operation_type):
@@ -554,7 +555,6 @@ class BulkIndex(Runner):
         * ``action_metadata_present``: if ``True``, assume that an action and metadata line is present (meaning only half of the lines
         contain actual documents to index)
         * ``index``: The name of the affected index in case ``action_metadata_present`` is ``False``.
-        * ``type``: The name of the affected type in case ``action_metadata_present`` is ``False``.
 
         The following keys are optional:
 
@@ -598,9 +598,7 @@ class BulkIndex(Runner):
 
         if with_action_metadata:
             api_kwargs.pop("index", None)
-            response = await es.bulk(params=bulk_params, **api_kwargs)
-        else:
-            response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
+        response = await es.bulk(params=bulk_params, **api_kwargs)
 
         stats = self._parse_stats(params, bulk_size, unit, response, api_kwargs, detailed_results)
 
@@ -913,7 +911,14 @@ class NodeStats(Runner):
         return "node-stats"
 
 
-def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: list[str] = None) -> dict:
+def parse(
+    text: BytesIO,
+    props: list[str],
+    lists: list[str] = None,
+    objects: list[str] = None,
+    stop_after: str = None,
+    with_cluster_details: bool = False,
+) -> dict:
     """
     Selectively parse the provided text as JSON extracting only the properties provided in ``props``. If ``lists`` is
     specified, this function determines whether the provided lists are empty (respective value will be ``True``) or
@@ -925,6 +930,10 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     :param props: A mandatory list of property paths (separated by a dot character) for which to extract values.
     :param lists: An optional list of property paths to JSON lists in the provided text.
     :param objects: An optional list of property paths to flat JSON objects in the provided text.
+    :param stop_after: An optional property path to an array that triggers early termination when the array starts,
+                       regardless of whether all props have been found. Useful when optional properties may not exist
+                       and all desired properties appear before this array in the JSON structure (e.g., "hits.hits").
+    :param with_cluster_details: If True, extracts _clusters.details as a list under the key "_clusters.details".
     :return: A dict containing all properties, lists, and flat objects that have been found in the provided text.
     """
     text.seek(0)
@@ -936,6 +945,12 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
     expect_end_array = False
     parsed_objects = {}
     in_object = None
+    # cluster details extraction state
+    cluster_details = []
+    in_cluster_detail = None
+    current_cluster_entry = {}
+    in_shards = False
+    current_shards = {}
     try:
         for prefix, event, value in parser:
             if expect_end_array:
@@ -955,9 +970,39 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
                 current_object = {}
             elif in_object and event in ["boolean", "integer", "double", "number", "string"]:
                 current_object[prefix[len(in_object) + 1 :]] = value
-            # found all necessary properties
+            # cluster details extraction - handle _shards nested object first
+            elif with_cluster_details and in_shards:
+                cluster_prefix = f"_clusters.details.{in_cluster_detail}"
+                if event == "end_map" and prefix == f"{cluster_prefix}._shards":
+                    current_cluster_entry["_shards"] = current_shards
+                    in_shards = False
+                elif event in ["boolean", "integer", "double", "number", "string"]:
+                    current_shards[prefix.split(".")[-1]] = value
+            # cluster details extraction - handle cluster entry
+            elif with_cluster_details and in_cluster_detail:
+                cluster_prefix = f"_clusters.details.{in_cluster_detail}"
+                if prefix == f"{cluster_prefix}._shards" and event == "start_map":
+                    in_shards = True
+                    current_shards = {}
+                elif event == "end_map" and prefix == cluster_prefix:
+                    cluster_details.append(current_cluster_entry)
+                    in_cluster_detail = None
+                elif event in ["boolean", "integer", "double", "number", "string"]:
+                    current_cluster_entry[prefix.split(".")[-1]] = value
+            # cluster details extraction - detect new cluster entry
+            elif with_cluster_details and prefix.startswith("_clusters.details.") and event == "start_map" and prefix.count(".") == 2:
+                in_cluster_detail = prefix.split(".")[-1]
+                current_cluster_entry = {"name": in_cluster_detail}
+            # stop if we've reached the designated stop point (e.g., hits.hits which contains bulk data)
+            if stop_after is not None and prefix == stop_after and event == "start_array":
+                # if this array is also in lists, record it as non-empty since we won't see the next event
+                if lists is not None and prefix in lists:
+                    parsed_lists[prefix] = False
+                break
+            # found all necessary properties (skip early termination if extracting cluster details)
             if (
-                len(parsed) == len(props)
+                not with_cluster_details
+                and len(parsed) == len(props)
                 and (lists is None or len(parsed_lists) == len(lists))
                 and (objects is None or len(parsed_objects) == len(objects))
             ):
@@ -969,6 +1014,8 @@ def parse(text: BytesIO, props: list[str], lists: list[str] = None, objects: lis
 
     parsed.update(parsed_lists)
     parsed.update(parsed_objects)
+    if with_cluster_details and cluster_details:
+        parsed["_clusters.details"] = cluster_details
     return parsed
 
 
@@ -980,7 +1027,6 @@ class Query(Runner):
 
     * `operation-type`: One of `search`, `paginated-search`, `scroll-search`, or `composite-agg`
     * `index`: The index or indices against which to issue the query.
-    * `type`: See `index`
     * `cache`: True iff the request cache should be used.
     * `body`: Query body
 
@@ -1072,7 +1118,7 @@ class Query(Runner):
                     pit_id = CompositeContext.get(pit_op)
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
-                response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
+                response = await self._raw_search(es, index=index, body=body.copy(), params=request_params, headers=headers)
                 parsed, last_sort = self._search_after_extractor(
                     response,
                     bool(pit_op),
@@ -1133,7 +1179,7 @@ class Query(Runner):
                     composite_agg_body["size"] = size
 
                 body_to_send = tree_copy_composite_agg(body, path_to_composite)
-                response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
+                response = await self._raw_search(es, index=index, body=body_to_send, params=request_params, headers=headers)
                 parsed = self._composite_agg_extractor(
                     response,
                     bool(pit_op),
@@ -1200,9 +1246,7 @@ class Query(Runner):
             return obj
 
         async def _request_body_query(es, params):
-            doc_type = params.get("type")
-
-            r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
+            r = await self._raw_search(es, index, body, request_params, headers=headers)
 
             if detailed_results:
                 props = parse(
@@ -1217,7 +1261,16 @@ class Query(Runner):
                         "_shards.successful",
                         "_shards.skipped",
                         "_shards.failed",
+                        "num_reduce_phases",
+                        "_clusters.total",
+                        "_clusters.successful",
+                        "_clusters.skipped",
+                        "_clusters.running",
+                        "_clusters.partial",
+                        "_clusters.failed",
                     ],
+                    stop_after="hits.hits",
+                    with_cluster_details=True,
                 )
                 hits_total = props.get("hits.total.value", props.get("hits.total", 0))
                 hits_relation = props.get("hits.total.relation", "eq")
@@ -1229,7 +1282,7 @@ class Query(Runner):
                 shards_skipped = props.get("_shards.skipped", 0)
                 shards_failed = props.get("_shards.failed", 0)
 
-                return {
+                result = {
                     "weight": 1,
                     "unit": "ops",
                     "success": True,
@@ -1244,6 +1297,27 @@ class Query(Runner):
                         "failed": shards_failed,
                     },
                 }
+
+                # Optional fields (cross-cluster search, num_reduce_phases)
+                if props.get("num_reduce_phases") is not None:
+                    result["num_reduce_phases"] = props["num_reduce_phases"]
+                if props.get("_clusters.total") is not None or props.get("_clusters.successful") is not None:
+                    result["clusters"] = {
+                        dest: props[key]
+                        for key, dest in [
+                            ("_clusters.total", "total"),
+                            ("_clusters.successful", "successful"),
+                            ("_clusters.skipped", "skipped"),
+                            ("_clusters.running", "running"),
+                            ("_clusters.partial", "partial"),
+                            ("_clusters.failed", "failed"),
+                        ]
+                        if props.get(key) is not None
+                    }
+                    if props.get("_clusters.details"):
+                        result["clusters"]["details"] = props["_clusters.details"]
+
+                return result
             else:
                 return {
                     "weight": 1,
@@ -1265,12 +1339,11 @@ class Query(Runner):
                     if page == 0:
                         sort = "_doc"
                         scroll = "10s"
-                        doc_type = params.get("type")
                         params = request_params.copy()
                         params["sort"] = sort
                         params["scroll"] = scroll
                         params["size"] = size
-                        r = await self._raw_search(es, doc_type, index, body, params, headers=headers)
+                        r = await self._raw_search(es, index, body, params, headers=headers)
 
                         props = parse(
                             r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"]
@@ -1338,12 +1411,10 @@ class Query(Runner):
         else:
             raise exceptions.RallyError(f"No runner available for operation-type: [{operation_type}]")
 
-    async def _raw_search(self, es, doc_type, index, body, params, headers=None):
+    async def _raw_search(self, es, index, body, params, headers=None):
         components = []
         if index:
             components.append(index)
-        if doc_type:
-            components.append(doc_type)
         components.append("_search")
         path = "/".join(components)
         return await es.perform_request(method="GET", path="/" + path, params=params, body=body, headers=headers)
@@ -2756,6 +2827,14 @@ class CompositeContext:
         except LookupError:
             raise exceptions.RallyAssertionError("This operation is only allowed inside a composite operation.") from None
 
+    @staticmethod
+    def has_active_context():
+        try:
+            CompositeContext.ctx.get()
+            return True
+        except LookupError:
+            return False
+
 
 class Composite(Runner):
     """
@@ -2767,6 +2846,7 @@ class Composite(Runner):
         # Since Composite is marked as serverless.Status.Public, only add public
         # operation types here.
         self.supported_op_types = [
+            "composite",
             "open-point-in-time",
             "close-point-in-time",
             "search",
@@ -2779,6 +2859,7 @@ class Composite(Runner):
             "delete-async-search",
             "field-caps",
         ]
+        self.operations_without_request_timing = ["composite"]
 
     async def run_stream(self, es, stream, connection_limit):
         streams = []
@@ -2799,20 +2880,30 @@ class Composite(Runner):
                         raise exceptions.RallyAssertionError(
                             f"Unsupported operation-type [{op_type}]. Use one of [{', '.join(self.supported_op_types)}]."
                         )
-                    runner = RequestTiming(runner_for(op_type))
-                    async with connection_limit:
+                    if op_type not in self.operations_without_request_timing:
+                        runner = RequestTiming(runner_for(op_type))
+                    else:
+                        runner = runner_for(op_type)
+                    if op_type == "composite":
+                        nested_item = dict(item)
+                        nested_item["_rally_connection_limit"] = connection_limit
                         async with runner:
-                            response = await runner({"default": es}, item)
-                            if response:
-                                # TODO: support calculating dependent's throughput
-                                # drop weight and unit metadata but keep the rest
-                                response.pop("weight")
-                                response.pop("unit")
-                                timing = response.get("dependent_timing")
-                                if timing:
-                                    timings.append(response)
-                            else:
-                                timings.append(None)
+                            response = await runner({"default": es}, nested_item)
+                    else:
+                        async with connection_limit:
+                            async with runner:
+                                response = await runner({"default": es}, item)
+
+                    if response:
+                        # TODO: support calculating dependent's throughput
+                        # drop weight and unit metadata but keep the rest
+                        response.pop("weight")
+                        response.pop("unit")
+                        timing = response.get("dependent_timing")
+                        if timing:
+                            timings.append(response)
+                    else:
+                        timings.append(None)
 
                 else:
                     raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
@@ -2832,9 +2923,15 @@ class Composite(Runner):
 
     async def __call__(self, es, params):
         requests = mandatory(params, "requests", self)
-        max_connections = params.get("max-connections", sys.maxsize)
-        async with CompositeContext():
-            response = await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+        connection_limit = params.get("_rally_connection_limit")
+        if connection_limit is None:
+            max_connections = params.get("max-connections", sys.maxsize)
+            connection_limit = asyncio.BoundedSemaphore(max_connections)
+        if CompositeContext.has_active_context():
+            response = await self.run_stream(es, requests, connection_limit)
+        else:
+            async with CompositeContext():
+                response = await self.run_stream(es, requests, connection_limit)
         return {
             "weight": 1,
             "unit": "ops",
@@ -3385,3 +3482,50 @@ class RunUntil(Runner):
 
     def __repr__(self, *args, **kwargs):
         return "run-until"
+
+
+class EnrichPolicy(Runner):
+
+    async def _delete_enrich_policy(self, es, policy_data):
+        reqs = []
+        for policy in policy_data.keys():
+            reqs.append(es.enrich.delete_policy(name=policy, ignore=[404]))
+        res = await asyncio.gather(*reqs)
+        self.logger.debug("Deleted %s enrich policies: %s", len(res), [r.body for r in res])
+
+    async def _create_enrich_policy(self, es, policy_data):
+        reqs = []
+        for p, req_body in policy_data.items():
+            reqs.append(es.enrich.put_policy(name=p, **req_body))
+        res = await asyncio.gather(*reqs)
+        self.logger.debug("Created %s enrich policies: %s", len(res), [r.body for r in res])
+
+    async def _refresh_indices(self, es):
+        res = await es.indices.refresh(index="_all")
+        self.logger.debug("Refreshed all indices: %s", res.body)
+
+    async def _execute_enrich_policy(self, es, policy_data):
+        reqs = []
+        for policy_name in policy_data:
+            reqs.append(es.enrich.execute_policy(name=policy_name, wait_for_completion=True))
+        res = await asyncio.gather(*reqs)
+        self.logger.debug("Executed %s enrich policies: %s", len(res), [r.body for r in res])
+
+    async def __call__(self, es, params):
+        enrich_policies = mandatory(params, "policies", self)
+
+        if params.get("delete", True):
+            await self._delete_enrich_policy(es, enrich_policies)
+
+        await self._create_enrich_policy(es, enrich_policies)
+        await self._refresh_indices(es)
+        await self._execute_enrich_policy(es, enrich_policies)
+
+        return {
+            "weight": len(enrich_policies),
+            "unit": "ops",
+            "success": True,
+        }
+
+    def __str__(self) -> str:
+        return "enrich-policy"

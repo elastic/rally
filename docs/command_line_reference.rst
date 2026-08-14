@@ -90,6 +90,23 @@ You can also pass track parameters to see how they affect the rendered output::
 
 It is also possible to refer to a track via its path (``--track-path``) or use a different track repository (``--track-repository``).
 
+.. _clr_validate_track:
+
+``validate-track``
+~~~~~~~~~~~~~~~~~~
+
+The ``validate-track`` subcommand loads a track and runs any registered challenge validators without starting a benchmark or contacting a cluster. Use it to fail fast on invalid track parameters (for example from automation before provisioning load drivers).
+
+It resolves the challenge the same way ``race`` does: an explicit ``--challenge``, or the track's default challenge when ``--challenge`` is omitted. An unknown challenge name fails with a non-zero exit code. Loading includes Jinja rendering, schema checks, unused-parameter checks, track plugins, and installing any track ``dependencies``. It does **not** download corpora or provision nodes. Track repository git fetch/update may still occur unless you pass ``--offline``.
+
+Unlike ``race`` (which detects build flavor from the target cluster), ``validate-track`` defaults to the ``default`` build flavor. For tracks whose Jinja templates depend on serverless conditionals, pass ``--build-flavor=serverless`` and optionally ``--serverless-operator`` so rendering matches the intended race environment.
+
+Example with a local track that registers validators (see :ref:`adding_tracks_custom_validators`)::
+
+    esrally validate-track --track-path=/path/to/my-track --challenge=autoscaling --track-params='{"scheduling": [1]}' --build-flavor=serverless --no-quiet
+
+On success the process exits zero. Confirmation text is suppressed by default (``--quiet``); pass ``--no-quiet`` to see whether validators ran. Exit code 0 with no registered validators for the resolved challenge means the track loaded successfully, **not** that custom parameter checks passed — only that there was nothing to validate. On failure it exits non-zero and prints the error (for example a ``TrackConfigError`` from a validator).
+
 ``compare``
 ~~~~~~~~~~~
 
@@ -906,7 +923,26 @@ If multiple Elasticsearch nodes are hidden behind a proxy, it is possible to add
 
 This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
 
-You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`.
+You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`. To benchmark multiple clusters simultaneously, combine the JSON format for ``--target-hosts`` with the :ref:`--multi-cluster flag <multi_cluster_mode>`.
+
+``multi-cluster``
+~~~~~~~~~~~~~~~~~
+
+Enables :ref:`multi-cluster mode <multi_cluster_mode>`. For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task, and reports results side-by-side.
+
+Requires a JSON object with two or more named clusters in ``--target-hosts`` and matching keys in ``--client-options``. Must be combined with the ``benchmark-only`` pipeline.
+
+Telemetry devices are disabled when this flag is active.
+
+The default value is ``false``.
+
+**Example**
+
+ ::
+
+   esrally race --track=geonames --pipeline=benchmark-only --multi-cluster \
+     --target-hosts='{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}' \
+     --client-options='{"cluster-a":{"timeout":60},"cluster-b":{"timeout":60}}'
 
 ``limit``
 ~~~~~~~~~
@@ -1103,6 +1139,8 @@ Examples:
 
 .. NOTE::
    **All** :ref:`built-in operations <track_operations>` will use the connection to the ``default`` cluster. However, you can utilize the client connections to the additional clusters in your :ref:`custom runners <adding_tracks_custom_runners>`.
+
+For :ref:`multi-cluster mode <multi_cluster_mode>`, use the same JSON format for ``--target-hosts`` and add ``--multi-cluster`` to the command line. Each task then runs against all clusters in parallel within a single race, and results are stored with a ``cluster`` field on each document so you can filter by cluster in your results store.
 
 ``client-options``
 ~~~~~~~~~~~~~~~~~~
