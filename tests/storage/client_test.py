@@ -346,6 +346,44 @@ def test_get_failover_on_service_unavailable_error_reduces_connections(client: C
     assert wg.max_count < default_max_count
 
 
+def test_get_raises_client_unavailable_error_when_every_mirror_is_client_unavailable(
+    client: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # pylint: disable=protected-access
+    monkeypatch.setattr(client, "resolve", lambda url, **kwargs: iter([MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD]))
+
+    adapter = client._adapters.get(MIRRORED_URL)
+
+    def always_client_unavailable(url, *, check_head=None):
+        raise ClientUnavailableError(f"boom: {url}")
+
+    monkeypatch.setattr(adapter, "get", always_client_unavailable)
+
+    # Every mirror failed for a client-side reason (e.g. credentials), not because a service was overwhelmed, so
+    # this should fail fast with `ClientUnavailableError` instead of the usual `ServiceUnavailableError`.
+    with pytest.raises(ClientUnavailableError):
+        client.get(MIRRORING_URL)
+
+
+def test_get_raises_service_unavailable_error_when_mirrors_fail_for_mixed_reasons(client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
+    # pylint: disable=protected-access
+    monkeypatch.setattr(client, "resolve", lambda url, **kwargs: iter([MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD]))
+
+    adapter = client._adapters.get(MIRRORED_URL)
+
+    def mixed_failures(url, *, check_head=None):
+        if url == MIRRORED_URL:
+            raise ClientUnavailableError("boom")
+        raise ServiceUnavailableError("boom")
+
+    monkeypatch.setattr(adapter, "get", mixed_failures)
+
+    # Not every mirror failed because of a client-side problem, so it is not safe to assume the whole transfer is
+    # unrecoverable: it should keep the usual `ServiceUnavailableError` "back off and retry" behavior.
+    with pytest.raises(ServiceUnavailableError):
+        client.get(MIRRORING_URL)
+
+
 def check_any(head: Head, any_head: list[Head]) -> list[Head]:
     ret: list[Head] = []
     for h in any_head:
