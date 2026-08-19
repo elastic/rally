@@ -3760,6 +3760,15 @@ class TestGlobalStatsCalculator:
 
 
 class TestGlobalStats:
+    TIME_WINDOW_FIELDS = (
+        "start-timestamp",
+        "end-timestamp",
+        "warmup-start-timestamp",
+        "warmup-end-timestamp",
+        "measure-start-timestamp",
+        "measure-end-timestamp",
+    )
+
     def test_as_flat_list(self):
         d = {
             "op_metrics": [
