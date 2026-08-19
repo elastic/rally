@@ -69,7 +69,33 @@
         "results": {
           "properties": {
             "op_metrics": {
-              "type": "nested"
+              "type": "nested",
+              "properties": {
+                "start-timestamp": {
+                  "type": "date",
+                  "format": "epoch_millis"
+                },
+                "end-timestamp": {
+                  "type": "date",
+                  "format": "epoch_millis"
+                },
+                "warmup-start-timestamp": {
+                  "type": "date",
+                  "format": "epoch_millis"
+                },
+                "warmup-end-timestamp": {
+                  "type": "date",
+                  "format": "epoch_millis"
+                },
+                "measure-start-timestamp": {
+                  "type": "date",
+                  "format": "epoch_millis"
+                },
+                "measure-end-timestamp": {
+                  "type": "date",
+                  "format": "epoch_millis"
+                }
+              }
             }
           }
         }

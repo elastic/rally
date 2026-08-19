@@ -16,7 +16,7 @@ Migrate rally indices to data streams
 * Rally default behavior is to write metrics, races and results on data streams by first creating index templates, each composed of 2 component templates:
   a. Main template, which contains the field mappings and an ILM policy reference. The default ILM policy triggers a rollover when any primary shard exceeds 50 GB.
   b. ``@custom`` template, which is empty by default but can be populated with custom index settings. This template is applied on top of the main template and can be used to override defaults (e.g. changing the ILM policy or replica count). Rally never overwrites this template.
-* Data streams are versioned ``rally-metrics-v1``, ``rally-races-v1`` and ``rally-results-v1``.
+* Data streams are versioned ``rally-metrics-v2``, ``rally-races-v2`` and ``rally-results-v2``.
 * Old date-based patterned indices (e.g. ``rally-metrics-YYYY-MM``) are not removed and will continue to work as before, by setting ``datastore.use_data_streams`` value to ``false``.
 
 Reindex of existing indices is recommended in order to benefit from the advantages of data streams.
@@ -65,7 +65,7 @@ Reindex the old indices into the target data stream. The ``op_type`` must be ``c
         "index": "rally-metrics-2*"
       },
       "dest": {
-        "index": "rally-metrics-v1",
+        "index": "rally-metrics-v2",
         "op_type": "create"
       }
     }
@@ -75,20 +75,20 @@ Repeat for races and results::
     POST _reindex
     {
       "source": { "index": "rally-races-2*" },
-      "dest": { "index": "rally-races-v1", "op_type": "create" }
+      "dest": { "index": "rally-races-v2", "op_type": "create" }
     }
 
     POST _reindex
     {
       "source": { "index": "rally-results-2*" },
-      "dest": { "index": "rally-results-v1", "op_type": "create" }
+      "dest": { "index": "rally-results-v2", "op_type": "create" }
     }
 
 **Step 3 — Verify and clean up**
 
 After reindexing, verify that the data stream contains at least as many documents as the old indices::
 
-    GET _cat/count/rally-metrics-v1
+    GET _cat/count/rally-metrics-v2
     GET _cat/count/rally-metrics-2*
 
 Once you are satisfied the data has been migrated, you can delete the old date-based indices::

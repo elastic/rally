@@ -53,6 +53,7 @@ def rally_metric_template():
                 "@timestamp": {"format": "epoch_millis", "type": "date"},
                 "car": {"type": "keyword"},
                 "challenge": {"type": "keyword"},
+                "response-timestamp": {"format": "epoch_millis", "type": "date"},
                 "environment": {"type": "keyword"},
                 "job": {"type": "keyword"},
                 "max": {"type": "float"},
@@ -585,7 +586,7 @@ class TestEsClient:
         bulk_index_errors = [
             {
                 "create": {
-                    "_index": "rally-metrics-v1",
+                    "_index": "rally-metrics-v2",
                     "_id": None,
                     "status": 429,
                     "error": {"type": "circuit_breaking_exception", "reason": "Data too large"},
@@ -611,7 +612,7 @@ class TestEsClient:
         bulk_index_errors = [
             {
                 "create": {
-                    "_index": "rally-metrics-v1",
+                    "_index": "rally-metrics-v2",
                     "_id": None,
                     "status": 409,
                     "error": {"type": "version_conflict_engine_exception"},
@@ -699,6 +700,16 @@ class TestKeepaliveUrllib3HttpNode:
 
 
 class TestIndexTemplateProvider:
+
+    TIME_WINDOW_FIELDS = (
+        "start-timestamp",
+        "end-timestamp",
+        "warmup-start-timestamp",
+        "warmup-end-timestamp",
+        "measure-start-timestamp",
+        "measure-end-timestamp",
+    )
+
     def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
@@ -791,6 +802,20 @@ class TestIndexTemplateProvider:
             t = json.loads(provider.get_template(es_store_type))
             assert t["index_patterns"] == [f"{es_store_type.index_prefix}*"]
             assert t["template"]["mappings"]["properties"]["@timestamp"] == {"type": "date", "format": "epoch_millis"}
+
+    def test_templates_map_task_time_windows(self):
+        provider = self._make_provider()
+        date_mapping = {"type": "date", "format": "epoch_millis"}
+        metrics_props = json.loads(provider.get_template(metrics.EsStoreType.metrics))["template"]["mappings"]["properties"]
+        assert metrics_props["response-timestamp"] == date_mapping
+
+        results_props = json.loads(provider.get_template(metrics.EsStoreType.results))["template"]["mappings"]["properties"]
+        races_op = json.loads(provider.get_template(metrics.EsStoreType.races))["template"]["mappings"]["properties"]["results"][
+            "properties"
+        ]["op_metrics"]["properties"]
+        for name in self.TIME_WINDOW_FIELDS:
+            assert results_props[name] == date_mapping
+            assert races_op[name] == date_mapping
 
 
 class TestComponentTemplateProvider:
@@ -1677,6 +1702,49 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
         )
 
         assert actual_index_size == index_size
+
+    def test_get_op_window(self):
+        search_result = {
+            "aggregations": {
+                "start": {"value": float(StaticClock.NOW * 1000 + 10000)},
+                "end": {"value": float(StaticClock.NOW * 1000 + 10050)},
+            },
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"race-id": self.RACE_ID}},
+                        {"term": {"name": "service_time"}},
+                        {"term": {"task": "index"}},
+                        {"term": {"sample-type": "warmup"}},
+                    ]
+                }
+            },
+            "size": 0,
+            "aggs": {
+                "start": {"min": {"field": "@timestamp"}},
+                "end": {"max": {"field": "response-timestamp"}},
+            },
+        }
+
+        assert self.metrics_store.get_op_window("index", sample_type=metrics.SampleType.Warmup) == (
+            StaticClock.NOW * 1000 + 10000,
+            StaticClock.NOW * 1000 + 10050,
+        )
+        self.es_mock.search.assert_called_with(
+            index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}",
+            body=expected_query,
+        )
+
+    def test_get_op_window_none_when_empty(self):
+        self.es_mock.search = mock.MagicMock(return_value={"aggregations": {"start": {"value": None}, "end": {"value": None}}})
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        assert self.metrics_store.get_op_window("index") is None
 
     def test_get_mean(self):
         mean_throughput = 1734
@@ -2922,6 +2990,111 @@ class TestInMemoryMetricsStore:
 
         assert actual_duration is None
 
+    def _put_service_time(self, task, sample_type, absolute_time, relative_time, service_time_ms):
+        self.metrics_store.put_value_cluster_level(
+            "service_time",
+            service_time_ms,
+            "ms",
+            task=task,
+            sample_type=sample_type,
+            absolute_time=absolute_time,
+            relative_time=relative_time,
+        )
+
+    def test_service_time_records_completion_time(self):
+        self.metrics_store.open(
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
+            "test",
+            "append-no-conflicts",
+            "defaults",
+            create=True,
+        )
+        self._put_service_time(
+            "index", metrics.SampleType.Normal, absolute_time=StaticClock.NOW + 10.0, relative_time=10.0, service_time_ms=200
+        )
+        self.metrics_store.put_value_cluster_level(
+            "throughput",
+            100,
+            "docs/s",
+            task="index",
+            absolute_time=StaticClock.NOW + 10.0,
+            relative_time=10.0,
+        )
+
+        service_time = next(d for d in self.metrics_store.docs if d["name"] == "service_time")
+        throughput = next(d for d in self.metrics_store.docs if d["name"] == "throughput")
+        assert service_time["response-timestamp"] == StaticClock.NOW * 1000 + 10200
+        # response-timestamp is only present in 'service-time' samples
+        assert "response-timestamp" not in throughput
+
+    def test_put_doc_stamps_response_timestamp_on_service_time(self):
+        self.metrics_store.open(
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
+            "test",
+            "append-no-conflicts",
+            "defaults",
+            create=True,
+        )
+        self.metrics_store.put_doc(
+            {"name": "service_time", "value": 200, "task": "index", "sample-type": "normal"},
+            absolute_time=StaticClock.NOW + 10.0,
+        )
+        self.metrics_store.put_doc(
+            {"name": "throughput", "value": 100, "task": "index", "sample-type": "normal"},
+            absolute_time=StaticClock.NOW + 10.0,
+        )
+        service_time = next(d for d in self.metrics_store.docs if d["name"] == "service_time")
+        throughput = next(d for d in self.metrics_store.docs if d["name"] == "throughput")
+        assert service_time["response-timestamp"] == StaticClock.NOW * 1000 + 10200
+        assert "response-timestamp" not in throughput
+
+    def test_get_op_window_uses_completion_end_over_normal_samples(self):
+        self.metrics_store.open(
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
+            "test",
+            "append-no-conflicts",
+            "defaults",
+            create=True,
+        )
+        # last-started Normal op (+10.050s, 5ms) finishes before the earlier 200ms op
+        self._put_service_time(
+            "index", metrics.SampleType.Warmup, absolute_time=StaticClock.NOW + 1.0, relative_time=1.0, service_time_ms=5
+        )
+        self._put_service_time(
+            "index", metrics.SampleType.Normal, absolute_time=StaticClock.NOW + 10.0, relative_time=10.0, service_time_ms=200
+        )
+        self._put_service_time(
+            "index", metrics.SampleType.Normal, absolute_time=StaticClock.NOW + 10.050, relative_time=10.050, service_time_ms=5
+        )
+        self._put_service_time(
+            "search", metrics.SampleType.Normal, absolute_time=StaticClock.NOW + 30.0, relative_time=1.0, service_time_ms=100
+        )
+
+        assert self.metrics_store.get_op_window("index") == (StaticClock.NOW * 1000 + 10000, StaticClock.NOW * 1000 + 10200)
+        assert self.metrics_store.get_op_window("index", sample_type=metrics.SampleType.Warmup) == (
+            StaticClock.NOW * 1000 + 1000,
+            StaticClock.NOW * 1000 + 1005,
+        )
+
+    def test_get_op_window_none_when_empty(self):
+        self.metrics_store.open(
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
+            "test",
+            "append-no-conflicts",
+            "defaults",
+            create=True,
+        )
+        self._put_service_time(
+            "index", metrics.SampleType.Warmup, absolute_time=StaticClock.NOW + 1.0, relative_time=1.0, service_time_ms=5
+        )
+
+        assert self.metrics_store.get_op_window("index") is None
+        assert self.metrics_store.get_op_window("missing") is None
+
     def test_get_value(self):
         throughput = 5000
         self.metrics_store.open(
@@ -3526,6 +3699,65 @@ class TestGlobalStatsCalculator:
         result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name="geonames", meta_data={}), challenge=challenge)()
         assert "delete-index" in [op_metric.get("task") for op_metric in result.op_metrics]
 
+    def _put_service_time(self, task, sample_type, absolute_time, relative_time, service_time_ms, operation_type="bulk"):
+        self.metrics_store.put_value_cluster_level(
+            "service_time",
+            service_time_ms,
+            "ms",
+            task=task,
+            operation=task,
+            operation_type=operation_type,
+            sample_type=sample_type,
+            absolute_time=absolute_time,
+            relative_time=relative_time,
+            meta_data={"success": True},
+        )
+
+    def test_op_metrics_include_task_time_windows(self):
+        index = Task("index", operation=Operation(name="index", operation_type="bulk"))
+        search = Task("search", operation=Operation(name="search", operation_type="search"))
+        challenge = Challenge(name="default", schedule=[index, search], meta_data={})
+
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "default", "defaults", create=True)
+        # origin = StaticClock.NOW, warmup [+1s, +20ms], measure [+5s, +80ms]
+        self._put_service_time("index", metrics.SampleType.Warmup, StaticClock.NOW + 1.0, 1.0, 20)
+        self._put_service_time("index", metrics.SampleType.Normal, StaticClock.NOW + 5.0, 5.0, 80)
+        self._put_service_time("search", metrics.SampleType.Normal, StaticClock.NOW + 20.0, 2.0, 15, operation_type="search")
+
+        result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name="test", meta_data={}), challenge=challenge)()
+        index_metrics = result.metrics("index")
+        search_metrics = result.metrics("search")
+
+        assert index_metrics["start-timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup-start-timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup-end-timestamp"] == StaticClock.NOW * 1000 + 1020
+        assert index_metrics["measure-start-timestamp"] == StaticClock.NOW * 1000 + 5000
+        assert index_metrics["measure-end-timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert index_metrics["end-timestamp"] == StaticClock.NOW * 1000 + 5080
+
+        assert search_metrics["start-timestamp"] == StaticClock.NOW * 1000 + 20000
+        assert "warmup-start-timestamp" not in search_metrics
+        assert search_metrics["measure-start-timestamp"] == StaticClock.NOW * 1000 + 20000
+        assert search_metrics["measure-end-timestamp"] == StaticClock.NOW * 1000 + 20015
+        assert search_metrics["end-timestamp"] == StaticClock.NOW * 1000 + 20015
+
+    def test_op_metrics_warmup_only_omits_measure_window(self):
+        index = Task("index", operation=Operation(name="index", operation_type="bulk"))
+        challenge = Challenge(name="default", schedule=[index], meta_data={})
+
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "default", "defaults", create=True)
+        self._put_service_time("index", metrics.SampleType.Warmup, StaticClock.NOW + 1.0, 1.0, 20)
+
+        result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name="test", meta_data={}), challenge=challenge)()
+        index_metrics = result.metrics("index")
+
+        assert index_metrics["start-timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup-start-timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup-end-timestamp"] == StaticClock.NOW * 1000 + 1020
+        assert index_metrics["end-timestamp"] == StaticClock.NOW * 1000 + 1020
+        assert "measure-start-timestamp" not in index_metrics
+        assert "measure-end-timestamp" not in index_metrics
+
 
 class TestGlobalStats:
     def test_as_flat_list(self):
@@ -3853,6 +4085,124 @@ class TestGlobalStats:
                 "single": 0,
             },
         }
+
+    def test_as_flat_list_does_not_emit_time_window_metrics(self):
+        s = metrics.GlobalStats(
+            {
+                "op_metrics": [
+                    {
+                        "task": "index",
+                        "operation": "index",
+                        "start-timestamp": StaticClock.NOW * 1000,
+                        "end-timestamp": StaticClock.NOW * 1000 + 5080,
+                        "warmup-start-timestamp": StaticClock.NOW * 1000 + 1000,
+                        "warmup-end-timestamp": StaticClock.NOW * 1000 + 1020,
+                        "measure-start-timestamp": StaticClock.NOW * 1000 + 5000,
+                        "measure-end-timestamp": StaticClock.NOW * 1000 + 5080,
+                    }
+                ]
+            }
+        )
+        metric_list = s.as_flat_list()
+        assert select(metric_list, "time_window") is None
+        for name in self.TIME_WINDOW_FIELDS:
+            assert select(metric_list, name) is None
+
+    def test_round_trip_preserves_task_time_windows(self):
+        original = {
+            "op_metrics": [
+                {
+                    "task": "index",
+                    "operation": "index",
+                    "error_rate": 0.0,
+                    "duration": 12.0,
+                    "start-timestamp": StaticClock.NOW * 1000,
+                    "end-timestamp": StaticClock.NOW * 1000 + 5080,
+                    "warmup-start-timestamp": StaticClock.NOW * 1000 + 1000,
+                    "warmup-end-timestamp": StaticClock.NOW * 1000 + 1020,
+                    "measure-start-timestamp": StaticClock.NOW * 1000 + 5000,
+                    "measure-end-timestamp": StaticClock.NOW * 1000 + 5080,
+                }
+            ]
+        }
+        assert metrics.GlobalStats(original).as_dict()["op_metrics"] == original["op_metrics"]
+        metrics.GlobalStats({"op_metrics": [{"task": "index", "operation": "index"}]})
+
+    def test_time_window_result_doc(self):
+        race = metrics.Race(
+            "1.0.0",
+            None,
+            "unittest",
+            "race-1",
+            datetime.datetime(2016, 1, 31, tzinfo=datetime.timezone.utc),
+            "benchmark-only",
+            {},
+            Track(name="test"),
+            {},
+            Challenge(name="default", schedule=[]),
+            "defaults",
+            {},
+            {},
+        )
+        window = {
+            "start-timestamp": StaticClock.NOW * 1000,
+            "end-timestamp": StaticClock.NOW * 1000 + 5080,
+            "measure-start-timestamp": StaticClock.NOW * 1000 + 5000,
+            "measure-end-timestamp": StaticClock.NOW * 1000 + 5080,
+        }
+        doc = race.time_window_result_doc("index", "index", window)
+        assert doc["name"] == "time_window"
+        assert doc["task"] == "index"
+        assert doc["operation"] == "index"
+        assert doc["race-id"] == "race-1"
+        assert doc["start-timestamp"] == StaticClock.NOW * 1000
+        assert doc["end-timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert "warmup-start-timestamp" not in doc
+
+    def test_to_result_dicts_includes_time_window_docs(self):
+        race = metrics.Race(
+            "1.0.0",
+            None,
+            "unittest",
+            "race-1",
+            datetime.datetime(2016, 1, 31, tzinfo=datetime.timezone.utc),
+            "benchmark-only",
+            {},
+            Track(name="test"),
+            {},
+            Challenge(name="default", schedule=[]),
+            "defaults",
+            {},
+            {},
+        )
+        race.add_results(
+            metrics.GlobalStats(
+                {
+                    "op_metrics": [
+                        {
+                            "task": "index",
+                            "operation": "index",
+                            "error_rate": 0.0,
+                            "duration": 12.0,
+                            "start-timestamp": StaticClock.NOW * 1000,
+                            "end-timestamp": StaticClock.NOW * 1000 + 5080,
+                            "measure-start-timestamp": StaticClock.NOW * 1000 + 5000,
+                            "measure-end-timestamp": StaticClock.NOW * 1000 + 5080,
+                        },
+                        {
+                            "task": "admin",
+                            "operation": "admin",
+                            "error_rate": 0.0,
+                        },
+                    ]
+                }
+            )
+        )
+        windows = [d for d in race.to_result_dicts() if d.get("name") == "time_window"]
+        assert len(windows) == 1
+        assert windows[0]["task"] == "index"
+        assert windows[0]["end-timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert "warmup-start-timestamp" not in windows[0]
 
 
 class TestSystemStats:

@@ -36,16 +36,16 @@ across runs, comparisons, convergence, or ad-hoc aggregations.
 ## Where the data lives
 
 By default (`datastore.use_data_streams = true`) Rally writes to three data streams;
-`rally-races-v1`, `rally-results-v1`, and `rally-metrics-v1` (detailed below). If you set
+`rally-races-v2`, `rally-results-v2`, and `rally-metrics-v2` (detailed below). If you set
 `datastore.use_data_streams = false`, Rally writes to monthly indices instead
 (`rally-races-YYYY-MM`, `rally-results-YYYY-MM`, `rally-metrics-YYYY-MM`). Querying with a
 wildcard (`rally-races-*`, `rally-results-*`, `rally-metrics-*`) covers both layouts.
 
 | Stream / index | One doc per | Contains |
 |---|---|---|
-| `rally-races-v1` | race | race metadata: track, challenge, car, timestamps, user tags |
-| `rally-results-v1` | task+metric | aggregated results — the summary-report numbers |
-| `rally-metrics-v1` | sample | raw time-series samples + node/GC/segment metrics |
+| `rally-races-v2` | race | race metadata: track, challenge, car, timestamps, user tags |
+| `rally-results-v2` | task+metric | aggregated results — the summary-report numbers |
+| `rally-metrics-v2` | sample | raw time-series samples + node/GC/segment metrics |
 
 ## Key fields (`docs/metrics.rst`)
 
