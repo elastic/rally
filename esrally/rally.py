@@ -1428,7 +1428,7 @@ def main():
     if not cfg.config_present():
         cfg.install_default_config()
     cfg.load_config(auto_upgrade=True)
-    cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.now(tz=datetime.UTC))
+    cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.now(tz=datetime.timezone.utc))
     # Local config per node
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
     cfg.add(config.Scope.application, "node", "rally.cwd", os.getcwd())
