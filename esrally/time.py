@@ -44,7 +44,7 @@ def from_iso8601(ts):
     :param ts: an ISO-8601 compliant string
     :return: The corresponding datetime instance.
     """
-    return datetime.strptime(ts, "%Y%m%dT%H%M%SZ")
+    return datetime.strptime(ts, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
 
 
 def sleep(seconds):

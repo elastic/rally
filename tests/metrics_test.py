@@ -3274,7 +3274,7 @@ class TestInMemoryMetricsStore:
 
 
 class TestFileRaceStore:
-    RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    RACE_TIMESTAMP = datetime.datetime(2016, 1, 31, tzinfo=datetime.UTC)
     RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
     class DictHolder:
