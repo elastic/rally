@@ -1064,8 +1064,6 @@ class MetricsStore:  # pylint: disable=too-many-public-methods
             doc["meta"] = meta
         if self._track_params:
             doc["track-params"] = self._track_params
-        if doc.get("name") == "service_time":
-            doc["response-timestamp"] = int(doc["@timestamp"] + doc["value"])
 
         self._add(doc)
 
@@ -1739,11 +1737,12 @@ class InMemoryMetricsStore(MetricsStore):
             return None
 
     def get_op_window(self, task, name="service_time", sample_type=SampleType.Normal, cluster_name=None):
-        starts = self._get(name, task, None, sample_type, None, cluster_name, lambda d: d["@timestamp"])
-        ends = self._get(name, task, None, sample_type, None, cluster_name, lambda d: d["response-timestamp"])
-        if not starts:
+        # Every service_time sample carries a response-timestamp, so each doc
+        # yields a (start, end) pair. The list is only empty when the task/phase produced no samples.
+        windows = self._get(name, task, None, sample_type, None, cluster_name, lambda d: (d["@timestamp"], d["response-timestamp"]))
+        if not windows:
             return None
-        return int(min(starts)), int(max(ends))
+        return int(min(start for start, _ in windows)), int(max(end for _, end in windows))
 
     def task_cluster_names(self):
         return {
@@ -2109,12 +2108,12 @@ class Race:
         all_results = []
         # Per-task wall-clock window fields copied from a reported op_metrics entry onto its own time_window doc.
         time_window_fields = (
-            "start-timestamp",
-            "end-timestamp",
-            "warmup-start-timestamp",
-            "warmup-end-timestamp",
-            "measure-start-timestamp",
-            "measure-end-timestamp",
+            "start_timestamp",
+            "end_timestamp",
+            "warmup_start_timestamp",
+            "warmup_end_timestamp",
+            "normal_start_timestamp",
+            "normal_end_timestamp",
         )
 
         results_list = self.results if isinstance(self.results, list) else [self.results]
@@ -2668,9 +2667,9 @@ class GlobalStatsCalculator:
                 t = task.name
                 op_type = task.operation.type
                 error_rate = self.error_rate(t, op_type, cluster_name=cluster_name)
-                duration = self.duration(t, cluster_name=cluster_name)
                 if task.operation.include_in_reporting or error_rate > 0:
                     self.logger.debug("Gathering request metrics for [%s].", t)
+                    time_window = self.time_window(t, cluster_name=cluster_name)
                     result.add_op_metrics(
                         t,
                         task.operation.name,
@@ -2679,9 +2678,9 @@ class GlobalStatsCalculator:
                         self.single_latency(t, op_type, metric_name="service_time", cluster_name=cluster_name),
                         self.single_latency(t, op_type, metric_name="processing_time", cluster_name=cluster_name),
                         error_rate,
-                        duration,
+                        self.duration(time_window),
                         self.merge(self.track.meta_data, self.challenge.meta_data, task.operation.meta_data, task.meta_data),
-                        time_window=self.time_window(t, cluster_name=cluster_name),
+                        time_window=time_window,
                     )
         self.logger.debug("Gathering indexing metrics.")
         result.total_time = self.sum("indexing_total_time")
@@ -2859,35 +2858,32 @@ class GlobalStatsCalculator:
             task=task_name, operation_type=operation_type, sample_type=SampleType.Normal, cluster_name=cluster_name
         )
 
-    def duration(self, task_name, cluster_name=None):
-        return self.store.get_one(
-            "service_time",
-            task=task_name,
-            cluster_name=cluster_name,
-            mapper=lambda doc: doc["relative-time"],
-            sort_key="relative-time",
-            sort_reverse=True,
-        )
+    def duration(self, time_window):
+        start = time_window.get("start_timestamp")
+        end = time_window.get("end_timestamp")
+        if start is None or end is None:
+            return None
+        return end - start
 
     def time_window(self, task_name, cluster_name=None):
         phases = {
             "warmup": self.store.get_op_window(task_name, sample_type=SampleType.Warmup, cluster_name=cluster_name),
-            "measure": self.store.get_op_window(task_name, sample_type=SampleType.Normal, cluster_name=cluster_name),
+            "normal": self.store.get_op_window(task_name, sample_type=SampleType.Normal, cluster_name=cluster_name),
         }
         window = {}
         for phase, op_window in phases.items():
             # a phase window is None when that phase produced no samples
             if op_window:
-                window[f"{phase}-start-timestamp"] = int(op_window[0])
-                window[f"{phase}-end-timestamp"] = int(op_window[1])
+                window[f"{phase}_start_timestamp"] = int(op_window[0])
+                window[f"{phase}_end_timestamp"] = int(op_window[1])
         starts = [op_window[0] for op_window in phases.values() if op_window]
         ends = [op_window[1] for op_window in phases.values() if op_window]
         if starts:
-            # start-timestamp is the earliest op start across phases (the first issued operation)
-            window["start-timestamp"] = int(min(starts))
+            # start_timestamp is the earliest op start across phases (the first issued operation)
+            window["start_timestamp"] = int(min(starts))
         if ends:
-            # end-timestamp is the timestamp of last response across phases (the last operation to complete)
-            window["end-timestamp"] = int(max(ends))
+            # end_timestamp is the timestamp of last response across phases (the last operation to complete)
+            window["end_timestamp"] = int(max(ends))
         return window
 
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None, cluster_name=None):

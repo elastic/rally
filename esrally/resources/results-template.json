@@ -77,27 +77,27 @@
       "task": {
         "type": "keyword"
       },
-      "start-timestamp": {
+      "start_timestamp": {
         "type": "date",
         "format": "epoch_millis"
       },
-      "end-timestamp": {
+      "end_timestamp": {
         "type": "date",
         "format": "epoch_millis"
       },
-      "warmup-start-timestamp": {
+      "warmup_start_timestamp": {
         "type": "date",
         "format": "epoch_millis"
       },
-      "warmup-end-timestamp": {
+      "warmup_end_timestamp": {
         "type": "date",
         "format": "epoch_millis"
       },
-      "measure-start-timestamp": {
+      "normal_start_timestamp": {
         "type": "date",
         "format": "epoch_millis"
       },
-      "measure-end-timestamp": {
+      "normal_end_timestamp": {
         "type": "date",
         "format": "epoch_millis"
       },

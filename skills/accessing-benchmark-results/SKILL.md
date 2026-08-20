@@ -35,22 +35,23 @@ across runs, comparisons, convergence, or ad-hoc aggregations.
 
 ## Where the data lives
 
-By default (`datastore.use_data_streams = true`) Rally writes to three data streams;
-`rally-races-v2`, `rally-results-v2`, and `rally-metrics-v2` (detailed below). If you set
-`datastore.use_data_streams = false`, Rally writes to monthly indices instead
-(`rally-races-YYYY-MM`, `rally-results-YYYY-MM`, `rally-metrics-YYYY-MM`). Querying with a
-wildcard (`rally-races-*`, `rally-results-*`, `rally-metrics-*`) covers both layouts.
+By default (`datastore.use_data_streams = true`) Rally writes to three versioned data streams
+(`rally-races-v*`, `rally-results-v*`, and `rally-metrics-v*`; current version is in
+`docs/metrics.rst`). If you set `datastore.use_data_streams = false`, Rally writes to monthly
+indices instead (`rally-races-YYYY-MM`, `rally-results-YYYY-MM`, `rally-metrics-YYYY-MM`).
+Querying with a wildcard (`rally-races-*`, `rally-results-*`, `rally-metrics-*`) covers both
+layouts.
 
 | Stream / index | One doc per | Contains |
 |---|---|---|
-| `rally-races-v2` | race | race metadata: track, challenge, car, timestamps, user tags |
-| `rally-results-v2` | task+metric | aggregated results — the summary-report numbers |
-| `rally-metrics-v2` | sample | raw time-series samples + node/GC/segment metrics |
+| `rally-races-*` | race | race metadata: track, challenge, car, timestamps, user tags |
+| `rally-results-*` | task+metric | aggregated results — the summary-report numbers |
+| `rally-metrics-*` | sample | raw time-series samples + node/GC/segment metrics |
 
 ## Key fields (`docs/metrics.rst`)
 
 `race-id` (UUID grouping a run), `race-timestamp`, `@timestamp` (epoch ms per sample),
-`relative-time` (ms since race start), `track`, `challenge`, `car`, `environment`,
+`relative-time` (ms since the current task started), `track`, `challenge`, `car`, `environment`,
 `sample-type` (`normal` = measured samples, `warmup` = warmup-phase samples), `name` (metric name, e.g.
 `service_time`), `value`, `unit`, `task`, `operation`, `operation-type`, and `meta.*`
 (host/CPU/OS info, `source_revision`, `distribution_version`, and user tags stored as

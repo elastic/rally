@@ -702,12 +702,12 @@ class TestKeepaliveUrllib3HttpNode:
 class TestIndexTemplateProvider:
 
     TIME_WINDOW_FIELDS = (
-        "start-timestamp",
-        "end-timestamp",
-        "warmup-start-timestamp",
-        "warmup-end-timestamp",
-        "measure-start-timestamp",
-        "measure-end-timestamp",
+        "start_timestamp",
+        "end_timestamp",
+        "warmup_start_timestamp",
+        "warmup_end_timestamp",
+        "normal_start_timestamp",
+        "normal_end_timestamp",
     )
 
     def setup_method(self, method):
@@ -3028,28 +3028,6 @@ class TestInMemoryMetricsStore:
         # response-timestamp is only present in 'service-time' samples
         assert "response-timestamp" not in throughput
 
-    def test_put_doc_stamps_response_timestamp_on_service_time(self):
-        self.metrics_store.open(
-            self.RACE_ID,
-            self.RACE_TIMESTAMP,
-            "test",
-            "append-no-conflicts",
-            "defaults",
-            create=True,
-        )
-        self.metrics_store.put_doc(
-            {"name": "service_time", "value": 200, "task": "index", "sample-type": "normal"},
-            absolute_time=StaticClock.NOW + 10.0,
-        )
-        self.metrics_store.put_doc(
-            {"name": "throughput", "value": 100, "task": "index", "sample-type": "normal"},
-            absolute_time=StaticClock.NOW + 10.0,
-        )
-        service_time = next(d for d in self.metrics_store.docs if d["name"] == "service_time")
-        throughput = next(d for d in self.metrics_store.docs if d["name"] == "throughput")
-        assert service_time["response-timestamp"] == StaticClock.NOW * 1000 + 10200
-        assert "response-timestamp" not in throughput
-
     def test_get_op_window_uses_completion_end_over_normal_samples(self):
         self.metrics_store.open(
             self.RACE_ID,
@@ -3476,6 +3454,7 @@ class TestStatsCalculator:
             operation_type=track.OperationType.Bulk,
             sample_type=metrics.SampleType.Warmup,
             meta_data={"success": False},
+            absolute_time=StaticClock.NOW,
             relative_time=536,
         )
         store.put_value_cluster_level(
@@ -3485,6 +3464,7 @@ class TestStatsCalculator:
             task="index #1",
             operation_type=track.OperationType.Bulk,
             meta_data={"success": True},
+            absolute_time=StaticClock.NOW,
             relative_time=595,
         )
         store.put_value_cluster_level(
@@ -3494,6 +3474,7 @@ class TestStatsCalculator:
             task="index #1",
             operation_type=track.OperationType.Bulk,
             meta_data={"success": False},
+            absolute_time=StaticClock.NOW,
             relative_time=709,
         )
         store.put_value_cluster_level(
@@ -3503,6 +3484,7 @@ class TestStatsCalculator:
             task="index #1",
             operation_type=track.OperationType.Bulk,
             meta_data={"success": True},
+            absolute_time=StaticClock.NOW,
             relative_time=653,
         )
 
@@ -3525,6 +3507,7 @@ class TestStatsCalculator:
             task="index #2",
             operation_type=track.OperationType.Bulk,
             sample_type=metrics.SampleType.Warmup,
+            absolute_time=StaticClock.NOW,
             relative_time=600,
         )
 
@@ -3566,7 +3549,8 @@ class TestStatsCalculator:
             "unit": "ms",
         }
         assert round(abs(0.3333333333333333 - opm["error_rate"]), 7) == 0
-        assert opm["duration"] == 709 * 1000
+        # All samples share StaticClock.NOW as @timestamp, so duration is last completion minus first start.
+        assert opm["duration"] == 250
 
         opm2 = stats.metrics("index #2")
         assert opm2["throughput"] == {
@@ -3587,7 +3571,7 @@ class TestStatsCalculator:
                 "unit": "ms",
             }
         ]
-        assert opm2["duration"] == 600 * 1000
+        assert opm2["duration"] == 250
 
         assert stats.young_gc_time == 100
         assert stats.young_gc_count == 1
@@ -3673,6 +3657,7 @@ class TestGlobalStatsCalculator:
         self.metrics_store.put_doc(
             doc={
                 "@timestamp": 1595896761994,
+                "response-timestamp": 1595896762066,
                 "relative-time": 283.382,
                 "race-id": "fb26018b-428d-4528-b36b-cf8c54a303ec",
                 "race-timestamp": "20200728T003905Z",
@@ -3728,20 +3713,22 @@ class TestGlobalStatsCalculator:
         index_metrics = result.metrics("index")
         search_metrics = result.metrics("search")
 
-        assert index_metrics["start-timestamp"] == StaticClock.NOW * 1000 + 1000
-        assert index_metrics["warmup-start-timestamp"] == StaticClock.NOW * 1000 + 1000
-        assert index_metrics["warmup-end-timestamp"] == StaticClock.NOW * 1000 + 1020
-        assert index_metrics["measure-start-timestamp"] == StaticClock.NOW * 1000 + 5000
-        assert index_metrics["measure-end-timestamp"] == StaticClock.NOW * 1000 + 5080
-        assert index_metrics["end-timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert index_metrics["start_timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup_start_timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup_end_timestamp"] == StaticClock.NOW * 1000 + 1020
+        assert index_metrics["normal_start_timestamp"] == StaticClock.NOW * 1000 + 5000
+        assert index_metrics["normal_end_timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert index_metrics["end_timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert index_metrics["duration"] == 4080
 
-        assert search_metrics["start-timestamp"] == StaticClock.NOW * 1000 + 20000
-        assert "warmup-start-timestamp" not in search_metrics
-        assert search_metrics["measure-start-timestamp"] == StaticClock.NOW * 1000 + 20000
-        assert search_metrics["measure-end-timestamp"] == StaticClock.NOW * 1000 + 20015
-        assert search_metrics["end-timestamp"] == StaticClock.NOW * 1000 + 20015
+        assert search_metrics["start_timestamp"] == StaticClock.NOW * 1000 + 20000
+        assert "warmup_start_timestamp" not in search_metrics
+        assert search_metrics["normal_start_timestamp"] == StaticClock.NOW * 1000 + 20000
+        assert search_metrics["normal_end_timestamp"] == StaticClock.NOW * 1000 + 20015
+        assert search_metrics["end_timestamp"] == StaticClock.NOW * 1000 + 20015
+        assert search_metrics["duration"] == 15
 
-    def test_op_metrics_warmup_only_omits_measure_window(self):
+    def test_op_metrics_warmup_only_omits_normal_window(self):
         index = Task("index", operation=Operation(name="index", operation_type="bulk"))
         challenge = Challenge(name="default", schedule=[index], meta_data={})
 
@@ -3751,22 +3738,40 @@ class TestGlobalStatsCalculator:
         result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name="test", meta_data={}), challenge=challenge)()
         index_metrics = result.metrics("index")
 
-        assert index_metrics["start-timestamp"] == StaticClock.NOW * 1000 + 1000
-        assert index_metrics["warmup-start-timestamp"] == StaticClock.NOW * 1000 + 1000
-        assert index_metrics["warmup-end-timestamp"] == StaticClock.NOW * 1000 + 1020
-        assert index_metrics["end-timestamp"] == StaticClock.NOW * 1000 + 1020
-        assert "measure-start-timestamp" not in index_metrics
-        assert "measure-end-timestamp" not in index_metrics
+        assert index_metrics["start_timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup_start_timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup_end_timestamp"] == StaticClock.NOW * 1000 + 1020
+        assert index_metrics["end_timestamp"] == StaticClock.NOW * 1000 + 1020
+        assert index_metrics["duration"] == 20
+        assert "normal_start_timestamp" not in index_metrics
+        assert "normal_end_timestamp" not in index_metrics
+
+    def test_duration_includes_last_request_service_time(self):
+        index = Task("index", operation=Operation(name="index", operation_type="bulk"))
+        challenge = Challenge(name="default", schedule=[index], meta_data={})
+
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "default", "defaults", create=True)
+        # last-started op (+50ms, 5ms) finishes before the earlier 200ms op
+        self._put_service_time("index", metrics.SampleType.Normal, StaticClock.NOW, 0.0, 200)
+        self._put_service_time("index", metrics.SampleType.Normal, StaticClock.NOW + 0.050, 0.050, 5)
+
+        result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name="test", meta_data={}), challenge=challenge)()
+        index_metrics = result.metrics("index")
+
+        assert index_metrics["start_timestamp"] == StaticClock.NOW * 1000
+        assert index_metrics["end_timestamp"] == StaticClock.NOW * 1000 + 200
+        assert index_metrics["duration"] == 200
+        assert index_metrics["duration"] == index_metrics["end_timestamp"] - index_metrics["start_timestamp"]
 
 
 class TestGlobalStats:
     TIME_WINDOW_FIELDS = (
-        "start-timestamp",
-        "end-timestamp",
-        "warmup-start-timestamp",
-        "warmup-end-timestamp",
-        "measure-start-timestamp",
-        "measure-end-timestamp",
+        "start_timestamp",
+        "end_timestamp",
+        "warmup_start_timestamp",
+        "warmup_end_timestamp",
+        "normal_start_timestamp",
+        "normal_end_timestamp",
     )
 
     def test_as_flat_list(self):
@@ -4102,12 +4107,12 @@ class TestGlobalStats:
                     {
                         "task": "index",
                         "operation": "index",
-                        "start-timestamp": StaticClock.NOW * 1000,
-                        "end-timestamp": StaticClock.NOW * 1000 + 5080,
-                        "warmup-start-timestamp": StaticClock.NOW * 1000 + 1000,
-                        "warmup-end-timestamp": StaticClock.NOW * 1000 + 1020,
-                        "measure-start-timestamp": StaticClock.NOW * 1000 + 5000,
-                        "measure-end-timestamp": StaticClock.NOW * 1000 + 5080,
+                        "start_timestamp": StaticClock.NOW * 1000,
+                        "end_timestamp": StaticClock.NOW * 1000 + 5080,
+                        "warmup_start_timestamp": StaticClock.NOW * 1000 + 1000,
+                        "warmup_end_timestamp": StaticClock.NOW * 1000 + 1020,
+                        "normal_start_timestamp": StaticClock.NOW * 1000 + 5000,
+                        "normal_end_timestamp": StaticClock.NOW * 1000 + 5080,
                     }
                 ]
             }
@@ -4125,12 +4130,12 @@ class TestGlobalStats:
                     "operation": "index",
                     "error_rate": 0.0,
                     "duration": 12.0,
-                    "start-timestamp": StaticClock.NOW * 1000,
-                    "end-timestamp": StaticClock.NOW * 1000 + 5080,
-                    "warmup-start-timestamp": StaticClock.NOW * 1000 + 1000,
-                    "warmup-end-timestamp": StaticClock.NOW * 1000 + 1020,
-                    "measure-start-timestamp": StaticClock.NOW * 1000 + 5000,
-                    "measure-end-timestamp": StaticClock.NOW * 1000 + 5080,
+                    "start_timestamp": StaticClock.NOW * 1000,
+                    "end_timestamp": StaticClock.NOW * 1000 + 5080,
+                    "warmup_start_timestamp": StaticClock.NOW * 1000 + 1000,
+                    "warmup_end_timestamp": StaticClock.NOW * 1000 + 1020,
+                    "normal_start_timestamp": StaticClock.NOW * 1000 + 5000,
+                    "normal_end_timestamp": StaticClock.NOW * 1000 + 5080,
                 }
             ]
         }
@@ -4154,19 +4159,19 @@ class TestGlobalStats:
             {},
         )
         window = {
-            "start-timestamp": StaticClock.NOW * 1000,
-            "end-timestamp": StaticClock.NOW * 1000 + 5080,
-            "measure-start-timestamp": StaticClock.NOW * 1000 + 5000,
-            "measure-end-timestamp": StaticClock.NOW * 1000 + 5080,
+            "start_timestamp": StaticClock.NOW * 1000,
+            "end_timestamp": StaticClock.NOW * 1000 + 5080,
+            "normal_start_timestamp": StaticClock.NOW * 1000 + 5000,
+            "normal_end_timestamp": StaticClock.NOW * 1000 + 5080,
         }
         doc = race.time_window_result_doc("index", "index", window)
         assert doc["name"] == "time_window"
         assert doc["task"] == "index"
         assert doc["operation"] == "index"
         assert doc["race-id"] == "race-1"
-        assert doc["start-timestamp"] == StaticClock.NOW * 1000
-        assert doc["end-timestamp"] == StaticClock.NOW * 1000 + 5080
-        assert "warmup-start-timestamp" not in doc
+        assert doc["start_timestamp"] == StaticClock.NOW * 1000
+        assert doc["end_timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert "warmup_start_timestamp" not in doc
 
     def test_to_result_dicts_includes_time_window_docs(self):
         race = metrics.Race(
@@ -4193,10 +4198,10 @@ class TestGlobalStats:
                             "operation": "index",
                             "error_rate": 0.0,
                             "duration": 12.0,
-                            "start-timestamp": StaticClock.NOW * 1000,
-                            "end-timestamp": StaticClock.NOW * 1000 + 5080,
-                            "measure-start-timestamp": StaticClock.NOW * 1000 + 5000,
-                            "measure-end-timestamp": StaticClock.NOW * 1000 + 5080,
+                            "start_timestamp": StaticClock.NOW * 1000,
+                            "end_timestamp": StaticClock.NOW * 1000 + 5080,
+                            "normal_start_timestamp": StaticClock.NOW * 1000 + 5000,
+                            "normal_end_timestamp": StaticClock.NOW * 1000 + 5080,
                         },
                         {
                             "task": "admin",
@@ -4210,8 +4215,8 @@ class TestGlobalStats:
         windows = [d for d in race.to_result_dicts() if d.get("name") == "time_window"]
         assert len(windows) == 1
         assert windows[0]["task"] == "index"
-        assert windows[0]["end-timestamp"] == StaticClock.NOW * 1000 + 5080
-        assert "warmup-start-timestamp" not in windows[0]
+        assert windows[0]["end_timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert "warmup_start_timestamp" not in windows[0]
 
 
 class TestSystemStats:
