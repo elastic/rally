@@ -211,7 +211,7 @@ This query requires the field ``source.geo.location`` to be mapped as a ``geo_po
 
 Rally will abort on the first request error by default. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`. For a more lenient behavior, use ``--on-error=continue`` to only record errors in the summary report via the :ref:`Error Rate <summary_report_error_rate>` statistic instead of aborting.
 
-This behavior can be changed, by invoking Rally with the :ref:`--on-error <command_line_reference_on_error>` switch e.g.::
+This behavior can be changed by invoking Rally with the :ref:`--on-error <command_line_reference_on_error>` switch e.g.::
 
 	esrally race --track=geonames --on-error=continue
 	

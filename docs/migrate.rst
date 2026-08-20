@@ -19,11 +19,6 @@ Migrate rally indices to data streams
 * Data streams are versioned ``rally-metrics-v1``, ``rally-races-v1`` and ``rally-results-v1``.
 * Old date-based patterned indices (e.g. ``rally-metrics-YYYY-MM``) are not removed and will continue to work as before, by setting ``datastore.use_data_streams`` value to ``false``.
 
-Default value of ``--on-error`` changed to ``abort``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Starting with Rally 2.14.0 the default value of ``--on-error`` has changed from ``continue`` to ``abort``. This means Rally will now abort the benchmark on the first request error by default. The previous behavior can be restored by explicitly passing ``--on-error=continue``. Individual tasks can still ignore non-fatal errors using the :ref:`ignore-response-error-level <track_schedule>` task parameter.
-
 Reindex of existing indices is recommended in order to benefit from the advantages of data streams.
 See the :ref:`data stream storage documentation <metrics_data_streams>` for more details about how to customize data streams.
 
@@ -105,6 +100,11 @@ Once you are satisfied the data has been migrated, you can delete the old date-b
 .. warning::
 
    Deleting old indices is irreversible. Ensure you have verified the reindex results and have backups before proceeding.
+
+Default value of ``--on-error`` changed to ``abort``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Starting with Rally 2.14.0 the default value of ``--on-error`` has changed from ``continue`` to ``abort``. This means Rally will now abort the benchmark on the first request error by default. The previous behavior can be restored by explicitly passing ``--on-error=continue``. Individual tasks can still ignore non-fatal errors using the :ref:`ignore-response-error-level <track_schedule>` task parameter.
 
 
 Migrating to Rally 2.13.0
