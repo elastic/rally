@@ -172,10 +172,10 @@ Rally stores the following metrics:
 * ``ml_processing_time``: A structure containing the minimum, mean, median and maximum bucket processing time in milliseconds per machine learning job. These metrics are only available if a machine learning job has been created in the respective benchmark.
 
 
+.. _metrics_data_streams:
+
 Data Stream Storage
 --------------------
-
-.. _metrics_data_streams:
 
 When ``datastore.use_data_streams`` is ``true`` (the default), Rally uses `Elasticsearch data streams <https://www.elastic.co/guide/en/elasticsearch/reference/current/data-streams.html>`_ for metrics, races, and results. Data streams simplify time-series data management by automatically handling index creation, rollover, and retention.
 
