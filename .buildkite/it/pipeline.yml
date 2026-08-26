@@ -1,8 +1,7 @@
 agents:
   provider: "gcp"
-  image: family/core-ubuntu-2604
+  image: family/core-ubuntu-2404
   machineType: "n1-standard-8"
-  diskSizeGb: 50
 
 steps:
   - label: "Run 3.10 integration tests :test_tube:"
