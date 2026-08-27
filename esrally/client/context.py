@@ -87,6 +87,21 @@ class RequestContextHolder:
         meta["request_end"] = new_request_end
 
     @classmethod
+    def reset_request_timing(cls):
+        """
+        Drop start/end timestamps so the next HTTP attempt is measured on its own.
+
+        Used when Rally retries a request and should record service time of the
+        successful attempt rather than the full retry budget.
+        """
+        try:
+            meta = cls.request_context.get()
+        except LookupError:
+            return
+        meta.pop("request_start", None)
+        meta.pop("request_end", None)
+
+    @classmethod
     def on_request_start(cls):
         cls.update_request_start(time.perf_counter())
 

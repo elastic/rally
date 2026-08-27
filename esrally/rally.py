@@ -796,6 +796,21 @@ def create_arg_parser():
         default=OnErrorBehavior.CONTINUE,
     )
     race_parser.add_argument(
+        "--retry-recoverable-query-errors",
+        action="store_true",
+        default=False,
+        help="Retry HTTP 429 (except durability: PERMANENT), 502, 503, 504, and ES|QL partial results "
+        "(200 with is_partial: true) for search, ES|QL, and SQL. Intended for Elasticsearch Serverless scale-up. "
+        "Each attempt is recorded as a sample with retry-count, retry-attempts-remaining, and retry-duration.",
+    )
+    race_parser.add_argument(
+        "--retry-recoverable-query-errors-attempts",
+        type=int,
+        default=50,
+        metavar="N",
+        help="Maximum attempts per query when --retry-recoverable-query-errors is set, including the original request (default: 50).",
+    )
+    race_parser.add_argument(
         "--telemetry",
         help=f"Enable the provided telemetry devices, provided as a comma-separated list. List possible telemetry "
         f"devices with `{PROGRAM_NAME} list telemetry`.",
@@ -1326,6 +1341,17 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
             cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
             cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
+            if args.retry_recoverable_query_errors_attempts < 1:
+                raise exceptions.SystemSetupError(
+                    f"--retry-recoverable-query-errors-attempts must be >= 1 but was [{args.retry_recoverable_query_errors_attempts}]."
+                )
+            cfg.add(config.Scope.applicationOverride, "driver", "retry.recoverable.query.errors", args.retry_recoverable_query_errors)
+            cfg.add(
+                config.Scope.applicationOverride,
+                "driver",
+                "retry.recoverable.query.errors.attempts",
+                args.retry_recoverable_query_errors_attempts,
+            )
             cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
             cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
             configure_track_params(arg_parser, args, cfg)

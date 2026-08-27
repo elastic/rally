@@ -8405,6 +8405,166 @@ class TestRetry:
         delegate.assert_has_calls([mock.call(es, params) for _ in range(failure_count + 1)])
 
 
+def _api_error(status, body=None, message="error"):
+    error_meta = elastic_transport.ApiResponseMeta(
+        status=status,
+        http_version="1.1",
+        headers=elastic_transport.HttpHeaders(),
+        duration=0.0,
+        node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+    )
+    return elasticsearch.ApiError(message=message, meta=error_meta, body=body)
+
+
+def _circuit_breaker_body(durability="TRANSIENT"):
+    return {
+        "error": {
+            "root_cause": [{"type": "circuit_breaking_exception", "reason": "Data too large", "durability": durability}],
+            "type": "circuit_breaking_exception",
+            "reason": "Data too large",
+            "durability": durability,
+        },
+        "status": 429,
+    }
+
+
+class TestRecoverableApiError:
+    def test_retries_transient_circuit_breaker(self):
+        assert runner.is_recoverable_api_error(_api_error(429, _circuit_breaker_body("TRANSIENT"))) is True
+
+    def test_does_not_retry_permanent_circuit_breaker(self):
+        assert runner.is_recoverable_api_error(_api_error(429, _circuit_breaker_body("PERMANENT"))) is False
+
+    def test_retries_429_without_durability(self):
+        assert runner.is_recoverable_api_error(_api_error(429, {"error": {"type": "es_rejected_execution_exception"}})) is True
+
+    def test_retries_503(self):
+        assert runner.is_recoverable_api_error(_api_error(503, {"error": {"type": "unavailable"}})) is True
+
+    def test_does_not_retry_404(self):
+        assert runner.is_recoverable_api_error(_api_error(404, {"error": {"type": "not_found"}})) is False
+
+    def test_request_meta_retries_transient_429(self):
+        assert runner.is_recoverable_request_meta({"success": False, "http-status": 429, "error-durability": "TRANSIENT"}) is True
+
+    def test_request_meta_retries_429_without_durability(self):
+        assert runner.is_recoverable_request_meta({"success": False, "http-status": 429}) is True
+
+    def test_request_meta_does_not_retry_permanent_429(self):
+        assert runner.is_recoverable_request_meta({"success": False, "http-status": 429, "error-durability": "PERMANENT"}) is False
+
+    def test_request_meta_retries_partial_results(self):
+        assert runner.is_recoverable_request_meta({"success": False, "is_partial": True}) is True
+
+    def test_request_meta_does_not_retry_success(self):
+        assert runner.is_recoverable_request_meta({"success": True, "http-status": 200}) is False
+
+
+class TestRecoverableQueryRetries:
+    def teardown_method(self, method):
+        runner.register_default_runners()
+
+    @pytest.mark.asyncio
+    async def test_retries_transient_429_then_succeeds(self):
+        success_return_value = {"weight": 1, "unit": "ops", "success": True}
+        delegate = mock.AsyncMock(
+            side_effect=[
+                _api_error(429, _circuit_breaker_body("TRANSIENT")),
+                _api_error(429, _circuit_breaker_body("TRANSIENT")),
+                success_return_value,
+            ]
+        )
+        es = mock.Mock()
+        es.options.return_value = es
+        params = {"retry-wait-period": 0.01}
+        retrier = runner.Retry(delegate, retry_on_recoverable=True, retries=4)
+
+        result = await retrier(es, params)
+
+        assert result == {"weight": 1, "unit": "ops", "success": True, "retries": 2}
+        es.options.assert_called_once_with(max_retries=0)
+        assert delegate.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_does_not_retry_permanent_circuit_breaker(self):
+        err = _api_error(429, _circuit_breaker_body("PERMANENT"))
+        delegate = mock.AsyncMock(side_effect=err)
+        retrier = runner.Retry(delegate, retry_on_recoverable=True, retries=4)
+
+        with pytest.raises(elasticsearch.ApiError):
+            await retrier(None, {"retry-wait-period": 0.01})
+
+        delegate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_does_not_retry_429_unless_recoverable_retries_enabled(self):
+        err = _api_error(429, _circuit_breaker_body("TRANSIENT"))
+        delegate = mock.AsyncMock(side_effect=err)
+        retrier = runner.Retry(delegate, retries=4)
+
+        with pytest.raises(elasticsearch.ApiError):
+            await retrier(None, {"retry-wait-period": 0.01, "retry-on-error": True})
+
+        delegate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_raises_after_attempts_exhausted(self):
+        err = _api_error(429, _circuit_breaker_body("TRANSIENT"))
+        delegate = mock.AsyncMock(side_effect=err)
+        retrier = runner.Retry(delegate, retry_on_recoverable=True, retries=2)
+
+        with pytest.raises(elasticsearch.ApiError):
+            await retrier(None, {"retry-wait-period": 0.01})
+
+        assert delegate.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_retries_esql_partial_results(self):
+        failed = {"weight": 1, "unit": "ops", "success": False, "is_partial": True}
+        success = {"weight": 1, "unit": "ops", "success": True, "is_partial": False}
+        delegate = mock.AsyncMock(side_effect=[failed, success])
+        retrier = runner.Retry(delegate, retry_on_recoverable=True, retries=3)
+
+        result = await retrier(None, {"retry-wait-period": 0.01})
+
+        assert result["success"] is True
+        assert result["retries"] == 1
+
+    @pytest.mark.asyncio
+    async def test_resets_request_timing_between_attempts(self):
+        success = {"weight": 1, "unit": "ops", "success": True}
+        delegate = mock.AsyncMock(side_effect=[_api_error(503), success])
+        retrier = runner.Retry(delegate, retry_on_recoverable=True, retries=2)
+
+        with mock.patch.object(runner.RequestContextHolder, "reset_request_timing") as reset_timing:
+            result = await retrier(None, {"retry-wait-period": 0.01})
+
+        assert result["retries"] == 1
+        reset_timing.assert_called_once()
+
+    def test_register_default_runners_does_not_wrap_query_ops_in_retry(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "driver", "retry.recoverable.query.errors", True)
+        cfg.add(config.Scope.application, "driver", "retry.recoverable.query.errors.attempts", 4)
+        runner.register_default_runners(cfg)
+        for operation_type in ("search", "esql", "esql-profile", "sql", "paginated-search", "scroll-search", "composite-agg"):
+            assert "retryable" not in repr(runner.runner_for(operation_type)), operation_type
+        assert runner.recoverable_query_retry_attempts(cfg) == 4
+
+    def test_register_default_runners_does_not_wrap_query_ops_by_default(self):
+        runner.register_default_runners()
+        assert "retryable" not in repr(runner.runner_for("esql"))
+        assert "retryable" not in repr(runner.runner_for("search"))
+        assert runner.recoverable_query_retry_attempts(None) is None
+
+    def test_rejects_non_positive_attempts(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "driver", "retry.recoverable.query.errors", True)
+        cfg.add(config.Scope.application, "driver", "retry.recoverable.query.errors.attempts", 0)
+        with pytest.raises(exceptions.SystemSetupError, match="must be >= 1"):
+            runner.register_default_runners(cfg)
+
+
 class TestRemovePrefix:
     def test_remove_matching_prefix(self):
         suffix = "index-20201117".removeprefix("index")

@@ -144,6 +144,8 @@ Key = Literal[
     "remote.repo.url",
     "repository.name",
     "repository.revision",
+    "retry.recoverable.query.errors",
+    "retry.recoverable.query.errors.attempts",
     "root.dir",
     "runtime.jdk",
     "sample.key",
