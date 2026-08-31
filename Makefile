@@ -30,17 +30,21 @@ PRE_COMMIT_HOOK_PATH := .git/hooks/pre-commit
 
 LOG_CI_LEVEL := INFO
 
+# Docker Compose file for it/tracks integration tests (build + ES + rally services).
+IT_TRACKS_COMPOSE := it/tracks/compose.yaml
+
 # --- Global goals ---
 
 all: lint test it
 
-clean: clean-others clean-docs
+clean: clean-it_tracks clean-others clean-docs
 
 check-all: all
 
 .PHONY: \
 	all \
 	clean \
+	clean-it_tracks \
 	check-all \
 	uv \
 	uv-add \
@@ -69,6 +73,8 @@ check-all: all
 	test-3.13 \
 	it \
 	it_serverless \
+	it_tracks \
+	it_tracks_image \
 	it_tracks_compat \
 	benchmark \
 	release-checks \
@@ -124,9 +130,9 @@ venv-destroy: clean-venv
 
 # --- Other goals ---
 
-# It delete many temporary files types.
+# It delete many temporary files types (including gitignored host logs under logs/, e.g. it/tracks).
 clean-others: clean-pycache
-	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs junit-py*.xml NOTICE.txt
+	rm -rf .benchmarks .eggs .nox .rally_it .cache build dist esrally.egg-info logs/ junit-py*.xml NOTICE.txt
 
 # Avoid conflicts between .pyc/pycache related files created by local Python interpreters and other interpreters in Docker
 clean-pycache:
@@ -199,13 +205,31 @@ test-3.13:
 
 # --- Integration tests goals ---
 
-# It runs integration tests.
+# It runs integration tests (excludes it/tracks; use make it_tracks for those).
 it: venv
-	$(MAKE) test ARGS=$(or $(ARGS),it/)
+	mkdir -p "$${RALLY_HOME:-$$HOME}/.rally/logs"
+	uv run -- pytest -s --log-file="$${RALLY_HOME:-$$HOME}/.rally/logs/pytest.log" it/ --ignore=it/tracks $(ARGS)
 
 # It runs serverless integration tests.
 it_serverless: install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) --track-repository-test-directory=it_tracks_serverless it/track_repo_compatibility $(ARGS)
+
+# It builds the Rally driver image for it/tracks (compose file in it/tracks/).
+# RALLY_TRACKS_REF (default master) is forwarded to compose build args; see it/tracks/compose.yaml.
+it_tracks_image:
+	docker compose --file $(IT_TRACKS_COMPOSE) build
+
+# It runs Docker-based per-track Rally race integration tests (it/tracks).
+# Isolation from it/conftest.py is handled by it/tracks/pytest.ini (confcutdir).
+# Options: see it/tracks/conftest.py (IT_SKIP_XFAIL, IT_TRACKS_ES_VERSIONS, IT_TRACKS_TIMEOUT_MINUTES,
+# IT_TRACKS_NAME, RALLY_TRACKS_REF in compose.yaml, pytest --it-tracks-* / --it-skip-xfail).
+it_tracks: venv it_tracks_image
+	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/tracks/ $(ARGS)
+
+# It tears down it/tracks compose (containers, networks, volumes, locally built images).
+# Best-effort: does not require Docker so `make clean` still runs clean-others/clean-docs.
+clean-it_tracks:
+	-docker compose --file $(IT_TRACKS_COMPOSE) down --volumes --remove-orphans --rmi local
 
 # It runs rally_tracks_compat integration tests.
 it_tracks_compat: install_pytest_rally_plugin
