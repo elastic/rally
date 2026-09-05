@@ -1,9 +1,12 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv==0.12.6"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
 path = "esrally/_version.py"
+
+[tool.hatch.build.hooks.custom]
+path = "dependency_constraints_build_hook.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -87,7 +90,7 @@ dependencies = [
     # License: BSD
     "zstandard==0.25.0",
     # License: Python Software Foundation License
-    "typing-extensions==4.12.2",
+    "typing-extensions==4.16.0",
     # License:  BSD-2-Clause license
     "python-json-logger==2.0.7",
     # License: Apache 2.0
