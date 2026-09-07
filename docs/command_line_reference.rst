@@ -895,6 +895,45 @@ This option controls how Rally behaves when a response error occurs. The followi
   With ``continue-on-network``, Rally continues on network errors (e.g., "Connection Refused"/`ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_). For other errors, behavior is the same as ``continue``. 
   Use this option if you want Rally to be resilient to temporary network issues during a benchmark. Note that this will impact rally aborting in the case of a target Elasticsearch cluster being down.
 
+.. _command_line_reference_retry_recoverable_query_errors:
+
+``retry-recoverable-query-errors``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Retry recoverable errors on search, paginated search, scroll search, composite agg, SQL, ES|QL, and ES|QL profile operations.
+
+Recoverable errors are:
+
+* HTTP 429, except circuit breaker errors with ``durability: PERMANENT``
+* HTTP 502, 503, and 504
+* ES|QL responses with ``is_partial: true``
+
+This is intended for Elasticsearch Serverless, where 429s are expected while the deployment scales up. Rally records **each attempt as its own sample**:
+
+* ``service_time`` is the HTTP time of that attempt (so a 429 sample is how long the 429 took to return).
+* ``retry-count`` is present on every sample and starts at ``0`` for the original request. A successful sample's ``retry-count`` is how many times the request was retried before it succeeded.
+* ``retry-attempts-remaining`` is the unused attempt budget after this sample.
+* ``retry-duration`` is milliseconds elapsed from the first attempt's request start to this attempt's request end (including waits between retries).
+
+Failed retry samples have ``success: false`` and ``weight`` 0 so they do not inflate throughput; they **do** count toward error rate. Summary ``service_time`` percentiles mix failed and successful attempts; filter the metrics store by ``meta.success`` (and ``meta.retry-count``) when you want only successes or only 429s.
+
+After the attempt budget is exhausted, :ref:`on-error <command_line_reference_on_error>` applies as usual.
+
+elasticsearch-py's own 429 retries are disabled for these operations so the budget is not multiplied. Target-throughput scheduling treats the whole retry sequence as one operation.
+
+This option is off by default and does not change retry behavior of bulk indexing or administrative operations.
+
+``retry-recoverable-query-errors-attempts``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Maximum number of attempts per query when ``--retry-recoverable-query-errors`` is set, including the original request. Defaults to ``50``.
+
+**Example**
+
+ ::
+
+   esrally race --track=geonames --on-error=abort --retry-recoverable-query-errors --retry-recoverable-query-errors-attempts=50
+
 ``load-driver-hosts``
 ~~~~~~~~~~~~~~~~~~~~~
 

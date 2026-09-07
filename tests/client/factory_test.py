@@ -513,6 +513,20 @@ class TestRequestContextManager:
         assert top_level_ctx.request_end > nested_ctx.request_end
         assert nested_ctx.request_end > nested_ctx.request_start + 0.01
 
+    def test_reset_request_timing_drops_start_and_end(self):
+        test_client = client.RequestContextHolder()
+        with test_client.new_request_context() as ctx:
+            test_client.on_request_start()
+            test_client.on_request_end()
+            assert ctx.request_start is not None
+            assert ctx.request_end is not None
+            test_client.reset_request_timing()
+            assert ctx.request_start is None
+            assert ctx.request_end is None
+
+    def test_reset_request_timing_without_context_is_noop(self):
+        client.RequestContextHolder.reset_request_timing()
+
 
 class TestRestLayer:
     @mock.patch("elasticsearch.Elasticsearch")
