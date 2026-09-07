@@ -2430,6 +2430,8 @@ class DiskUsageStats(TelemetryDevice):
 
             for field, field_info in idx_fields["fields"].items():
                 meta = {"index": index, "field": field}
+                if field_type := field_info.get("type"):
+                    meta["field_type"] = field_type
                 self.metrics_store.put_value_cluster_level("disk_usage_total", field_info["total_in_bytes"], meta_data=meta, unit="byte")
 
                 inverted_index = field_info.get("inverted_index", {"total_in_bytes": 0})["total_in_bytes"]
