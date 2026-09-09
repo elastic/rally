@@ -39,6 +39,7 @@ from esrally import (
     actor,
     client,
     config,
+    config_keys,
     exceptions,
     metrics,
     paths,
@@ -566,7 +567,9 @@ class TrackPreparationActor(actor.RallyActor):
 
 
 def num_cores(cfg: types.Config):
-    return int(cfg.opts("system", "available.cores", mandatory=False, default_value=multiprocessing.cpu_count()))
+    return int(
+        cfg.opts(config_keys.SYSTEM_SECTION, config_keys.AVAILABLE_CORES, mandatory=False, default_value=multiprocessing.cpu_count())
+    )
 
 
 ApiKey = collections.namedtuple("ApiKey", ["id", "secret"])
@@ -735,7 +738,7 @@ class Driver:
     def prepare_benchmark(self, t):
         self.track = t
         self.challenge = select_challenge(self.config, self.track)
-        self.quiet = self.config.opts("system", "quiet.mode", mandatory=False, default_value=False)
+        self.quiet = self.config.opts(config_keys.SYSTEM_SECTION, config_keys.QUIET_MODE, mandatory=False, default_value=False)
         downsample_factor = int(self.config.opts("reporting", "metrics.request.downsample.factor", mandatory=False, default_value=1))
         self.metrics_store = metrics.metrics_store(cfg=self.config, track=self.track.name, challenge=self.challenge.name, read_only=False)
 
@@ -1829,7 +1832,9 @@ class AsyncIoAdapter:
         self.parent_worker_id = worker_id
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
         self.assertions_enabled = self.cfg.opts("driver", "assertions")
-        self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
+        self.debug_event_loop = self.cfg.opts(
+            config_keys.SYSTEM_SECTION, config_keys.ASYNCHRONOUS_DEBUG, mandatory=False, default_value=False
+        )
         self.logger = logging.getLogger(__name__)
 
     def __call__(self, *args, **kwargs):

@@ -29,6 +29,7 @@ from esrally import (
     actor,
     client,
     config,
+    config_keys,
     doc_link,
     driver,
     exceptions,
@@ -393,7 +394,7 @@ def list_pipelines():
 def run(cfg: types.Config):
     logger = logging.getLogger(__name__)
     name = cfg.opts("race", "pipeline")
-    race_id = cfg.opts("system", "race.id")
+    race_id = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.RACE_ID)
     console.info(f"Race id is [{race_id}]", logger=logger)
     if len(name) == 0:
         # assume from-distribution pipeline if distribution.version has been specified and --pipeline cli arg not set

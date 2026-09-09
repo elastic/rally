@@ -25,7 +25,7 @@ from typing import Any, Callable, Optional, Union
 
 import tabulate
 
-from esrally import PROGRAM_NAME, config, exceptions, types
+from esrally import PROGRAM_NAME, config, config_keys, exceptions, types
 from esrally.utils import console, io, modules, repo
 
 TEAM_FORMAT_VERSION = 1
@@ -128,7 +128,7 @@ def team_path(cfg: types.Config) -> str:
         distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         repo_name = cfg.opts("mechanic", "repository.name")
         repo_revision = cfg.opts("mechanic", "repository.revision")
-        offline = cfg.opts("system", "offline.mode")
+        offline = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.OFFLINE_MODE)
         # TODO remove the below ignore when introducing LiteralString on Python 3.11+
         remote_url = cfg.opts("teams", "%s.url" % repo_name, mandatory=False)  # type: ignore[arg-type]
         root = cfg.opts("node", "root.dir")

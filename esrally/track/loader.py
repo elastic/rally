@@ -35,6 +35,7 @@ from jinja2 import meta
 from esrally import (
     PROGRAM_NAME,
     config,
+    config_keys,
     exceptions,
     paths,
     storage,
@@ -459,7 +460,7 @@ class GitTrackRepository:
         distribution_version = cfg.opts("mechanic", "distribution.version", mandatory=False)
         repo_name = cfg.opts("track", "repository.name")
         repo_revision = cfg.opts("track", "repository.revision", mandatory=False)
-        offline = cfg.opts("system", "offline.mode")
+        offline = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.OFFLINE_MODE)
         # TODO remove the below ignore when introducing LiteralString on Python 3.11+
         remote_url = cfg.opts("tracks", "%s.url" % repo_name, mandatory=False)  # type: ignore[arg-type]
         root = cfg.opts("node", "root.dir")
@@ -613,7 +614,9 @@ class Downloader:
 
     @classmethod
     def from_config(cls, cfg: types.Config):
-        offline: bool = convert.to_bool(cfg.opts("system", "offline.mode", mandatory=False, default_value=False))
+        offline: bool = convert.to_bool(
+            cfg.opts(config_keys.SYSTEM_SECTION, config_keys.OFFLINE_MODE, mandatory=False, default_value=False)
+        )
         test_mode: bool = convert.to_bool(cfg.opts("track", "test.mode.enabled", mandatory=False, default_value=False))
         use_transfer_manager: bool = convert.to_bool(
             cfg.opts("track", "track.downloader.multipart_enabled", mandatory=False, default_value=False)

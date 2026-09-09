@@ -36,6 +36,7 @@ from esrally import (
     actor,
     check_python_version,
     config,
+    config_keys,
     doc_link,
     exceptions,
     log,
@@ -989,7 +990,7 @@ def create_arg_parser():
 
 
 def dispatch_list(cfg: types.Config):
-    what = cfg.opts("system", "list.config.option")
+    what = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.LIST_CONFIG_OPTION)
     if what == "telemetry":
         telemetry.list_telemetry()
     elif what == "tracks":
@@ -1009,7 +1010,7 @@ def dispatch_list(cfg: types.Config):
 
 
 def dispatch_add(cfg: types.Config):
-    what = cfg.opts("system", "add.config.option")
+    what = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ADD_CONFIG_OPTION)
     if what == "annotation":
         metrics.add_annotation(cfg)
     else:
@@ -1017,7 +1018,7 @@ def dispatch_add(cfg: types.Config):
 
 
 def dispatch_delete(cfg: types.Config):
-    what = cfg.opts("system", "delete.config.option")
+    what = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.DELETE_CONFIG_OPTION)
     if what == "race":
         metrics.delete_race(cfg)
     elif what == "annotation":
@@ -1084,7 +1085,7 @@ def with_actor_system(runnable, cfg: types.Config):
     try:
         actors = actor.bootstrap_actor_system(try_join=bool(already_running), prefer_local_only=not already_running)
         # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
-        cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
+        cfg.add(config.Scope.application, config_keys.SYSTEM_SECTION, config_keys.REMOTE_BENCHMARKING_SUPPORTED, already_running)
     # This happens when the admin process could not be started, e.g. because it could not open a socket.
     except thespian.actors.InvalidActorAddress:
         LOG.info("Falling back to offline actor system.")
@@ -1232,8 +1233,8 @@ def configure_reporting_params(args, cfg: types.Config):
 def dispatch_sub_command(arg_parser, args, cfg: types.Config):
     sub_command = args.subcommand
 
-    cfg.add(config.Scope.application, "system", "quiet.mode", args.quiet)
-    cfg.add(config.Scope.application, "system", "offline.mode", args.offline)
+    cfg.add(config.Scope.application, config_keys.SYSTEM_SECTION, config_keys.QUIET_MODE, args.quiet)
+    cfg.add(config.Scope.application, config_keys.SYSTEM_SECTION, config_keys.OFFLINE_MODE, args.offline)
     logger = logging.getLogger(__name__)
 
     try:
@@ -1241,31 +1242,35 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             configure_reporting_params(args, cfg)
             reporter.compare(cfg, args.baseline, args.contender)
         elif sub_command == "list":
-            cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
-            cfg.add(config.Scope.applicationOverride, "system", "list.max_results", args.limit)
-            cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.benchmark_name", args.benchmark_name)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.format", args.format)
-            cfg.add(config.Scope.applicationOverride, "system", "list.races.user_tags", opts.to_dict(args.user_tags))
-            cfg.add(config.Scope.applicationOverride, "system", "list.from_date", args.from_date)
-            cfg.add(config.Scope.applicationOverride, "system", "list.to_date", args.to_date)
-            cfg.add(config.Scope.applicationOverride, "system", "list.challenge", args.challenge)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.LIST_CONFIG_OPTION, args.configuration)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.LIST_MAX_RESULTS, args.limit)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.ADMIN_TRACK, args.track)
+            cfg.add(
+                config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.LIST_RACES_BENCHMARK_NAME, args.benchmark_name
+            )
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.LIST_RACES_FORMAT, args.format)
+            cfg.add(
+                config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.LIST_RACES_USER_TAGS, opts.to_dict(args.user_tags)
+            )
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.LIST_FROM_DATE, args.from_date)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.LIST_TO_DATE, args.to_date)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.LIST_CHALLENGE, args.challenge)
             configure_mechanic_params(args, cfg, command_requires_car=False)
             configure_track_params(arg_parser, args, cfg, command_requires_track=False, command_requires_track_details=False)
             dispatch_list(cfg)
         elif sub_command == "delete":
-            cfg.add(config.Scope.applicationOverride, "system", "delete.config.option", args.configuration)
-            cfg.add(config.Scope.applicationOverride, "system", "delete.id", args.id)
-            cfg.add(config.Scope.applicationOverride, "system", "admin.dry_run", args.dry_run)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.DELETE_CONFIG_OPTION, args.configuration)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.DELETE_ID, args.id)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.ADMIN_DRY_RUN, args.dry_run)
             dispatch_delete(cfg)
         elif sub_command == "add":
-            cfg.add(config.Scope.applicationOverride, "system", "add.config.option", args.configuration)
-            cfg.add(config.Scope.applicationOverride, "system", "admin.track", args.track)
-            cfg.add(config.Scope.applicationOverride, "system", "add.message", args.message)
-            cfg.add(config.Scope.applicationOverride, "system", "add.race_timestamp", args.race_timestamp)
-            cfg.add(config.Scope.applicationOverride, "system", "add.chart_type", args.chart_type)
-            cfg.add(config.Scope.applicationOverride, "system", "add.chart_name", args.chart_name)
-            cfg.add(config.Scope.applicationOverride, "system", "admin.dry_run", args.dry_run)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.ADD_CONFIG_OPTION, args.configuration)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.ADMIN_TRACK, args.track)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.ADD_MESSAGE, args.message)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.ADD_RACE_TIMESTAMP, args.race_timestamp)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.ADD_CHART_TYPE, args.chart_type)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.ADD_CHART_NAME, args.chart_name)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.ADMIN_DRY_RUN, args.dry_run)
             dispatch_add(cfg)
         elif sub_command == "build":
             cfg.add(config.Scope.applicationOverride, "mechanic", "car.plugins", opts.csv_to_list(args.elasticsearch_plugins))
@@ -1283,7 +1288,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             configure_mechanic_params(args, cfg)
             mechanic.download(cfg)
         elif sub_command == "install":
-            cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.INSTALL_ID, args.installation_id)
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.host", args.network_host)
             cfg.add(config.Scope.applicationOverride, "mechanic", "network.http.port", args.http_port)
             cfg.add(config.Scope.applicationOverride, "mechanic", "source.revision", args.revision)
@@ -1300,15 +1305,15 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             configure_mechanic_params(args, cfg)
             mechanic.install(cfg)
         elif sub_command == "start":
-            cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
-            cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.RACE_ID, args.race_id)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.INSTALL_ID, args.installation_id)
             cfg.add(config.Scope.applicationOverride, "mechanic", "runtime.jdk", args.runtime_jdk)
             configure_telemetry_params(args, cfg)
             mechanic.start(cfg)
         elif sub_command == "stop":
             cfg.add(config.Scope.applicationOverride, "mechanic", "preserve.install", convert.to_bool(args.preserve_install))
             cfg.add(config.Scope.applicationOverride, "mechanic", "skip.telemetry", args.skip_telemetry)
-            cfg.add(config.Scope.applicationOverride, "system", "install.id", args.installation_id)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.INSTALL_ID, args.installation_id)
             mechanic.stop(cfg)
         elif sub_command == "race":
             # As the race command is doing more work than necessary at the moment, we duplicate several parameters
@@ -1316,10 +1321,10 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             # these duplicated parameters will vanish as we move towards dedicated subcommands and use "race" only
             # to run the actual benchmark (i.e. generating load).
             if args.effective_start_date:
-                cfg.add(config.Scope.applicationOverride, "system", "time.start", args.effective_start_date)
-            cfg.add(config.Scope.applicationOverride, "system", "race.id", args.race_id)
+                cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.TIME_START, args.effective_start_date)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.RACE_ID, args.race_id)
             # use the race id implicitly also as the install id.
-            cfg.add(config.Scope.applicationOverride, "system", "install.id", args.race_id)
+            cfg.add(config.Scope.applicationOverride, config_keys.SYSTEM_SECTION, config_keys.INSTALL_ID, args.race_id)
             cfg.add(config.Scope.applicationOverride, "race", "pipeline", args.pipeline)
             cfg.add(config.Scope.applicationOverride, "race", "user.tags", opts.to_dict(args.user_tags))
             cfg.add(config.Scope.applicationOverride, "driver", "multi.cluster", args.multi_cluster)
@@ -1428,7 +1433,7 @@ def main():
     if not cfg.config_present():
         cfg.install_default_config()
     cfg.load_config(auto_upgrade=True)
-    cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.now(tz=datetime.timezone.utc))
+    cfg.add(config.Scope.application, config_keys.SYSTEM_SECTION, config_keys.TIME_START, datetime.datetime.now(tz=datetime.timezone.utc))
     # Local config per node
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
     cfg.add(config.Scope.application, "node", "rally.cwd", os.getcwd())
