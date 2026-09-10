@@ -35,11 +35,7 @@ class TestConfigKeys:
                 assert value in valid_keys, f"{name} = {value!r} is not a valid types.Key"
 
     def test_constants_are_unique(self):
-        values = [
-            value
-            for name, value in vars(config_keys).items()
-            if not name.startswith("_") and isinstance(value, str)
-        ]
+        values = [value for name, value in vars(config_keys).items() if not name.startswith("_") and isinstance(value, str)]
         assert len(values) == len(set(values)), "config key constants are not unique"
 
     def test_system_section(self):
