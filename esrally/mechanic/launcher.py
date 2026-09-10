@@ -21,7 +21,7 @@ import subprocess
 
 import psutil
 
-from esrally import exceptions, telemetry, time, types
+from esrally import config_keys, exceptions, telemetry, time, types
 from esrally.mechanic import cluster, java_resolver
 from esrally.utils import io, opts, process
 
@@ -127,7 +127,9 @@ class ProcessLauncher:
         self.cfg = cfg
         self._clock = clock
         self.logger = logging.getLogger(__name__)
-        self.pass_env_vars = opts.csv_to_list(self.cfg.opts("system", "passenv", mandatory=False, default_value="PATH"))
+        self.pass_env_vars = opts.csv_to_list(
+            self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.PASSENV, mandatory=False, default_value="PATH")
+        )
 
     def start(self, node_configurations):
         node_count_on_host = len(node_configurations)

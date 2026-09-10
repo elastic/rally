@@ -27,7 +27,16 @@ from typing import Optional
 
 import thespian.actors
 
-from esrally import PROGRAM_NAME, actor, config, exceptions, metrics, paths, types
+from esrally import (
+    PROGRAM_NAME,
+    actor,
+    config,
+    config_keys,
+    exceptions,
+    metrics,
+    paths,
+    types,
+)
 from esrally.mechanic import launcher, provisioner, supplier, team
 from esrally.utils import console, net
 
@@ -90,16 +99,16 @@ def install(cfg: types.Config):
         raise exceptions.SystemSetupError(f"Unknown build type [{build_type}]")
 
     provisioner.save_node_configuration(root_path, node_config)
-    console.println(json.dumps({"installation-id": cfg.opts("system", "install.id")}, indent=2), force=True)
+    console.println(json.dumps({"installation-id": cfg.opts(config_keys.SYSTEM_SECTION, config_keys.INSTALL_ID)}, indent=2), force=True)
 
 
 def start(cfg: types.Config):
     root_path = paths.install_root(cfg)
-    race_id = cfg.opts("system", "race.id")
+    race_id = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.RACE_ID)
     # avoid double-launching - we expect that the node file is absent
     with contextlib.suppress(FileNotFoundError):
         _load_node_file(root_path)
-        install_id = cfg.opts("system", "install.id")
+        install_id = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.INSTALL_ID)
         raise exceptions.SystemSetupError(
             "A node with this installation id is already running. Please stop it first "
             "with {} stop --installation-id={}".format(PROGRAM_NAME, install_id)
@@ -751,7 +760,7 @@ class Mechanic:
         self.node_configs = []
 
     def _current_race(self):
-        race_id = self.cfg.opts("system", "race.id")
+        race_id = self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.RACE_ID)
         return metrics.race_store(self.cfg).find_by_race_id(race_id)
 
     def _add_results(self, current_race, node):

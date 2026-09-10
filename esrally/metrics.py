@@ -35,7 +35,7 @@ import tabulate
 import urllib3.connection
 from elastic_transport import Urllib3HttpNode
 
-from esrally import client, config, exceptions, paths, time, types, version
+from esrally import client, config, config_keys, exceptions, paths, time, types, version
 from esrally.utils import console, convert, io, pretty, versions
 
 
@@ -691,8 +691,8 @@ def metrics_store(cfg: types.Config, read_only=True, track=None, challenge=None,
     store = cls(cfg=cfg, meta_info=meta_info)
     logging.getLogger(__name__).info("Creating %s", str(store))
 
-    race_id = cfg.opts("system", "race.id")
-    race_timestamp = cfg.opts("system", "time.start")
+    race_id = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.RACE_ID)
+    race_timestamp = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.TIME_START)
     selected_car = cfg.opts("mechanic", "car.names") if car is None else car
 
     store.open(race_id, race_timestamp, track, challenge, selected_car, create=not read_only)
@@ -746,7 +746,7 @@ class MetricsStore:  # pylint: disable=too-many-public-methods
         self._challenge = None
         self._car = None
         self._car_name = None
-        self._environment_name = cfg.opts("system", "env.name")
+        self._environment_name = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ENV_NAME)
         self.opened = False
         if meta_info is None:
             self._meta_info = {}
@@ -1845,7 +1845,7 @@ def list_races(cfg: types.Config):
         else:
             return None
 
-    output_format: str = cfg.opts("system", "list.races.format")
+    output_format: str = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.LIST_RACES_FORMAT)
     if output_format == "text":
         races = []
         for race in race_store(cfg).list():
@@ -1899,9 +1899,9 @@ def list_races(cfg: types.Config):
 
 def create_race(cfg: types.Config, track, challenge, track_revision=None):
     car = cfg.opts("mechanic", "car.names")
-    environment = cfg.opts("system", "env.name")
-    race_id = cfg.opts("system", "race.id")
-    race_timestamp = cfg.opts("system", "time.start")
+    environment = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ENV_NAME)
+    race_id = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.RACE_ID)
+    race_timestamp = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.TIME_START)
     user_tags = cfg.opts("race", "user.tags", default_value={}, mandatory=False)
     pipeline = cfg.opts("race", "pipeline")
     multi_cluster = cfg.opts("driver", "multi.cluster", mandatory=False, default_value=False)
@@ -2162,7 +2162,7 @@ class Race:
 class RaceStore:
     def __init__(self, cfg: types.Config):
         self.cfg = cfg
-        self.environment_name = cfg.opts("system", "env.name")
+        self.environment_name = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ENV_NAME)
 
     def find_by_race_id(self, race_id):
         raise NotImplementedError("abstract method")
@@ -2186,43 +2186,43 @@ class RaceStore:
         raise NotImplementedError("abstract method")
 
     def _max_results(self):
-        return int(self.cfg.opts("system", "list.max_results"))
+        return int(self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.LIST_MAX_RESULTS))
 
     def _track(self):
-        return self.cfg.opts("system", "admin.track", mandatory=False)
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ADMIN_TRACK, mandatory=False)
 
     def _benchmark_name(self):
-        return self.cfg.opts("system", "list.races.benchmark_name", mandatory=False)
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.LIST_RACES_BENCHMARK_NAME, mandatory=False)
 
     def _user_tags(self) -> dict:
-        return self.cfg.opts("system", "list.races.user_tags", default_value={}, mandatory=False)
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.LIST_RACES_USER_TAGS, default_value={}, mandatory=False)
 
     def _race_timestamp(self):
-        return self.cfg.opts("system", "add.race_timestamp")
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ADD_RACE_TIMESTAMP)
 
     def _message(self):
-        return self.cfg.opts("system", "add.message")
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ADD_MESSAGE)
 
     def _chart_type(self):
-        return self.cfg.opts("system", "add.chart_type", mandatory=False)
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ADD_CHART_TYPE, mandatory=False)
 
     def _chart_name(self):
-        return self.cfg.opts("system", "add.chart_name", mandatory=False)
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ADD_CHART_NAME, mandatory=False)
 
     def _from_date(self):
-        return self.cfg.opts("system", "list.from_date", mandatory=False)
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.LIST_FROM_DATE, mandatory=False)
 
     def _to_date(self):
-        return self.cfg.opts("system", "list.to_date", mandatory=False)
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.LIST_TO_DATE, mandatory=False)
 
     def _dry_run(self):
-        return self.cfg.opts("system", "admin.dry_run", mandatory=False)
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.ADMIN_DRY_RUN, mandatory=False)
 
     def _id(self):
-        return self.cfg.opts("system", "delete.id")
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.DELETE_ID)
 
     def _challenge(self):
-        return self.cfg.opts("system", "list.challenge", mandatory=False)
+        return self.cfg.opts(config_keys.SYSTEM_SECTION, config_keys.LIST_CHALLENGE, mandatory=False)
 
 
 # Does not inherit from RaceStore as it is only a delegator with the same API.

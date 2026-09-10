@@ -16,7 +16,7 @@
 # under the License.
 import os
 
-from esrally import types
+from esrally import config_keys, types
 
 
 def rally_confdir():
@@ -34,12 +34,12 @@ def races_root(cfg: types.Config):
 
 def race_root(cfg: types.Config, race_id=None):
     if not race_id:
-        race_id = cfg.opts("system", "race.id")
+        race_id = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.RACE_ID)
     return os.path.join(races_root(cfg), race_id)
 
 
 def install_root(cfg: types.Config):
-    install_id = cfg.opts("system", "install.id")
+    install_id = cfg.opts(config_keys.SYSTEM_SECTION, config_keys.INSTALL_ID)
     return os.path.join(races_root(cfg), install_id)
 
 
