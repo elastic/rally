@@ -1254,6 +1254,59 @@ class TestIndexHandler:
         self.client.component_template_exists.assert_called_once_with(custom_name)
         self.client.put_component_template.assert_called_once_with(custom_name, custom_template)
 
+    @dataclass
+    class AnnotationsEnsureTemplateCase:
+        index_template_exists: bool = False
+        identical: bool = False
+        overwrite_templates: bool = False
+        expect_put_template: bool = True
+        expect_get_template: bool = False
+
+    @cases.cases(
+        fresh_create=AnnotationsEnsureTemplateCase(),
+        identical=AnnotationsEnsureTemplateCase(
+            index_template_exists=True,
+            identical=True,
+            expect_put_template=False,
+            expect_get_template=True,
+        ),
+        differ_no_overwrite=AnnotationsEnsureTemplateCase(
+            index_template_exists=True,
+            expect_put_template=False,
+            expect_get_template=True,
+        ),
+        differ_overwrite=AnnotationsEnsureTemplateCase(
+            index_template_exists=True,
+            overwrite_templates=True,
+            expect_get_template=True,
+        ),
+    )
+    def test_ensure_annotations_template(self, case: AnnotationsEnsureTemplateCase):
+        self.cfg.add(config.Scope.applicationOverride, "reporting", "datastore.overwrite_existing_templates", case.overwrite_templates)
+
+        handler = metrics.IndexHandler(self.cfg, self.client, metrics.EsStoreType.races)
+        annotations_template = handler.annotations_template()
+
+        self.client.index_template_exists.return_value = case.index_template_exists
+        if case.index_template_exists:
+            if case.identical:
+                real_template = json.loads(annotations_template)
+            else:
+                real_template = {}
+            self.client.get_template.return_value = mock.MagicMock(body={"index_templates": [{"index_template": real_template}]})
+
+        handler.ensure_annotations_template("rally-annotations")
+
+        self.client.index_template_exists.assert_called_once_with("rally-annotations")
+        if case.expect_get_template:
+            self.client.get_template.assert_called_with("rally-annotations")
+        else:
+            self.client.get_template.assert_not_called()
+        if case.expect_put_template:
+            self.client.put_template.assert_called_once_with("rally-annotations", annotations_template)
+        else:
+            self.client.put_template.assert_not_called()
+
 
 class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
@@ -2528,9 +2581,14 @@ class TestEsRaceStore:
             "chart-name": "unittest-chart_name",
             "message": "Test Annotation",
         }
+        # the annotations index does not exist yet
+        self.es_mock.exists.return_value = False
         self.race_store.add_annotation()
 
         self.es_mock.exists.assert_called_once_with(index="rally-annotations")
+        # the annotations index does not exist yet, hence the index template must be created (without overwriting an existing one)
+        self.race_store._index_handler.ensure_annotations_template.assert_called_once_with("rally-annotations")
+        self.es_mock.create_index.assert_called_once_with(index="rally-annotations")
         self.es_mock.index.assert_called_once_with(
             index="rally-annotations",
             id="7",
