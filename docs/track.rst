@@ -994,6 +994,7 @@ Properties
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results. This flag is ineffective for scroll queries.
 * ``pages`` (optional, deprecated): Number of pages to retrieve. If this parameter is present, a scroll query will be executed. If you want to retrieve all result pages, use the value "all". This parameter is deprecated and will be replaced with the ``scroll-search`` operation in a future release.
 * ``results-per-page`` (optional):  Number of documents to retrieve per page. This maps to the Search API's ``size`` parameter, and can be used for scroll and non-scroll searches. Defaults to ``10``
+* ``clear-blob-cache`` (optional, defaults to ``false``): When Rally is used against `Elastic Serverless <https://docs.elastic.co/serverless>`_, clears the blob cache before this operation is issued. The clear request is excluded from the measured request timing. Ignored when not targeting a serverless cluster.
 
 Example::
 
@@ -3182,6 +3183,7 @@ Properties
 * ``filter`` (optional): A query filter defined in `Elasticsearch query DSL <https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html>`_.
 * ``body`` (optional): The query body.
 * ``detailed-results`` (optional, defaults to ``false``): Records more detailed meta-data about queries. As it analyzes the corresponding response in more detail, this might incur additional overhead which can skew measurement results.
+* ``clear-blob-cache`` (optional, defaults to ``false``): When Rally is used against `Elastic Serverless <https://docs.elastic.co/serverless>`_, clears the blob cache before this operation is issued. The clear request is excluded from the measured request timing. Ignored when not targeting a serverless cluster.
 
 Example::
 

@@ -3338,6 +3338,104 @@ class TestQueryRunner:
         )
         es.clear_scroll.assert_not_called()
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_clears_blob_cache_in_serverless(self, es):
+        es.options.return_value = es
+        clear_token = mock.Mock()
+        es.init_request_context = mock.Mock(return_value=({}, clear_token))
+        es.restore_context = mock.Mock()
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "hits": {"total": {"value": 0, "relation": "eq"}, "hits": []},
+        }
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(b"{}"),
+                io.BytesIO(json.dumps(search_response).encode()),
+            ]
+        )
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        query_runner = runner.Query(config=cfg)
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "clear-blob-cache": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            await query_runner(es, params)
+
+        assert es.perform_request.await_count == 2
+        assert es.perform_request.await_args_list[0] == mock.call(method="POST", path="/_internal/blob_caches/clear")
+        assert es.perform_request.await_args_list[1] == mock.call(
+            method="GET", path="/_all/_search", params={}, body=params["body"], headers=None
+        )
+        es.init_request_context.assert_called_once()
+        es.restore_context.assert_called_once_with(clear_token)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_does_not_clear_blob_cache_when_not_serverless(self, es):
+        es.options.return_value = es
+        es.init_request_context = mock.Mock()
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "hits": {"total": {"value": 0, "relation": "eq"}, "hits": []},
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        query_runner = runner.Query()
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "clear-blob-cache": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            await query_runner(es, params)
+
+        es.perform_request.assert_awaited_once_with(method="GET", path="/_all/_search", params={}, body=params["body"], headers=None)
+        es.init_request_context.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_does_not_clear_blob_cache_when_flag_not_set(self, es):
+        es.options.return_value = es
+        es.init_request_context = mock.Mock()
+        search_response = {
+            "timed_out": False,
+            "took": 5,
+            "hits": {"total": {"value": 0, "relation": "eq"}, "hits": []},
+        }
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(search_response).encode()))
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        query_runner = runner.Query(config=cfg)
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "body": {"query": {"match_all": {}}},
+        }
+
+        async with query_runner:
+            await query_runner(es, params)
+
+        es.perform_request.assert_awaited_once_with(method="GET", path="/_all/_search", params={}, body=params["body"], headers=None)
+        es.init_request_context.assert_not_called()
+
 
 class TestPutPipelineRunner:
     @mock.patch("elasticsearch.Elasticsearch")
@@ -8608,6 +8706,75 @@ class TestEsqlRunner:
         assert result["completion_time_in_millis"] is None
         assert result["start_time_in_millis"] is None
         assert result["expiration_time_in_millis"] is None
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_clears_blob_cache_in_serverless(self, es):
+        es.options.return_value = es
+        clear_token = mock.Mock()
+        es.init_request_context = mock.Mock(return_value=({}, clear_token))
+        es.restore_context = mock.Mock()
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(
+            side_effect=[
+                io.BytesIO(b"{}"),
+                io.BytesIO(json.dumps(response).encode()),
+            ]
+        )
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        esql = runner.Esql(config=cfg)
+
+        params = {"query": "from logs-* | stats c = count(*)", "clear-blob-cache": True}
+        result = await esql(es, params)
+
+        assert result == {"weight": 1, "unit": "ops", "success": True, "is_partial": False}
+        assert es.perform_request.await_count == 2
+        assert es.perform_request.await_args_list[0] == mock.call(method="POST", path="/_internal/blob_caches/clear")
+        expected_body = {"query": "from logs-* | stats c = count(*)"}
+        assert es.perform_request.await_args_list[1] == mock.call(
+            method="POST", path="/_query", headers=None, body=expected_body, params={}
+        )
+        es.init_request_context.assert_called_once()
+        es.restore_context.assert_called_once_with(clear_token)
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_does_not_clear_blob_cache_when_not_serverless(self, es):
+        es.options.return_value = es
+        es.init_request_context = mock.Mock()
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+        esql = runner.Esql()
+
+        params = {"query": "from logs-* | stats c = count(*)", "clear-blob-cache": True}
+        await esql(es, params)
+
+        expected_body = {"query": "from logs-* | stats c = count(*)"}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+        es.init_request_context.assert_not_called()
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_does_not_clear_blob_cache_when_flag_not_set(self, es):
+        es.options.return_value = es
+        es.init_request_context = mock.Mock()
+        response = {"is_partial": False, "columns": [], "values": []}
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(response).encode()))
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        esql = runner.Esql(config=cfg)
+
+        params = {"query": "from logs-* | stats c = count(*)"}
+        await esql(es, params)
+
+        expected_body = {"query": "from logs-* | stats c = count(*)"}
+        es.perform_request.assert_awaited_once_with(method="POST", path="/_query", headers=None, body=expected_body, params={})
+        es.init_request_context.assert_not_called()
 
 
 class TestEsqlProfileRunner:

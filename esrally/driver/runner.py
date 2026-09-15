@@ -62,7 +62,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
-    register_runner(track.OperationType.Esql, Esql(), async_runner=True)
+    register_runner(track.OperationType.Esql, Esql(config=config), async_runner=True)
     register_runner(track.OperationType.EsqlProfile, EsqlProfile(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
@@ -238,6 +238,24 @@ class Runner:
             headers.update({"x-opaque-id": opaque_id})
 
         return params, request_params, transport_params, headers
+
+    async def _clear_blob_cache(self, es, params):
+        """
+        Clears the serverless blob cache before an iteration if the ``clear-blob-cache`` param
+        is set to ``True``. Only applies when running against a serverless target. The clear
+        request is issued in its own request context so it is excluded from the calling
+        runner's ``service_time`` / ``latency`` measurements.
+        """
+        if not (self.serverless_mode and params.get("clear-blob-cache", False)):
+            return
+        # A nested `new_request_context()` propagates its start/end times to the parent context
+        # on exit, so it would still be included in the parent's timing. Swapping in a throwaway
+        # context via the classmethods below avoids that propagation entirely.
+        _, token = es.init_request_context()
+        try:
+            await es.perform_request(method="POST", path="/_internal/blob_caches/clear")
+        finally:
+            es.restore_context(token)
 
 
 class Delegator:
@@ -1040,6 +1058,9 @@ class Query(Runner):
                            defaults to ``None`` and potentially falls back to the global timeout setting.
     * `results-per-page`: Number of results to retrieve per page.  This maps to the Search API's ``size`` parameter, and
                            can be used for paginated and non-paginated searches.  Defaults to ``10``
+    * `clear-blob-cache` (default: ``False``): On serverless targets, clears the blob cache before this
+                                               iteration is issued. The clear request is excluded from the
+                                               measured time. Ignored on non-serverless targets.
 
     If the following parameters are present in addition, a paginated query will be issued:
 
@@ -1073,6 +1094,7 @@ class Query(Runner):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         # we don't set headers at the options level because the Query runner sets them via the client's '_perform_request' method
         es = es.options(**transport_params)
+        await self._clear_blob_cache(es, params)
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
         # composite context where there is no actual parameter source and the entire request structure must be provided
         # by the composite's parameter source.
@@ -3130,6 +3152,9 @@ class Esql(Runner):
     * `detailed-results` (default: ``False``): Records more detailed meta-data about queries. As it analyzes the
                                                corresponding response in more detail, this might incur additional
                                                overhead which can skew measurement results.
+    * `clear-blob-cache` (default: ``False``): On serverless targets, clears the blob cache before this
+                                               iteration is issued. The clear request is excluded from the
+                                               measured time. Ignored on non-serverless targets.
 
     If the response contains ``is_partial: true``, the operation is marked as failed. This will cause the benchmark
     to abort if ``--on-error=abort`` is specified, or record an error and continue otherwise.
@@ -3138,6 +3163,7 @@ class Esql(Runner):
     async def __call__(self, es, params):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
+        await self._clear_blob_cache(es, params)
         query = mandatory(params, "query", self)
         body = params.get("body", {})
         body["query"] = query
