@@ -4650,6 +4650,10 @@ def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest
     monkeypatch.setattr(console, "info", mock.create_autospec(console.info))
     monkeypatch.setattr(subprocess, "check_call", mock.create_autospec(subprocess.check_call))
     os.makedirs(os.path.join(str(tmpdir), "logs"), exist_ok=True)
+    constraints_path = os.path.join(str(tmpdir), "constraints.txt")
+    with open(constraints_path, "w", encoding="utf-8") as constraints_file:
+        constraints_file.write("anyio==4.9.0\n")
+    monkeypatch.setattr(loader, "_write_constraints_file", lambda: constraints_path)
     loader._install_dependencies(case.requirements)
 
     if not case.requirements:
@@ -4666,5 +4670,24 @@ def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest
         "--upgrade",
         "--target",
         "./libs",
+        "--constraint",
+        constraints_path,
     ]
+    assert not os.path.exists(constraints_path)
     assert os.path.isfile("./logs/dependency.log")
+
+
+def test_write_constraints_file_pins_resolved_versions() -> None:
+    # pylint: disable=protected-access
+    constraints_path = loader._write_constraints_file()
+    if constraints_path is None:
+        pytest.skip("esrally package metadata is not available")
+    try:
+        with open(constraints_path, encoding="utf-8") as constraints_file:
+            constraints = constraints_file.read().splitlines()
+        assert constraints == sorted(constraints)
+        assert constraints
+        assert all("==" in line for line in constraints)
+        assert any(line.startswith("elasticsearch==") for line in constraints)
+    finally:
+        os.remove(constraints_path)

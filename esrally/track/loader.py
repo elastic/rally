@@ -313,15 +313,51 @@ def _install_dependencies(dependencies):
     if dependencies:
         log_path = os.path.join(paths.logs(), "dependency.log")
         console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
+        constraints_path = _write_constraints_file()
         try:
             with open(log_path, "ab") as install_log:
+                command = [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()]
+                if constraints_path:
+                    command += ["--constraint", constraints_path]
                 subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
+                    command,
                     stdout=install_log,
                     stderr=install_log,
                 )
         except subprocess.CalledProcessError:
             raise exceptions.SystemSetupError(f"Installation of track dependencies failed. See [{install_log.name}] for more information.")
+        finally:
+            if constraints_path and os.path.exists(constraints_path):
+                os.remove(constraints_path)
+
+
+def _write_constraints_file():
+    """
+    Writes Rally's resolved dependencies as a pip constraints file so track dependency
+    installation cannot upgrade shared packages beyond what Rally runs with.
+
+    :return: The path of the written constraints file, or None if it could not be determined.
+    """
+    from importlib import metadata
+
+    try:
+        requirements = metadata.requires("esrally") or []
+    except metadata.PackageNotFoundError:
+        return None
+    constraints = []
+    for requirement in requirements:
+        match = re.match(r"^[A-Za-z0-9_.\-]+", requirement.strip())
+        if not match:
+            continue
+        try:
+            constraints.append(f"{match.group(0)}=={metadata.version(match.group(0))}")
+        except metadata.PackageNotFoundError:
+            continue
+    if not constraints:
+        return None
+    with tempfile.NamedTemporaryFile(mode="w", prefix="rally-constraints-", suffix=".txt", delete=False) as constraints_file:
+        constraints_file.write("\n".join(sorted(constraints)) + "\n")
+        return constraints_file.name
 
 
 def _load_single_track(cfg: types.Config, track_repository, track_name, install_dependencies=False):
