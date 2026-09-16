@@ -48,6 +48,7 @@ COPY .ci/variables.json /rally/.ci/
 COPY esrally/ /rally/esrally/
 COPY pyproject.toml /rally/
 COPY uv.lock /rally/
+COPY dependency_constraints_build_hook.py /rally/
 
 ENV VIRTUAL_ENV=/rally/venv
 ENV PATH=/rally/venv/bin:$PATH
