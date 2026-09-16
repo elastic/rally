@@ -3436,6 +3436,38 @@ class TestQueryRunner:
         es.perform_request.assert_awaited_once_with(method="GET", path="/_all/_search", params={}, body=params["body"], headers=None)
         es.init_request_context.assert_not_called()
 
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_query_fails_iteration_when_blob_cache_clear_fails(self, es):
+        es.options.return_value = es
+        clear_token = mock.Mock()
+        es.init_request_context = mock.Mock(return_value=({}, clear_token))
+        es.restore_context = mock.Mock()
+        es.on_request_start = mock.Mock()
+        es.on_request_end = mock.Mock()
+        es.perform_request = mock.AsyncMock(side_effect=elasticsearch.ConnectionError(message="connection refused"))
+
+        cfg = config.Config()
+        cfg.add(config.Scope.benchmark, "driver", "serverless.mode", True)
+        cfg.add(config.Scope.benchmark, "driver", "serverless.operator", True)
+        query_runner = runner.Query(config=cfg)
+
+        params = {
+            "operation-type": "search",
+            "index": "_all",
+            "clear-blob-cache": True,
+            "body": {"query": {"match_all": {}}},
+        }
+
+        with pytest.raises(elasticsearch.ConnectionError):
+            async with query_runner:
+                await query_runner(es, params)
+
+        es.perform_request.assert_awaited_once()
+        es.restore_context.assert_called_once_with(clear_token)
+        es.on_request_start.assert_called_once()
+        es.on_request_end.assert_called_once()
+
 
 class TestPutPipelineRunner:
     @mock.patch("elasticsearch.Elasticsearch")

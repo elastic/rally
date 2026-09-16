@@ -244,18 +244,31 @@ class Runner:
         Clears the serverless blob cache before an iteration if the ``clear-blob-cache`` param
         is set to ``True``. Only applies when running against a serverless target. The clear
         request is issued in its own request context so it is excluded from the calling
-        runner's ``service_time`` / ``latency`` measurements.
+        runner's ``service_time`` / ``latency`` measurements. A failed clear re-raises the
+        original transport/API error so ``execute_single`` can apply the normal ``--on-error``
+        logic for that iteration.
         """
         if not (self.serverless_mode and params.get("clear-blob-cache", False)):
             return
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
         # A nested `new_request_context()` propagates its start/end times to the parent context
         # on exit, so it would still be included in the parent's timing. Swapping in a throwaway
         # context via the classmethods below avoids that propagation entirely.
         _, token = es.init_request_context()
+        exc = None
         try:
             await es.perform_request(method="POST", path="/_internal/blob_caches/clear")
+        except (elasticsearch.ApiError, elasticsearch.TransportError) as e:
+            exc = e
         finally:
             es.restore_context(token)
+        if exc is not None:
+            # Stamp the outer context so driver.py timing arithmetic has valid values.
+            es.on_request_start()
+            es.on_request_end()
+            raise exc
 
 
 class Delegator:
