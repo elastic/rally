@@ -1907,6 +1907,7 @@ class AsyncIoAdapter:
                         self.complete,
                         task.error_behavior(self.on_error),
                         cluster_name=cluster_name,
+                        recoverable_query_retry_attempts=runner.recoverable_query_retry_attempts(self.cfg),
                     )
                     final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                     awaitables.append(final_executor())
@@ -1935,6 +1936,7 @@ class AsyncIoAdapter:
                     self.complete,
                     task.error_behavior(self.on_error),
                     cluster_name=None,
+                    recoverable_query_retry_attempts=runner.recoverable_query_retry_attempts(self.cfg),
                 )
                 final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                 awaitables.append(final_executor())
@@ -1992,6 +1994,26 @@ class AsyncProfiler:
             self.profile_logger.info(profile)
 
 
+def _clients_without_retries(es_clients: EsClients) -> EsClients:
+    """Return clients with elasticsearch-py retries disabled so Rally can sample each attempt."""
+    return EsClients(
+        {name: (es_client.options(max_retries=0) if hasattr(es_client, "options") else es_client) for name, es_client in es_clients.items()}
+    )
+
+
+def _request_error_message(request_meta_data):
+    msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
+    if description := request_meta_data.get("error-description"):
+        msg += f", Description: {description}"
+    if http_status := request_meta_data.get("http-status"):
+        msg += f", HTTP Status: {http_status}"
+    return msg
+
+
+def _api_error_durability(e):
+    return runner.api_error_durability(e)
+
+
 class AsyncExecutor:
     def __init__(
         self,
@@ -2004,6 +2026,7 @@ class AsyncExecutor:
         complete,
         on_error: OnErrorBehavior,
         cluster_name=None,
+        recoverable_query_retry_attempts=None,
     ):
         """
         Executes tasks according to the schedule for a given operation.
@@ -2016,6 +2039,7 @@ class AsyncExecutor:
         :param complete: A shared boolean that indicates we need to prematurely complete execution.
         :param on_error: An Enum of type `OnErrorBehaviour` specifying how the load generator should behave on errors.
         :param cluster_name: Optional name of the target cluster (for multi-cluster reporting).
+        :param recoverable_query_retry_attempts: Max attempts per query when retrying recoverable errors, else ``None``.
         """
         self.client_id = client_id
         self.task = task
@@ -2027,7 +2051,86 @@ class AsyncExecutor:
         self.complete = complete
         self.on_error = on_error
         self.cluster_name = cluster_name
+        self.recoverable_query_retry_attempts = recoverable_query_retry_attempts
+        self.retry_recoverable_queries = (
+            recoverable_query_retry_attempts is not None and self.op.type in runner.RECOVERABLE_QUERY_OPERATION_TYPES
+        )
+        self.es_ops = _clients_without_retries(es) if self.retry_recoverable_queries else es
         self.logger = logging.getLogger(__name__)
+
+    def _emit_sample(
+        self,
+        *,
+        op_runner,
+        sample_type,
+        request_meta_data,
+        absolute_processing_start,
+        request_start,
+        request_end,
+        processing_start,
+        processing_end,
+        total_start,
+        throughput_throttled,
+        absolute_expected_schedule_time,
+        total_ops,
+        total_ops_unit,
+        percent_completed,
+        task_completes_parent,
+    ):
+        service_time = request_end - request_start
+        processing_time = processing_end - processing_start
+        time_period = request_end - total_start
+        # Allow runners to override the throughput calculation in very specific circumstances. Usually, Rally
+        # assumes that throughput is the "amount of work" (determined by the "weight") per unit of time
+        # (determined by the elapsed time period). However, in certain cases (e.g. shard recovery or other
+        # long running operations where there is a dedicated stats API to determine progress), it is
+        # advantageous if the runner calculates throughput directly. The following restrictions apply:
+        #
+        # * Only one client must call that runner (when throughput is calculated, it is aggregated across
+        #   all clients but if the runner provides it, we take the value as is).
+        # * The runner should be rate-limited as each runner call will result in one throughput sample.
+        #
+        throughput = request_meta_data.pop("throughput", None)
+        # Do not calculate latency separately when we run unthrottled. This metric is just confusing then.
+        latency = request_end - absolute_expected_schedule_time if throughput_throttled else service_time
+        # If this task completes the parent task we should *not* check for completion by another client but
+        # instead continue until our own runner has completed. We need to do this because the current
+        # worker (process) could run multiple clients that execute the same task. We do not want all clients to
+        # finish this task as soon as the first of these clients has finished but rather continue until the last
+        # client has finished that task.
+        if task_completes_parent:
+            completed = op_runner.completed
+        else:
+            completed = self.complete.is_set() or op_runner.completed
+        # last sample should bump progress to 100% if externally completed.
+        if completed:
+            progress = 1.0
+        elif op_runner.percent_completed:
+            progress = op_runner.percent_completed
+        else:
+            progress = percent_completed
+
+        sample_meta = dict(request_meta_data) if request_meta_data else {}
+        if self.cluster_name is not None:
+            sample_meta["cluster"] = self.cluster_name
+        self.sampler.add(
+            self.task,
+            self.client_id,
+            sample_type,
+            sample_meta,
+            absolute_processing_start,
+            request_start,
+            latency,
+            service_time,
+            processing_time,
+            throughput,
+            total_ops,
+            total_ops_unit,
+            time_period,
+            progress,
+            request_meta_data.pop("dependent_timing", None),
+        )
+        return completed
 
     async def __call__(self, *args, **kwargs):
         any_task_completes_parent = self.task.any_completes_parent
@@ -2046,7 +2149,7 @@ class AsyncExecutor:
         self.logger.debug("Entering main loop for client id [%s].", self.client_id)
         # noinspection PyBroadException
         try:
-            async for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
+            async for expected_scheduled_time, sample_type, percent_completed, op_runner, params in schedule:
                 if self.cancel.is_set():
                     self.logger.info("User cancelled execution.")
                     break
@@ -2057,70 +2160,88 @@ class AsyncExecutor:
                     if rest > 0:
                         await asyncio.sleep(rest)
 
-                absolute_processing_start = time.time()
                 processing_start = time.perf_counter()
                 self.schedule_handle.before_request(processing_start)
-                es_client = self.es.default
-                with es_client.new_request_context() as request_context:
-                    total_ops, total_ops_unit, request_meta_data = await execute_single(runner, self.es, params, self.on_error)
-                    request_start = request_context.request_start
-                    request_end = request_context.request_end
 
-                processing_end = time.perf_counter()
-                service_time = request_end - request_start
-                processing_time = processing_end - processing_start
-                time_period = request_end - total_start
-                self.schedule_handle.after_request(processing_end, total_ops, total_ops_unit, request_meta_data)
-                # Allow runners to override the throughput calculation in very specific circumstances. Usually, Rally
-                # assumes that throughput is the "amount of work" (determined by the "weight") per unit of time
-                # (determined by the elapsed time period). However, in certain cases (e.g. shard recovery or other
-                # long running operations where there is a dedicated stats API to determine progress), it is
-                # advantageous if the runner calculates throughput directly. The following restrictions apply:
-                #
-                # * Only one client must call that runner (when throughput is calculated, it is aggregated across
-                #   all clients but if the runner provides it, we take the value as is).
-                # * The runner should be rate-limited as each runner call will result in one throughput sample.
-                #
-                throughput = request_meta_data.pop("throughput", None)
-                # Do not calculate latency separately when we run unthrottled. This metric is just confusing then.
-                latency = request_end - absolute_expected_schedule_time if throughput_throttled else service_time
-                # If this task completes the parent task we should *not* check for completion by another client but
-                # instead continue until our own runner has completed. We need to do this because the current
-                # worker (process) could run multiple clients that execute the same task. We do not want all clients to
-                # finish this task as soon as the first of these clients has finished but rather continue until the last
-                # client has finished that task.
-                if task_completes_parent:
-                    completed = runner.completed
-                else:
-                    completed = self.complete.is_set() or runner.completed
-                # last sample should bump progress to 100% if externally completed.
-                if completed:
-                    progress = 1.0
-                elif runner.percent_completed:
-                    progress = runner.percent_completed
-                else:
-                    progress = percent_completed
-
-                sample_meta = dict(request_meta_data) if request_meta_data else {}
-                if self.cluster_name is not None:
-                    sample_meta["cluster"] = self.cluster_name
-                self.sampler.add(
-                    self.task,
-                    self.client_id,
-                    sample_type,
-                    sample_meta,
-                    absolute_processing_start,
-                    request_start,
-                    latency,
-                    service_time,
-                    processing_time,
-                    throughput,
-                    total_ops,
-                    total_ops_unit,
-                    time_period,
-                    progress,
-                    request_meta_data.pop("dependent_timing", None),
+                attempt = 0
+                first_request_start = None
+                total_ops = 0
+                total_ops_unit = "ops"
+                request_meta_data = {}
+                after_request_meta = {}
+                processing_end = processing_start
+                completed = False
+                # When retrying recoverable query errors, don't abort inside execute_single so each
+                # attempt can be sampled. Connection-error policy is unchanged (CONTINUE still aborts
+                # on connection refused; CONTINUE_ON_NETWORK is passed through).
+                attempt_on_error = (
+                    OnErrorBehavior.CONTINUE if self.retry_recoverable_queries and self.on_error == OnErrorBehavior.ABORT else self.on_error
                 )
+
+                while True:
+                    if self.cancel.is_set():
+                        self.logger.info("User cancelled execution.")
+                        break
+
+                    absolute_processing_start = time.time()
+                    processing_start = time.perf_counter()
+                    es_client = self.es.default
+                    with es_client.new_request_context() as request_context:
+                        total_ops, total_ops_unit, request_meta_data = await execute_single(
+                            op_runner, self.es_ops, params, attempt_on_error
+                        )
+                        request_start = request_context.request_start
+                        request_end = request_context.request_end
+
+                    processing_end = time.perf_counter()
+                    if first_request_start is None:
+                        first_request_start = request_start
+
+                    success = request_meta_data.get("success", True)
+                    if self.retry_recoverable_queries:
+                        if not success:
+                            # Failed retry attempts must not inflate throughput.
+                            total_ops = 0
+                        request_meta_data["retry-count"] = attempt
+                        request_meta_data["retry-attempts-remaining"] = self.recoverable_query_retry_attempts - attempt - 1
+                        request_meta_data["retry-duration"] = convert.seconds_to_ms(request_end - first_request_start)
+
+                    after_request_meta = dict(request_meta_data) if request_meta_data else {}
+                    completed = self._emit_sample(
+                        op_runner=op_runner,
+                        sample_type=sample_type,
+                        request_meta_data=request_meta_data,
+                        absolute_processing_start=absolute_processing_start,
+                        request_start=request_start,
+                        request_end=request_end,
+                        processing_start=processing_start,
+                        processing_end=processing_end,
+                        total_start=total_start,
+                        throughput_throttled=throughput_throttled,
+                        absolute_expected_schedule_time=absolute_expected_schedule_time,
+                        total_ops=total_ops,
+                        total_ops_unit=total_ops_unit,
+                        percent_completed=percent_completed,
+                        task_completes_parent=task_completes_parent,
+                    )
+
+                    recoverable = self.retry_recoverable_queries and runner.is_recoverable_request_meta(after_request_meta)
+                    attempts_left = self.retry_recoverable_queries and (attempt + 1) < self.recoverable_query_retry_attempts
+                    if success or not recoverable or not attempts_left:
+                        if not success and self.on_error == OnErrorBehavior.ABORT:
+                            raise exceptions.RallyAssertionError(_request_error_message(after_request_meta))
+                        break
+
+                    attempt += 1
+                    self.logger.info(
+                        "Recoverable error on [%s] (retry-count [%s]). Retrying in [%.2f] seconds.",
+                        self.task,
+                        attempt,
+                        runner.RECOVERABLE_QUERY_RETRY_WAIT_SECONDS,
+                    )
+                    await asyncio.sleep(runner.RECOVERABLE_QUERY_RETRY_WAIT_SECONDS)
+
+                self.schedule_handle.after_request(processing_end, total_ops, total_ops_unit, after_request_meta)
 
                 if completed:
                     self.logger.info("Task [%s] is considered completed due to external event.", self.task)
@@ -2265,6 +2386,8 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
         request_meta_data["error-description"] = error_description
         if e.status_code:
             request_meta_data["http-status"] = e.status_code
+        if durability := _api_error_durability(e):
+            request_meta_data["error-durability"] = durability
         request_meta_data.update(_parse_headers(e))
 
     except KeyError as e:
@@ -2274,15 +2397,7 @@ async def execute_single(runner, es, params, on_error: OnErrorBehavior):
 
     if not request_meta_data["success"]:
         if on_error == OnErrorBehavior.ABORT or (is_connection_error and on_error != OnErrorBehavior.CONTINUE_ON_NETWORK):
-            msg = "Request returned an error. Error type: %s" % request_meta_data.get("error-type", "Unknown")
-
-            if description := request_meta_data.get("error-description"):
-                msg += f", Description: {description}"
-
-            if http_status := request_meta_data.get("http-status"):
-                msg += f", HTTP Status: {http_status}"
-
-            raise exceptions.RallyAssertionError(msg)
+            raise exceptions.RallyAssertionError(_request_error_message(request_meta_data))
 
     return total_ops, total_ops_unit, request_meta_data
 

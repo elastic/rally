@@ -13,6 +13,7 @@
 
 #### Enhancements
 
+* Retry recoverable query errors (HTTP 429/5xx and ES|QL partial results) via ``--retry-recoverable-query-errors``. Each attempt is recorded as a sample with ``retry-count``, ``retry-attempts-remaining``, and ``retry-duration``.
 * [#2046](https://github.com/elastic/rally/pull/2046): Add detailed results support for ES|QL queries
 * [#2039](https://github.com/elastic/rally/pull/2039): Log warning on BadRequestError
 * [#1868](https://github.com/elastic/rally/pull/1868): Bulk http status & 429 retries
