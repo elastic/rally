@@ -538,6 +538,27 @@ class IndexHandler:
     def annotations_template(self):
         return self._index_template_provider.annotations_template()
 
+    def ensure_annotations_template(self, annotations_index_name):
+        """
+        Ensures that the index template for the annotations index exists, respecting
+        `datastore.overwrite_existing_templates`: an existing (potentially user-customized)
+        template is only replaced if that option is enabled, otherwise it is kept as-is.
+        """
+        template_name = annotations_index_name
+        _annotations_template = self.annotations_template()
+
+        old_template = None
+        if self._client.index_template_exists(template_name):
+            for existing in self._client.get_template(template_name).body.get("index_templates", []):
+                old_template = existing.get("index_template", {}).get("template", {})
+                break
+            new_template = json.loads(_annotations_template)["template"]
+
+            if not self._should_apply_update(f"index template [{template_name}]", old_template, new_template):
+                return
+
+        self._client.put_template(template_name, _annotations_template)
+
     def _ilm_default_template(self, policy_name):
         with open("%s/resources/%s.json" % (self._index_template_provider.script_dir, policy_name), encoding="utf-8") as f:
             return json.dumps(json.load(f))
@@ -2409,8 +2430,8 @@ class EsRaceStore(RaceStore):
             )
         else:
             if not self.client.exists(index="rally-annotations"):
-                # create or overwrite template on index creation
-                self.client.put_template("rally-annotations", self._index_handler.annotations_template())
+                # create the template if needed (don't overwrite an existing one without the user's consent)
+                self._index_handler.ensure_annotations_template("rally-annotations")
                 self.client.create_index(index="rally-annotations")
             self.client.index(
                 index="rally-annotations",
