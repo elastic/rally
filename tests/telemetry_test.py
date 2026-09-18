@@ -5332,6 +5332,7 @@ class TestDiskUsageStats:
             "foo": {
                 "fields": {
                     "prcp": {
+                        "type": "float",
                         "total_in_bytes": 1498,
                         "doc_values_in_bytes": 748,
                         "points_in_bytes": 750,
@@ -5344,9 +5345,9 @@ class TestDiskUsageStats:
         t.on_benchmark_start()
         t.on_benchmark_stop()
         assert metrics_store_cluster_level.mock_calls == [
-            self._mock_store("disk_usage_total", 1498, "prcp"),
-            self._mock_store("disk_usage_doc_values", 748, "prcp"),
-            self._mock_store("disk_usage_points", 750, "prcp"),
+            self._mock_store("disk_usage_total", 1498, "prcp", field_type="float"),
+            self._mock_store("disk_usage_doc_values", 748, "prcp", field_type="float"),
+            self._mock_store("disk_usage_points", 750, "prcp", field_type="float"),
         ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
@@ -5359,6 +5360,7 @@ class TestDiskUsageStats:
             "foo": {
                 "fields": {
                     "station.country_code": {
+                        "type": "keyword",
                         "total_in_bytes": 346,
                         "doc_values_in_bytes": 328,
                         "points_in_bytes": 18,
@@ -5371,9 +5373,9 @@ class TestDiskUsageStats:
         t.on_benchmark_start()
         t.on_benchmark_stop()
         assert metrics_store_cluster_level.mock_calls == [
-            self._mock_store("disk_usage_total", 346, "station.country_code"),
-            self._mock_store("disk_usage_doc_values", 328, "station.country_code"),
-            self._mock_store("disk_usage_points", 18, "station.country_code"),
+            self._mock_store("disk_usage_total", 346, "station.country_code", field_type="keyword"),
+            self._mock_store("disk_usage_doc_values", 328, "station.country_code", field_type="keyword"),
+            self._mock_store("disk_usage_points", 18, "station.country_code", field_type="keyword"),
         ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
@@ -5394,8 +5396,11 @@ class TestDiskUsageStats:
             self._mock_store("disk_usage_knn_vectors", 64179820, "title_vector"),
         ]
 
-    def _mock_store(self, name, size, field):
-        return mock.call(name, size, meta_data={"index": "foo", "field": field}, unit="byte")
+    def _mock_store(self, name, size, field, field_type=None):
+        meta = {"index": "foo", "field": field}
+        if field_type is not None:
+            meta["field_type"] = field_type
+        return mock.call(name, size, meta_data=meta, unit="byte")
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("elasticsearch.Elasticsearch")
