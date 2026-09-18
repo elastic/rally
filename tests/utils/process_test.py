@@ -112,6 +112,16 @@ class TestProcess:
         assert process.find_all_other_rally_processes() == [rally_process_p, rally_process_r, rally_process_e, rally_process_mac]
 
     @mock.patch("psutil.process_iter")
+    def test_find_all_other_rally_processes_ignores_own_parent(self, process_iter):
+        # a launcher such as a debugger mentions esrally in its command line but is not a competing Rally process
+        parent_process = Process(os.getppid(), "python3", ["/usr/bin/python3", "/debugpy/launcher", "--", "~/.local/bin/esrally"])
+        rally_process_e = Process(107, "esrally", ["/usr/bin/python3", "~/.local/bin/esrally"])
+
+        process_iter.return_value = [parent_process, rally_process_e]
+
+        assert process.find_all_other_rally_processes() == [rally_process_e]
+
+    @mock.patch("psutil.process_iter")
     def test_find_no_other_rally_process_running(self, process_iter):
         metrics_store_process = Process(
             102,
