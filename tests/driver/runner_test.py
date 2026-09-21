@@ -1666,7 +1666,8 @@ class TestBulkIndexRunner:
         ]
         es.bulk = mock.AsyncMock(side_effect=bulk_responses)
         bulk = runner.BulkIndex()
-        result = await bulk(es, dict(params))
+        with mock.patch("asyncio.sleep", new_callable=mock.AsyncMock):
+            result = await bulk(es, dict(params))
         assert result["index"] == "test"
         assert result["unit"] == "docs"
         assert result["weight"] == 3
@@ -1792,7 +1793,8 @@ class TestBulkIndexRunner:
         ]
         es.bulk = mock.AsyncMock(side_effect=bulk_responses)
         bulk = runner.BulkIndex()
-        result = await bulk(es, dict(params))
+        with mock.patch("asyncio.sleep", new_callable=mock.AsyncMock):
+            result = await bulk(es, dict(params))
         assert result["index"] == "test"
         assert result["weight"] == 2
         assert result["success"] is False

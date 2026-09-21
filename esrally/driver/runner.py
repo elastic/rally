@@ -605,8 +605,17 @@ class BulkIndex(Runner):
         for i in range(retries_on_429):
             if not stats.error_429_indices:
                 break
+            # Exponential backoff with full jitter so that retried docs don't
+            # re-saturate indexing pressure immediately (e.g. on Serverless cold-start).
+            delay = random.uniform(0, min(0.5 * (2**i), 30))
+            await asyncio.sleep(delay)
             lines_to_retry = self._build_retry_body(api_kwargs, stats.error_429_indices)
-            self.logger.warning("Retrying %d documents that previously resulted in a 429.", len(lines_to_retry) / 2)
+            self.logger.warning(
+                "Retrying %d documents that previously resulted in a 429 (attempt %d, backoff %.2fs).",
+                len(lines_to_retry) / 2,
+                i + 1,
+                delay,
+            )
             api_kwargs["body"] = lines_to_retry
             bulk_size = len(lines_to_retry) / 2
             response = await es.bulk(params=bulk_params, **api_kwargs)
