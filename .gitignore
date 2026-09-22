@@ -122,3 +122,6 @@ recipes/ccr/ccr-target-hosts.json
 
 # Tracker tracks
 tracks/
+
+# ctags
+tags
