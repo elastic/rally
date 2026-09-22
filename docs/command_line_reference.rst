@@ -588,9 +588,9 @@ Allows to set parameters for telemetry devices. It accepts a list of comma-separ
 
 Example::
 
-    esrally race --track=geonames --telemetry=jfr --telemetry-params="recording-template:'profile'"
+    esrally race --track=geonames --telemetry=jfr --telemetry-params="jfr-recording-template:'profile'"
 
-This enables the Java flight recorder telemetry device and sets the ``recording-template`` parameter to "profile".
+This enables the Java flight recorder telemetry device and sets the ``jfr-recording-template`` parameter to "profile".
 
 For more complex cases specify a JSON file. Store the following as ``telemetry-params.json``::
 
