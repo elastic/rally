@@ -57,7 +57,6 @@ jobs:
 
   test-pypi-publish:
     name: "Upload release to Test PyPI"
-    if: false # Temporarily disabled.
     needs: ["build"]
     permissions:
       id-token: write # Needed for trusted publishing to Test PyPI.
