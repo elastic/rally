@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 path = "esrally/_version.py"
 
 [tool.hatch.build.hooks.custom]
-path = "dependency_constraints_build_hook.py"
+path = "scripts/dependency_constraints_build_hook.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
