@@ -3209,6 +3209,8 @@ class EsqlProfile(Runner):
     - parsing.took_ms: Time to parse the ES|QL query
     - preanalysis.took_ms: Preanalysis time (field_caps, enrich policies, lookup indices)
     - analysis.took_ms: Analysis time before optimizations
+    - documents_found, values_loaded, rows_emitted, bytes_read, read_nanos,
+      read_cpu_nanos, cpu_nanos: response-level counters (not part of the profile)
     - <driver>.number: Count of driver instances
     - <driver>.took_ms: Maximum took time across all driver instances
     - <driver>.cpu_ms: Maximum CPU time across all driver instances
@@ -3234,8 +3236,35 @@ class EsqlProfile(Runner):
         response = await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
         profile = response["profile"]
         result = {"weight": 1, "unit": "ops", "success": True}
+        # Top-level counters, returned on every _query response independently of
+        # profile:true. They are accumulated across every driver - including ones
+        # whose per-operator profile is dropped before serialization - so they are
+        # the only view of that work.
+        for counter in (
+            "documents_found",
+            "values_loaded",
+            "rows_emitted",
+            "bytes_read",
+            "read_nanos",
+            "read_cpu_nanos",
+            "cpu_nanos",
+        ):
+            if counter in response:
+                result[counter] = response[counter]
         if profile:
-            for phase_name in ["query", "planning", "parsing", "preanalysis", "dependency_resolution", "analysis"]:
+            for phase_name in [
+                "query",
+                "planning",
+                "parsing",
+                "view_resolution",
+                "dataset_resolution",
+                "preanalysis",
+                "indices_resolution",
+                "enrich_resolution",
+                "inference_resolution",
+                "analysis",
+                "dependency_resolution",
+            ]:
                 if phase_name in profile:
                     took_nanos = profile.get(phase_name, {}).get("took_nanos", 0)
                     if took_nanos > 0:
