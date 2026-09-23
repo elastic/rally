@@ -25,6 +25,7 @@ import sys
 import tempfile
 import urllib.error
 from collections.abc import Callable, Generator
+from importlib import metadata
 
 import jinja2
 import jinja2.exceptions
@@ -314,9 +315,21 @@ def _install_dependencies(dependencies):
         log_path = os.path.join(paths.logs(), "dependency.log")
         console.info(f"Installing track dependencies [{', '.join(dependencies)}]")
         try:
+            constraints_file = metadata.distribution("esrally").locate_file("esrally/resources/rally-constraints.txt")
             with open(log_path, "ab") as install_log:
                 subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install", *dependencies, "--upgrade", "--target", paths.libs()],
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        *dependencies,
+                        "--upgrade",
+                        "--constraint",
+                        str(constraints_file),
+                        "--target",
+                        paths.libs(),
+                    ],
                     stdout=install_log,
                     stderr=install_log,
                 )
