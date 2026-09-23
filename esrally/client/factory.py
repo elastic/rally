@@ -29,6 +29,9 @@ from esrally.utils import console, convert, versions
 
 
 def _needs_cleanup_closed(python_version):
+    # Python 3.12.8 got rid of the need for this
+    # param. 3.13.0 had a bug that required it again.
+    # That bug was fixed in 3.13.1.
     return python_version < (3, 12, 8) or (3, 13, 0) <= python_version < (3, 13, 1)
 
 
