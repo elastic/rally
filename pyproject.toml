@@ -130,7 +130,7 @@ develop = [
     "pre-commit==2.20.0",
     "pylint==3.3.8",
     "trustme==0.9.0",
-    "GitPython==3.1.30",
+    "GitPython==3.1.60",
     # formatting
     "black==26.3.1",
     # mypy
