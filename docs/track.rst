@@ -3245,13 +3245,28 @@ Meta-data
 * ``unit``: Always ``ops``.
 * ``success``: A boolean indicating whether the query has succeeded.
 
-The following metrics are included when profile data is present:
+The following response-level counters are copied as-is from the ``_query`` response when present. They are aggregated across all drivers, including those whose per-operator profile is not returned:
+
+* ``documents_found``: Number of documents found by all Lucene queries.
+* ``values_loaded``: Number of values loaded (roughly documents times fields; ``null`` values are not counted and multi-valued fields count once per value).
+* ``rows_emitted``: Total rows emitted by source operators.
+* ``bytes_read``: Total bytes read.
+* ``read_nanos``: Wall time spent reading by external-source format readers, in nanoseconds. Always ``0`` for Lucene-backed indices.
+* ``read_cpu_nanos``: CPU time spent reading by external-source format readers (excludes IO wait), in nanoseconds. Always ``0`` for Lucene-backed indices.
+* ``cpu_nanos``: Total CPU time across all drivers, in nanoseconds.
+
+The following metrics are included when profile data is present. A phase is only recorded if Elasticsearch reports it with a non-zero duration:
 
 * ``query.took_ms``: Total query execution time in milliseconds.
-* ``planning.took_ms``: Total planning time (includes parsing, preanalysis, and analysis).
+* ``planning.took_ms``: Total planning time (includes parsing, resolution, preanalysis, and analysis).
 * ``parsing.took_ms``: Time to parse the ES|QL query.
-* ``preanalysis.took_ms``: Preanalysis time (field_caps, enrich policies, lookup indices).
-* ``dependency_resolution.took_ms``: Dependency resolution time.
+* ``view_resolution.took_ms``: Time to resolve views in the logical plan.
+* ``dataset_resolution.took_ms``: Time to rewrite datasets in the logical plan.
+* ``preanalysis.took_ms``: Index preanalysis time, including lookup indices.
+* ``indices_resolution.took_ms``: Time to resolve index dependencies.
+* ``enrich_resolution.took_ms``: Time to resolve enrich policy dependencies.
+* ``inference_resolution.took_ms``: Time to resolve inference endpoint dependencies.
+* ``dependency_resolution.took_ms``: Combined dependency resolution time. Only reported by older Elasticsearch builds that do not split it into ``indices_resolution``, ``enrich_resolution``, and ``inference_resolution``.
 * ``analysis.took_ms``: Analysis time before optimizations.
 * ``<driver>.number``: Count of driver instances for the given driver.
 * ``<driver>.took_ms``: Maximum took time across all driver instances (milliseconds).

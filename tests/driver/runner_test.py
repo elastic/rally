@@ -8671,6 +8671,87 @@ class TestEsqlProfileRunner:
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
+    async def test_esql_profile_extracts_resolution_phase_metrics(self, es):
+        es.options.return_value = es
+        profile_response = {
+            "profile": {
+                "view_resolution": {"took_nanos": 100_000},
+                "dataset_resolution": {"took_nanos": 200_000},
+                "preanalysis": {"took_nanos": 300_000},
+                "indices_resolution": {"took_nanos": 1_000_000},
+                "enrich_resolution": {"took_nanos": 2_000_000},
+                "inference_resolution": {"took_nanos": 0},
+                "analysis": {"took_nanos": 400_000},
+            }
+        }
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "view_resolution.took_ms": 0.1,
+            "dataset_resolution.took_ms": 0.2,
+            "preanalysis.took_ms": 0.3,
+            "indices_resolution.took_ms": 1.0,
+            "enrich_resolution.took_ms": 2.0,
+            "analysis.took_ms": 0.4,
+        }
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_legacy_dependency_resolution(self, es):
+        es.options.return_value = es
+        profile_response = {"profile": {"dependency_resolution": {"took_nanos": 3_000_000}}}
+        es.perform_request = mock.AsyncMock(return_value=profile_response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result == {"weight": 1, "unit": "ops", "success": True, "dependency_resolution.took_ms": 3.0}
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_response_counters(self, es):
+        es.options.return_value = es
+        response = {
+            "took": 12,
+            "is_partial": False,
+            "documents_found": 1000,
+            "values_loaded": 5000,
+            "rows_emitted": 1000,
+            "bytes_read": 65536,
+            "read_nanos": 0,
+            "cpu_nanos": 7_000_000,
+            "profile": {"query": {"took_nanos": 5_000_000}},
+        }
+        es.perform_request = mock.AsyncMock(return_value=response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result == {
+            "weight": 1,
+            "unit": "ops",
+            "success": True,
+            "documents_found": 1000,
+            "values_loaded": 5000,
+            "rows_emitted": 1000,
+            "bytes_read": 65536,
+            "read_nanos": 0,
+            "cpu_nanos": 7_000_000,
+            "query.took_ms": 5.0,
+        }
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_esql_profile_extracts_response_counters_with_empty_profile(self, es):
+        es.options.return_value = es
+        response = {"documents_found": 10, "values_loaded": 20, "profile": {}}
+        es.perform_request = mock.AsyncMock(return_value=response)
+        esql_profile = runner.EsqlProfile()
+        result = await esql_profile(es, params={"query": "from logs-* | limit 10"})
+        assert result == {"weight": 1, "unit": "ops", "success": True, "documents_found": 10, "values_loaded": 20}
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
     async def test_esql_profile_extracts_driver_metrics(self, es):
         es.options.return_value = es
         profile_response = {
