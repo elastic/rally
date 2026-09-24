@@ -108,9 +108,9 @@ async def test_resolve_host_even_client_allocation(
     for i in range(num_clients):
         hostinfo.append(
             # pylint: disable=protected-access
-            await asynchronous.RallyTCPConnector(
-                limit_per_host=256, use_dns_cache=True, enable_cleanup_closed=True, client_id=i
-            )._resolve_host("rally-dns-test.es.us-east-1.aws.found.io", 443)
+            await asynchronous.RallyTCPConnector(limit_per_host=256, use_dns_cache=True, client_id=i)._resolve_host(
+                "rally-dns-test.es.us-east-1.aws.found.io", 443
+            )
         )
 
     first_host_per_client = []

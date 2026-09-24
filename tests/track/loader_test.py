@@ -4648,22 +4648,36 @@ def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest
     monkeypatch.setattr(paths, "logs", lambda: "./logs")
     monkeypatch.setattr(paths, "libs", lambda: "./libs")
     monkeypatch.setattr(console, "info", mock.create_autospec(console.info))
-    monkeypatch.setattr(subprocess, "check_call", mock.create_autospec(subprocess.check_call))
+    constraints_path = os.path.join(str(tmpdir), "rally-constraints.txt")
+    distribution = mock.Mock()
+    distribution.locate_file.return_value = constraints_path
+    distribution_mock = mock.create_autospec(loader.metadata.distribution, return_value=distribution)
+    monkeypatch.setattr(loader.metadata, "distribution", distribution_mock)
+    check_call_mock = mock.create_autospec(subprocess.check_call)
+    monkeypatch.setattr(subprocess, "check_call", check_call_mock)
     os.makedirs(os.path.join(str(tmpdir), "logs"), exist_ok=True)
     loader._install_dependencies(case.requirements)
 
     if not case.requirements:
-        subprocess.check_call.assert_not_called()
+        check_call_mock.assert_not_called()
+        distribution_mock.assert_not_called()
         return
 
-    subprocess.check_call.assert_called_once()
-    assert subprocess.check_call.call_args[0][0] == [
+    distribution_mock.assert_called_once_with("esrally")
+    distribution.locate_file.assert_called_once_with("esrally/resources/rally-constraints.txt")
+    check_call_mock.assert_called_once()
+    install_command = check_call_mock.call_args.args[0]
+    actual_constraints_path = install_command[install_command.index("--constraint") + 1]
+    assert actual_constraints_path == constraints_path
+    assert install_command == [
         sys.executable,
         "-m",
         "pip",
         "install",
         *case.requirements,
         "--upgrade",
+        "--constraint",
+        actual_constraints_path,
         "--target",
         "./libs",
     ]
