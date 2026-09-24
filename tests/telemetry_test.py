@@ -341,7 +341,7 @@ class TestJfr:
 
     def test_sets_options_for_pre_java_9_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(
-            telemetry_params={"recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(0, 8)
+            telemetry_params={"jfr-recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(0, 8)
         )
         assert jfr.java_opts("/var/log/test-recording.jfr") == [
             "-XX:+UnlockDiagnosticVMOptions",
@@ -354,7 +354,7 @@ class TestJfr:
 
     def test_sets_options_for_java_9_or_10_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(
-            telemetry_params={"recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(9, 10)
+            telemetry_params={"jfr-recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(9, 10)
         )
         assert jfr.java_opts("/var/log/test-recording.jfr") == [
             "-XX:+UnlockDiagnosticVMOptions",
@@ -366,7 +366,7 @@ class TestJfr:
 
     def test_sets_options_for_java_11_or_above_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(
-            telemetry_params={"recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(11, 999)
+            telemetry_params={"jfr-recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(11, 999)
         )
         assert jfr.java_opts("/var/log/test-recording.jfr") == [
             "-XX:+UnlockDiagnosticVMOptions",
@@ -377,7 +377,7 @@ class TestJfr:
 
     def test_sets_options_for_java_11_or_above_custom_delay_duration_recording_template(self):
         jfr = telemetry.FlightRecorder(
-            telemetry_params={"recording-template": "profile", "jfr-duration": "20m", "jfr-delay": "10s"},
+            telemetry_params={"jfr-recording-template": "profile", "jfr-duration": "20m", "jfr-delay": "10s"},
             log_root="/var/log",
             java_major_version=random.randint(11, 999),
         )
@@ -387,6 +387,36 @@ class TestJfr:
             "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
             "filename=/var/log/test-recording.jfr,delay=10s,duration=20m,settings=profile",
         ]
+
+    def test_deprecated_recording_template_name_is_still_supported(self, caplog):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(11, 999)
+        )
+        with caplog.at_level(logging.WARNING):
+            java_opts = jfr.java_opts("/var/log/test-recording.jfr")
+        assert java_opts == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,settings=profile",
+        ]
+        assert "Telemetry parameter [recording-template] is deprecated. Please use [jfr-recording-template] instead." in caplog.text
+
+    def test_prefixed_recording_template_takes_precedence_over_deprecated_name(self, caplog):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"jfr-recording-template": "profile", "recording-template": "ignored"},
+            log_root="/var/log",
+            java_major_version=random.randint(11, 999),
+        )
+        with caplog.at_level(logging.WARNING):
+            java_opts = jfr.java_opts("/var/log/test-recording.jfr")
+        assert java_opts == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,settings=profile",
+        ]
+        assert "deprecated" not in caplog.text
 
 
 class TestGc:
