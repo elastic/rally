@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 import os
+import shutil
 import tempfile
 
 import it
@@ -41,6 +42,12 @@ def test_run_with_help(cfg):
 def test_run_without_http_connection(cfg):
     cmd = it.esrally_command_line_for(cfg, "list tracks")
     with tempfile.TemporaryDirectory() as tmpdir:
+        rally_home = os.path.join(tmpdir, ".rally")
+        os.makedirs(rally_home)
+        shutil.copy(
+            os.path.join(os.path.dirname(__file__), "resources", f"rally-{cfg}.ini"),
+            rally_home,
+        )
         env = os.environ.copy()
         env["http_proxy"] = "http://invalid"
         env["https_proxy"] = "http://invalid"
