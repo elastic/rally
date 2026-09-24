@@ -60,6 +60,42 @@ class DriverTestParamSource:
         return self._params
 
 
+def _api_error(status, body=None, message="error"):
+    error_meta = elastic_transport.ApiResponseMeta(
+        status=status,
+        http_version="1.1",
+        headers=elastic_transport.HttpHeaders(),
+        duration=0.0,
+        node=elastic_transport.NodeConfig(scheme="http", host="localhost", port=9200),
+    )
+    return elasticsearch.ApiError(message=message, meta=error_meta, body=body)
+
+
+def _circuit_breaker_body(durability="TRANSIENT"):
+    return {
+        "error": {
+            "root_cause": [{"type": "circuit_breaking_exception", "reason": "Data too large", "durability": durability}],
+            "type": "circuit_breaking_exception",
+            "reason": "Data too large",
+            "durability": durability,
+        },
+        "status": 429,
+    }
+
+
+class ScriptedRunner:
+    def __init__(self, side_effects):
+        self.side_effects = list(side_effects)
+        self.calls = 0
+
+    async def __call__(self, es, params):
+        effect = self.side_effects[self.calls]
+        self.calls += 1
+        if isinstance(effect, BaseException):
+            raise effect
+        return effect
+
+
 class TestEsClients:
     def test_returns_default_client(self):
         default_client = object()
@@ -2018,6 +2054,172 @@ class TestAsyncExecutor:
 
         assert es.call_count == 0
 
+    async def _run_esql_schedule(self, es, side_effects, *, attempts, on_error):
+        task_start = time.perf_counter()
+        es.new_request_context.return_value = self.StaticRequestTiming(task_start=task_start)
+        es.options.return_value = es
+        scripted = ScriptedRunner(side_effects)
+        runner.register_runner(track.OperationType.Esql, scripted, async_runner=True)
+
+        params.register_param_source_for_name("driver-test-param-source", DriverTestParamSource)
+        test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
+        task = track.Task(
+            "esql-query",
+            track.Operation(
+                "esql-query",
+                track.OperationType.Esql.to_hyphenated_string(),
+                params={"query": "FROM test"},
+                param_source="driver-test-param-source",
+            ),
+            iterations=1,
+            clients=1,
+        )
+        param_source = track.operation_parameters(test_track, task)
+        task_allocation = driver.TaskAllocation(task=task, client_index_in_task=0, global_client_index=0, total_clients=task.clients)
+        schedule = driver.schedule_for(task_allocation, param_source)
+        sampler = driver.Sampler(start_timestamp=task_start)
+        execute_schedule = driver.AsyncExecutor(
+            client_id=0,
+            task=task,
+            schedule=schedule,
+            es=driver.EsClients({"default": es}),
+            sampler=sampler,
+            cancel=threading.Event(),
+            complete=threading.Event(),
+            on_error=on_error,
+            recoverable_query_retry_attempts=attempts,
+        )
+        return execute_schedule, sampler, scripted
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_records_each_recoverable_failure_as_sample(self, es):
+        success = {"weight": 1, "unit": "ops", "success": True}
+        execute_schedule, sampler, scripted = await self._run_esql_schedule(
+            es,
+            [
+                _api_error(429, _circuit_breaker_body("TRANSIENT")),
+                _api_error(429, _circuit_breaker_body("TRANSIENT")),
+                success,
+            ],
+            attempts=50,
+            on_error=OnErrorBehavior.ABORT,
+        )
+
+        async def noop_sleep(_seconds):
+            return None
+
+        with mock.patch("esrally.driver.driver.asyncio.sleep", noop_sleep):
+            await execute_schedule()
+
+        samples = sampler.samples
+        assert len(samples) == 3
+        assert [s.request_meta_data["success"] for s in samples] == [False, False, True]
+        assert [s.request_meta_data["retry-count"] for s in samples] == [0, 1, 2]
+        assert [s.request_meta_data["retry-attempts-remaining"] for s in samples] == [49, 48, 47]
+        assert samples[0].total_ops == 0
+        assert samples[1].total_ops == 0
+        assert samples[2].total_ops == 1
+        assert samples[0].request_meta_data["http-status"] == 429
+        assert samples[0].request_meta_data["error-durability"] == "TRANSIENT"
+        assert samples[0].request_meta_data["retry-duration"] < samples[1].request_meta_data["retry-duration"]
+        assert samples[1].request_meta_data["retry-duration"] < samples[2].request_meta_data["retry-duration"]
+        es.options.assert_called_with(max_retries=0)
+        assert scripted.calls == 3
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_success_on_first_attempt_records_retry_count_zero(self, es):
+        execute_schedule, sampler, scripted = await self._run_esql_schedule(
+            es,
+            [{"weight": 1, "unit": "ops", "success": True}],
+            attempts=50,
+            on_error=OnErrorBehavior.ABORT,
+        )
+        await execute_schedule()
+
+        samples = sampler.samples
+        assert len(samples) == 1
+        assert samples[0].request_meta_data["success"] is True
+        assert samples[0].request_meta_data["retry-count"] == 0
+        assert samples[0].request_meta_data["retry-attempts-remaining"] == 49
+        assert scripted.calls == 1
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_retries_esql_partial_results_as_samples(self, es):
+        execute_schedule, sampler, scripted = await self._run_esql_schedule(
+            es,
+            [
+                {"weight": 1, "unit": "ops", "success": False, "is_partial": True},
+                {"weight": 1, "unit": "ops", "success": True, "is_partial": False},
+            ],
+            attempts=5,
+            on_error=OnErrorBehavior.ABORT,
+        )
+
+        async def noop_sleep(_seconds):
+            return None
+
+        with mock.patch("esrally.driver.driver.asyncio.sleep", noop_sleep):
+            await execute_schedule()
+
+        samples = sampler.samples
+        assert len(samples) == 2
+        assert samples[0].request_meta_data["success"] is False
+        assert samples[0].request_meta_data["is_partial"] is True
+        assert samples[0].request_meta_data["retry-count"] == 0
+        assert samples[0].total_ops == 0
+        assert samples[1].request_meta_data["success"] is True
+        assert samples[1].request_meta_data["retry-count"] == 1
+        assert scripted.calls == 2
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_does_not_retry_permanent_circuit_breaker(self, es):
+        execute_schedule, sampler, scripted = await self._run_esql_schedule(
+            es,
+            [_api_error(429, _circuit_breaker_body("PERMANENT"))],
+            attempts=50,
+            on_error=OnErrorBehavior.ABORT,
+        )
+
+        with pytest.raises(exceptions.RallyError, match="HTTP Status: 429"):
+            await execute_schedule()
+
+        samples = sampler.samples
+        assert len(samples) == 1
+        assert samples[0].request_meta_data["success"] is False
+        assert samples[0].request_meta_data["retry-count"] == 0
+        assert samples[0].request_meta_data["error-durability"] == "PERMANENT"
+        assert scripted.calls == 1
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_aborts_after_recoverable_attempts_exhausted(self, es):
+        execute_schedule, sampler, scripted = await self._run_esql_schedule(
+            es,
+            [
+                _api_error(429, _circuit_breaker_body("TRANSIENT")),
+                _api_error(429, _circuit_breaker_body("TRANSIENT")),
+            ],
+            attempts=2,
+            on_error=OnErrorBehavior.ABORT,
+        )
+
+        async def noop_sleep(_seconds):
+            return None
+
+        with mock.patch("esrally.driver.driver.asyncio.sleep", noop_sleep):
+            with pytest.raises(exceptions.RallyError, match="HTTP Status: 429"):
+                await execute_schedule()
+
+        samples = sampler.samples
+        assert len(samples) == 2
+        assert [s.request_meta_data["retry-count"] for s in samples] == [0, 1]
+        assert samples[1].request_meta_data["retry-attempts-remaining"] == 0
+        assert scripted.calls == 2
+
     @pytest.mark.asyncio
     async def test_execute_single_no_return_value(self):
         es = None
@@ -2214,6 +2416,22 @@ class TestAsyncExecutor:
             "error-description": "",
             "success": False,
         }
+
+    @pytest.mark.asyncio
+    async def test_execute_single_records_error_durability(self):
+        es = None
+        params = None
+        op_runner = mock.AsyncMock(side_effect=_api_error(429, _circuit_breaker_body("TRANSIENT")))
+
+        ops, unit, request_meta_data = await driver.execute_single(
+            self.context_managed(op_runner), es, params, on_error=OnErrorBehavior.CONTINUE
+        )
+
+        assert ops == 0
+        assert unit == "ops"
+        assert request_meta_data["success"] is False
+        assert request_meta_data["http-status"] == 429
+        assert request_meta_data["error-durability"] == "TRANSIENT"
 
     @pytest.mark.asyncio
     async def test_execute_single_with_key_error(self):

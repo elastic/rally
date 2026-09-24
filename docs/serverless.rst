@@ -114,7 +114,8 @@ A similar approach can be used to express more nuanced benchmark variations. In 
 Hints
 -----
 
-- Elasticsearch Serverless should provide a clear message indicating unavailable API endpoint or index setting which can happen with custom tracks or some of the `public tracks <https://github.com/elastic/rally-tracks>`_. To surface this error fail fast by using ``--on-error="abort"`` command line option when running Rally. 
+- Elasticsearch Serverless should provide a clear message indicating unavailable API endpoint or index setting which can happen with custom tracks or some of the `public tracks <https://github.com/elastic/rally-tracks>`_. To surface this error fail fast by using ``--on-error="abort"`` command line option when running Rally.
+- When combining ``--on-error=abort`` with Serverless, also pass :ref:`--retry-recoverable-query-errors <command_line_reference_retry_recoverable_query_errors>` so transient 429s during scale-up are retried instead of aborting the race. Each attempt is recorded as a sample (``retry-count`` starts at 0; ``service_time`` on a failed sample is the 429 response time). Size ``--retry-recoverable-query-errors-attempts`` to the expected ramp (default 50).
 - Consider using ``--track-params="post_ingest_sleep:true"`` track parameter when benchmarking with `public tracks <https://github.com/elastic/rally-tracks>`_. Consult track README files to confirm availability of this parameter. The intention of the parameter is to introduce an extra delay between ingesting the data and running the search for better result stability. In traditional non-Serverless clusters this role is fulfilled by force merge operation, but explicit force merge action is not available in Serverless. When the post-ingest sleep is enabled, its duration is controlled by ``post_ingest_sleep_duration`` which defaults to 30s.
 
 

@@ -36,6 +36,7 @@ from typing import Optional
 import ijson
 
 from esrally import exceptions, track, types
+from esrally.client.context import RequestContextHolder
 from esrally.utils import convert
 from esrally.utils.versions import Version
 
@@ -43,16 +44,64 @@ from esrally.utils.versions import Version
 
 __RUNNERS = {}
 
+DEFAULT_RECOVERABLE_QUERY_ERROR_ATTEMPTS = 50
+RECOVERABLE_QUERY_RETRY_WAIT_SECONDS = 0.5
+_RECOVERABLE_HTTP_STATUS = frozenset({429, 502, 503, 504})
+_PERMANENT_DURABILITY = "PERMANENT"
+RECOVERABLE_QUERY_OPERATION_TYPES = frozenset(
+    {
+        track.OperationType.Search.to_hyphenated_string(),
+        track.OperationType.PaginatedSearch.to_hyphenated_string(),
+        track.OperationType.ScrollSearch.to_hyphenated_string(),
+        track.OperationType.CompositeAgg.to_hyphenated_string(),
+        track.OperationType.Sql.to_hyphenated_string(),
+        track.OperationType.Esql.to_hyphenated_string(),
+        track.OperationType.EsqlProfile.to_hyphenated_string(),
+    }
+)
+
+
+def recoverable_query_retry_attempts(config: Optional[types.Config]) -> Optional[int]:
+    """Return the max attempts when the race-level recoverable-error switch is on, else ``None``."""
+    if not config:
+        return None
+    enabled = convert.to_bool(config.opts("driver", "retry.recoverable.query.errors", mandatory=False, default_value=False))
+    if not enabled:
+        return None
+    attempts = int(
+        config.opts(
+            "driver",
+            "retry.recoverable.query.errors.attempts",
+            mandatory=False,
+            default_value=DEFAULT_RECOVERABLE_QUERY_ERROR_ATTEMPTS,
+        )
+    )
+    if attempts < 1:
+        raise exceptions.SystemSetupError(f"--retry-recoverable-query-errors-attempts must be >= 1 but was [{attempts}].")
+    return attempts
+
 
 def register_default_runners(config: Optional[types.Config] = None):
+    attempts = recoverable_query_retry_attempts(config)
+    if attempts is not None:
+        logging.getLogger(__name__).info(
+            "Retrying recoverable errors for query operations (search, ES|QL, SQL) up to [%s] attempts; "
+            "each attempt is recorded as a sample.",
+            attempts,
+        )
+    query = Query(config=config)
+    sql = Sql()
+    esql = Esql()
+    esql_profile = EsqlProfile()
+
     register_runner(track.OperationType.Bulk, BulkIndex(), async_runner=True)
     register_runner(track.OperationType.ForceMerge, ForceMerge(), async_runner=True)
     register_runner(track.OperationType.IndexStats, Retry(IndicesStats()), async_runner=True)
     register_runner(track.OperationType.NodeStats, NodeStats(), async_runner=True)
-    register_runner(track.OperationType.Search, Query(config=config), async_runner=True)
-    register_runner(track.OperationType.PaginatedSearch, Query(config=config), async_runner=True)
-    register_runner(track.OperationType.CompositeAgg, Query(config=config), async_runner=True)
-    register_runner(track.OperationType.ScrollSearch, Query(config=config), async_runner=True)
+    register_runner(track.OperationType.Search, query, async_runner=True)
+    register_runner(track.OperationType.PaginatedSearch, query, async_runner=True)
+    register_runner(track.OperationType.CompositeAgg, query, async_runner=True)
+    register_runner(track.OperationType.ScrollSearch, query, async_runner=True)
     register_runner(track.OperationType.RawRequest, RawRequest(), async_runner=True)
     register_runner(track.OperationType.Composite, Composite(), async_runner=True)
     register_runner(track.OperationType.SubmitAsyncSearch, SubmitAsyncSearch(), async_runner=True)
@@ -60,10 +109,10 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.DeleteAsyncSearch, DeleteAsyncSearch(), async_runner=True)
     register_runner(track.OperationType.OpenPointInTime, OpenPointInTime(), async_runner=True)
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
-    register_runner(track.OperationType.Sql, Sql(), async_runner=True)
+    register_runner(track.OperationType.Sql, sql, async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
-    register_runner(track.OperationType.Esql, Esql(), async_runner=True)
-    register_runner(track.OperationType.EsqlProfile, EsqlProfile(), async_runner=True)
+    register_runner(track.OperationType.Esql, esql, async_runner=True)
+    register_runner(track.OperationType.EsqlProfile, esql_profile, async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
     register_runner(track.OperationType.Sleep, Sleep(), async_runner=True)
@@ -3319,6 +3368,83 @@ class RequestTiming(Runner, Delegator):
         return await self.delegate.__aexit__(exc_type, exc_val, exc_tb)
 
 
+def _error_object(body):
+    if isinstance(body, bytes):
+        try:
+            body = json.loads(body.decode("utf-8", errors="replace"))
+        except ValueError:
+            return None
+    elif isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except ValueError:
+            return None
+    if not isinstance(body, dict):
+        return None
+    error = body.get("error")
+    return error if isinstance(error, dict) else None
+
+
+def api_error_durability(e):
+    error = _error_object(getattr(e, "body", None))
+    if not error:
+        return None
+    if durability := error.get("durability"):
+        return durability
+    for cause in error.get("root_cause") or []:
+        if isinstance(cause, dict) and (durability := cause.get("durability")):
+            return durability
+    return None
+
+
+def is_recoverable_api_error(e):
+    """
+    Return whether an Elasticsearch ``ApiError`` is worth retrying.
+
+    HTTP 502/503/504 are treated as recoverable. HTTP 429 is recoverable unless the
+    error body reports ``durability: PERMANENT`` (a circuit breaker that will not
+    clear without a different query or cluster configuration).
+    """
+    status = getattr(e, "status_code", None)
+    if status not in _RECOVERABLE_HTTP_STATUS:
+        return False
+    if status != 429:
+        return True
+    return api_error_durability(e) != _PERMANENT_DURABILITY
+
+
+def is_recoverable_request_meta(request_meta_data):
+    """
+    Return whether a recorded request failure is recoverable for query retries.
+
+    Used after ``execute_single`` has turned an exception or ``success: false``
+    result into request meta-data.
+    """
+    if not request_meta_data or request_meta_data.get("success", True):
+        return False
+    if request_meta_data.get("is_partial"):
+        return True
+    status = request_meta_data.get("http-status")
+    if status in (502, 503, 504):
+        return True
+    if status == 429:
+        return request_meta_data.get("error-durability") != _PERMANENT_DURABILITY
+    return False
+
+
+def _with_retry_meta(return_value, attempt, record_retries):
+    if not record_retries or attempt == 0 or not isinstance(return_value, dict):
+        return return_value
+    return_value["retries"] = attempt
+    return return_value
+
+
+async def _wait_before_retry(sleep_time, reset_timing):
+    if reset_timing:
+        RequestContextHolder.reset_request_timing()
+    await asyncio.sleep(sleep_time)
+
+
 # TODO: Allow to use this from (selected) regular runners and add user documentation.
 # TODO: It would maybe be interesting to add meta-data on how many retries there were.
 class Retry(Runner, Delegator):
@@ -3334,11 +3460,15 @@ class Retry(Runner, Delegator):
     * ``retry-on-timeout`` (optional, default True): Whether to retry on connection timeout.
     * ``retry-on-error`` (optional, default False): Whether to retry on failure (i.e. the delegate
                          returns ``success == False``)
+    * ``retry-on-recoverable`` (optional, default False): Retry HTTP 429 (except permanent circuit breakers),
+                              502, 503 and 504. Also retries ``success == False`` (e.g. ES|QL ``is_partial``).
     """
 
-    def __init__(self, delegate, retry_until_success=False):
+    def __init__(self, delegate, retry_until_success=False, retry_on_recoverable=False, retries=0):
         super().__init__(delegate=delegate)
         self.retry_until_success = retry_until_success
+        self.retry_on_recoverable = retry_on_recoverable
+        self.retries = retries
 
     async def __aenter__(self):
         await self.delegate.__aenter__()
@@ -3351,26 +3481,31 @@ class Retry(Runner, Delegator):
         import elasticsearch
 
         retry_until_success = params.get("retry-until-success", self.retry_until_success)
+        retry_on_recoverable = params.get("retry-on-recoverable", self.retry_on_recoverable)
         if retry_until_success:
             max_attempts = sys.maxsize
             retry_on_error = True
         else:
-            max_attempts = params.get("retries", 0) + 1
-            retry_on_error = params.get("retry-on-error", False)
+            max_attempts = params.get("retries", self.retries) + 1
+            retry_on_error = params.get("retry-on-error", False) or retry_on_recoverable
         sleep_time = params.get("retry-wait-period", 0.5)
         retry_on_timeout = params.get("retry-on-timeout", True)
+
+        if retry_on_recoverable and hasattr(es, "options"):
+            # Avoid nested elasticsearch-py 429 retries on top of Rally retries.
+            es = es.options(max_retries=0)
 
         for attempt in range(max_attempts):
             last_attempt = attempt + 1 == max_attempts
             try:
                 return_value = await self.delegate(es, params)
                 if last_attempt or not retry_on_error:
-                    return return_value
+                    return _with_retry_meta(return_value, attempt, retry_on_recoverable)
                 # we can determine success if and only if the runner returns a dict. Otherwise, we have to assume it was fine.
                 elif isinstance(return_value, dict):
                     if return_value.get("success", True):
                         self.logger.debug("%s has returned successfully", repr(self.delegate))
-                        return return_value
+                        return _with_retry_meta(return_value, attempt, retry_on_recoverable)
                     else:
                         self.logger.info(
                             "[%s] has returned with an error: %s. Retrying in [%.2f] seconds.",
@@ -3378,23 +3513,30 @@ class Retry(Runner, Delegator):
                             return_value,
                             sleep_time,
                         )
-                        await asyncio.sleep(sleep_time)
+                        await _wait_before_retry(sleep_time, retry_on_recoverable)
                 else:
                     return return_value
             except (socket.timeout, elasticsearch.exceptions.ConnectionError):
                 if last_attempt or not retry_on_timeout:
                     raise
-                await asyncio.sleep(sleep_time)
+                await _wait_before_retry(sleep_time, retry_on_recoverable)
             except elasticsearch.BadRequestError as e:
                 self.logger.warning("[%s] %s", str(self.delegate), str(e))
                 raise e
             except elasticsearch.ApiError as e:
-                if last_attempt or not retry_on_timeout:
+                if last_attempt:
                     raise e
-
-                if e.status_code == 408:
+                if e.status_code == 408 and retry_on_timeout:
                     self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
-                    await asyncio.sleep(sleep_time)
+                    await _wait_before_retry(sleep_time, retry_on_recoverable)
+                elif retry_on_recoverable and is_recoverable_api_error(e):
+                    self.logger.info(
+                        "[%s] has returned a recoverable error (HTTP %s). Retrying in [%.2f] seconds.",
+                        repr(self.delegate),
+                        e.status_code,
+                        sleep_time,
+                    )
+                    await _wait_before_retry(sleep_time, retry_on_recoverable)
                 else:
                     raise e
 
@@ -3403,7 +3545,7 @@ class Retry(Runner, Delegator):
                     raise e
 
                 self.logger.info("[%s] has timed out. Retrying in [%.2f] seconds.", repr(self.delegate), sleep_time)
-                await asyncio.sleep(sleep_time)
+                await _wait_before_retry(sleep_time, retry_on_recoverable)
             except elasticsearch.exceptions.TransportError as e:
                 if last_attempt or not retry_on_timeout:
                     raise e
