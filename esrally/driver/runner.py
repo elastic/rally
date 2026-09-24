@@ -3205,9 +3205,12 @@ class EsqlProfile(Runner):
     Runs an ES|QL query using profile: true, and adds the profile information to the result:
 
     - query.took_ms: Total query time
-    - planning.took_ms: Planning time (includes parsing, preanalysis, analysis)
+    - planning.took_ms: Planning time (includes parsing, resolution, preanalysis, analysis)
     - parsing.took_ms: Time to parse the ES|QL query
-    - preanalysis.took_ms: Preanalysis time (field_caps, enrich policies, lookup indices)
+    - view_resolution.took_ms, dataset_resolution.took_ms: View and dataset resolution time
+    - preanalysis.took_ms: Index preanalysis time, including lookup indices
+    - indices_resolution.took_ms, enrich_resolution.took_ms, inference_resolution.took_ms:
+      Dependency resolution time (dependency_resolution.took_ms on older builds)
     - analysis.took_ms: Analysis time before optimizations
     - documents_found, values_loaded, rows_emitted, bytes_read, read_nanos,
       read_cpu_nanos, cpu_nanos: response-level counters (not part of the profile)
