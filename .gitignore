@@ -119,9 +119,8 @@ recipes/ccr/ccr-target-hosts.json
 /.project
 /.pydevproject
 /.vscode
+# ctags
+tags
 
 # Tracker tracks
 tracks/
-
-# ctags
-tags
