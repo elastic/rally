@@ -388,29 +388,35 @@ class TestJfr:
             "filename=/var/log/test-recording.jfr,delay=10s,duration=20m,settings=profile",
         ]
 
-    def test_deprecated_recording_template_name_is_still_supported(self):
+    def test_deprecated_recording_template_name_is_still_supported(self, caplog):
         jfr = telemetry.FlightRecorder(
             telemetry_params={"recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(11, 999)
         )
-        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+        with caplog.at_level(logging.WARNING):
+            java_opts = jfr.java_opts("/var/log/test-recording.jfr")
+        assert java_opts == [
             "-XX:+UnlockDiagnosticVMOptions",
             "-XX:+DebugNonSafepoints",
             "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
             "filename=/var/log/test-recording.jfr,settings=profile",
         ]
+        assert "Telemetry parameter [recording-template] is deprecated. Please use [jfr-recording-template] instead." in caplog.text
 
-    def test_prefixed_recording_template_takes_precedence_over_deprecated_name(self):
+    def test_prefixed_recording_template_takes_precedence_over_deprecated_name(self, caplog):
         jfr = telemetry.FlightRecorder(
             telemetry_params={"jfr-recording-template": "profile", "recording-template": "ignored"},
             log_root="/var/log",
             java_major_version=random.randint(11, 999),
         )
-        assert jfr.java_opts("/var/log/test-recording.jfr") == [
+        with caplog.at_level(logging.WARNING):
+            java_opts = jfr.java_opts("/var/log/test-recording.jfr")
+        assert java_opts == [
             "-XX:+UnlockDiagnosticVMOptions",
             "-XX:+DebugNonSafepoints",
             "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
             "filename=/var/log/test-recording.jfr,settings=profile",
         ]
+        assert "deprecated" not in caplog.text
 
 
 class TestGc:
