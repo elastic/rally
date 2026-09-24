@@ -230,6 +230,7 @@ class Transfer:
         self._executor = executor
         self._errors: list[Exception] = []
         self._lock = threading.Lock()
+        self._save_status_lock = threading.Lock()
         self._resumed_size = 0
         self._crc32c = crc32c
         self._mirror_failures: dict[str, TransferMirrorFailure] = {}
@@ -434,26 +435,28 @@ class Transfer:
 
     def save_status(self):
         """It updates the status file."""
-        # It synchronizes mirror failures with the client.
-        mirror_failures = self.client.mirror_failures(self.url)
-        with self._lock:
-            for f in mirror_failures:
-                self._add_mirror_failure(url=f.mirror_url, error=f.error)
-        document = {
-            "url": self.url,
-            "path": self.path,
-            "document_length": self.document_length,
-            "done": str(self.done),
-            "crc32c": self.crc32c,
-            # Mirror failures is intended to be consumed by a tool in charge to upload downloaded files that was missing
-            # in any mirror server to keep it in sync with source file repository.
-            "mirror_failures": [dataclasses.asdict(f) for f in self.mirror_failures],
-            "stats": [dataclasses.asdict(s) for s in self.stats],
-        }
-        status_filename = self.status_file_path
-        os.makedirs(os.path.dirname(status_filename), exist_ok=True)
-        with open(status_filename, "w") as fd:
-            json.dump(document, fd)
+        # Serialize snapshots and writes so concurrent workers cannot overwrite the same status file.
+        with self._save_status_lock:
+            # It synchronizes mirror failures with the client.
+            mirror_failures = self.client.mirror_failures(self.url)
+            with self._lock:
+                for f in mirror_failures:
+                    self._add_mirror_failure(url=f.mirror_url, error=f.error)
+            document = {
+                "url": self.url,
+                "path": self.path,
+                "document_length": self.document_length,
+                "done": str(self.done),
+                "crc32c": self.crc32c,
+                # Mirror failures is intended to be consumed by a tool in charge to upload downloaded files that was missing
+                # in any mirror server to keep it in sync with source file repository.
+                "mirror_failures": [dataclasses.asdict(f) for f in self.mirror_failures],
+                "stats": [dataclasses.asdict(s) for s in self.stats],
+            }
+            status_filename = self.status_file_path
+            os.makedirs(os.path.dirname(status_filename), exist_ok=True)
+            with open(status_filename, "w") as fd:
+                json.dump(document, fd)
 
     def _run(self) -> None:
         """It downloads part of the file."""
