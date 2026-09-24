@@ -1402,6 +1402,16 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
         return ExitStatus.ERROR
 
 
+def load_configuration(config_name):
+    cfg = config.Config(config_name=config_name)
+    if not cfg.config_present():
+        if config_name:
+            raise exceptions.ConfigError(f"Configuration file [{cfg.config_file.location}] does not exist.")
+        cfg.install_default_config()
+    cfg.load_config(auto_upgrade=True)
+    return cfg
+
+
 def main():
     check_python_version()
     log.install_default_log_config()
@@ -1424,10 +1434,16 @@ def main():
     if (not hasattr(args, "format")) or args.format == "text":
         console.println(BANNER)
 
-    cfg = config.Config(config_name=args.configuration_name)
-    if not cfg.config_present():
-        cfg.install_default_config()
-    cfg.load_config(auto_upgrade=True)
+    try:
+        cfg = load_configuration(args.configuration_name)
+    except exceptions.ConfigError as e:
+        logger.exception("Cannot load configuration.")
+        console.error(e.full_message)
+        console.println("")
+        print_help_on_errors()
+        console.println("")
+        console.info("FAILURE (took %d seconds)" % (time.time() - start), overline="-", underline="-")
+        sys.exit(64)
     cfg.add(config.Scope.application, "system", "time.start", datetime.datetime.now(tz=datetime.timezone.utc))
     # Local config per node
     cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
