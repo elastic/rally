@@ -283,7 +283,9 @@ class TestDockerBuilder:
             builder.build(["./gradlew assemble"])
 
         # Execute the generated shell with a fake wrapper and no real delay or network access.
-        result = subprocess.run(["bash", "-c", "sleep() { :; }; " + run.call_args.args[0]], cwd=tmp_path, capture_output=True, text=True)
+        result = subprocess.run(
+            ["bash", "-c", "sleep() { :; }; " + run.call_args.args[0]], cwd=tmp_path, capture_output=True, text=True, check=False
+        )
         assert result.returncode == expected_status, result.stderr
         assert len((tmp_path / "attempts").read_text().splitlines()) == expected_attempts
         if failures >= 3:
