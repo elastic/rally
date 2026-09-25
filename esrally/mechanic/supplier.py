@@ -23,6 +23,7 @@ import logging
 import os
 import shutil
 import urllib.error
+from typing import Any
 
 import docker
 from esrally import PROGRAM_NAME, exceptions, paths, types
@@ -905,7 +906,7 @@ class DockerBuilder:
         except StopIteration:
             self.logger.info("Log stream ended for [%s]", container_name)
 
-    def check_container_return_code(self, completion, container_name):
+    def check_container_return_code(self, completion: dict[str, Any], container_name: str) -> None:
         if completion["StatusCode"] != 0:
             msg = f"Executing '{container_name}' failed. The last 20 lines in the build.log file are:\n"
             msg += "=========================================================================================================\n"
@@ -943,7 +944,6 @@ class DockerBuilder:
 
             # wait for container to complete
             completion = image_container.wait()
-            breakpoint()
             self.check_container_return_code(completion, self.image_builder_container_name)
 
             # create the image (i.e. docker commit)
