@@ -23,6 +23,7 @@ import logging
 import os
 import shutil
 import urllib.error
+from textwrap import dedent
 from typing import Any
 
 import docker
@@ -955,7 +956,21 @@ class DockerBuilder:
             raise exceptions.SystemSetupError(self.err_msg(e))
 
     def build(self, commands):
-        build_command = "; ".join(commands)
+        # Bootstrap Gradle separately so download failures can be retried without rerunning build tasks.
+        bootstrap = dedent("""\
+            for attempt in 1 2 3; do
+                ./gradlew --version && break
+                status=$?
+
+                if [ "$attempt" = 3 ]; then
+                    exit "$status"
+                fi
+
+                echo 'Gradle bootstrap failed; retrying in 5 seconds'
+                sleep 5
+            done
+        """)
+        build_command = "\n".join([bootstrap, *commands])
         self.run(build_command)
 
     def run(self, command):
@@ -971,7 +986,7 @@ class DockerBuilder:
                 image=container_image.id,
                 user=self.user_name,
                 group_add=[self.group_id],
-                command=f"/bin/bash -c \"git config --global --add safe.directory '*'; {command}\"",
+                command=["/bin/bash", "-c", f"git config --global --add safe.directory '*'; {command}"],
                 volumes=[f"{self.src_dir}:/home/{self.user_name}/elasticsearch"],
                 working_dir=f"/home/{self.user_name}/elasticsearch",
             )

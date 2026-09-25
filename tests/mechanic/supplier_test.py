@@ -20,6 +20,8 @@ import collections
 import datetime
 import getpass
 import os
+import subprocess
+from textwrap import dedent
 from unittest import mock
 
 import pytest
@@ -236,10 +238,58 @@ class TestDockerBuilder:
             user=user,
             group_add=[group_id],
             image="test-image",
-            command="/bin/bash -c \"git config --global --add safe.directory '*'; ./gradlew clean; ./gradlew assemble\"",
+            command=[
+                "/bin/bash",
+                "-c",
+                "git config --global --add safe.directory '*'; " + dedent("""\
+                    for attempt in 1 2 3; do
+                        ./gradlew --version && break
+                        status=$?
+
+                        if [ "$attempt" = 3 ]; then
+                            exit "$status"
+                        fi
+
+                        echo 'Gradle bootstrap failed; retrying in 5 seconds'
+                        sleep 5
+                    done
+
+                    ./gradlew clean
+                    ./gradlew assemble"""),
+            ],
             volumes=[f"/src:/home/{user}/elasticsearch"],
             working_dir=f"/home/{user}/elasticsearch",
         )
+
+    @pytest.mark.parametrize(
+        "failures,build_status,expected_attempts,expected_status",
+        [(0, 0, 1, 0), (2, 0, 3, 0), (3, 0, 3, 23), (0, 42, 1, 42)],
+    )
+    def test_build_retries_gradle_bootstrap(self, tmp_path, failures, build_status, expected_attempts, expected_status):
+        gradlew = tmp_path / "gradlew"
+        gradlew.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [ "$1" = "--version" ]; then\n'
+            "  echo attempt >> attempts\n"
+            f'  if [ "$(wc -l < attempts)" -le {failures} ]; then exit 23; fi\n'
+            "else\n"
+            "  echo build >> builds\n"
+            f"  exit {build_status}\n"
+            "fi\n"
+        )
+        gradlew.chmod(0o755)
+        builder = supplier.DockerBuilder(src_dir=str(tmp_path), log_dir=str(tmp_path), client=mock.MagicMock())
+        with mock.patch.object(builder, "run") as run:
+            builder.build(["./gradlew assemble"])
+
+        # Execute the generated shell with a fake wrapper and no real delay or network access.
+        result = subprocess.run(["bash", "-c", "sleep() { :; }; " + run.call_args.args[0]], cwd=tmp_path, capture_output=True, text=True)
+        assert result.returncode == expected_status, result.stderr
+        assert len((tmp_path / "attempts").read_text().splitlines()) == expected_attempts
+        if failures >= 3:
+            assert not (tmp_path / "builds").exists()
+        else:
+            assert (tmp_path / "builds").read_text() == "build\n"
 
     @mock.patch("__main__.__builtins__.open")
     def test_run(self, mocked_open):
@@ -286,7 +336,7 @@ class TestDockerBuilder:
                     image="test-image",
                     user=builder.user_name,
                     group_add=[builder.group_id],
-                    command="/bin/bash -c \"git config --global --add safe.directory '*'; test command\"",
+                    command=["/bin/bash", "-c", "git config --global --add safe.directory '*'; test command"],
                     volumes=[f"/src:/home/{builder.user_name}/elasticsearch"],
                     working_dir=f"/home/{builder.user_name}/elasticsearch",
                 ),
