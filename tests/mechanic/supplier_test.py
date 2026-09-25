@@ -393,6 +393,18 @@ class TestDockerBuilder:
                 "Build log output [Executing 'test-container-name' failed. The last 20 lines in the build.log file are" in str(e.value)
             )
 
+    @pytest.mark.parametrize("completion", [{"StatusCode": 1}, {"StatusCode": 1, "Error": None}])
+    def test_check_container_return_code_without_error(self, completion):
+        builder = supplier.DockerBuilder(src_dir="/src", build_jdk=8, log_dir="logs", client=mock.MagicMock())
+        with mock.patch("builtins.open", mock.mock_open(read_data="Gradle download failed: HTTP 500\n")):
+            with pytest.raises(exceptions.BuildError) as exc:
+                builder.check_container_return_code(completion, "test-container-name")
+
+        message = str(exc.value)
+        assert "Docker container [test-container-name] failed with status code [1]: Build log output" in message
+        assert "Gradle download failed: HTTP 500" in message
+        assert "The full build log is available at [logs/build.log]" in message
+
 
 class TestTemplateRenderer:
     def test_uses_provided_values(self):

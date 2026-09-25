@@ -914,9 +914,11 @@ class DockerBuilder:
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"
             msg += f"The full build log is available at [{self.log_file}]"
+            error = completion.get("Error")
+            error_detail = f"Error [{error}]: " if error else ""
             raise BuildError(
                 f"Docker container [{container_name}] failed with status code [{completion['StatusCode']}]: "
-                f"Error [{completion['Error']}]: Build log output [{msg}]"
+                f"{error_detail}Build log output [{msg}]"
             )
         self.logger.info("Container [%s] completed successfully.", container_name)
 
@@ -941,6 +943,7 @@ class DockerBuilder:
 
             # wait for container to complete
             completion = image_container.wait()
+            breakpoint()
             self.check_container_return_code(completion, self.image_builder_container_name)
 
             # create the image (i.e. docker commit)
