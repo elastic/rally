@@ -570,6 +570,8 @@ class SearchParamSource(ParamSource):
             self.query_params["results-per-page"] = results_per_page
         if with_point_in_time_from:
             self.query_params["with-point-in-time-from"] = with_point_in_time_from
+        if "clear-blob-cache" in params:
+            self.query_params["clear-blob-cache"] = params["clear-blob-cache"]
         if "assertions" in params:
             if not detailed_results:
                 # for paginated queries the value does not matter because detailed results are always retrieved.

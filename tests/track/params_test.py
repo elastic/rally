@@ -2988,6 +2988,29 @@ class TestDeleteComposableTemplateParamSource:
 
 
 class TestSearchParamSource:
+    def test_passes_clear_blob_cache(self):
+        index1 = track.Index(name="index1")
+
+        source = params.SearchParamSource(
+            track=track.Track(name="unit-test", indices=[index1]),
+            params={
+                "body": {"query": {"match_all": {}}},
+                "clear-blob-cache": True,
+            },
+        )
+
+        assert source.params()["clear-blob-cache"] is True
+
+    def test_clear_blob_cache_absent_when_not_set(self):
+        index1 = track.Index(name="index1")
+
+        source = params.SearchParamSource(
+            track=track.Track(name="unit-test", indices=[index1]),
+            params={"body": {"query": {"match_all": {}}}},
+        )
+
+        assert "clear-blob-cache" not in source.params()
+
     def test_passes_cache(self):
         index1 = track.Index(name="index1")
 
