@@ -23,6 +23,8 @@ import logging
 import os
 import shutil
 import urllib.error
+from textwrap import dedent
+from typing import Any
 
 import docker
 from esrally import PROGRAM_NAME, exceptions, paths, types
@@ -905,7 +907,7 @@ class DockerBuilder:
         except StopIteration:
             self.logger.info("Log stream ended for [%s]", container_name)
 
-    def check_container_return_code(self, completion, container_name):
+    def check_container_return_code(self, completion: dict[str, Any], container_name: str) -> None:
         if completion["StatusCode"] != 0:
             msg = f"Executing '{container_name}' failed. The last 20 lines in the build.log file are:\n"
             msg += "=========================================================================================================\n"
@@ -914,9 +916,11 @@ class DockerBuilder:
                 msg += "\t".join(f.readlines()[-20:])
             msg += "=========================================================================================================\n"
             msg += f"The full build log is available at [{self.log_file}]"
+            error = completion.get("Error")
+            error_detail = f"Error [{error}]: " if error else ""
             raise BuildError(
                 f"Docker container [{container_name}] failed with status code [{completion['StatusCode']}]: "
-                f"Error [{completion['Error']}]: Build log output [{msg}]"
+                f"{error_detail}Build log output [{msg}]"
             )
         self.logger.info("Container [%s] completed successfully.", container_name)
 
@@ -952,7 +956,21 @@ class DockerBuilder:
             raise exceptions.SystemSetupError(self.err_msg(e))
 
     def build(self, commands):
-        build_command = "; ".join(commands)
+        # Bootstrap Gradle separately so download failures can be retried without rerunning build tasks.
+        bootstrap = dedent("""\
+            for attempt in 1 2 3; do
+                ./gradlew --version && break
+                status=$?
+
+                if [ "$attempt" = 3 ]; then
+                    exit "$status"
+                fi
+
+                echo 'Gradle bootstrap failed; retrying in 5 seconds'
+                sleep 5
+            done
+        """)
+        build_command = "\n".join([bootstrap, *commands])
         self.run(build_command)
 
     def run(self, command):
@@ -968,7 +986,7 @@ class DockerBuilder:
                 image=container_image.id,
                 user=self.user_name,
                 group_add=[self.group_id],
-                command=f"/bin/bash -c \"git config --global --add safe.directory '*'; {command}\"",
+                command=["/bin/bash", "-c", f"git config --global --add safe.directory '*'; {command}"],
                 volumes=[f"{self.src_dir}:/home/{self.user_name}/elasticsearch"],
                 working_dir=f"/home/{self.user_name}/elasticsearch",
             )
