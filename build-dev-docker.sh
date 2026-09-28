@@ -58,7 +58,6 @@ if [[ "${RALLY_BRANCH}" =~ .*\/.* ]]; then
 else
   branch_name="${RALLY_BRANCH}"
 fi
-export RALLY_VERSION=$(hatch version)
 export RALLY_VERSION_TAG="${branch_name}-${GIT_SHA}-${DATE}-${ARCH}"
 MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
@@ -87,12 +86,21 @@ popd
 popd
 rally_dir="${tmp_dir}/rally"
 
+# Compute the Python (PEP 440) version of the sources we are about to build, e.g. "2.13.0.post1.dev96".
+# It is only used inside the image (SETUPTOOLS_SCM_PRETEND_VERSION and the version label); Docker tags
+# use RALLY_VERSION_TAG instead. Note: `export VAR=$(cmd)` would mask a failure of `cmd` (SC2155).
+RALLY_VERSION="$(cd "${rally_dir}" && uvx hatch version)"
+export RALLY_VERSION
+if [[ -z "${RALLY_VERSION}" ]]; then
+    echo "ERROR: could not determine the Rally version with \`hatch version\`."
+    exit 1
+fi
 
 echo "========================================================"
-echo "Building Docker image for Rally $RALLY_VERSION          "
+echo "Building Docker image ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG} for Rally ${RALLY_VERSION}"
 echo "========================================================"
 
-docker build --provenance=false -t "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile "${rally_dir}"
+docker build --provenance=false -t "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile "${rally_dir}"
 
 echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
@@ -101,18 +109,18 @@ echo "======================================================="
 ./release-docker-test.sh dev
 
 echo "======================================================="
-echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION   "
+echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION_TAG   "
 echo "======================================================="
 
 trap push_failed ERR
-docker push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}"
+docker push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}"
 
 if [[ $PUSH_LATEST == "true" ]]; then
     echo "============================================"
     echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     echo "============================================"
 
-    docker tag "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
+    docker tag "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     docker push "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
 fi
 
