@@ -266,6 +266,7 @@ class Runner:
             es.restore_context(token)
         if exc is not None:
             # Stamp the outer context so driver.py timing arithmetic has valid values.
+            # The value will be close to 0 in this case.
             es.on_request_start()
             es.on_request_end()
             raise exc
