@@ -148,25 +148,71 @@ class TestGit:
         with pytest.raises(exceptions.SystemSetupError) as exc:
             git.head_revision("/src")
         assert exc.value.args[0] == "Your git version is [1.0.0] but Rally requires at least git 1.9. Please update git."
-        run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG)
+        run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG, timeout=git.GIT_TIMEOUT)
 
     def test_clone_successful(self):
         git.clone(self.tmp_clone_dir, remote=self.remote_tmp_src_dir)
         assert git.is_working_copy(self.tmp_clone_dir)
 
-    def test_clone_with_error(self):
+    @mock.patch("time.sleep")
+    def test_clone_with_error(self, sleep):
         remote = "/this/remote/doesnt/exist"
         with pytest.raises(exceptions.SupplyError) as exc:
             git.clone(self.tmp_clone_dir, remote=remote)
         assert exc.value.args[0] == f"Could not clone from [{remote}] to [{self.tmp_clone_dir}]"
 
+    @mock.patch("time.sleep")
+    @mock.patch("shutil.rmtree")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_clone_retries_until_exhausted(self, run_subprocess_with_logging, rmtree, sleep):
+        run_subprocess_with_logging.return_value = -9
+        remote = "https://github.com/elastic/rally-tracks"
+        with pytest.raises(exceptions.SupplyError) as exc:
+            git.clone(self.tmp_clone_dir, remote=remote)
+        assert exc.value.args[0] == f"Could not clone from [{remote}] to [{self.tmp_clone_dir}]"
+        run_subprocess_with_logging.assert_called_with(f"git clone {remote} {self.tmp_clone_dir}", timeout=git.GIT_TIMEOUT)
+        assert run_subprocess_with_logging.call_count == git.GIT_RETRIES
+        # the partial clone is cleaned up between attempts, but not after the final failure
+        assert rmtree.call_count == git.GIT_RETRIES - 1
+
+    @mock.patch("time.sleep")
+    @mock.patch("shutil.rmtree")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_clone_retries_then_succeeds(self, run_subprocess_with_logging, rmtree, sleep):
+        # fail once, then succeed
+        run_subprocess_with_logging.side_effect = [-9, 0]
+        remote = "https://github.com/elastic/rally-tracks"
+        git.clone(self.tmp_clone_dir, remote=remote)
+        assert run_subprocess_with_logging.call_count == 2
+        assert rmtree.call_count == 1
+
     def test_fetch_successful(self):
         git.fetch(self.local_tmp_src_dir, remote=self.local_remote_name)
 
-    def test_fetch_with_error(self):
+    @mock.patch("time.sleep")
+    def test_fetch_with_error(self, sleep):
         with pytest.raises(exceptions.SupplyError) as exc:
             git.fetch(self.local_tmp_src_dir, remote="this-remote-doesnt-actually-exist")
         assert exc.value.args[0] == "Could not fetch source tree from [this-remote-doesnt-actually-exist]"
+
+    @mock.patch("time.sleep")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_fetch_retries_until_exhausted(self, run_subprocess_with_logging, sleep):
+        # the @probed decorator first runs a `git --version` probe which must succeed
+        run_subprocess_with_logging.side_effect = lambda cmd, **kwargs: 0 if "--version" in cmd else -9
+        with pytest.raises(exceptions.SupplyError):
+            git.fetch(self.local_tmp_src_dir, remote="origin")
+        fetch_calls = [c for c in run_subprocess_with_logging.call_args_list if "fetch" in c.args[0]]
+        assert len(fetch_calls) == git.GIT_RETRIES
+
+    @mock.patch("time.sleep")
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    def test_fetch_retries_then_succeeds(self, run_subprocess_with_logging, sleep):
+        fetch_results = [-9, 0]
+        run_subprocess_with_logging.side_effect = lambda cmd, **kwargs: 0 if "--version" in cmd else fetch_results.pop(0)
+        git.fetch(self.local_tmp_src_dir, remote="origin")
+        fetch_calls = [c for c in run_subprocess_with_logging.call_args_list if "fetch" in c.args[0]]
+        assert len(fetch_calls) == 2
 
     def test_checkout_successful(self):
         git.checkout(self.local_tmp_src_dir, branch=self.local_branch)

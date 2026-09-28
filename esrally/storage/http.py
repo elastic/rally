@@ -105,7 +105,7 @@ class HTTPAdapter(Adapter):
             try:
                 with response:
                     yield from response.iter_content(chunk_size=self.chunk_size)
-            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as ex:
+            except (requests.exceptions.Timeout, requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError) as ex:
                 raise TimeoutError(f"Timed out reading content from URL={url}: {ex}") from ex
 
         return GetResponse(head, iter_chunks())

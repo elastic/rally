@@ -125,3 +125,170 @@ class TestDecompression:
     def read(self, f):
         with open(f) as content_file:
             return content_file.read()
+
+
+class TestFileOffsetTable:
+    def _make_table(self, tmp_path, data_content, offset_content):
+        data_file = tmp_path / "docs.json"
+        data_file.write_text(data_content)
+        offset_file = tmp_path / "docs.json.offset"
+        if offset_content is not None:
+            offset_file.write_text(offset_content)
+            data_mtime = os.path.getmtime(data_file)
+            os.utime(offset_file, (data_mtime + 1, data_mtime + 1))
+        return io.FileOffsetTable(str(data_file), str(offset_file), "rt")
+
+    def test_is_valid_with_well_formed_content(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "0;0\n50000;1234\n100000;5678\n")
+        assert table.is_valid() is True
+
+    def test_is_valid_with_single_line(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "0;0\n")
+        assert table.is_valid() is True
+
+    def test_is_valid_rejects_empty_file(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "")
+        assert table.is_valid() is False
+
+    def test_is_valid_rejects_missing_offset_file(self, tmp_path):
+        data_file = tmp_path / "docs.json"
+        data_file.write_text("line1\n")
+        table = io.FileOffsetTable(str(data_file), str(tmp_path / "docs.json.offset"), "rt")
+        assert table.is_valid() is False
+
+    def test_is_valid_rejects_wrong_separator(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "0,0\n50000,1234\n")
+        assert table.is_valid() is False
+
+    def test_is_valid_rejects_non_integer_values(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "abc;def\n")
+        assert table.is_valid() is False
+
+    def test_is_valid_rejects_extra_fields(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\n", "0;0;extra\n")
+        assert table.is_valid() is False
+
+    def test_try_download_returns_false_when_no_base_url(self, tmp_path):
+        data_file = tmp_path / "docs.json"
+        data_file.write_text("line1\n")
+        table = io.FileOffsetTable(str(data_file), str(tmp_path / "docs.json.offset"), "rt")
+        assert table.try_download_from_corpus_location(None) is False
+        assert not (tmp_path / "docs.json.offset").exists()
+
+    def test_try_download_returns_true_on_successful_download(self, tmp_path):
+        data_file = tmp_path / "docs.json"
+        data_file.write_text("line1\n")
+        offset_file = tmp_path / "docs.json.offset"
+        table = io.FileOffsetTable(str(data_file), str(offset_file), "rt")
+
+        def fake_download(url, dest, **kwargs):
+            with open(dest, "w"):
+                pass
+
+        with mock.patch("esrally.utils.net.download", side_effect=fake_download) as mock_dl:
+            result = table.try_download_from_corpus_location("http://example.com/corpora")
+
+        assert result is True
+        mock_dl.assert_called_once_with(
+            "http://example.com/corpora/docs.json.offset",
+            str(offset_file),
+        )
+
+    def test_try_download_returns_false_on_download_failure(self, tmp_path):
+        data_file = tmp_path / "docs.json"
+        data_file.write_text("line1\n")
+        table = io.FileOffsetTable(str(data_file), str(tmp_path / "docs.json.offset"), "rt")
+
+        with mock.patch("esrally.utils.net.download", side_effect=Exception("404 Not Found")):
+            result = table.try_download_from_corpus_location("http://example.com/corpora")
+
+        assert result is False
+
+    def test_try_download_strips_trailing_slash_from_base_url(self, tmp_path):
+        data_file = tmp_path / "docs.json"
+        data_file.write_text("line1\n")
+        offset_file = tmp_path / "docs.json.offset"
+        table = io.FileOffsetTable(str(data_file), str(offset_file), "rt")
+
+        def fake_download(url, dest, **kwargs):
+            with open(dest, "w"):
+                pass
+
+        with mock.patch("esrally.utils.net.download", side_effect=fake_download) as mock_dl:
+            table.try_download_from_corpus_location("http://example.com/corpora/")
+
+        mock_dl.assert_called_once_with(
+            "http://example.com/corpora/docs.json.offset",
+            str(offset_file),
+        )
+
+
+class TestPrepareFileOffsetTable:
+    def _write_data_file(self, tmp_path, lines=100):
+        data_file = tmp_path / "docs.json"
+        data_file.write_text("\n".join(f"line{i}" for i in range(lines)) + "\n")
+        return str(data_file)
+
+    def test_downloads_and_uses_valid_offset_file(self, tmp_path):
+        data_file_path = self._write_data_file(tmp_path)
+        offset_file_path = f"{data_file_path}.offset"
+        valid_offset_content = "0;0\n50000;1234\n"
+
+        def fake_download(url, dest, **kwargs):
+            with open(dest, "w") as f:
+                f.write(valid_offset_content)
+            data_mtime = os.path.getmtime(data_file_path)
+            os.utime(dest, (data_mtime + 1, data_mtime + 1))
+
+        with mock.patch("esrally.utils.net.download", side_effect=fake_download):
+            result = io.prepare_file_offset_table(data_file_path, "http://example.com/corpora")
+
+        assert result is None
+        assert os.path.exists(offset_file_path)
+
+    def test_falls_back_to_local_when_download_fails(self, tmp_path):
+        data_file_path = self._write_data_file(tmp_path)
+
+        with mock.patch("esrally.utils.net.download", side_effect=Exception("404 Not Found")):
+            result = io.prepare_file_offset_table(data_file_path, "http://example.com/corpora")
+
+        assert result == 100
+
+    def test_falls_back_to_local_when_downloaded_file_is_invalid(self, tmp_path):
+        data_file_path = self._write_data_file(tmp_path)
+        offset_file_path = f"{data_file_path}.offset"
+
+        def fake_download_invalid(url, dest, **kwargs):
+            with open(dest, "w") as f:
+                f.write("this is not valid offset content\n")
+            data_mtime = os.path.getmtime(data_file_path)
+            os.utime(dest, (data_mtime + 1, data_mtime + 1))
+
+        with mock.patch("esrally.utils.net.download", side_effect=fake_download_invalid):
+            result = io.prepare_file_offset_table(data_file_path, "http://example.com/corpora")
+
+        assert result == 100
+        assert os.path.exists(offset_file_path)
+
+    def test_skips_download_when_no_base_url(self, tmp_path):
+        data_file_path = self._write_data_file(tmp_path)
+
+        with mock.patch("esrally.utils.net.download") as mock_dl:
+            result = io.prepare_file_offset_table(data_file_path, None)
+
+        mock_dl.assert_not_called()
+        assert result == 100
+
+    def test_returns_none_when_valid_offset_already_exists(self, tmp_path):
+        data_file_path = self._write_data_file(tmp_path)
+        offset_file_path = f"{data_file_path}.offset"
+        with open(offset_file_path, "w") as f:
+            f.write("0;0\n50000;1234\n")
+        data_mtime = os.path.getmtime(data_file_path)
+        os.utime(offset_file_path, (data_mtime + 1, data_mtime + 1))
+
+        with mock.patch("esrally.utils.net.download") as mock_dl:
+            result = io.prepare_file_offset_table(data_file_path, "http://example.com/corpora")
+
+        mock_dl.assert_not_called()
+        assert result is None

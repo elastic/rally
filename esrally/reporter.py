@@ -129,37 +129,47 @@ class SummaryReporter:
     def report(self):
         print_header(FINAL_SCORE)
 
-        stats = self.results
+        results_list = self.results if isinstance(self.results, list) else [self.results]
+        stats = results_list[0]
 
         warnings = []
         metrics_table = []
         metrics_table.extend(self._report_totals(stats))
         metrics_table.extend(self._report_ml_processing_times(stats))
-
         metrics_table.extend(self._report_gc_metrics(stats))
-
         metrics_table.extend(self._report_disk_usage(stats))
         metrics_table.extend(self._report_segment_memory(stats))
         metrics_table.extend(self._report_segment_counts(stats))
-
         metrics_table.extend(self._report_transform_stats(stats))
-
         metrics_table.extend(self._report_ingest_pipeline_stats(stats))
-
         metrics_table.extend(self._report_disk_usage_per_field(stats))
 
-        for record in stats.op_metrics:
-            task = record["task"]
-            metrics_table.extend(self._report_throughput(record, task))
-            metrics_table.extend(self._report_latency(record, task))
-            metrics_table.extend(self._report_service_time(record, task))
-            # this is mostly needed for debugging purposes but not so relevant to end users
-            if self.show_processing_time:
-                metrics_table.extend(self._report_processing_time(record, task))
-            metrics_table.extend(self._report_error_rate(record, task))
-            self.add_warnings(warnings, record, task)
+        if len(results_list) > 1:
+            cluster_names = [s.cluster_name for s in results_list]
+            op_metrics_by_cluster = {s.cluster_name: s.op_metrics for s in results_list}
+            metrics_table.extend(self._report_op_metrics_multi_cluster(stats, cluster_names, op_metrics_by_cluster, warnings))
+            # Pad 4-column rows (totals, gc, disk, etc.) to multi-cluster width
+            padded = []
+            for row in metrics_table:
+                if len(row) == 4:
+                    padded.append([row[0], row[1], row[2]] + [""] * (len(cluster_names) - 1) + [row[3]])
+                else:
+                    padded.append(row)
+            metrics_table = padded
+            headers = ["Metric", "Task"] + cluster_names + ["Unit"]
+        else:
+            for record in stats.op_metrics:
+                task = record["task"]
+                metrics_table.extend(self._report_throughput(record, task))
+                metrics_table.extend(self._report_latency(record, task))
+                metrics_table.extend(self._report_service_time(record, task))
+                if self.show_processing_time:
+                    metrics_table.extend(self._report_processing_time(record, task))
+                metrics_table.extend(self._report_error_rate(record, task))
+                self.add_warnings(warnings, record, task)
+            headers = ["Metric", "Task", "Value", "Unit"]
 
-        self.write_report(metrics_table)
+        self.write_report(metrics_table, headers=headers)
 
         if warnings:
             for warning in warnings:
@@ -178,16 +188,97 @@ class SummaryReporter:
             else:
                 warnings.append("No throughput metrics available for [%s]. Likely cause: The benchmark ended already during warmup." % op)
 
-    def write_report(self, metrics_table):
+    def write_report(self, metrics_table, headers=None):
+        if headers is None:
+            headers = ["Metric", "Task", "Value", "Unit"]
         write_single_report(
             self.report_file,
             self.report_format,
             self.cwd,
             self.numbers_align,
-            headers=["Metric", "Task", "Value", "Unit"],
+            headers=headers,
             data_plain=metrics_table,
             data_rich=metrics_table,
         )
+
+    def _report_op_metrics_multi_cluster(self, stats, cluster_names, op_metrics_by_cluster, warnings):
+        """Build op_metrics table rows with one column per cluster."""
+        # Collect task -> list of records (one per cluster, same index)
+        task_to_records = {}
+        for cn in cluster_names:
+            for record in op_metrics_by_cluster.get(cn, []):
+                task = record["task"]
+                if task not in task_to_records:
+                    task_to_records[task] = {c: None for c in cluster_names}
+                task_to_records[task][cn] = record
+        lines = []
+        for task, by_cluster in task_to_records.items():
+            # Throughput
+            for label, key in [
+                ("Min Throughput", "min"),
+                ("Mean Throughput", "mean"),
+                ("Median Throughput", "median"),
+                ("Max Throughput", "max"),
+            ]:
+
+                def _throughput(rec, k):
+                    return (rec.get("throughput") or {}).get(k) if rec else None
+
+                row = self._line_multi(
+                    label,
+                    task,
+                    [_throughput(by_cluster.get(cn), key) for cn in cluster_names],
+                    _throughput(by_cluster.get(cluster_names[0]), "unit") or "",
+                    lambda v: "%.2f" % v if v is not None else None,
+                )
+                if row:
+                    lines.append(row)
+            # Latency percentiles
+            for p in metrics.percentiles_for_sample_size(sys.maxsize):
+                pk = metrics.encode_float_key(p)
+                row = self._line_multi(
+                    "%sth percentile latency" % p,
+                    task,
+                    [(rec.get("latency") or {}).get(pk) if rec else None for rec in [by_cluster.get(cn) for cn in cluster_names]],
+                    "ms",
+                    lambda v: "%.2f" % v if v is not None else None,
+                )
+                if row:
+                    lines.append(row)
+            # Service time percentiles
+            for p in metrics.percentiles_for_sample_size(sys.maxsize):
+                pk = metrics.encode_float_key(p)
+                row = self._line_multi(
+                    "%sth percentile service time" % p,
+                    task,
+                    [(rec.get("service_time") or {}).get(pk) if rec else None for rec in [by_cluster.get(cn) for cn in cluster_names]],
+                    "ms",
+                    lambda v: "%.2f" % v if v is not None else None,
+                )
+                if row:
+                    lines.append(row)
+            # Error rate
+            row = self._line_multi(
+                "error rate",
+                task,
+                [rec.get("error_rate") if rec else None for rec in [by_cluster.get(cn) for cn in cluster_names]],
+                "%",
+                lambda v: "%.2f" % (v * 100.0) if v is not None else None,
+            )
+            if row:
+                lines.append(row)
+            # Warnings from first cluster
+            rec = by_cluster.get(cluster_names[0])
+            if rec:
+                self.add_warnings(warnings, rec, task)
+        return lines
+
+    def _line_multi(self, k, task, values_per_cluster, unit, converter=lambda x: x):
+        """One row: [Metric, Task, val_1, val_2, ..., Unit] for multi-cluster table."""
+        if not any(v is not None for v in values_per_cluster):
+            return []
+        converted = [converter(v) if v is not None else "" for v in values_per_cluster]
+        return [k, task] + converted + [unit]
 
     def _report_throughput(self, values, task):
         throughput = values["throughput"]
@@ -370,9 +461,6 @@ class ComparisonReporter:
 
     def report(self, r1, r2):
         # we don't verify anything about the races as it is possible that the user benchmarks two different tracks intentionally
-        baseline_stats = metrics.GlobalStats(r1.results)
-        contender_stats = metrics.GlobalStats(r2.results)
-
         print_internal("")
         print_internal("Comparing baseline")
         print_internal("  Race ID: %s" % r1.race_id)
@@ -393,12 +481,28 @@ class ComparisonReporter:
         if r2.user_tags:
             r2_user_tags = ", ".join(["%s=%s" % (k, v) for k, v in sorted(r2.user_tags.items())])
             print_internal("  User tags: %s" % r2_user_tags)
-        print_header(FINAL_SCORE)
 
-        metric_table_plain = self._metrics_table(baseline_stats, contender_stats, plain=True)
-        metric_table_rich = self._metrics_table(baseline_stats, contender_stats, plain=False)
-        # Writes metric_table_rich to console, writes metric_table_plain to file
-        self._write_report(metric_table_plain, metric_table_rich)
+        r1_results = r1.results if isinstance(r1.results, list) else [r1.results]
+        r2_results = r2.results if isinstance(r2.results, list) else [r2.results]
+
+        if len(r1_results) > 1 or len(r2_results) > 1:
+            r1_by_cluster = {r.get("cluster_name"): r for r in r1_results if isinstance(r, dict)}
+            r2_by_cluster = {r.get("cluster_name"): r for r in r2_results if isinstance(r, dict)}
+            for cluster_name in sorted(k for k in (set(r1_by_cluster) | set(r2_by_cluster)) if k is not None):
+                print_header("%s [%s]" % (FINAL_SCORE, cluster_name))
+                baseline_stats = metrics.GlobalStats(r1_by_cluster.get(cluster_name))
+                contender_stats = metrics.GlobalStats(r2_by_cluster.get(cluster_name))
+                metric_table_plain = self._metrics_table(baseline_stats, contender_stats, plain=True)
+                metric_table_rich = self._metrics_table(baseline_stats, contender_stats, plain=False)
+                self._write_report(metric_table_plain, metric_table_rich)
+        else:
+            print_header(FINAL_SCORE)
+            baseline_stats = metrics.GlobalStats(r1_results[0])
+            contender_stats = metrics.GlobalStats(r2_results[0])
+            metric_table_plain = self._metrics_table(baseline_stats, contender_stats, plain=True)
+            metric_table_rich = self._metrics_table(baseline_stats, contender_stats, plain=False)
+            # Writes metric_table_rich to console, writes metric_table_plain to file
+            self._write_report(metric_table_plain, metric_table_rich)
 
     def _metrics_table(self, baseline_stats, contender_stats, plain):
         self.plain = plain

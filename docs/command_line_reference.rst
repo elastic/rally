@@ -90,6 +90,23 @@ You can also pass track parameters to see how they affect the rendered output::
 
 It is also possible to refer to a track via its path (``--track-path``) or use a different track repository (``--track-repository``).
 
+.. _clr_validate_track:
+
+``validate-track``
+~~~~~~~~~~~~~~~~~~
+
+The ``validate-track`` subcommand loads a track and runs any registered challenge validators without starting a benchmark or contacting a cluster. Use it to fail fast on invalid track parameters (for example from automation before provisioning load drivers).
+
+It resolves the challenge the same way ``race`` does: an explicit ``--challenge``, or the track's default challenge when ``--challenge`` is omitted. An unknown challenge name fails with a non-zero exit code. Loading includes Jinja rendering, schema checks, unused-parameter checks, track plugins, and installing any track ``dependencies``. It does **not** download corpora or provision nodes. Track repository git fetch/update may still occur unless you pass ``--offline``.
+
+Unlike ``race`` (which detects build flavor from the target cluster), ``validate-track`` defaults to the ``default`` build flavor. For tracks whose Jinja templates depend on serverless conditionals, pass ``--build-flavor=serverless`` and optionally ``--serverless-operator`` so rendering matches the intended race environment.
+
+Example with a local track that registers validators (see :ref:`adding_tracks_custom_validators`)::
+
+    esrally validate-track --track-path=/path/to/my-track --challenge=autoscaling --track-params='{"scheduling": [1]}' --build-flavor=serverless --no-quiet
+
+On success the process exits zero. Confirmation text is suppressed by default (``--quiet``); pass ``--no-quiet`` to see whether validators ran. Exit code 0 with no registered validators for the resolved challenge means the track loaded successfully, **not** that custom parameter checks passed — only that there was nothing to validate. On failure it exits non-zero and prints the error (for example a ``TrackConfigError`` from a validator).
+
 ``compare``
 ~~~~~~~~~~~
 
@@ -126,22 +143,12 @@ Because ``--quiet`` is specified, Rally will suppress all non-essential output (
 
 This subcommand can be used to download Elasticsearch distributions. Example::
 
-    esrally download --distribution-version=6.8.0 --quiet
+    esrally download --distribution-version={ES_CLIENT_VER} --quiet
 
-This will download the OSS distribution of Elasticsearch 6.8.0. Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has downloaded it::
-
-    {
-      "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-oss-6.8.0.tar.gz"
-    }
-
-To download the default distribution you need to specify a license (via ``--car``)::
-
-    esrally download --distribution-version=6.8.0 --car=basic-license --quiet
-
-This will show the path to the default distribution::
+This will download the distribution of Elasticsearch {ES_CLIENT_VER}. Because ``--quiet`` is specified, Rally will suppress all non-essential output (banners, progress messages etc.) and only return the location of the binary on the local machine after it has downloaded it::
 
     {
-      "elasticsearch": "/Users/dm/.rally/benchmarks/distributions/elasticsearch-6.8.0.tar.gz"
+      "elasticsearch": "~/.rally/benchmarks/distributions/elasticsearch-{ES_CLIENT_VER}-darwin-aarch64.tar.gz"
     }
 
 ``delete``
@@ -160,7 +167,7 @@ The ``delete`` subcommand is used to delete records for different configuration 
 
 This subcommand can be used to install a single Elasticsearch node. Example::
 
-    esrally install --quiet --distribution-version=7.4.2 --node-name="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="rally-node-0" --network-host="127.0.0.1" --http-port=39200 --master-nodes="rally-node-0" --seed-hosts="127.0.0.1:39300"
 
 This will output the id of this installation::
 
@@ -280,7 +287,8 @@ Example JSON file::
       "clients": 16
    }
 
-All track parameters are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races``, it will show all track parameters::
+Track parameters whose names start with ``secret_`` (for example ``secret_api_key``) are written to the metrics store, race records, and results documents with their value replaced by ``<hidden>``; the real value is still available to the track (Jinja templates, parameter sources, and so on) and is not persisted. All track parameter keys are recorded for each metrics record in the metrics store. Also, when you run ``esrally list races`` with JSON output, persisted ``track-params`` follow the same rule::
+
 
     Race Timestamp    Track    Track Parameters          Challenge            Car       User Tags
     ----------------  -------  ------------------------- -------------------  --------  ---------
@@ -288,6 +296,11 @@ All track parameters are recorded for each metrics record in the metrics store. 
     20160518T112341Z  pmc      bulk_size=2000,clients=16 append-no-conflicts  defaults
 
 Note that the default values are not recorded or shown (Rally does not know about them).
+
+``ignore-unused-track-params``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, Rally mandates that all provided track-parameters be used by the target track. Adding this flag suppresses that behavior; instead, Rally will write a warning to the log-file, then proceed as normal.
 
 ``challenge``
 ~~~~~~~~~~~~~
@@ -327,13 +340,13 @@ Used to specify the current node's name in the cluster when it is setup via the 
 This parameter is useful in benchmarks involved multiple Elasticsearch clusters. It's used to configure the cluster name of the current Elasticsearch node when it is setup via the ``install`` or ``race`` subcommand. The following example sets up two Elasticsearch clusters: ``cluster-1`` and ``cluster-2``, and each has two nodes::
 
     # install node-1 in cluster-1
-    esrally install --quiet --distribution-version=8.2.2 --node-name="node-1" --cluster-name=cluster-1 --network-host="192.168.1.1" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="node-1" --cluster-name=cluster-1 --network-host="192.168.1.1" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
     # install node-2 in cluster-1
-    esrally install --quiet --distribution-version=8.2.2 --node-name="node-2" --cluster-name=cluster-1 --network-host="192.168.1.2" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="node-2" --cluster-name=cluster-1 --network-host="192.168.1.2" --http-port=39200 --master-nodes="node-1" --seed-hosts="192.168.1.1:39300,192.168.1.2:39300"
     # install node-3 in cluster-2
-    esrally install --quiet --distribution-version=8.2.2 --node-name="node-3" --cluster-name=cluster-2 --network-host="192.168.1.3" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="node-3" --cluster-name=cluster-2 --network-host="192.168.1.3" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
     # install node-4 in cluster-2
-    esrally install --quiet --distribution-version=8.2.2 --node-name="node-4" --cluster-name=cluster-2 --network-host="192.168.1.4" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
+    esrally install --quiet --distribution-version={ES_CLIENT_VER} --node-name="node-4" --cluster-name=cluster-2 --network-host="192.168.1.4" --http-port=39200 --master-nodes="node-3" --seed-hosts="192.168.1.3:39300,192.168.1.4:39300"
 
 If the ``cluster-name`` parameter is not specified, Rally will use ``rally-benchmark`` as the default cluster name.
 
@@ -442,14 +455,14 @@ Example::
 
 Specifies the name of the target operating system for which an artifact should be downloaded. By default this value is automatically derived based on the operating system Rally is run. This command line flag is only applicable to the ``download`` subcommand and allows to download an artifact for a different operating system. Example::
 
-    esrally download --distribution-version=7.5.1 --target-os=linux
+    esrally download --distribution-version={ES_CLIENT_VER} --target-os=linux
 
 ``target-arch``
 ~~~~~~~~~~~~~~~
 
 Specifies the name of the target CPU architecture for which an artifact should be downloaded. By default this value is automatically derived based on the CPU architecture Rally is run. This command line flag is only applicable to the ``download`` subcommand and allows to download an artifact for a different CPU architecture. Example::
 
-    esrally download --distribution-version=7.5.1 --target-arch=x86_64
+    esrally download --distribution-version={ES_CLIENT_VER} --target-arch=x86_64
 
 
 ``car``
@@ -498,7 +511,7 @@ Allows to override variables of Elasticsearch plugins. It accepts a list of comm
 
 Example::
 
-    esrally race --track=geonames --distribution-version=6.1.1. --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'http',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
+    esrally race --track=geonames --distribution-version={ES_CLIENT_VER} --elasticsearch-plugins="x-pack:monitoring-http" --plugin-params="monitoring_type:'http',monitoring_host:'some_remote_host',monitoring_port:10200,monitoring_user:'rally',monitoring_password:'m0n1t0r1ng'"
 
 This enables the HTTP exporter of `X-Pack Monitoring <https://www.elastic.co/products/x-pack/monitoring>`_ and exports the data to the configured monitoring host.
 
@@ -611,9 +624,9 @@ This command line parameter sets the major version of the JDK that Rally should 
 Example::
 
    # Run a benchmark with defaults
-   esrally race --track=geonames --distribution-version=7.0.0
+   esrally race --track=geonames --distribution-version={ES_CLIENT_VER}
    # Force to run with JDK 11
-   esrally race --track=geonames --distribution-version=7.0.0 --runtime-jdk=11
+   esrally race --track=geonames --distribution-version={ES_CLIENT_VER} --runtime-jdk=11
 
 It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/7.0/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
 
@@ -657,10 +670,10 @@ If you want Rally to launch and benchmark a cluster using a binary distribution,
 
  ::
 
-   esrally race --track=geonames --distribution-version=7.0.0
+   esrally race --track=geonames --distribution-version={ES_CLIENT_VER}
 
 
-Rally will then benchmark the official Elasticsearch 7.0.0 distribution. Please check our :doc:`version support page </versions>` to see which Elasticsearch versions are currently supported by Rally.
+Rally will then benchmark the official Elasticsearch {ES_CLIENT_VER} distribution. Please check our :doc:`version support page </versions>` to see which Elasticsearch versions are currently supported by Rally.
 
 ``distribution-repository``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -680,9 +693,9 @@ The ``url`` property defines the URL pattern for this repository. The ``cache`` 
 
 You can use this distribution repository with the name "in_house_snapshot" as follows::
 
-   esrally race --track=geonames --distribution-repository=in_house_snapshot --distribution-version=7.0.0-SNAPSHOT
+   esrally race --track=geonames --distribution-repository=in_house_snapshot --distribution-version={ES_CLIENT_VER}-SNAPSHOT
 
-This will benchmark the latest 7.0.0 snapshot build of Elasticsearch.
+This will benchmark the latest {ES_CLIENT_VER} snapshot build of Elasticsearch.
 
 ``source-build-method``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -745,7 +758,7 @@ Default value: ``timeout:60`` (applies any time ``timeout`` is not specified. Se
 Rally recognizes the following client options in addition:
 
 * ``max_connections``: By default, Rally will choose the maximum allowed number of connections automatically (equal to the number of simulated clients but at least 256 connections). With this property it is possible to override that logic but a minimum of 256 is enforced internally.
-* ``enable_cleanup_closed`` (default: ``true``): In some cases, `Elasticsearch does not properly close SSL connections <https://github.com/elastic/elasticsearch/issues/76642>`_ and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections.
+* ``enable_cleanup_closed`` (default: ``true`` on affected Python versions): In some cases, `Elasticsearch does not properly close SSL connections <https://github.com/elastic/elasticsearch/issues/76642>`_ and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections. Rally disables this option on Python 3.12.8+, excluding Python 3.13.0, because these versions contain the upstream asyncio fix and aiohttp ignores the option.
 * ``static_responses``: The path to a JSON file containing path patterns and the corresponding responses. When this value is set to ``true``, Rally will not send requests to Elasticsearch but return static responses as specified by the file. This is useful to diagnose performance issues in Rally itself. See below for a specific example.
 * ``create_api_key_per_client`` (default: ``false``): If set to ``true``, Rally will create a unique `Elasticsearch API key <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html>`_ for each simulated client that issues requests against Elasticsearch during the benchmark. This is useful for simulating workloads where data is indexed by many distinct agents, each configured with its own API key, as is typical with Elastic Agent. Note that ``basic_auth_user`` and ``basic_auth_password`` must also be provided, and the ``basic_auth_user`` must have `sufficient privileges <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html#security-api-create-api-key-prereqs>`_ to create API keys. These basic auth credentials are used to create the API keys at the start of the benchmark and delete them at the end, but only the generated API keys will be used during benchmark execution.
 
@@ -873,8 +886,8 @@ Save the above responses as ``responses.json`` and execute a benchmark as follow
 
 This option controls how Rally behaves when a response error occurs. The following values are possible:
 
-* ``continue``: (default) only records that an error has happened and will continue with the benchmark unless there is a fatal error. At the end of a race, errors show up in the "error rate" metric.
-* ``abort``: aborts the benchmark on the first request error with a detailed error message. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`.
+* ``continue``: only records that an error has happened and will continue with the benchmark unless there is a fatal error. At the end of a race, errors show up in the "error rate" metric.
+* ``abort``: (default) aborts the benchmark on the first request error with a detailed error message. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`.
 * ``continue-on-network``: As with ``continue``, but also continues on network errors (such as connection refused).
 
 .. attention::
@@ -910,7 +923,26 @@ If multiple Elasticsearch nodes are hidden behind a proxy, it is possible to add
 
 This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
 
-You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`.
+You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`. To benchmark multiple clusters simultaneously, combine the JSON format for ``--target-hosts`` with the :ref:`--multi-cluster flag <multi_cluster_mode>`.
+
+``multi-cluster``
+~~~~~~~~~~~~~~~~~
+
+Enables :ref:`multi-cluster mode <multi_cluster_mode>`. For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task, and reports results side-by-side.
+
+Requires a JSON object with two or more named clusters in ``--target-hosts`` and matching keys in ``--client-options``. Must be combined with the ``benchmark-only`` pipeline.
+
+Telemetry devices are disabled when this flag is active.
+
+The default value is ``false``.
+
+**Example**
+
+ ::
+
+   esrally race --track=geonames --pipeline=benchmark-only --multi-cluster \
+     --target-hosts='{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}' \
+     --client-options='{"cluster-a":{"timeout":60},"cluster-b":{"timeout":60}}'
 
 ``limit``
 ~~~~~~~~~
@@ -1107,6 +1139,8 @@ Examples:
 
 .. NOTE::
    **All** :ref:`built-in operations <track_operations>` will use the connection to the ``default`` cluster. However, you can utilize the client connections to the additional clusters in your :ref:`custom runners <adding_tracks_custom_runners>`.
+
+For :ref:`multi-cluster mode <multi_cluster_mode>`, use the same JSON format for ``--target-hosts`` and add ``--multi-cluster`` to the command line. Each task then runs against all clusters in parallel within a single race, and results are stored with a ``cluster`` field on each document so you can filter by cluster in your results store.
 
 ``client-options``
 ~~~~~~~~~~~~~~~~~~

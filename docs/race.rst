@@ -48,11 +48,11 @@ Starting a Race
 
 To start a race you have to define the track and challenge to run. For example::
 
-    esrally race --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
+    esrally race --distribution-version={ES_CLIENT_VER} --track=geopoint --challenge=append-fast-with-conflicts
 
 Rally will then start racing on this track. If you have never started Rally before, it should look similar to the following output::
 
-    $ esrally race --distribution-version=6.0.0 --track=geopoint --challenge=append-fast-with-conflicts
+    $ esrally race --distribution-version={ES_CLIENT_VER} --track=geopoint --challenge=append-fast-with-conflicts
 
         ____        ____
        / __ \____ _/ / /_  __
@@ -61,8 +61,8 @@ Rally will then start racing on this track. If you have never started Rally befo
     /_/ |_|\__,_/_/_/\__, /
                     /____/
 
-    [INFO] Racing on track [geopoint], challenge [append-fast-with-conflicts] and car ['defaults'] with version [6.0.0].
-    [INFO] Downloading Elasticsearch 6.0.0 ... [OK]
+    [INFO] Racing on track [geopoint], challenge [append-fast-with-conflicts] and car ['defaults'] with version [{ES_CLIENT_VER}].
+    [INFO] Downloading Elasticsearch {ES_CLIENT_VER} ... [OK]
     [INFO] Rally will delete the benchmark candidate after the benchmark
     [INFO] Downloading data from [http://benchmarks.elasticsearch.org.s3.amazonaws.com/corpora/geopoint/documents.json.bz2] (482 MB) to [/Users/dm/.rally/benchmarks/data/geopoint/documents.json.bz2] ... [OK]
     [INFO] Decompressing track data from [/Users/dm/.rally/benchmarks/data/geopoint/documents.json.bz2] to [/Users/dm/.rally/benchmarks/data/geopoint/documents.json] (resulting size: 2.28 GB) ... [OK]
@@ -127,11 +127,12 @@ When the race has finished, Rally will show a summary on the command line::
 
 What did Rally just do?
 
-* It downloaded and started Elasticsearch 6.0.0
+* It downloaded and started Elasticsearch {ES_CLIENT_VER}
 * It downloaded the relevant data for the geopoint track
 * It ran the actual benchmark
 * And finally it reported the results
 
 If you are curious about the operations that Rally has run, inspect the `geopoint track specification <https://github.com/elastic/rally-tracks/blob/5/geopoint/track.json>`_ or start to :doc:`write your own tracks </adding_tracks>`. You can also configure Rally to :doc:`store all data samples in Elasticsearch </configuration>` so you can analyze the results with Kibana. Finally, you may want to :doc:`change the Elasticsearch configuration </car>`.
+
 
 

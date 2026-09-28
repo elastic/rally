@@ -16,18 +16,22 @@
 # under the License.
 
 import copy
+import dataclasses
 import os
 import random
 import re
+import subprocess
+import sys
 import textwrap
 import urllib.error
 from unittest import mock
 
 import pytest
 
-from esrally import config, exceptions
-from esrally.track import loader, track
-from esrally.utils import io
+from esrally import config, exceptions, paths
+from esrally.track import loader, params, track
+from esrally.utils import console, io
+from esrally.utils.cases import cases
 
 
 def strip_ws(s):
@@ -218,6 +222,175 @@ class TestRenderTrack:
             loader.render_track(cfg)
 
 
+class TestValidateTrack:
+    def _track_with_challenges(self, *challenge_specs):
+        """
+        Build a track from (name, default) pairs. Challenges are not marked selected;
+        validation resolves via find_challenge_or_default like race.
+        """
+        challenges = [track.Challenge(name, default=default, schedule=[]) for name, default in challenge_specs]
+        return track.Track(name="unittest", challenges=challenges)
+
+    def _cfg(self, challenge_name=None, track_params=None):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "challenge.name", challenge_name)
+        cfg.add(config.Scope.application, "track", "params", track_params or {})
+        return cfg
+
+    def teardown_method(self, method):
+        params._clear_validators()  # pylint: disable=protected-access
+
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_invokes_validators_for_explicit_challenge(self, load_track):
+        load_track.return_value = self._track_with_challenges(("validated", True), ("other", False))
+        cfg = self._cfg("validated", {"scheduling": [1, 2, 3]})
+
+        received = []
+
+        def validator(track_params):
+            received.append(track_params)
+            raise exceptions.TrackConfigError("'scheduling' must have 1 or 2 elements but had 3.")
+
+        params.register_validator("validated", validator)
+        with pytest.raises(exceptions.TrackConfigError, match="'scheduling' must have 1 or 2 elements but had 3."):
+            loader.validate_track(cfg)
+
+        assert received == [{"scheduling": [1, 2, 3]}]
+        load_track.assert_called_once_with(cfg, install_dependencies=True)
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_succeeds_when_validators_pass(self, load_track, println):
+        load_track.return_value = self._track_with_challenges(("validated", True))
+        cfg = self._cfg("validated", {"scheduling": [1]})
+
+        calls = []
+
+        def mark_ok(_):
+            calls.append("ok")
+
+        params.register_validator("validated", mark_ok)
+
+        loader.validate_track(cfg)
+
+        assert calls == ["ok"]
+        println.assert_called_once_with("Track parameters for challenge [validated] are valid (1 validator ran).")
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_uses_default_challenge_when_challenge_omitted(self, load_track, println):
+        load_track.return_value = self._track_with_challenges(("default-challenge", True), ("other", False))
+        cfg = self._cfg(None, {"scheduling": [1]})
+
+        calls = []
+
+        def mark_default(_):
+            calls.append("default")
+
+        def mark_other(_):
+            calls.append("other")
+
+        params.register_validator("default-challenge", mark_default)
+        params.register_validator("other", mark_other)
+
+        loader.validate_track(cfg)
+
+        assert calls == ["default"]
+        println.assert_called_once_with("Track parameters for challenge [default-challenge] are valid (1 validator ran).")
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_reports_when_no_validators_registered(self, load_track, println):
+        load_track.return_value = self._track_with_challenges(("validated", True))
+        cfg = self._cfg("validated", {})
+
+        loader.validate_track(cfg)
+
+        println.assert_called_once_with(
+            "Track [unittest] challenge [validated] loaded successfully; no validators are registered for this challenge."
+        )
+
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_fails_on_unknown_challenge(self, load_track):
+        load_track.return_value = self._track_with_challenges(("default-challenge", True), ("other", False))
+        cfg = self._cfg("typo-challenge", {})
+
+        def noop(_):
+            return None
+
+        params.register_validator("default-challenge", noop)
+
+        with pytest.raises(exceptions.InvalidName, match="Unknown challenge \\[typo-challenge\\] for track \\[unittest\\]"):
+            loader.validate_track(cfg)
+
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_fails_when_track_has_no_challenges(self, load_track):
+        load_track.return_value = track.Track(name="unittest", challenges=[])
+        cfg = self._cfg(None, {})
+
+        with pytest.raises(exceptions.SystemSetupError, match="Track \\[unittest\\] does not provide challenge"):
+            loader.validate_track(cfg)
+
+    @mock.patch("esrally.track.loader.load_track")
+    def test_validate_track_wraps_unexpected_validator_errors(self, load_track):
+        load_track.return_value = self._track_with_challenges(("validated", True))
+        cfg = self._cfg("validated", {})
+
+        def boom(_):
+            raise ValueError("boom")
+
+        params.register_validator("validated", boom)
+        with pytest.raises(exceptions.TrackConfigError, match="Validator \\[boom\\] for challenge \\[validated\\] failed: boom"):
+            loader.validate_track(cfg)
+
+    def test_resolve_challenge_and_invoke_validators_matches_race_semantics(self):
+        t = self._track_with_challenges(("default-challenge", True), ("other", False))
+        cfg = self._cfg(None, {"x": 1})
+
+        received = []
+        params.register_validator("default-challenge", received.append)
+
+        challenge = loader.resolve_challenge_and_invoke_validators(t, cfg)
+
+        assert challenge.name == "default-challenge"
+        assert received == [{"x": 1}]
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.load_track")
+    def test_track_info_does_not_invoke_validators(self, load_track, println):
+        load_track.return_value = self._track_with_challenges(("validated", True))
+        # Mark selected so info prints a single challenge schedule without needing full corpora metadata.
+        load_track.return_value.challenges[0].selected = True
+        cfg = self._cfg("validated", {"scheduling": [1, 2, 3]})
+
+        called = []
+
+        def mark(_):
+            called.append(True)
+
+        params.register_validator("validated", mark)
+
+        loader.track_info(cfg)
+
+        assert called == []
+        load_track.assert_called_once_with(cfg)
+
+    def test_validate_track_loads_plugin_validators_from_track_path(self):
+        track_path = os.path.join(os.path.dirname(__file__), "..", "..", "it", "resources", "track_with_validator")
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
+        cfg.add(config.Scope.application, "track", "track.path", os.path.abspath(track_path))
+        cfg.add(config.Scope.application, "track", "challenge.name", "validated")
+        cfg.add(config.Scope.application, "track", "params", {"ok": 1})
+        cfg.add(config.Scope.application, "track", "params.ignore_unused", False)
+
+        loader.validate_track(cfg)
+
+        cfg.add(config.Scope.application, "track", "params", {"ok": 0})
+        with pytest.raises(exceptions.TrackConfigError, match="Track parameter 'ok' must be set to 1."):
+            loader.validate_track(cfg)
+
+
 class TestTrackPreparation:
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")
@@ -243,7 +416,7 @@ class TestTrackPreparation:
             data_root="/tmp",
         )
 
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", None)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")
@@ -269,7 +442,7 @@ class TestTrackPreparation:
             data_root="/tmp",
         )
 
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", None)
 
     @mock.patch("esrally.utils.io.decompress")
     @mock.patch("os.path.getsize")
@@ -384,7 +557,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json.bz2", "/tmp/docs.json.bz2", 200, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", "http://benchmarks.elasticsearch.org/corpora/unit-test")
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -401,18 +574,18 @@ class TestTrackPreparation:
         is_file.side_effect = [False, True, True]
         # uncompressed file size is 2000
         get_size.return_value = 2000
-        scheme = random.choice(["http", "https", "s3", "gs"])
+        scheme = str(random.choice(["http", "https", "s3", "gs"]))
 
         prepare_file_offset_table.return_value = 5
 
         p = loader.DocumentSetPreparator(
             track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=False), decompressor=loader.Decompressor()
         )
-
+        url = f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/"
         p.prepare_document_set(
             document_set=track.Documents(
                 source_format=track.Documents.SOURCE_FORMAT_BULK,
-                base_url=f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/",
+                base_url=url,
                 document_file="docs.json",
                 # --> We don't provide a document archive here <--
                 document_archive=None,
@@ -427,7 +600,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             f"{scheme}://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", url)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.net.download")
@@ -466,7 +639,7 @@ class TestTrackPreparation:
         download.assert_called_with(
             "http://benchmarks.elasticsearch.org/corpora/unit-test/docs.json", "/tmp/docs.json", 2000, progress_indicator=mock.ANY
         )
-        prepare_file_offset_table.assert_called_with("/tmp/docs.json")
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", "http://benchmarks.elasticsearch.org/corpora/unit-test")
 
     @mock.patch("esrally.utils.net.download")
     @mock.patch("esrally.utils.io.ensure_dir")
@@ -663,7 +836,7 @@ class TestTrackPreparation:
             data_root=".",
         )
 
-        prepare_file_offset_table.assert_called_with("./docs.json")
+        prepare_file_offset_table.assert_called_with("./docs.json", None)
 
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("esrally.utils.io.decompress")
@@ -703,7 +876,6 @@ class TestTrackPreparation:
             "corpora": [
                 {
                     "name": "http_logs_unparsed",
-                    "target-type": "type",
                     "documents": [
                         {
                             "target-index": "logs-181998",
@@ -730,7 +902,6 @@ class TestTrackPreparation:
                 },
                 {
                     "name": "http_logs",
-                    "target-type": "type",
                     "documents": [
                         {
                             "target-index": "logs-181998",
@@ -850,7 +1021,7 @@ class TestTrackPreparation:
             data_root=".",
         )
 
-        prepare_file_offset_table.assert_called_with("./docs.json")
+        prepare_file_offset_table.assert_called_with("./docs.json", None)
 
     @mock.patch("os.path.getsize")
     @mock.patch("os.path.isfile")
@@ -1226,7 +1397,6 @@ class TestTrackPostProcessing:
             {
                 "name": "test-index",
                 "body": "test-index-body.json",
-                "types": ["test-type"]
             }
         ],
         "corpora": [
@@ -1303,9 +1473,6 @@ class TestTrackPostProcessing:
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": [
-                        "test-type",
-                    ],
                 },
             ],
             "corpora": [
@@ -1392,7 +1559,6 @@ class TestTrackPostProcessing:
                 {
                     "name": "test-index",
                     "body": "test-index-body.json",
-                    "types": ["test-type"],
                 },
             ],
             "corpora": [
@@ -1530,7 +1696,7 @@ class TestTrackPath:
                     ],
                 )
             ],
-            indices=[track.Index(name="test", types=["docs"])],
+            indices=[track.Index(name="test")],
         )
 
         loader.set_absolute_data_path(cfg, t)
@@ -2078,7 +2244,6 @@ class TestTrackSpecificationReader:
             "indices": [
                 {
                     "name": "test-index",
-                    "types": ["test-type"],
                 },
             ],
             "data-streams": [],
@@ -2097,7 +2262,6 @@ class TestTrackSpecificationReader:
             "indices": [
                 {
                     "name": "test-index",
-                    "types": ["docs"],
                 },
             ],
             "corpora": [
@@ -2123,7 +2287,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": ["docs"],
                 }
             ],
             "corpora": [
@@ -2178,7 +2341,7 @@ class TestTrackSpecificationReader:
     def test_parse_with_mixed_iterations_and_ramp_up(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "body": "index.json", "types": ["docs"]}],
+            "indices": [{"name": "test-index", "body": "index.json"}],
             "corpora": [
                 {
                     "name": "test",
@@ -2237,7 +2400,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": ["docs"],
                 },
             ],
             "corpora": [
@@ -2271,7 +2433,7 @@ class TestTrackSpecificationReader:
     def test_parse_challenge_and_challenges_are_defined(self):
         track_specification = {
             "description": "description for unit test",
-            "indices": [{"name": "test-index", "body": "index.json", "types": ["docs"]}],
+            "indices": [{"name": "test-index", "body": "index.json"}],
             "corpora": [
                 {
                     "name": "test",
@@ -2310,7 +2472,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "test-index",
                     "body": "index.json",
-                    "types": ["docs"],
                 },
             ],
             "corpora": [
@@ -2435,7 +2596,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "index-historical",
                     "body": "body.json",
-                    "types": ["_doc"],
                 },
             ],
             "corpora": [
@@ -2530,7 +2690,6 @@ class TestTrackSpecificationReader:
                 {
                     "name": "index-historical",
                     "body": "body.json",
-                    "types": ["main", "secondary"],
                 },
             ],
             "corpora": [
@@ -2545,7 +2704,6 @@ class TestTrackSpecificationReader:
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
                             "target-index": "index-historical",
-                            "target-type": "main",
                             "meta": {"test-docs": True, "role": "main"},
                         },
                         {
@@ -2630,9 +2788,6 @@ class TestTrackSpecificationReader:
                 "secondary": "empty-for-test",
             },
         } == resulting_track.indices[0].body
-        assert len(resulting_track.indices[0].types) == 2
-        assert resulting_track.indices[0].types[0] == "main"
-        assert resulting_track.indices[0].types[1] == "secondary"
         # corpora
         assert len(resulting_track.corpora) == 1
         assert resulting_track.corpora[0].name == "test"
@@ -2649,7 +2804,6 @@ class TestTrackSpecificationReader:
         assert docs_primary.compressed_size_in_bytes == 100
         assert docs_primary.uncompressed_size_in_bytes == 10000
         assert docs_primary.target_index == "index-historical"
-        assert docs_primary.target_type == "main"
         assert docs_primary.meta_data == {"test-docs": True, "role": "main"}
 
         docs_secondary = resulting_track.corpora[0].documents[1]
@@ -2663,7 +2817,6 @@ class TestTrackSpecificationReader:
         assert docs_secondary.uncompressed_size_in_bytes == 20000
         # This is defined by the action-and-meta-data line!
         assert docs_secondary.target_index is None
-        assert docs_secondary.target_type is None
         assert docs_secondary.meta_data == {"test-docs": True, "role": "secondary"}
 
         # challenges
@@ -2767,7 +2920,6 @@ class TestTrackSpecificationReader:
         assert docs_primary.uncompressed_size_in_bytes == 10000
         assert docs_primary.target_data_stream == "data-stream-historical"
         assert docs_primary.target_index is None
-        assert docs_primary.target_type is None
 
         docs_secondary = resulting_track.corpora[0].documents[1]
         assert track.Documents.SOURCE_FORMAT_BULK == docs_secondary.source_format
@@ -2781,7 +2933,6 @@ class TestTrackSpecificationReader:
         # This is defined by the action-and-meta-data line!
         assert docs_secondary.target_data_stream is None
         assert docs_secondary.target_index is None
-        assert docs_secondary.target_type is None
 
         docs_tertiary = resulting_track.corpora[0].documents[2]
         assert track.Documents.SOURCE_FORMAT_BULK == docs_tertiary.source_format
@@ -2792,7 +2943,6 @@ class TestTrackSpecificationReader:
         assert docs_tertiary.number_of_documents == 10
         assert docs_tertiary.compressed_size_in_bytes == 100
         assert docs_tertiary.target_index is None
-        assert docs_tertiary.target_type is None
         assert docs_tertiary.target_data_stream == "data-stream-historical"
 
         # challenges
@@ -2865,7 +3015,6 @@ class TestTrackSpecificationReader:
                 "number_of_shards": 3,
             },
         }
-        assert len(resulting_track.indices[0].types) == 0
         # corpora
         assert len(resulting_track.corpora) == 1
         assert resulting_track.corpora[0].name == "test"
@@ -2881,7 +3030,6 @@ class TestTrackSpecificationReader:
         assert docs_primary.compressed_size_in_bytes == 100
         assert docs_primary.uncompressed_size_in_bytes == 10000
         assert docs_primary.target_index == "index-historical"
-        assert docs_primary.target_type is None
         assert docs_primary.target_data_stream is None
 
         # challenges
@@ -2950,41 +3098,6 @@ class TestTrackSpecificationReader:
                             "compressed-bytes": 100,
                             "uncompressed-bytes": 10000,
                             "target-index": "historical-index",
-                        },
-                    ],
-                }
-            ],
-            "schedule": [
-                {
-                    "clients": 8,
-                    "operation": {
-                        "name": "index-append",
-                        "operation-type": "bulk",
-                        "bulk-size": 5000,
-                    },
-                },
-            ],
-        }
-        complete_track_params = loader.CompleteTrackParams()
-        reader = loader.TrackSpecificationReader(complete_track_params=complete_track_params)
-        with pytest.raises(loader.TrackSyntaxError):
-            reader("unittest", track_specification, "/mapping")
-
-    def test_parse_invalid_data_streams_with_target_type(self):
-        track_specification = {
-            "description": "description for unit test",
-            "data-streams": [{"name": "historical-data-stream"}],
-            "corpora": [
-                {
-                    "name": "test",
-                    "base-url": "https://localhost/data",
-                    "documents": [
-                        {
-                            "source-file": "documents-main.json.bz2",
-                            "document-count": 10,
-                            "compressed-bytes": 100,
-                            "uncompressed-bytes": 10000,
-                            "target-type": "_doc",
                         },
                     ],
                 }
@@ -3114,7 +3227,6 @@ class TestTrackSpecificationReader:
         assert docs_primary.compressed_size_in_bytes == 100
         assert docs_primary.uncompressed_size_in_bytes == 10000
         assert docs_primary.target_data_stream == "historical-data-stream"
-        assert docs_primary.target_type is None
         assert docs_primary.target_index is None
 
         # challenges
@@ -4312,6 +4424,155 @@ class TestTrackSpecificationReader:
             "value": 7,
         }
 
+    def test_rejects_index_types(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index", "types": ["docs"]}],
+            "corpora": [],
+            "operations": [],
+            "challenges": [],
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Track index 'test-index' specifies 'types'"):
+            reader("unittest", track_specification, "/mappings")
+
+    def test_rejects_corpus_target_type(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "corpora": [
+                {
+                    "name": "test-corpus",
+                    "target-type": "docs",
+                    "documents": [
+                        {
+                            "source-file": "documents.json.bz2",
+                            "document-count": 10,
+                            "target-index": "test-index",
+                        }
+                    ],
+                }
+            ],
+            "operations": [],
+            "challenges": [],
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Track corpus 'test-corpus' specifies 'target-type'"):
+            reader("unittest", track_specification, "/mappings")
+
+    def test_rejects_document_target_type(self):
+        track_specification = {
+            "description": "description for unit test",
+            "indices": [{"name": "test-index"}],
+            "corpora": [
+                {
+                    "name": "test-corpus",
+                    "documents": [
+                        {
+                            "source-file": "documents.json.bz2",
+                            "document-count": 10,
+                            "target-index": "test-index",
+                            "target-type": "docs",
+                        }
+                    ],
+                }
+            ],
+            "operations": [],
+            "challenges": [],
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"documents.json.bz2.*specifies 'target-type'"):
+            reader("unittest", track_specification, "/mappings")
+
+    @pytest.mark.parametrize("operation_type", ["search", "scroll-search"])
+    def test_rejects_search_operation_document_type(self, operation_type):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [
+                {
+                    "name": "match-all",
+                    "operation-type": operation_type,
+                    "index": "test-index",
+                    "type": "docs",
+                    "body": {"query": {"match_all": {}}},
+                }
+            ],
+            "challenges": [],
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Operation 'match-all' specifies 'type'"):
+            reader("unittest", track_specification, "/mappings")
+
+    def test_rejects_inline_search_operation_document_type(self):
+        track_specification = {
+            "description": "description for unit test",
+            "operations": [],
+            "challenge": {
+                "name": "default-challenge",
+                "schedule": [
+                    {
+                        "operation": {
+                            "name": "match-all",
+                            "operation-type": "search",
+                            "index": "test-index",
+                            "type": "docs",
+                            "body": {"query": {"match_all": {}}},
+                        },
+                    },
+                ],
+            },
+        }
+        reader = loader.TrackSpecificationReader()
+        with pytest.raises(loader.TrackSyntaxError, match=r"Operation 'match-all' specifies 'type'"):
+            reader("unittest", track_specification, "/mappings")
+
+
+class TestTrackPluginReader:
+    def test_register_validator_forwards_to_registry(self):
+        registry = mock.Mock()
+        reader = loader.TrackPluginReader("/some/track/path", validator_registry=registry)
+
+        def my_validator(params):
+            pass
+
+        reader.register_validator("my-challenge", my_validator)
+
+        registry.assert_called_once_with("my-challenge", my_validator)
+
+    def test_register_validator_without_registry_is_a_noop(self):
+        reader = loader.TrackPluginReader("/some/track/path")
+        # no validator_registry was provided, so forwarding must be skipped without raising
+        reader.register_validator("my-challenge", lambda params: None)
+
+
+class TestValidatorRegistrationWiring:
+    @mock.patch("esrally.track.loader.TrackPluginReader")
+    @mock.patch("esrally.track.loader.track_repo")
+    def test_load_track_plugins_passes_validator_registry_to_reader(self, track_repo, plugin_reader_class):
+        # short-circuit before load() so we only assert how the reader is constructed
+        plugin_reader_class.return_value.can_load.return_value = False
+
+        def my_register_validator(challenge_name, fn):
+            pass
+
+        loader.load_track_plugins(config.Config(), "unittest-track", register_validator=my_register_validator)
+
+        # validator_registry is the 5th positional arg of TrackPluginReader.__init__
+        assert plugin_reader_class.call_args.args[4] is my_register_validator
+
+    @mock.patch("esrally.track.loader.load_track_plugins")
+    @mock.patch("esrally.track.loader.TrackProcessorRegistry")
+    @mock.patch("esrally.track.loader.TrackFileReader")
+    def test_load_single_track_registers_params_validators(self, file_reader, track_processor_registry, load_track_plugins):
+        # pylint: disable=protected-access
+        load_track_plugins.return_value = False
+        track_processor_registry.return_value.processors = []
+
+        loader._load_single_track(config.Config(), mock.Mock(), "unittest-track")
+
+        # the loader must wire the params validator registry so a track's register() can register validators
+        assert load_track_plugins.call_args.kwargs["register_validator"] is params.register_validator
+
 
 class MyMockTrackProcessor(loader.TrackProcessor):
     pass
@@ -4370,3 +4631,54 @@ class TestTrackProcessorRegistry:
         ]
         actual_processors = [proc.__class__ for proc in tpr.processors]
         assert len(expected_processors) == len(actual_processors)
+
+
+@dataclasses.dataclass
+class InstallDependenciesCase:
+    requirements: list[str]
+
+
+@cases(
+    empty=InstallDependenciesCase(requirements=[]),
+    simple=InstallDependenciesCase(requirements=["pyyaml"]),
+)
+def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest.MonkeyPatch, tmpdir) -> None:
+    # pylint: disable=protected-access
+    monkeypatch.chdir(str(tmpdir))
+    monkeypatch.setattr(paths, "logs", lambda: "./logs")
+    monkeypatch.setattr(paths, "libs", lambda: "./libs")
+    monkeypatch.setattr(console, "info", mock.create_autospec(console.info))
+    constraints_path = os.path.join(str(tmpdir), "rally-constraints.txt")
+    distribution = mock.Mock()
+    distribution.locate_file.return_value = constraints_path
+    distribution_mock = mock.create_autospec(loader.metadata.distribution, return_value=distribution)
+    monkeypatch.setattr(loader.metadata, "distribution", distribution_mock)
+    check_call_mock = mock.create_autospec(subprocess.check_call)
+    monkeypatch.setattr(subprocess, "check_call", check_call_mock)
+    os.makedirs(os.path.join(str(tmpdir), "logs"), exist_ok=True)
+    loader._install_dependencies(case.requirements)
+
+    if not case.requirements:
+        check_call_mock.assert_not_called()
+        distribution_mock.assert_not_called()
+        return
+
+    distribution_mock.assert_called_once_with("esrally")
+    distribution.locate_file.assert_called_once_with("esrally/resources/rally-constraints.txt")
+    check_call_mock.assert_called_once()
+    install_command = check_call_mock.call_args.args[0]
+    actual_constraints_path = install_command[install_command.index("--constraint") + 1]
+    assert actual_constraints_path == constraints_path
+    assert install_command == [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        *case.requirements,
+        "--upgrade",
+        "--constraint",
+        actual_constraints_path,
+        "--target",
+        "./libs",
+    ]
+    assert os.path.isfile("./logs/dependency.log")

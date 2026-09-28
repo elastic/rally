@@ -7,8 +7,10 @@ Rally Configuration
 Rally stores its configuration in the file ``~/.rally/rally.ini`` which is automatically created the first time Rally is executed. It comprises the following sections.
 
 .. note:: 
-    The configuration file can use `${CONFIG_DIR}` to refer to the directory where Rally stores its configuration files. This is useful for configuring Rally in a portable way.
-    This defaults to `~/.rally`, but can be overridden by setting the `RALLY_HOME` environment variable in your shell.
+  The configuration file can use `${RALLY_CONFIG_DIR}` to refer to the directory where Rally stores its configuration files. This is useful for configuring Rally in a portable way.
+  It resolves to `~/.rally` by default and follows the value selected by the `RALLY_HOME` environment variable in your shell.
+
+  In addition to `${RALLY_CONFIG_DIR}`, the configuration file can also use environment variables.
 
 
 actor
@@ -90,9 +92,10 @@ The following settings are applicable only if ``datastore.type`` is set to "elas
 * ``datastore.password``: Sets the password of the Elasticsearch BASIC authentication user for the metrics store. Alternatively, this password can be configured using the ``RALLY_REPORTING_DATASTORE_PASSWORD`` environment variable, which avoids storing credentials in a plain text file. The environment variable will take precedence over the config file if both define a password.
 * ``datastore.api_key``: Sets the Elasticsearch API key for the metrics store to be used instead of BASIC authentication. Alternatively, the API key can be configured using the ``RALLY_REPORTING_DATASTORE_API_KEY`` environment variable, which avoids storing credentials in a plain text file. The environment variable will take precedence over the config file if both are defined. Configuration of both (``datastore.user`` and ``datastore.password``) and ``datastore.api_key`` is not allowed. If both are configured, Rally will raise an error. Required for authentication with Elastic Cloud Serverless projects.
 * ``datastore.probe.cluster_version`` (default: true): Enables automatic detection of the metric store's version.
-* ``datastore.number_of_shards`` (default: `Elasticsearch default value <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#_static_index_settings>`_): The number of primary shards that the ``rally-*`` indices should have. Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices. An error is raised if set for Elastic Cloud Serverless projects.
-* ``datastore.number_of_replicas`` (default: `Elasticsearch default value <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#_static_index_settings>`_): The number of replicas each primary shard has. Defaults to . Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices. An error is raised if set for Elastic Cloud Serverless projects.
-* ``datastore.overwrite_existing_templates`` (default: ``false``): Existing Rally index templates are replaced only when this option is ``true``.
+* ``datastore.use_data_streams`` (default: ``true``): If ``true``, Rally writes to versioned data streams (``rally-metrics-v*``, ``rally-races-v*`` and ``rally-results-v*``; see :ref:`metrics_data_streams` for the current version) and if ``false`` to date based ``rally-metrics-YYYY-MM``, ``rally-races-YYYY-MM`` and ``rally-results-YYYY-MM`` indices. When ``true`` Rally creates a composable index template for each stream, composed of mappings, a default index lifecycle policy with rollover at ``50 GB`` of primary shard size and an empty `@custom` component which can be used to apply custom settings.
+* ``datastore.number_of_shards`` (default: `Elasticsearch default value <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#_static_index_settings>`_): The number of primary shards that the ``rally-*`` indices should have. Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices. An error is raised if set for Elastic Cloud Serverless projects. Ignored when ``datastore.use_data_streams`` is ``true``; use the ``@custom`` component template instead.
+* ``datastore.number_of_replicas`` (default: `Elasticsearch default value <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#_static_index_settings>`_): The number of replicas each primary shard has. Defaults to . Any updates to this setting after initial index creation will only be applied to new ``rally-*`` indices. An error is raised if set for Elastic Cloud Serverless projects. Ignored when ``datastore.use_data_streams`` is ``true``; use the ``@custom`` component template instead.
+* ``datastore.overwrite_existing_templates`` (default: ``false``): Existing Rally index templates are replaced only when this option is ``true``. When ``datastore.use_data_streams`` is ``true``, this option applies to component templates, the composable index template and the ILM policy.
 
 
 **Examples**

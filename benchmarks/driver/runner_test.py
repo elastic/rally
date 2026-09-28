@@ -44,7 +44,7 @@ class ElasticsearchMock:
                 }
             )
 
-    def bulk(self, body=None, index=None, doc_type=None, params=None):
+    def bulk(self, body=None, index=None, params=None):
         return self.no_errors
 
 

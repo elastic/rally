@@ -6,8 +6,12 @@ Metrics Records
 
 At the end of a race, Rally stores all metrics records in its metrics store. Metrics can be kept in memory or written to a dedicated Elasticsearch cluster (not the cluster where Rally ran its benchmarks). This can be configured in the `[reporting] section <https://esrally.readthedocs.io/en/stable/configuration.html#reporting>`_.
 
-Rally stores the metrics in the indices ``rally-metrics-*``. It will create a new index for each month. Here is a typical metrics record::
+By default, Rally stores metrics in a versioned data stream (``rally-metrics-v*``; see :ref:`metrics_data_streams` for the current version). When ``datastore.use_data_streams`` is set to false, Rally falls back to monthly indices named ``rally-metrics-YYYY-MM``.
 
+Metrics Records — Field Descriptions
+------------------------------------
+
+Sample metrics record::
 
     {
           "environment": "nightly",
@@ -78,10 +82,15 @@ A UUID that changes on every invocation of Rally. It is intended to group all sa
 
 The timestamp in milliseconds since epoch determined when the sample was taken. For request-related metrics, such as ``latency`` or ``service_time`` this is the timestamp when Rally has issued the request.
 
+response-timestamp
+~~~~~~~~~~~~~~~~~~
+
+The timestamp in milliseconds when that operation completed (``@timestamp + value``). Present only on ``service_time`` records.
+
 relative-time
 ~~~~~~~~~~~~~
 
-The relative time in milliseconds since the start of the benchmark. This is useful for comparing time-series graphs over multiple races, e.g. you might want to compare the indexing throughput over time across multiple races. As they should always start at the same (relative) point in time, absolute timestamps are not helpful.
+The relative time in milliseconds since the start of the current task. Rally resets this origin when each task starts. This is useful for comparing time-series graphs over multiple races, e.g. you might want to compare the indexing throughput over time across multiple races. As they should always start at the same (relative) point in time, absolute timestamps are not helpful.
 
 name, value, unit
 ~~~~~~~~~~~~~~~~~
@@ -122,6 +131,13 @@ Rally stores the following metrics:
 * ``service_time`` Time period between sending a request and receiving the corresponding response. This metric can easily be mixed up with ``latency`` but does not include waiting time. This is what most load testing tools refer to as "latency" (although it is incorrect).
 * ``processing_time`` Time period between start of request processing and receiving the complete response. Contrary to service time, this metric also includes Rally's client side processing overhead. Large differences between service time and processing time indicate a high overhead in the client and can thus point to a potential client-side bottleneck which requires investigation.
 * ``throughput``: Number of operations that Elasticsearch can perform within a certain time period, usually per second. See the :doc:`track reference </track>` for a definition of what is meant by one "operation" for each operation type.
+* ``time_window``: The timestamp windows of a reported task.
+
+  * ``start_timestamp``: the timestamp the first operation was sent.
+  * ``end_timestamp``: the timestamp of the last operation completion.
+  * ``warmup_start_timestamp`` / ``warmup_end_timestamp``: start and end of warmup operations.
+  * ``normal_start_timestamp`` / ``normal_end_timestamp``: start and end of normal operations.
+* ``duration``: Wall-clock length of a reported task in milliseconds (``end_timestamp - start_timestamp``). This includes warmup.
 * ``disk_io_write_bytes``: number of bytes that have been written to disk during the benchmark. On Linux this metric reports only the bytes that have been written by Elasticsearch, on Mac OS X it reports the number of bytes written by all processes.
 * ``disk_io_read_bytes``: number of bytes that have been read from disk during the benchmark. The same caveats apply on Mac OS X as for ``disk_io_write_bytes``.
 * ``node_startup_time``: The time in seconds it took from process start until the node is up.
@@ -154,3 +170,69 @@ Rally stores the following metrics:
 * ``store_size_in_bytes``: The size in bytes of the index (excluding the translog), as reported by the index stats API.
 * ``translog_size_in_bytes``: The size in bytes of the translog, as reported by the index stats API.
 * ``ml_processing_time``: A structure containing the minimum, mean, median and maximum bucket processing time in milliseconds per machine learning job. These metrics are only available if a machine learning job has been created in the respective benchmark.
+
+
+.. _metrics_data_streams:
+
+Data Stream Storage
+--------------------
+
+When ``datastore.use_data_streams`` is ``true`` (the default), Rally uses `Elasticsearch data streams <https://www.elastic.co/guide/en/elasticsearch/reference/current/data-streams.html>`_ for metrics, races, and results. Data streams simplify time-series data management by automatically handling index creation, rollover, and retention.
+
+Rally creates three versioned data streams. The current version is ``v2``:
+
+* ``rally-metrics-v2`` — benchmark metric samples (throughput, latency, etc.)
+* ``rally-races-v2`` — race metadata (track, challenge, car, timestamps)
+* ``rally-results-v2`` — aggregated race results for Kibana reporting
+
+**Index templates and component templates**
+
+Each data stream is backed by a composable index template (e.g. ``rally-metrics-v2``) that is composed of two `component templates <https://www.elastic.co/docs/manage-data/data-store/templates#component-templates>`_:
+
+1. **Main component** (e.g. ``rally-metrics-v2``): Contains field mappings, index settings, and an `Index Lifecycle Management (ILM) <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-lifecycle-management.html>`_ policy reference. The default ILM policy triggers a rollover when any primary shard exceeds 50 GB, which helps keep individual shards at a manageable size for search and storage efficiency.
+
+2. **Custom component** (e.g. ``rally-metrics-v2@custom``): An empty placeholder template that is applied *on top of* the main component. You can populate it with your own settings to override defaults — for example, changing the number of replicas or adding a custom ILM policy — without modifying Rally's managed templates. Rally never overwrites this template.
+
+**Customisation example**
+
+To add a custom retention policy, first create the policy::
+
+  PUT _ilm/policy/my-custom-ilm-policy
+  {
+    "policy": {
+      "phases": {
+        "hot": {
+          "actions": {
+            "set_priority": {
+              "priority": 600
+            },
+            "rollover": {
+              "max_age": "90d",
+              "max_primary_shard_size": "30gb"
+            }
+          }
+        },
+      }
+    }
+  }
+
+and then modify the ``@custom`` component template::
+
+  PUT _component_template/rally-races-v2@custom
+  {
+    "template": {
+      "settings": {
+        "index": {
+          "lifecycle": {
+            "name": "my-custom-ilm-policy"
+          }
+        }
+      }
+    }
+  }
+
+Because the ``@custom`` component is listed last in the ``composed_of`` order, its settings take precedence over the main component.
+
+.. note::
+
+   The ``datastore.number_of_shards`` and ``datastore.number_of_replicas`` settings in ``rally.ini`` are **not** applied to data streams. Use the ``@custom`` component template to configure shard and replica counts for data streams.

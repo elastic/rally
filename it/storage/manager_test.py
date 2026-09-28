@@ -67,9 +67,12 @@ class GetCase:
 )
 def test_get(case: GetCase, base_url: str, transfer_manager: storage.TransferManager):
     tr = transfer_manager.get(f"{base_url}/{case.path}")
-    tr.wait(timeout=300.0)
-    assert tr.done
-    assert os.path.isfile(tr.path)
-    assert os.path.getsize(tr.path) == case.want_size
-    assert tr.crc32c is not None
-    assert crc32c.Checksum.from_filename(tr.path) == crc32c.Checksum.from_base64(tr.crc32c)
+    try:
+        tr.wait(timeout=300.0)
+        assert tr.done
+        assert os.path.isfile(tr.path)
+        assert os.path.getsize(tr.path) == case.want_size
+        assert tr.crc32c is not None
+        assert crc32c.Checksum.from_filename(tr.path) == crc32c.Checksum.from_base64(tr.crc32c)
+    finally:
+        tr.prune()

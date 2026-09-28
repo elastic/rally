@@ -24,13 +24,14 @@ To benchmark a cluster, you also have to specify the hosts to connect to. An exa
 
     esrally race --track=geonames --pipeline=benchmark-only --target-hosts=search-node-a.intranet.acme.com:9200,search-node-b.intranet.acme.com:9200
 
+To benchmark multiple clusters simultaneously, add ``--multi-cluster``. See :ref:`multi-cluster mode <multi_cluster_mode>` in the race documentation.
 
 from-distribution
 ~~~~~~~~~~~~~~~~~
 
 This pipeline allows to benchmark an official Elasticsearch distribution which will be automatically downloaded by Rally. An example invocation::
 
-    esrally race --track=geonames --pipeline=from-distribution --distribution-version=7.0.0
+    esrally race --track=geonames --pipeline=from-distribution --distribution-version={ES_CLIENT_VER}
 
 The version numbers have to match the name in the download URL path.
 

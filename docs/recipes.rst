@@ -1,7 +1,7 @@
-Tips and Tricks
+Using Rally
 ===============
 
-This section covers various tips and tricks in a recipe-style fashion.
+This section covers various examples on how to use Rally in a recipe-style fashion.
 
 Benchmarking an Elastic Cloud cluster
 -------------------------------------
@@ -84,7 +84,7 @@ To run a benchmark for this scenario follow these steps:
 
 1. :doc:`Install </install>` and :doc:`configure </configuration>` Rally on all machines. Be sure that the same version is installed on all of them and fully :doc:`configured </configuration>`.
 2. Start the :doc:`Rally daemon </rally_daemon>` on each machine. The Rally daemon allows Rally to communicate with all remote machines. On the benchmark coordinator run ``esrallyd start --node-ip=10.5.5.5 --coordinator-ip=10.5.5.5`` and on the benchmark candidate machines run ``esrallyd start --node-ip=10.5.5.10 --coordinator-ip=10.5.5.5`` and ``esrallyd start --node-ip=10.5.5.11 --coordinator-ip=10.5.5.5`` respectively. The ``--node-ip`` parameter tells Rally the IP of the machine on which it is running. As some machines have more than one network interface, Rally will not attempt to auto-detect the machine IP. The ``--coordinator-ip`` parameter tells Rally the IP of the benchmark coordinator node.
-3. Start the benchmark by invoking Rally as usual on the benchmark coordinator, for example: ``esrally race --track=pmc --distribution-version=7.0.0 --target-hosts=10.5.5.10:39200,10.5.5.11:39200``. Rally will derive from the ``--target-hosts``  parameter that it should provision the nodes ``10.5.5.10`` and ``10.5.5.11``.
+3. Start the benchmark by invoking Rally as usual on the benchmark coordinator, for example: ``esrally race --track=pmc --distribution-version={ES_CLIENT_VER} --target-hosts=10.5.5.10:39200,10.5.5.11:39200``. Rally will derive from the ``--target-hosts``  parameter that it should provision the nodes ``10.5.5.10`` and ``10.5.5.11``.
 4. After the benchmark has finished you can stop the Rally daemon again. On the benchmark coordinator and on the benchmark candidates run ``esrallyd stop``.
 
 .. note::
@@ -174,7 +174,7 @@ Running the ``start.sh`` script requires Docker locally installed and performs t
 
 1. Starts a single node (512MB heap) Elasticsearch cluster locally, to serve as a :doc:`metrics store </configuration>`. It also starts Kibana attached to the Elasticsearch metric store cluster.
 2. Creates a new configuration file for Rally under ``~/.rally/rally-metricstore.ini`` referencing Elasticsearch from step 1.
-3. Starts two additional local Elasticsearch clusters with 1 node each, (version ``7.3.2`` by default) called ``leader`` and ``follower`` listening at ports 32901 and 32902 respectively. Each node uses 1GB heap.
+3. Starts two additional local Elasticsearch clusters with 1 node each, (version ``9.3.3`` by default) called ``leader`` and ``follower`` listening at ports 32901 and 32902 respectively. Each node uses 1GB heap.
 4. Accepts the trial license.
 5. Configures ``leader`` on the ``follower`` as a `remote cluster <https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-remote-clusters.html#configuring-remote-clusters>`_.
 6. Sets an `auto-follow pattern <https://www.elastic.co/guide/en/elasticsearch/reference/current/ccr-put-auto-follow-pattern.html#ccr-put-auto-follow-pattern>`_ on the follower for every index on the leader to be replicated as ``<leader-index-name>-copy``.
@@ -209,11 +209,11 @@ Consider a simple example Rally operation::
 
 This query requires the field ``source.geo.location`` to be mapped as a ``geo_point`` type. If incorrectly mapped, Elasticsearch will respond with an error. 
 
-Rally will not exit on errors (unless fatal e.g. `ECONNREFUSED <http://man7.org/linux/man-pages/man2/connect.2.html>`_) by default, instead reporting errors in the summary report via the :ref:`Error Rate <summary_report_error_rate>` statistic. This can potentially leading to misleading results. This behavior is by design and consistent with other load testing tools such as JMeter i.e. In most cases it is desirable that a large long running benchmark should not fail because of a single error response.
+Rally will abort on the first request error by default. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`. For a more lenient behavior, use ``--on-error=continue`` to only record errors in the summary report via the :ref:`Error Rate <summary_report_error_rate>` statistic instead of aborting.
 
-This behavior can also be changed, by invoking Rally with the :ref:`--on-error <command_line_reference_on_error>` switch e.g.::
+This behavior can be changed by invoking Rally with the :ref:`--on-error <command_line_reference_on_error>` switch e.g.::
 
-	esrally race --track=geonames --on-error=abort
+	esrally race --track=geonames --on-error=continue
 	
 Checking Queries and Responses
 ------------------------------
@@ -324,3 +324,32 @@ When a benchmark is executed with ``--enable-assertions`` and this query returns
 
     [ERROR] Cannot race. Error in load generator [0]
         Cannot run task [geo_distance]: Expected [hits] to be > [0] but was [0].
+
+.. _multi_cluster_mode:
+
+Multi-cluster mode
+------------------
+
+Multi-cluster mode lets you run the same benchmark against multiple Elasticsearch clusters simultaneously and compare results side-by-side.
+
+For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task. Results are stored in a single race with a ``cluster`` field on each result document, and the terminal summary shows a side-by-side table with one column per cluster.
+
+.. note::
+
+   Multi-cluster mode is currently only supported with the ``benchmark-only`` :doc:`pipeline </pipelines>`. The clusters must already be running — Rally will not provision them.
+
+Enable multi-cluster mode by adding ``--multi-cluster`` to the ``esrally race`` command. You must specify two or more named clusters in ``--target-hosts`` using JSON format with matching keys in ``--client-options``. See :ref:`target-hosts advanced topics <command_line_reference_advanced_topics>` for the full format reference.
+
+::
+
+   esrally race --track=geonames --pipeline=benchmark-only --multi-cluster \
+     --target-hosts='{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}' \
+     --client-options='{"cluster-a":{"timeout":60},"cluster-b":{"timeout":60}}'
+
+.. note::
+
+   Telemetry devices are disabled in multi-cluster mode. Use dedicated monitoring tooling to collect node-level metrics when benchmarking multiple clusters.
+
+.. note::
+
+   Custom runners work in multi-cluster mode without any changes. For each cluster Rally calls your runner once with a single ``default`` client scoped to that cluster — the same interface as single-cluster mode.

@@ -1,6 +1,112 @@
 Migration Guide
 ===============
 
+Migrating to Rally 2.14.0 (unreleased)
+--------------------------------------
+
+Document type fields are no longer supported
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Track fields ``types`` (on indices), ``target-type`` (on corpora and per-document sets), and the ``type`` parameter on ``search``/``scroll-search`` operations are no longer accepted by Rally. Mapping types were removed in Elasticsearch 7.0 and are rejected by Elasticsearch 8.0, which is Rally's minimum supported version. Tracks that still specify any of these fields will fail to load with a ``TrackSyntaxError``. Remove the fields from your track to fix the error.
+
+Migrate rally indices to data streams
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Rally 2.14.0 introduces data streams for metric storage by introducing the ``datastore.use_data_streams`` parameter in section ``reporting``, which is ``true`` by default.
+* Rally default behavior is to write metrics, races and results on data streams by first creating index templates, each composed of 2 component templates:
+  a. Main template, which contains the field mappings and an ILM policy reference. The default ILM policy triggers a rollover when any primary shard exceeds 50 GB.
+  b. ``@custom`` template, which is empty by default but can be populated with custom index settings. This template is applied on top of the main template and can be used to override defaults (e.g. changing the ILM policy or replica count). Rally never overwrites this template.
+* Data streams are versioned ``rally-metrics-v2``, ``rally-races-v2`` and ``rally-results-v2``.
+* Old date-based patterned indices (e.g. ``rally-metrics-YYYY-MM``) are not removed and will continue to work as before, by setting ``datastore.use_data_streams`` value to ``false``.
+
+Reindex of existing indices is recommended in order to benefit from the advantages of data streams.
+See the :ref:`data stream storage documentation <metrics_data_streams>` for more details about how to customize data streams.
+
+Reindexing old date-based indices into data streams
+""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+If you have existing ``rally-metrics-YYYY-MM``, ``rally-races-YYYY-MM``, or ``rally-results-YYYY-MM`` indices and want to consolidate them into the new data streams, follow the steps below. The examples use the ``rally-metrics-*`` indices but the same process applies to races and results.
+
+**Prerequisites**
+
+* Ensure Rally 2.14.0+ has run at least once with ``datastore.use_data_streams = true`` (the default) so that the data stream index templates and ILM policies exist.
+* Data streams require every document to have an ``@timestamp`` field. Recent Rally versions already write this field, but documents created by older versions may be missing it.
+
+**Step 1 — Add ``@timestamp`` to old documents (if missing)**
+
+If your old `race` and `results` indices contain documents without ``@timestamp`` indexed by older Rally versions, you can populate it from the existing ``race-timestamp`` field using an update-by-query. The ``race-timestamp`` field is stored as ``basic_date_time_no_millis`` (e.g. ``20160421T042749Z``), while ``@timestamp`` expects ``epoch_millis``, so the script must parse and convert::
+
+    POST rally-races-2*/_update_by_query
+    {
+      "query": {
+        "bool": {
+          "must_not": {
+            "exists": { "field": "@timestamp" }
+          }
+        }
+      },
+      "script": {
+        "source": "ctx._source['@timestamp'] = new SimpleDateFormat(\"yyyyMMdd'T'HHmmss'Z'\").parse(ctx._source['race-timestamp']).getTime()",
+        "lang": "painless"
+      }
+    }
+
+.. note::
+
+   For documents that already have ``@timestamp`` (written by recent Rally versions), this step is a no-op because the query filters them out.
+
+**Step 2 — Reindex into the data stream**
+
+Reindex the old indices into the target data stream. The ``op_type`` must be ``create`` because data streams only support create operations::
+
+    POST _reindex
+    {
+      "source": {
+        "index": "rally-metrics-2*"
+      },
+      "dest": {
+        "index": "rally-metrics-v2",
+        "op_type": "create"
+      }
+    }
+
+Repeat for races and results::
+
+    POST _reindex
+    {
+      "source": { "index": "rally-races-2*" },
+      "dest": { "index": "rally-races-v2", "op_type": "create" }
+    }
+
+    POST _reindex
+    {
+      "source": { "index": "rally-results-2*" },
+      "dest": { "index": "rally-results-v2", "op_type": "create" }
+    }
+
+**Step 3 — Verify and clean up**
+
+After reindexing, verify that the data stream contains at least as many documents as the old indices::
+
+    GET _cat/count/rally-metrics-v2
+    GET _cat/count/rally-metrics-2*
+
+Once you are satisfied the data has been migrated, you can delete the old date-based indices::
+
+    DELETE rally-metrics-2*
+    DELETE rally-races-2*
+    DELETE rally-results-2*
+
+.. warning::
+
+   Deleting old indices is irreversible. Ensure you have verified the reindex results and have backups before proceeding.
+
+Default value of ``--on-error`` changed to ``abort``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Starting with Rally 2.14.0 the default value of ``--on-error`` has changed from ``continue`` to ``abort``. This means Rally will now abort the benchmark on the first request error by default. The previous behavior can be restored by explicitly passing ``--on-error=continue``. Individual tasks can still ignore non-fatal errors using the :ref:`ignore-response-error-level <track_schedule>` task parameter.
+
+
 Migrating to Rally 2.13.0
 -------------------------
 
@@ -11,8 +117,6 @@ Rally 2.13.0 drops support for Python 3.9. Supported interpreters are 3.10.x thr
 
 Development uses uv instead of nox
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-
 
 Migrating to Rally 2.12.0
 -------------------------
@@ -26,7 +130,6 @@ The metrics store keeps existing index templates
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Existing Rally index templates are replaced only when option ``datastore.overwrite_existing_templates`` in section ``reporting`` is ``true``.
-
 
 Migrating to Rally 2.10.1
 -------------------------
@@ -386,10 +489,10 @@ With Rally 2.0.0, the implementation changes as follows::
 
     async def percolate(es, params):
         await es.percolate(
-                index="queries",
-                doc_type="content",
-                body=params["body"]
-              )
+           index="queries",
+           doc_type="content",
+           body=params["body"]
+        )
 
     def register(registry):
         registry.register_runner("percolate", percolate, async_runner=True)

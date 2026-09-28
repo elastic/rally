@@ -18,12 +18,21 @@
 import os
 import shutil
 import tempfile
+from collections.abc import Generator
 
 import pytest
 
 from esrally import config, version
 from esrally.utils import process
-from it import CONFIG_NAMES, ROOT_DIR, TestCluster
+from it import (
+    BENCHMARK_IT_HTTP_PORT,
+    IT_CONFIG_NAMES,
+    ROOT_DIR,
+    TestCluster,
+    ensure_benchmark_http_port_free,
+    find_rally_es_pids,
+    wait_until_port_is_free,
+)
 
 
 def check_prerequisites():
@@ -32,6 +41,23 @@ def check_prerequisites():
         raise AssertionError("Docker must be installed and the daemon must be up and running to run integration tests.")
     if process.run_subprocess_with_logging("docker compose version") != 0:
         raise AssertionError("Docker Compose is required to run integration tests.")
+    try:
+        wait_until_port_is_free(port_number=EsMetricsStore.HTTP_PORT, timeout=1)
+    except TimeoutError:
+        raise AssertionError(
+            f"Integration tests use Elasticsearch metrics store listening at 127.0.0.1:{EsMetricsStore.HTTP_PORT} which is not available."
+        )
+    try:
+        wait_until_port_is_free(port_number=BENCHMARK_IT_HTTP_PORT, timeout=1)
+    except TimeoutError:
+        raise AssertionError(
+            f"Integration tests benchmark Elasticsearch clusters listening at 127.0.0.1:{BENCHMARK_IT_HTTP_PORT} which is not available."
+        )
+    if es_pids := find_rally_es_pids():
+        raise AssertionError(
+            f"Rally started some Elasticsearch cluster(s) prior to integration tests, see PIDs {es_pids}. "
+            "Stop them before running the tests."
+        )
 
 
 def install_integration_test_config():
@@ -41,7 +67,7 @@ def install_integration_test_config():
         f.store_default_config(template_path=source_path)
 
     print("Installing integration test configs...")
-    for n in CONFIG_NAMES:
+    for n in IT_CONFIG_NAMES:
         copy_config(n)
 
 
@@ -68,27 +94,33 @@ def build_docker_image():
 
 
 def remove_integration_test_config():
-    for config_name in CONFIG_NAMES:
+    for config_name in IT_CONFIG_NAMES:
         os.remove(config.ConfigFile(config_name).location)
 
 
 class EsMetricsStore:
+    """Session-scoped Elasticsearch used as the integration-test metrics store."""
+
     VERSION = "8.5.1"
+    HTTP_PORT = 10200
 
-    def __init__(self):
-        self.cluster = TestCluster("in-memory-it")
+    def __init__(self) -> None:
+        self.cluster = TestCluster(IT_CONFIG_NAMES[0])
 
-    def start(self):
-        print("Starting Elasticsearch metrics store...")
+    def start(self) -> None:
+        """Installs metrics Elasticsearch cluster listening at ``HTTP_PORT``, and verifies if healthy."""
+        print(f"Starting Elasticsearch metrics store at port {self.HTTP_PORT}...")
         self.cluster.install(
             distribution_version=EsMetricsStore.VERSION,
             node_name="metrics-store",
             car="defaults,basic-license",
-            http_port=10200,
+            http_port=self.HTTP_PORT,
         )
         self.cluster.start(race_id="metrics-store")
+        print("Waiting for metrics store cluster health (yellow)...")
+        self.cluster.wait_for_cluster_health()
 
-    def stop(self):
+    def stop(self) -> None:
         print("Stopping Elasticsearch metrics store...")
         self.cluster.stop()
 
@@ -97,7 +129,27 @@ ES_METRICS_STORE = EsMetricsStore()
 
 
 @pytest.fixture(scope="session", autouse=True)
-def shared_setup():
+def isolate_git_global_config() -> Generator[None]:
+    """
+    Point ``GIT_CONFIG_GLOBAL`` at ``os.devnull`` so integration tests are not affected by the
+    developer's ``~/.gitconfig`` (e.g. per-URL ``proxy=""`` can let git ignore env proxies).
+
+    Session-scoped fixtures cannot use pytest's function-scoped ``monkeypatch`` fixture; use a
+    dedicated ``pytest.MonkeyPatch`` instance and ``pytest.MonkeyPatch.undo`` after the session.
+    """
+    mp = pytest.MonkeyPatch()
+    mp.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    yield
+    mp.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shared_setup(isolate_git_global_config: None) -> Generator[None]:
+    """
+    Session autouse hook: prerequisites, Rally IT config, metrics store, and docker image.
+
+    Depends on ``isolate_git_global_config`` so git runs with a neutral global config first.
+    """
     print("\nStarting shared setup...")
     check_prerequisites()
     install_integration_test_config()
@@ -119,6 +171,35 @@ class ConfigFile:
             self.config_file_name = "rally.ini"
         self.source_path = os.path.join(os.path.dirname(__file__), "resources", self.config_file_name)
         self.target_path = os.path.join(self.rally_home, self.config_file_name)
+
+
+@pytest.fixture
+def free_benchmark_http_port() -> Generator[int]:
+    """
+    Before and after the test:
+    1. Stop Rally-created Elasticsearch processes with the exception of metrics store cluster,
+    2. Stop Docker containers publishing at port 19200,
+    3. Wait until the 19200 port is free.
+    """
+    install_id = ES_METRICS_STORE.cluster.installation_id
+    assert install_id is not None, "Elasticsearch metrics store should have been installed earlier"
+    port = ensure_benchmark_http_port_free(install_id)
+    yield port
+    ensure_benchmark_http_port_free(install_id, port)
+
+
+@pytest.fixture(scope="module")
+def free_benchmark_http_port_module() -> Generator[int]:
+    """
+    Module-scoped variant of ``free_benchmark_http_port`` for module fixtures (e.g. ``test_cluster``).
+
+    See ``it.ensure_benchmark_http_port_free`` for rationale on the fixed port and teardown behavior.
+    """
+    install_id = ES_METRICS_STORE.cluster.installation_id
+    assert install_id is not None, "Elasticsearch metrics store should have been installed earlier"
+    port = ensure_benchmark_http_port_free(install_id)
+    yield port
+    ensure_benchmark_http_port_free(install_id, port)
 
 
 # ensures that a fresh log file is available

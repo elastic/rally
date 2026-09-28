@@ -22,7 +22,7 @@ VIRTUAL_ENV := $(or $(VIRTUAL_ENV),.venv$(if $(PY_VERSION),-$(PY_VERSION)))
 VENV_ACTIVATE_FILE := $(VIRTUAL_ENV)/bin/activate
 VENV_ACTIVATE := source $(VENV_ACTIVATE_FILE)
 
-PY_VERSION := $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
+PY_VERSION ?= $(shell jq -r '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
 export UV_PYTHON := $(PY_VERSION)
 export UV_PROJECT_ENVIRONMENT := $(VIRTUAL_ENV)
 
@@ -174,7 +174,8 @@ clean-docs: venv
 
 # It runs unit tests using the default python interpreter version.
 test: venv
-	uv run -- pytest -s $(or $(ARGS), tests/)
+	mkdir -p "$${RALLY_HOME:-$$HOME}/.rally/logs"
+	uv run -- pytest -s --log-file="$${RALLY_HOME:-$$HOME}/.rally/logs/pytest.log" $(or $(ARGS), tests/)
 
 # It runs unit tests using all supported python versions.
 test-all: test-3.10 test-3.11 test-3.12 test-3.13

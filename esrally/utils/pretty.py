@@ -42,7 +42,7 @@ def dump(o: Any, flags: Flag = Flag.NONE) -> str:
     return "\n".join(lines)
 
 
-_HAS_DIFF = re.compile(r"^\+ ", flags=re.MULTILINE)
+_HAS_DIFF = re.compile(r"^[+\-] ", flags=re.MULTILINE)
 
 
 def diff(old: Any, new: Any, flags: Flag = Flag.NONE) -> str:

@@ -334,6 +334,53 @@ class TestRallyRepository:
         assert checkout.call_count == 0
         assert rebase.call_count == 0
 
+    @pytest.mark.parametrize(
+        "revision, expected",
+        [
+            ("abcdef1234567890abcdef1234567890abcdef12", True),  # full SHA
+            ("abcdef1", True),  # short SHA (7 chars)
+            ("ffffff1", False),  # short SHA mismatch
+            ("abcdef", False),  # too short for prefix matching, falls back to exact
+        ],
+        ids=["full_sha", "short_sha", "mismatch", "too_short_prefix"],
+    )
+    @mock.patch("esrally.utils.git.head_revision")
+    @mock.patch("esrally.utils.git.is_branch")
+    @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
+    def test_correct_revision_sha(self, is_working_copy, is_branch, head_revision, revision, expected):
+        is_working_copy.return_value = True
+        is_branch.return_value = False
+        head_revision.return_value = "abcdef1234567890abcdef1234567890abcdef12"
+
+        r = repo.RallyRepository(
+            remote_url=None,
+            root_dir="/rally-resources",
+            repo_name="unit-test",
+            resource_name="unittest-resources",
+            offline=True,
+        )
+
+        assert r.correct_revision(revision) == expected
+
+    @mock.patch("esrally.utils.git.current_branch")
+    @mock.patch("esrally.utils.git.is_branch")
+    @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
+    def test_correct_revision_with_branch(self, is_working_copy, is_branch, current_branch):
+        is_working_copy.return_value = True
+        is_branch.return_value = True
+        current_branch.return_value = "main"
+
+        r = repo.RallyRepository(
+            remote_url=None,
+            root_dir="/rally-resources",
+            repo_name="unit-test",
+            resource_name="unittest-resources",
+            offline=True,
+        )
+
+        assert r.correct_revision("main")
+        assert not r.correct_revision("other-branch")
+
     @mock.patch("esrally.utils.git.is_working_copy", autospec=True)
     @mock.patch("esrally.utils.git.fetch", autospec=True)
     @mock.patch("esrally.utils.git.checkout", autospec=True)

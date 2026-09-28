@@ -53,6 +53,8 @@ spec:
       name: Rally - IT
       description: Macrobenchmarking framework for Elasticsearch
     spec:
+      # Stateful ITs are self-contained so intermediate cancelling is safe.
+      cancel_intermediate_builds: true
       env:
         ELASTIC_SLACK_NOTIFICATIONS_ENABLED: "true"
         SLACK_NOTIFICATIONS_CHANNEL: "#es-perf-build"
@@ -92,6 +94,9 @@ spec:
       name: Rally - IT Serverless
       description: Macrobenchmarking framework for Elasticsearch
     spec:
+      # Serverless ITs are not self-contained as they launch serverless projects.
+      # Pytest does not execute fixture cleanup on SIGTERM by default.
+      cancel_intermediate_builds: false
       env:
         ELASTIC_SLACK_NOTIFICATIONS_ENABLED: "true"
         SLACK_NOTIFICATIONS_CHANNEL: "#es-perf-build"

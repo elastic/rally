@@ -25,7 +25,6 @@ You can find an example in the ``http_logs`` track::
     {
       "name": "range",
         "index": "logs-*",
-        "type": "type",
         "body": {
           "query": {
             "range": {
@@ -160,7 +159,7 @@ First, define the name of your parameter source in the operation definition::
     {
       "name": "term",
       "operation-type": "search",
-      "param-source": "my-custom-term-param-source"
+      "param-source": "my-custom-term-param-source",
       "professions": ["mechanic", "physician", "nurse"]
     }
 
@@ -171,19 +170,13 @@ Rally recognizes the parameter source and looks for a file ``track.py`` next to 
 
     def random_profession(track, params, **kwargs):
         # choose a suitable index: if there is only one defined for this track
-        # choose that one, but let the user always override index and type.
+        # choose that one, but let the user always override the index.
         if len(track.indices) == 1:
             default_index = track.indices[0].name
-            if len(track.indices[0].types) == 1:
-                default_type = track.indices[0].types[0].name
-            else:
-                default_type = None
         else:
             default_index = "_all"
-            default_type = None
 
         index_name = params.get("index", default_index)
-        type_name = params.get("type", default_type)
 
         # you must provide all parameters that the runner expects
         return {
@@ -195,7 +188,6 @@ Rally recognizes the parameter source and looks for a file ``track.py`` next to 
                 }
             },
             "index": index_name,
-            "type": type_name,
             "cache": params.get("cache", False)
         }
 
@@ -208,20 +200,15 @@ The function ``random_profession`` is the actual parameter source. Rally will bi
 
 The parameter source function needs to declare the parameters ``track``, ``params`` and ``**kwargs``. ``track`` contains a structured representation of the current track and ``params`` contains all parameters that have been defined in the operation definition in ``track.json``. We use it in the example to read the professions to choose. The third parameter is there to ensure a more stable API as Rally evolves.
 
-We also derive an appropriate index and document type from the track's index definitions but allow the user to override this choice with the ``index`` or ``type`` parameters::
+We also derive an appropriate index from the track's index definitions but allow the user to override this choice with the ``index`` parameter::
 
     {
       "name": "term",
       "operation-type": "search",
-      "param-source": "my-custom-term-param-source"
+      "param-source": "my-custom-term-param-source",
       "professions": ["mechanic", "physician", "nurse"],
-      "index": "employee*",
-      "type": "docs"
+      "index": "employee*"
     }
-
-.. note::
-
-    Please remember about index and mapping types usage in ``index.json`` and ``track.json`` in Elasticsearch prior to 7.0.0 as specified in notes above.
 
 
 If you need more control, you need to implement a class. Below is the implementation of the same parameter source as a class::
@@ -232,20 +219,14 @@ If you need more control, you need to implement a class. Below is the implementa
     class TermParamSource:
         def __init__(self, track, params, **kwargs):
             # choose a suitable index: if there is only one defined for this track
-            # choose that one, but let the user always override index and type.
+            # choose that one, but let the user always override the index.
             if len(track.indices) == 1:
                 default_index = track.indices[0].name
-                if len(track.indices[0].types) == 1:
-                    default_type = track.indices[0].types[0].name
-                else:
-                    default_type = None
             else:
                 default_index = "_all"
-                default_type = None
 
             # we can eagerly resolve these parameters already in the constructor...
             self._index_name = params.get("index", default_index)
-            self._type_name = params.get("type", default_type)
             self._cache = params.get("cache", False)
             # ... but we need to resolve "profession" lazily on each invocation later
             self._params = params
@@ -267,7 +248,6 @@ If you need more control, you need to implement a class. Below is the implementa
                     }
                 },
                 "index": self._index_name,
-                "type": self._type_name,
                 "cache": self._cache
             }
 
@@ -296,6 +276,44 @@ Custom parameter sources can use the Python standard API but using any additiona
 
 You can also implement your parameter sources and runners in multiple Python files but the main entry point is always ``track.py``. The root package name of your plugin is the name of your track.
 
+.. _adding_tracks_custom_validators:
+
+Validating Track Parameters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Tracks that rely on parameters supplied via ``--track-params`` (or a parameters file) often need those parameters to satisfy certain constraints. Rather than failing deep inside a parameter source or runner with a confusing error, you can register a validator that Rally invokes for the selected challenge before the benchmark starts. This lets you reject invalid parameters up front with a clear, actionable message.
+
+A validator is any callable that accepts the resolved track parameters and raises ``esrally.exceptions.TrackConfigError`` if they are invalid::
+
+    from esrally.exceptions import TrackConfigError
+
+
+    def validate_autoscaling(params):
+        phases = params.get("autoscaling_phases", [])
+        scheduling = params.get("scheduling", [])
+        if len(scheduling) not in (1, len(phases)):
+            raise TrackConfigError(
+                f"'scheduling' must contain either a single element or one element per phase "
+                f"({len(phases)}) but had {len(scheduling)}."
+            )
+
+
+    def register(registry):
+        registry.register_validator("autoscaling", validate_autoscaling)
+
+Note the following:
+
+* The first argument to ``register_validator`` is the **challenge name**. Rally only invokes validators registered for the challenge that is selected for the benchmark.
+* The validator receives the track parameters as a dictionary (the values supplied via ``--track-params`` or a parameters file).
+* Raise ``TrackConfigError`` to abort the benchmark. Rally runs the validators after loading the track and selecting the challenge, but before provisioning nodes or starting the benchmark, so a misconfigured parameter is reported without waiting for the engine to start.
+* You may register more than one validator for the same challenge; Rally invokes them in registration order.
+
+To check track parameters without running a benchmark, use the ``validate-track`` subcommand::
+
+    esrally validate-track --track-path=/path/to/my-track --challenge=autoscaling --track-params='{"scheduling": [1]}' --build-flavor=serverless --no-quiet
+
+See the :ref:`command line reference <clr_validate_track>` for details, including serverless flags and scope limits.
+
 .. _adding_tracks_custom_runners:
 
 Creating Your Own Operations With Custom Runners
@@ -305,46 +323,42 @@ Creating Your Own Operations With Custom Runners
 
     Your runner is on a performance-critical code-path. Double-check with :ref:`Rally's profiling support <clr_enable_driver_profiling>` that you did not introduce any bottlenecks.
 
-Runners execute an operation against Elasticsearch. Rally supports many operations out of the box already, see the :doc:`track reference </track>` for a complete list. If you want to call any other Elasticsearch API, define a custom runner.
+Runners execute an operation against Elasticsearch. Rally supports many operations out of the box already, see the :doc:`track reference </track>` for a complete list. If you want to call any other Elasticsearch API or use any other feature of the Elasticsearch Python client, define a custom runner.
 
-Consider we want to use the percolate API with an older version of Elasticsearch which is not supported by Rally. To achieve this, we implement a custom runner in the following steps.
+Consider we want to use the reindex API, which is not currently supported by Rally. To achieve this, we implement a custom runner in the following steps.
 
-In ``track.json`` set the ``operation-type`` to "percolate" (you can choose this name freely)::
-
+In ``track.json`` set the ``operation-type`` to "reindex" (you can choose this name freely)::
 
     {
-      "name": "percolator_with_content_google",
-      "operation-type": "percolate",
-      "body": {
-        "doc": {
-          "body": "google"
-        },
-        "track_scores": true
-      }
+      "name": "reindex_example",
+      "operation-type": "reindex",
+      "source": "logs-*",
+      "dest": "reindexed-logs"
     }
 
 
 Then create a file ``track.py`` next to ``track.json`` and implement the following two functions::
 
-    async def percolate(es, params):
-        await es.percolate(
-                index="queries",
-                doc_type="content",
-                body=params["body"]
-              )
+    async def reindex(es, params):
+        response = await es.reindex(
+            source={"index": params["source"]},
+            dest={"index": params["dest"]},
+            request_timeout=params.get("request_timeout", 7200)
+        )
+        return response["total"], "docs"
 
     def register(registry):
-        registry.register_runner("percolate", percolate, async_runner=True)
+        registry.register_runner("reindex", reindex, async_runner=True)
 
-The function ``percolate`` is the actual runner and takes the following parameters:
+The function ``reindex`` is the actual runner and takes the following parameters:
 
-* ``es``, is an instance of the Elasticsearch Python client
+* ``es``, is an instance of the Elasticsearch Python client. See `Elasticsearch Python client querying documentation <https://www.elastic.co/docs/reference/elasticsearch/clients/python/querying/>`_ for more details on querying, including when you need to use an API or parameter that is not yet supported by the Elasticsearch Python client used by Rally.
 * ``params`` is a ``dict`` of parameters provided by its corresponding parameter source. Treat this parameter as read-only.
 
 This function can return:
 
 * Nothing at all. Then Rally will assume by default ``1`` and ``"ops"`` (see below).
-* A tuple of ``weight`` and a ``unit``, which is usually ``1`` and ``"ops"``. If you run a bulk operation you might return the bulk size here, for example in number of documents or in MB. Then you'd return for example ``(5000, "docs")`` Rally will use these values to store throughput metrics.
+* A tuple of ``weight`` and a ``unit``. If you run a bulk operation you might return the bulk size here, for example in number of documents or in MB. Then you'd return for example ``(5000, "docs")`` Rally will use these values to store throughput metrics.
 * A ``dict`` with arbitrary keys. If the ``dict`` contains the key ``weight`` it is assumed to be numeric and chosen as weight as defined above. The key ``unit`` is treated similarly. All other keys are added to the ``meta`` section of the corresponding service time and latency metrics records.
 
 Similar to a parameter source you also need to bind the name of your operation type to the function within ``register``.
@@ -365,19 +379,20 @@ To illustrate how to use custom return values, suppose we want to implement a cu
 
 If you need more control, you can also implement a runner class. The example above, implemented as a class looks as follows::
 
-    class PercolateRunner:
+    class PendingTasksRunner:
         async def __call__(self, es, params):
-            await es.percolate(
-                index="queries",
-                doc_type="content",
-                body=params["body"]
-            )
+            response = await es.cluster.pending_tasks()
+            return {
+                "weight": 1,
+                "unit": "ops",
+                "pending-tasks-count": len(response["tasks"])
+            }
 
         def __repr__(self, *args, **kwargs):
-            return "percolate"
+            return "pending-tasks"
 
     def register(registry):
-        registry.register_runner("percolate", PercolateRunner(), async_runner=True)
+        registry.register_runner("pending-tasks", PendingTasksRunner(), async_runner=True)
 
 
 The actual runner is implemented in the method ``__call__`` and the same return value conventions apply as for functions. For debugging purposes you should also implement ``__repr__`` and provide a human-readable name for your runner. Finally, you need to register your runner in the ``register`` function.

@@ -302,6 +302,7 @@ Supported telemetry parameters:
 
 * ``disk-usage-stats-indices`` (default all indices in the track): Comma separated string or a list of indices who's disk usage to fetch.
 * ``disk-usage-stats-timeout`` (default 600s): A time value specifying the timeout for the disk usage API call.
+* ``disk-usage-stats-flush`` (default true): Whether to pass ``flush=true`` to the disk usage API. When false, the response may not include uncommitted data.
 
 Example::
 

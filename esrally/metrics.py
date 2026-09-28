@@ -23,13 +23,17 @@ import math
 import os
 import pickle
 import random
+import socket
 import statistics
 import sys
+import threading
 import uuid
 import zlib
 from enum import Enum, IntEnum
 
 import tabulate
+import urllib3.connection
+from elastic_transport import Urllib3HttpNode
 
 from esrally import client, config, exceptions, paths, time, types, version
 from esrally.utils import console, convert, io, pretty, versions
@@ -40,8 +44,14 @@ class EsClient:
     Provides a stripped-down client interface that is easier to exchange for testing
     """
 
+    # Per-request timeout for the flush/close path. Bounds worst-case blocking in the actor
+    # event loop (see guarded()) well under Thespian's 5-minute message delivery timeout.
+    FLUSH_REQUEST_TIMEOUT = 60
+
     def __init__(self, client, cluster_version=None):
         self._client = client
+        # Reused across the flush/close path.
+        self._flush_client = client.options(request_timeout=self.FLUSH_REQUEST_TIMEOUT)
         self.logger = logging.getLogger(__name__)
         self._cluster_version = cluster_version
         self.retryable_status_codes = [502, 503, 504, 429]
@@ -53,11 +63,35 @@ class EsClient:
         tmpl = json.loads(template)
         return self.guarded(self._client.indices.put_index_template, name=name, **tmpl)
 
-    def template_exists(self, name):
+    def index_template_exists(self, name):
         return self.guarded(self._client.indices.exists_index_template, name=name)
+
+    def get_component_template(self, name):
+        return self.guarded(self._client.cluster.get_component_template, name=name)
+
+    def put_component_template(self, name, template):
+        tmpl = json.loads(template)
+        return self.guarded(self._client.cluster.put_component_template, name=name, **tmpl)
+
+    def component_template_exists(self, name):
+        return self.guarded(self._client.cluster.exists_component_template, name=name)
+
+    @property
+    def is_serverless(self):
+        return getattr(self._client, "is_serverless", False)
+
+    def get_lifecycle(self, name):
+        return self.guarded(self._client.ilm.get_lifecycle, name=name)
+
+    def put_lifecycle(self, name, policy):
+        ilm_policy = json.loads(policy)
+        return self.guarded(self._client.ilm.put_lifecycle, name=name, **ilm_policy)
 
     def delete_by_query(self, index, body):
         return self.guarded(self._client.delete_by_query, index=index, body=body)
+
+    def update_by_query(self, index, body):
+        return self.guarded(self._flush_client.update_by_query, index=index, body=body)
 
     def delete(self, index, id):
         # ignore 404 status code (NotFoundError) when index does not exist
@@ -74,30 +108,35 @@ class EsClient:
         return self.guarded(self._client.indices.exists, index=index)
 
     def refresh(self, index):
-        return self.guarded(self._client.indices.refresh, index=index)
+        return self.guarded(self._flush_client.indices.refresh, index=index)
 
-    def bulk_index(self, index, items):
+    def bulk_index(self, *, index, items, use_data_streams):
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
 
-        self.guarded(elasticsearch.helpers.bulk, self._client, items, index=index, chunk_size=5000)
+        if use_data_streams:
+            for item in items:
+                item["_op_type"] = "create"
+        self.guarded(elasticsearch.helpers.bulk, self._flush_client, items, index=index, chunk_size=5000)
 
-    def index(self, index, item, id=None):
+    def index(self, *, index, item, id=None, use_data_streams):
         doc = {"_source": item}
-        if id:
+        if not use_data_streams and id:
             doc["_id"] = id
-        self.bulk_index(index, [doc])
+        self.bulk_index(index=index, items=[doc], use_data_streams=use_data_streams)
 
     def search(self, index, body):
         return self.guarded(self._client.search, index=index, body=body)
 
-    def guarded(self, target, *args, **kwargs):
+    def guarded(self, target, *args, _max_retries=3, **kwargs):
         # pylint: disable=import-outside-toplevel
         import elasticsearch
         import elasticsearch.helpers
         from elastic_transport import ApiError, TransportError
 
-        max_execution_count = 10
+        # 3 retries × 60s request_timeout + sleep keeps worst-case blocking under
+        # Thespian's 5-minute actor event-loop delivery timeout.
+        max_execution_count = _max_retries
         execution_count = 0
 
         while execution_count <= max_execution_count:
@@ -165,8 +204,9 @@ class EsClient:
                 raise exceptions.SystemSetupError(msg)
             except elasticsearch.helpers.BulkIndexError as e:
                 for err in e.errors:
-                    err_type = err.get("index", {}).get("error", {}).get("type", None)
-                    if err.get("index", {}).get("status", None) not in self.retryable_status_codes:
+                    op = err.get("create") or err.get("index") or {}
+                    err_type = op.get("error", {}).get("type", None)
+                    if op.get("status", None) not in self.retryable_status_codes:
                         msg = f"Unretryable error encountered when sending metrics to remote metrics store: [{err_type}]"
                         self.logger.exception("%s - Full error(s) [%s]", msg, str(e.errors))
                         raise exceptions.RallyError(msg)
@@ -199,7 +239,7 @@ class EsClient:
                     node = self._client.transport.node_pool.get()
                     msg = (
                         "An error [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on host [%s] "
-                        "at port [%s]." % (e.error, target.__name__, node.host, node.port)
+                        "at port [%s]. args: [%s], kwargs: [%s]" % (e.error, target.__name__, node.host, node.port, args, kwargs)
                     )
                     self.logger.exception(msg)
                     # this does not necessarily mean it's a system setup problem...
@@ -213,7 +253,7 @@ class EsClient:
                     err = e
                 msg = (
                     "Transport error(s) [%s] occurred while running the operation [%s] against your Elasticsearch metrics store on "
-                    "host [%s] at port [%s]." % (err, target.__name__, node.host, node.port)
+                    "host [%s] at port [%s]. args: [%s], kwargs: [%s]" % (err, target.__name__, node.host, node.port, args, kwargs)
                 )
                 self.logger.exception(msg)
                 # this does not necessarily mean it's a system setup problem...
@@ -223,6 +263,37 @@ class EsClient:
 DATASTORE_API_KEY: str = os.environ.get("RALLY_REPORTING_DATASTORE_API_KEY", "")
 DATASTORE_USER: str = os.environ.get("RALLY_REPORTING_DATASTORE_USER", "")
 DATASTORE_PASSWORD: str = os.environ.get("RALLY_REPORTING_DATASTORE_PASSWORD", "")
+
+# TCP keepalive detects dead connections (e.g. NAT state dropped) without waiting for request_timeout.
+_KEEPALIVE_SOCKET_OPTIONS = [
+    (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+]
+if sys.platform == "linux" and hasattr(socket, "TCP_KEEPIDLE"):
+    # Probe after 60s idle, retry every 10s, give up after 6 missed probes (dead in ~120s).
+    _KEEPALIVE_SOCKET_OPTIONS += [
+        (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60),
+        (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10),
+        (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6),
+    ]
+elif sys.platform == "darwin" and hasattr(socket, "TCP_KEEPALIVE"):
+    # macOS uses TCP_KEEPALIVE (not TCP_KEEPIDLE) for per-socket idle time; interval/count are system-wide only.
+    _KEEPALIVE_SOCKET_OPTIONS += [
+        (socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60),
+    ]
+
+
+class KeepaliveUrllib3HttpNode(Urllib3HttpNode):
+    """Enables TCP keepalive on the metrics store connection pool."""
+
+    def __init__(self, config):
+        super().__init__(config)
+        # Seed from urllib3's default (includes TCP_NODELAY) so we don't lose it by supplying
+        # socket_options explicitly; then extend with keepalive options.
+        self.pool.conn_kw.setdefault(
+            "socket_options",
+            list(urllib3.connection.HTTPConnection.default_socket_options),
+        )
+        self.pool.conn_kw["socket_options"] = self.pool.conn_kw["socket_options"] + _KEEPALIVE_SOCKET_OPTIONS
 
 
 class EsClientFactory:
@@ -280,6 +351,9 @@ class EsClientFactory:
             )
             self._cluster_version = distribution_version
 
+        # Use keepalive nodes for the long-lived metrics connection only (not the probe above).
+        client_options["node_class"] = KeepaliveUrllib3HttpNode
+
         factory = client_factory(
             hosts=hosts,
             client_options=client_options,
@@ -293,6 +367,33 @@ class EsClientFactory:
         return c
 
 
+class EsStoreType(Enum):
+    metric_name: str
+    index_prefix: str
+    data_stream_template_name: str
+    date_based_template_name: str
+    index_template_resource: str
+    ilm_default_name: str
+    ilm_default_resource: str
+    data_stream_version: str
+
+    metrics = ("metrics", "v2")
+    results = ("results", "v2")
+    races = ("races", "v2")
+
+    def __new__(cls, metric_name, version):
+        obj = object.__new__(cls)
+        obj.metric_name = metric_name
+        obj.index_prefix = f"rally-{obj.metric_name}-"
+        obj.index_template_resource = f"{obj.metric_name}-template"
+        obj.ilm_default_name = f"{obj.index_prefix}default"
+        obj.ilm_default_resource = "ilm-default"
+        obj.data_stream_template_name = f"{obj.index_prefix}{version}"
+        obj.date_based_template_name = f"rally-{obj.metric_name}"
+        obj.data_stream_version = version
+        return obj
+
+
 class IndexTemplateProvider:
     """
     Abstracts how the Rally index template is retrieved. Intended for testing.
@@ -304,17 +405,11 @@ class IndexTemplateProvider:
         self._number_of_replicas = self._config.opts("reporting", "datastore.number_of_replicas", default_value=None, mandatory=False)
         self.script_dir = self._config.opts("node", "rally.root")
 
-    def metrics_template(self):
-        return self._read("metrics-template")
-
-    def races_template(self):
-        return self._read("races-template")
-
-    def results_template(self):
-        return self._read("results-template")
+    def get_template(self, es_store_type: EsStoreType):
+        return json.dumps(self._read(f"{es_store_type.index_template_resource}"))
 
     def annotations_template(self):
-        return self._read("annotation-template")
+        return json.dumps(self._read("annotation-template"))
 
     def _read(self, template_name):
         with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
@@ -328,7 +423,229 @@ class IndexTemplateProvider:
                 template["template"]["settings"]["index"]["number_of_shards"] = int(self._number_of_shards)
             if self._number_of_replicas is not None:
                 template["template"]["settings"]["index"]["number_of_replicas"] = int(self._number_of_replicas)
-            return json.dumps(template)
+            return template
+
+
+class ComponentTemplateProvider(IndexTemplateProvider):
+    """
+    Abstracts how the Rally component templates are retrieved. Intended for testing.
+    """
+
+    COMPONENT_TEMPLATE_CUSTOM_SUFFIX = "@custom"
+
+    def _read(self, template_name):
+        """Read template without applying number_of_shards/number_of_replicas.
+
+        Data streams should rely on ES administrator to provide shard/replica
+        settings via @custom component templates.
+        """
+        with open("%s/resources/%s.json" % (self.script_dir, template_name), encoding="utf-8") as f:
+            return json.load(f)
+
+    def _get_component_templates(self, name, template_name, lifecycle_policy_name, include_ilm=True):
+        template = self._read(template_name)["template"]
+        index_settings = {**template.get("settings", {}).get("index", {})}
+        if include_ilm:
+            index_settings["lifecycle"] = {"name": lifecycle_policy_name}
+
+        return {
+            name: json.dumps(
+                {
+                    "template": {
+                        "mappings": template["mappings"],
+                        "settings": {"index": index_settings},
+                    }
+                }
+            ),
+            f"{name}{self.COMPONENT_TEMPLATE_CUSTOM_SUFFIX}": json.dumps({"template": {}}),
+        }
+
+    def get_template(self, es_store_type: EsStoreType, include_ilm=True):
+        return json.dumps(
+            self._get_component_templates(
+                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}",
+                es_store_type.index_template_resource,
+                es_store_type.ilm_default_name,
+                include_ilm=include_ilm,
+            )
+        )
+
+    # This is needed for testing to verify that the expected component templates are created.
+    def component_names(self, es_store_type: EsStoreType):
+        return list(
+            self._get_component_templates(
+                f"{es_store_type.index_prefix}{es_store_type.data_stream_version}",
+                es_store_type.index_template_resource,
+                es_store_type.ilm_default_name,
+            ).keys()
+        )
+
+
+class IndexHandler:
+
+    TEMPLATE_PRIORITY = 500
+
+    def __init__(
+        self,
+        cfg: types.Config,
+        client: EsClient,
+        es_store_type=EsStoreType.metrics,
+    ):
+        """
+        Index Handler abstraction. Used as a component in Metric Stores.
+
+        :param cfg: The config object. Mandatory.
+        :param clock: This parameter is optional and needed for testing.
+        :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
+        """
+        self._config = cfg
+        self._es_store_type = es_store_type
+        self.logger = logging.getLogger(f"{self._es_store_type.metric_name}{__name__}")
+        self._client = client
+        self._index_template_provider = ComponentTemplateProvider(cfg) if self.use_data_streams else IndexTemplateProvider(cfg)
+
+    @property
+    def use_data_streams(self):
+        return convert.to_bool(self._config.opts("reporting", "datastore.use_data_streams", default_value=True, mandatory=False))
+
+    @property
+    def is_serverless(self):
+        return getattr(self._client, "is_serverless", False)
+
+    @property
+    def overwrite_templates(self):
+        return convert.to_bool(
+            self._config.opts(section="reporting", key="datastore.overwrite_existing_templates", default_value=False, mandatory=False)
+        )
+
+    def index_name(self, race_timestamp=None):
+        if self.use_data_streams:
+            return f"{self._es_store_type.index_prefix}{self._es_store_type.data_stream_version}"
+        else:
+            ts = time.from_iso8601(race_timestamp) if isinstance(race_timestamp, str) else race_timestamp
+            return f"{self._es_store_type.index_prefix}{ts.year:04d}-{ts.month:02d}"
+
+    def ensure_index_template(self, create=False):
+        if self.use_data_streams:
+            if not self.is_serverless:
+                self._ensure_lifecycle_policy(
+                    self._es_store_type.ilm_default_name, self._ilm_default_template(self._es_store_type.ilm_default_resource)
+                )
+            self._ensure_data_stream_template()
+        else:
+            self._ensure_date_based_template(create)
+
+    def annotations_template(self):
+        return self._index_template_provider.annotations_template()
+
+    def _ilm_default_template(self, policy_name):
+        with open("%s/resources/%s.json" % (self._index_template_provider.script_dir, policy_name), encoding="utf-8") as f:
+            return json.dumps(json.load(f))
+
+    def _data_stream_template(self, component_templates):
+        return json.dumps(
+            {
+                "index_patterns": [f"{self._es_store_type.index_prefix}{self._es_store_type.data_stream_version}"],
+                "data_stream": {},
+                "composed_of": component_templates,
+                "priority": self.TEMPLATE_PRIORITY,
+            }
+        )
+
+    def migrated_index_name(self, original_name):
+        return f"{original_name}.new"
+
+    def _should_apply_update(self, resource_label, old_resource, new_resource):
+        """Returns True if the resource should be written, False to skip."""
+        if old_resource is None:
+            self.logger.debug("Create %s:\n%s", resource_label, pretty.dump(new_resource, pretty.Flag.FLAT_DICT))
+            return True
+
+        diff = pretty.diff(old_resource, new_resource, pretty.Flag.FLAT_DICT)
+        if diff == "":
+            self.logger.debug("Keep existing %s (it is identical)", resource_label)
+            return False
+        if not self.overwrite_templates:
+            self.logger.debug("Keep existing %s (datastore.overwrite_existing_templates = false):\n%s", resource_label, diff)
+            return False
+
+        self.logger.warning("Overwrite existing %s (datastore.overwrite_existing_templates = true):\n%s", resource_label, diff)
+        return True
+
+    def _ensure_date_based_template(self, create):
+        assert isinstance(
+            self._index_template_provider, IndexTemplateProvider
+        ), "Expected IndexTemplateProvider for date-based indices but got [%s]" % type(self._index_template_provider)
+
+        if not create:
+            return
+
+        _index_template = self._index_template_provider.get_template(self._es_store_type)
+        if self._client.index_template_exists(self._es_store_type.date_based_template_name):
+            old_template = None
+            for existing in self._client.get_template(self._es_store_type.date_based_template_name).body.get("index_templates", []):
+                old_template = existing.get("index_template", {}).get("template", {})
+                break
+            new_template = json.loads(_index_template)["template"]
+
+            if not self._should_apply_update(
+                f"index template [{self._es_store_type.date_based_template_name}]", old_template, new_template
+            ):
+                return
+
+        self._client.put_template(self._es_store_type.date_based_template_name, _index_template)
+
+    def _ensure_data_stream_template(self):
+        assert isinstance(
+            self._index_template_provider, ComponentTemplateProvider
+        ), "Expected ComponentTemplateProvider for data streams but got [%s]" % type(self._index_template_provider)
+
+        _index_template = json.loads(self._index_template_provider.get_template(self._es_store_type, include_ilm=not self.is_serverless))
+
+        # The index template is composed of multiple component templates.
+        # We need to ensure that all component templates exist and are up to date
+        # before we can put them together in the index template.
+        for name, template in _index_template.items():
+            self._ensure_component_template(name, template)
+
+        component_names = list(_index_template.keys())
+
+        new_template = json.loads(self._data_stream_template(component_names))
+        old_template = None
+        if self._client.index_template_exists(self._es_store_type.data_stream_template_name):
+            for existing in self._client.get_template(self._es_store_type.data_stream_template_name).body.get("index_templates", []):
+                old_template = existing.get("index_template", {})
+                break
+
+        if not self._should_apply_update(f"index template [{self._es_store_type.data_stream_template_name}]", old_template, new_template):
+            return
+
+        self._client.put_template(self._es_store_type.data_stream_template_name, self._data_stream_template(component_names))
+
+    def _ensure_lifecycle_policy(self, name, policy):
+        new_policy_body = json.loads(policy).get("policy", {})
+        try:
+            old_policy = self._client.get_lifecycle(name).body.get(name, {}).get("policy", {})
+        # "Lifecycle exists" is not supported by the Elasticsearch API and get_lifecycle throws an exception.
+        except Exception:
+            old_policy = None
+
+        if self._should_apply_update(f"lifecycle policy [{name}]", old_policy, new_policy_body):
+            self._client.put_lifecycle(name, policy)
+
+    def _ensure_component_template(self, name, template):
+        new_template_body = json.loads(template).get("template", {})
+
+        old_template_body = None
+        if self._client.component_template_exists(name):
+            if ComponentTemplateProvider.COMPONENT_TEMPLATE_CUSTOM_SUFFIX in name:
+                return
+            for existing in self._client.get_component_template(name).body.get("component_templates", []):
+                old_template_body = existing.get("component_template", {}).get("template", {})
+                break
+
+        if self._should_apply_update(f"component template [{name}]", old_template_body, new_template_body):
+            self._client.put_component_template(name, template)
 
 
 class MetaInfoScope(Enum):
@@ -349,6 +666,11 @@ class MetaInfoScope(Enum):
 
 def calculate_results(store, race):
     calc = GlobalStatsCalculator(store, race.track, race.challenge)
+    if race.multi_cluster:
+        cluster_names = store.task_cluster_names()
+        if cluster_names:
+            # Multi-cluster: return one GlobalStats per cluster, each stamped with its name.
+            return [calc(cluster_name=cn) for cn in sorted(cluster_names)]
     return calc()
 
 
@@ -389,7 +711,21 @@ class SampleType(IntEnum):
     Normal = 1
 
 
-class MetricsStore:
+SECRET_TRACK_PARAM_PLACEHOLDER = "<hidden>"
+
+
+def track_params_for_reporting(track_params):
+    """
+    Track parameters whose names start with ``secret_`` are included in metrics documents,
+    race records, and other persisted reporting, but their values are replaced with
+    ``SECRET_TRACK_PARAM_PLACEHOLDER`` (``"<hidden>"``). Actual values remain only in configuration for track loading.
+    """
+    if not track_params:
+        return {}
+    return {k: (SECRET_TRACK_PARAM_PLACEHOLDER if str(k).startswith("secret_") else v) for k, v in track_params.items()}
+
+
+class MetricsStore:  # pylint: disable=too-many-public-methods
     """
     Abstract metrics store
     """
@@ -406,7 +742,7 @@ class MetricsStore:
         self._race_id = None
         self._race_timestamp = None
         self._track = None
-        self._track_params = cfg.opts("track", "params", default_value={}, mandatory=False)
+        self._track_params = track_params_for_reporting(cfg.opts("track", "params", default_value={}, mandatory=False))
         self._challenge = None
         self._car = None
         self._car_name = None
@@ -424,6 +760,7 @@ class MetricsStore:
         self._clock = clock
         self._stop_watch = self._clock.stop_watch()
         self.logger = logging.getLogger(__name__)
+        self._docs_lock = threading.Lock()
 
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         """
@@ -478,7 +815,7 @@ class MetricsStore:
         """
         self._stop_watch.start()
 
-    def flush(self, refresh=True):
+    def flush(self, refresh=True, closing=False):
         """
         Explicitly flushes buffered metrics to the metric store. It is not required to flush before closing the metrics store.
         """
@@ -491,7 +828,7 @@ class MetricsStore:
         """
         self.logger.info("Closing metrics store.")
         self.opened = False
-        self.flush()
+        self.flush(closing=True)
         self._clear_meta_info()
 
     def add_meta_info(self, scope, scope_key, key, value):
@@ -651,8 +988,9 @@ class MetricsStore:
         if relative_time is None:
             relative_time = self._stop_watch.split_time()
 
+        timestamp = time.to_epoch_millis(absolute_time)
         doc = {
-            "@timestamp": time.to_epoch_millis(absolute_time),
+            "@timestamp": timestamp,
             "relative-time": convert.seconds_to_ms(relative_time),
             "race-id": self._race_id,
             "race-timestamp": self._race_timestamp,
@@ -666,6 +1004,8 @@ class MetricsStore:
             "sample-type": sample_type.name.lower(),
             "meta": meta,
         }
+        if name == "service_time":
+            doc["response-timestamp"] = int(timestamp + value)
         if task:
             doc["task"] = task
         if operation:
@@ -750,7 +1090,15 @@ class MetricsStore:
         raise NotImplementedError("abstract method")
 
     def get_one(
-        self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+        self,
+        name,
+        sample_type=None,
+        node_name=None,
+        task=None,
+        cluster_name=None,
+        mapper=lambda doc: doc["value"],
+        sort_key=None,
+        sort_reverse=False,
     ):
         """
         Gets one value for the given metric name (even if there should be more than one).
@@ -759,6 +1107,7 @@ class MetricsStore:
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
         :param task The task name to query. Optional.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :param sort_key The key to sort the docs before returning the first value. Optional.
         :param sort_reverse  The flag to reverse the sort. Optional.
         :return: The corresponding value for the given metric name or None if there is no value.
@@ -769,7 +1118,7 @@ class MetricsStore:
     def _first_or_none(values):
         return values[0] if values else None
 
-    def get(self, name, task=None, operation_type=None, sample_type=None, node_name=None):
+    def get(self, name, task=None, operation_type=None, sample_type=None, node_name=None, cluster_name=None):
         """
         Gets all raw values for the given metric name.
 
@@ -778,11 +1127,21 @@ class MetricsStore:
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: A list of all values for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, node_name, lambda doc: doc["value"])
+        return self._get(name, task, operation_type, sample_type, node_name, cluster_name, lambda doc: doc["value"])
 
-    def get_raw(self, name, task=None, operation_type=None, sample_type=None, node_name=None, mapper=lambda doc: doc):
+    def get_raw(
+        self,
+        name,
+        task=None,
+        operation_type=None,
+        sample_type=None,
+        node_name=None,
+        cluster_name=None,
+        mapper=lambda doc: doc,
+    ):
         """
         Gets all raw records for the given metric name.
 
@@ -791,12 +1150,13 @@ class MetricsStore:
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
         :param node_name The name of the node where this metric was gathered. Optional.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :param mapper A record mapper. By default, the complete record is returned.
         :return: A list of all raw records for the given metric.
         """
-        return self._get(name, task, operation_type, sample_type, node_name, mapper)
+        return self._get(name, task, operation_type, sample_type, node_name, cluster_name, mapper)
 
-    def get_unit(self, name, task=None, operation_type=None, node_name=None):
+    def get_unit(self, name, task=None, operation_type=None, node_name=None, cluster_name=None):
         """
         Gets the unit for the given metric name.
 
@@ -804,15 +1164,16 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param node_name The name of the node where this metric was gathered. Optional.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: The corresponding unit for the given metric name or None if no metric record is available.
         """
         # does not make too much sense to ask for a sample type here
-        return self._first_or_none(self._get(name, task, operation_type, None, node_name, lambda doc: doc["unit"]))
+        return self._first_or_none(self._get(name, task, operation_type, None, node_name, cluster_name, lambda doc: doc["unit"]))
 
-    def _get(self, name, task, operation_type, sample_type, node_name, mapper):
+    def _get(self, name, task, operation_type, sample_type, node_name, cluster_name, mapper):
         raise NotImplementedError("abstract method")
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None, cluster_name=None):
         """
         Gets the error rate for a specific task.
 
@@ -823,7 +1184,14 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=None):
+    def task_cluster_names(self):
+        """
+        :return: The set of distinct cluster names stamped on per-task request samples for the current race.
+                 Empty if the race ran against a single cluster (no cluster name is stamped).
+        """
+        raise NotImplementedError("abstract method")
+
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None, cluster_name=None):
         """
         Gets standard statistics for the given metric.
 
@@ -831,11 +1199,24 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: A metric_stats structure.
         """
         raise NotImplementedError("abstract method")
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
+    def get_op_window(self, task, name="service_time", sample_type=SampleType.Normal, cluster_name=None):
+        """
+        Earliest operation start and latest operation completion for a task.
+
+        :param task: The task name to query.
+        :param name: The metric name to query. Defaults to service_time.
+        :param sample_type: Warmup or Normal. Defaults to SampleType.Normal.
+        :param cluster_name: The name of the cluster (multi-cluster mode). Optional.
+        :return: ``(min @timestamp, max response-timestamp)`` in epoch milliseconds, or None if there are no matching samples.
+        """
+        raise NotImplementedError("abstract method")
+
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None, cluster_name=None):
         """
         Retrieves percentile metrics for the given metric.
 
@@ -851,7 +1232,7 @@ class MetricsStore:
         """
         raise NotImplementedError("abstract method")
 
-    def get_median(self, name, task=None, operation_type=None, sample_type=None):
+    def get_median(self, name, task=None, operation_type=None, sample_type=None, cluster_name=None):
         """
         Retrieves median value of the given metric.
 
@@ -859,13 +1240,14 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: The median value.
         """
         median = "50.0"
-        percentiles = self.get_percentiles(name, task, operation_type, sample_type, percentiles=[median])
+        percentiles = self.get_percentiles(name, task, operation_type, sample_type, percentiles=[median], cluster_name=cluster_name)
         return percentiles[median] if percentiles else None
 
-    def get_mean(self, name, task=None, operation_type=None, sample_type=None):
+    def get_mean(self, name, task=None, operation_type=None, sample_type=None, cluster_name=None):
         """
         Retrieves mean of the given metric.
 
@@ -873,22 +1255,22 @@ class MetricsStore:
         :param task The task name to query. Optional.
         :param operation_type The operation type to query. Optional.
         :param sample_type The sample type to query. Optional. By default, all samples are considered.
+        :param cluster_name The name of the cluster (multi-cluster mode). Optional.
         :return: The mean.
         """
-        stats = self.get_stats(name, task, operation_type, sample_type)
+        stats = self.get_stats(name, task, operation_type, sample_type, cluster_name=cluster_name)
         return stats["avg"] if stats else None
 
 
 class EsMetricsStore(MetricsStore):
     """
-    A metrics store backed by Elasticsearch.
+    A metrics store for telemetry backed by Elasticsearch.
     """
 
     def __init__(
         self,
         cfg: types.Config,
         client_factory_class=EsClientFactory,
-        index_template_provider_class=IndexTemplateProvider,
         clock=time.Clock,
         meta_info=None,
     ):
@@ -897,105 +1279,115 @@ class EsMetricsStore(MetricsStore):
 
         :param cfg: The config object. Mandatory.
         :param client_factory_class: This parameter is optional and needed for testing.
-        :param index_template_provider_class: This parameter is optional and needed for testing.
         :param clock: This parameter is optional and needed for testing.
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
         """
         MetricsStore.__init__(self, cfg=cfg, clock=clock, meta_info=meta_info)
-        self._index = None
         self._client = client_factory_class(cfg).create()
-        self._index_template_provider = index_template_provider_class(cfg)
+        self._index_handler = IndexHandler(self._config, self._client, EsStoreType.metrics)
         self._docs = None
+        self._flush_consecutive_failures = 0
 
     def open(self, race_id=None, race_timestamp=None, track_name=None, challenge_name=None, car_name=None, ctx=None, create=False):
         self._docs = []
         MetricsStore.open(self, race_id, race_timestamp, track_name, challenge_name, car_name, ctx, create)
-        self._index = self.index_name()
-        # reduce a bit of noise in the metrics cluster log
-        if create:
-            self._ensure_index_template()
-            if not self._client.exists(index=self._index):
-                self._client.create_index(index=self._index)
+        self._index_handler.ensure_index_template(create=create)
+
+        # Skip refresh when creating with data streams - the data stream won't exist until first write
+        if not self._index_handler.use_data_streams:
+            index_name = self._index_handler.index_name(self._race_timestamp)
+            if create:
+                if not self._client.exists(index=index_name):
+                    # Create the concrete index when writing to a date-based store, even if the template already existed.
+                    self._client.create_index(index=index_name)
+                else:
+                    self.logger.info("[%s] already exists.", index_name)
             else:
-                self.logger.info("[%s] already exists.", self._index)
-        else:
-            # we still need to check for the correct index name - prefer the one with the suffix
-            new_name = self._migrated_index_name(self._index)
-            if self._client.exists(index=new_name):
-                self._index = new_name
+                # we still need to check for the correct index name - prefer the one with the suffix
+                new_name = self._index_handler.migrated_index_name(index_name)
+                if self._client.exists(index=new_name):
+                    index_name = new_name
 
-        # ensure we can search immediately after opening
-        self._client.refresh(index=self._index)
+            # ensure we can search immediately after opening
+            self._client.refresh(index=index_name)
 
-    def _ensure_index_template(self):
-        new_template: str = self._get_template()
+    _MAX_FLUSH_FAILURES = 10
 
-        old_template: dict | None = None
-        if self._client.template_exists("rally-metrics"):
-            for t in self._client.get_template("rally-metrics").body.get("index_templates", []):
-                old_template = t.get("index_template", {}).get("template", {})
-                break
+    def flush(self, refresh=True, closing=False):
+        with self._docs_lock:
+            docs_to_flush = self._docs
+            self._docs = []
 
-        if old_template is None:
-            self.logger.info(
-                "Create index template:\n%s",
-                pretty.dump(json.loads(new_template).get("template", {}), pretty.Flag.FLAT_DICT),
-            )
-        else:
-            diff = pretty.diff(old_template, json.loads(new_template).get("template", {}), pretty.Flag.FLAT_DICT)
-            if diff == "":
-                self.logger.debug("Keep existing template (it is identical)")
+        indexed = False
+        if not docs_to_flush:
+            # A quiet cycle breaks the consecutive-failure chain.
+            self._flush_consecutive_failures = 0
+        if docs_to_flush:
+            try:
+                sw = time.StopWatch()
+                sw.start()
+                self._client.bulk_index(
+                    index=self._index_handler.index_name(self._race_timestamp),
+                    items=docs_to_flush,
+                    use_data_streams=self._index_handler.use_data_streams,
+                )
+                sw.stop()
+                indexed = True
+                self._flush_consecutive_failures = 0
+                self.logger.info(
+                    "Successfully added %d metrics documents for race timestamp=[%s],"
+                    " track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
+                    len(docs_to_flush),
+                    self._race_timestamp,
+                    self._track,
+                    self._challenge,
+                    self._car,
+                    sw.total_time(),
+                )
+            except exceptions.SystemSetupError:
+                raise
+            except exceptions.RallyError as e:
+                if closing:
+                    # The closing flush is the last chance to persist, so surface the failure.
+                    raise exceptions.RallyError(f"Failed to flush {len(docs_to_flush)} final metrics docs on close.", cause=e) from e
+                self._flush_consecutive_failures += 1
+                if self._flush_consecutive_failures >= self._MAX_FLUSH_FAILURES:
+                    raise exceptions.RallyError(
+                        f"Metrics store unreachable after {self._MAX_FLUSH_FAILURES} consecutive flush failures, failing benchmark.",
+                        cause=e,
+                    ) from e
+                with self._docs_lock:
+                    self._docs = docs_to_flush + self._docs
+                self.logger.warning(
+                    "Failed to flush %d metrics docs (attempt %d/%d), re-queuing for next cycle: %s",
+                    len(docs_to_flush),
+                    self._flush_consecutive_failures,
+                    self._MAX_FLUSH_FAILURES,
+                    e,
+                )
                 return
-            if not convert.to_bool(
-                self._config.opts(section="reporting", key="datastore.overwrite_existing_templates", default_value=False, mandatory=False)
-            ):
-                self.logger.debug("Keep existing template (datastore.overwrite_existing_templates = false):\n%s", diff)
-                return
-            self.logger.warning("Overwrite existing index template (datastore.overwrite_existing_templates = true):\n%s", diff)
 
-        self._client.put_template("rally-metrics", new_template)
-
-    def index_name(self):
-        ts = time.from_iso8601(self._race_timestamp)
-        return "rally-metrics-%04d-%02d" % (ts.year, ts.month)
-
-    def _migrated_index_name(self, original_name):
-        return f"{original_name}.new"
-
-    def _get_template(self):
-        return self._index_template_provider.metrics_template()
-
-    def flush(self, refresh=True):
-        if self._docs:
-            sw = time.StopWatch()
-            sw.start()
-            self._client.bulk_index(index=self._index, items=self._docs)
-            sw.stop()
-            self.logger.info(
-                "Successfully added %d metrics documents for race timestamp=[%s], track=[%s], challenge=[%s], car=[%s] in [%f] seconds.",
-                len(self._docs),
-                self._race_timestamp,
-                self._track,
-                self._challenge,
-                self._car,
-                sw.total_time(),
-            )
-        self._docs = []
-        # ensure we can search immediately after flushing
-        if refresh:
-            self._client.refresh(index=self._index)
+        # Refresh only when docs were written — skipping when idle avoids a blocking call.
+        if refresh and indexed:
+            try:
+                self._client.refresh(
+                    index=self._index_handler.index_name(self._race_timestamp),
+                )
+            except exceptions.RallyError as e:
+                self.logger.warning("Metrics store refresh failed (docs were indexed successfully): %s", e)
 
     def _add(self, doc):
-        self._docs.append(doc)
+        with self._docs_lock:
+            self._docs.append(doc)
 
-    def _get(self, name, task, operation_type, sample_type, node_name, mapper):
+    def _get(self, name, task, operation_type, sample_type, node_name, cluster_name, mapper):
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, node_name),
+            "query": self._query_by_name(name, task, operation_type, sample_type, node_name, cluster_name),
             "track_total_hits": True,
             "size": 10000,
         }
-        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index_handler.index_name(self._race_timestamp), query)
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         es_count = result["hits"]["total"]["value"]
         self.logger.debug("Metrics query found [%s] results.", es_count)
         if es_count != len(result["hits"]["hits"]):
@@ -1003,17 +1395,25 @@ class EsMetricsStore(MetricsStore):
         return [mapper(v["_source"]) for v in result["hits"]["hits"]]
 
     def get_one(
-        self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+        self,
+        name,
+        sample_type=None,
+        node_name=None,
+        task=None,
+        cluster_name=None,
+        mapper=lambda doc: doc["value"],
+        sort_key=None,
+        sort_reverse=False,
     ):
         order = "desc" if sort_reverse else "asc"
         query = {
-            "query": self._query_by_name(name, task, None, sample_type, node_name),
+            "query": self._query_by_name(name, task, None, sample_type, node_name, cluster_name),
             "size": 1,
         }
         if sort_key:
             query["sort"] = [{sort_key: {"order": order}}]
-        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug("Issuing get against index=[%s], query=[%s].", self._index_handler.index_name(self._race_timestamp), query)
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
         if isinstance(hits, dict):
@@ -1024,9 +1424,9 @@ class EsMetricsStore(MetricsStore):
         else:
             return None
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None, cluster_name=None):
         query = {
-            "query": self._query_by_name("service_time", task, operation_type, sample_type, None),
+            "query": self._query_by_name("service_time", task, operation_type, sample_type, None, cluster_name),
             "size": 0,
             "aggs": {
                 "error_rate": {
@@ -1036,8 +1436,10 @@ class EsMetricsStore(MetricsStore):
                 },
             },
         }
-        self.logger.debug("Issuing get_error_rate against index=[%s], query=[%s]", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug(
+            "Issuing get_error_rate against index=[%s], query=[%s]", self._index_handler.index_name(self._race_timestamp), query
+        )
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         buckets = result["aggregations"]["error_rate"]["buckets"]
         self.logger.debug("Query returned [%d] buckets.", len(buckets))
         count_success = 0
@@ -1060,7 +1462,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return count_errors / (count_errors + count_success)
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=None):
+    def get_stats(self, name, task=None, operation_type=None, sample_type=None, cluster_name=None):
         """
         Gets standard statistics for the given metric name.
 
@@ -1068,7 +1470,7 @@ class EsMetricsStore(MetricsStore):
         https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-metrics-stats-aggregation.html
         """
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, None),
+            "query": self._query_by_name(name, task, operation_type, sample_type, None, cluster_name),
             "size": 0,
             "aggs": {
                 "metric_stats": {
@@ -1078,15 +1480,61 @@ class EsMetricsStore(MetricsStore):
                 },
             },
         }
-        self.logger.debug("Issuing get_stats against index=[%s], query=[%s]", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug("Issuing get_stats against index=[%s], query=[%s]", self._index_handler.index_name(self._race_timestamp), query)
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         return result["aggregations"]["metric_stats"]
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
+    def get_op_window(self, task, name="service_time", sample_type=SampleType.Normal, cluster_name=None):
+        query = {
+            "query": self._query_by_name(name, task, None, sample_type, None, cluster_name),
+            "size": 0,
+            "aggs": {
+                "start": {"min": {"field": "@timestamp"}},
+                "end": {"max": {"field": "response-timestamp"}},
+            },
+        }
+        self.logger.debug(
+            "Issuing get_op_window against index=[%s], query=[%s]", self._index_handler.index_name(self._race_timestamp), query
+        )
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
+        start = result["aggregations"]["start"]["value"]
+        end = result["aggregations"]["end"]["value"]
+        if start is None or end is None:
+            return None
+        return int(start), int(end)
+
+    def task_cluster_names(self):
+        query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"race-id": self._race_id}},
+                        {"exists": {"field": "task"}},
+                        {"exists": {"field": "meta.cluster"}},
+                    ],
+                },
+            },
+            "size": 0,
+            "aggs": {
+                "clusters": {
+                    "terms": {
+                        "field": "meta.cluster",
+                        "size": 1000,
+                    },
+                },
+            },
+        }
+        self.logger.debug(
+            "Issuing task_cluster_names against index=[%s], query=[%s]", self._index_handler.index_name(self._race_timestamp), query
+        )
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
+        return {b["key"] for b in result["aggregations"]["clusters"]["buckets"]}
+
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None, cluster_name=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         query = {
-            "query": self._query_by_name(name, task, operation_type, sample_type, None),
+            "query": self._query_by_name(name, task, operation_type, sample_type, None, cluster_name),
             "size": 0,
             "aggs": {
                 "percentile_stats": {
@@ -1097,8 +1545,10 @@ class EsMetricsStore(MetricsStore):
                 },
             },
         }
-        self.logger.debug("Issuing get_percentiles against index=[%s], query=[%s]", self._index, query)
-        result = self._client.search(index=self._index, body=query)
+        self.logger.debug(
+            "Issuing get_percentiles against index=[%s], query=[%s]", self._index_handler.index_name(self._race_timestamp), query
+        )
+        result = self._client.search(index=self._index_handler.index_name(self._race_timestamp), body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
         if isinstance(hits, dict):
@@ -1110,7 +1560,7 @@ class EsMetricsStore(MetricsStore):
         else:
             return None
 
-    def _query_by_name(self, name, task, operation_type, sample_type, node_name):
+    def _query_by_name(self, name, task, operation_type, sample_type, node_name, cluster_name=None):
         q = {
             "bool": {
                 "filter": [
@@ -1143,7 +1593,7 @@ class EsMetricsStore(MetricsStore):
                     },
                 },
             )
-        if sample_type:
+        if sample_type is not None:
             q["bool"]["filter"].append(
                 {
                     "term": {
@@ -1156,6 +1606,14 @@ class EsMetricsStore(MetricsStore):
                 {
                     "term": {
                         "meta.node_name": node_name,
+                    },
+                },
+            )
+        if cluster_name:
+            q["bool"]["filter"].append(
+                {
+                    "term": {
+                        "meta.cluster": cluster_name,
                     },
                 },
             )
@@ -1189,26 +1647,33 @@ class InMemoryMetricsStore(MetricsStore):
         del self.docs
 
     def _add(self, doc):
+        with self._docs_lock:
+            self.docs.append(doc)
+
+    # for testing purposes only
+    def _add_unlocked(self, doc):
         self.docs.append(doc)
 
-    def flush(self, refresh=True):
+    def flush(self, refresh=True, closing=False):
         pass
 
     def to_externalizable(self, clear=False):
-        docs = self.docs
-        if clear:
-            self.docs = []
+        with self._docs_lock:
+            if clear:
+                docs, self.docs = self.docs, []
+            else:
+                docs = list(self.docs)
         compressed = zlib.compress(pickle.dumps(docs))
         self.logger.debug(
             "Compression changed size of metric store from [%d] bytes to [%d] bytes", sys.getsizeof(docs, -1), sys.getsizeof(compressed, -1)
         )
         return compressed
 
-    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None):
+    def get_percentiles(self, name, task=None, operation_type=None, sample_type=None, percentiles=None, cluster_name=None):
         if percentiles is None:
             percentiles = [99, 99.9, 100]
         result = collections.OrderedDict()
-        values = self.get(name, task, operation_type, sample_type)
+        values = self.get(name, task, operation_type, sample_type, cluster_name=cluster_name)
         if len(values) > 0:
             sorted_values = sorted(values)
             for percentile in percentiles:
@@ -1237,7 +1702,7 @@ class InMemoryMetricsStore(MetricsStore):
             higher_score = sorted_values[lr_next]
             return lower_score + (higher_score - lower_score) * fr
 
-    def get_error_rate(self, task, operation_type=None, sample_type=None):
+    def get_error_rate(self, task, operation_type=None, sample_type=None, cluster_name=None):
         error = 0
         total_count = 0
         for doc in self.docs:
@@ -1247,6 +1712,7 @@ class InMemoryMetricsStore(MetricsStore):
                 and doc["task"] == task
                 and (operation_type is None or doc["operation-type"] == operation_type)
                 and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+                and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
             ):
                 total_count += 1
                 if doc["meta"]["success"] is False:
@@ -1256,8 +1722,8 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return 0.0
 
-    def get_stats(self, name, task=None, operation_type=None, sample_type=SampleType.Normal):
-        values = self.get(name, task, operation_type, sample_type)
+    def get_stats(self, name, task=None, operation_type=None, sample_type=SampleType.Normal, cluster_name=None):
+        values = self.get(name, task, operation_type, sample_type, cluster_name=cluster_name)
         sorted_values = sorted(values)
         if len(sorted_values) > 0:
             return {
@@ -1270,7 +1736,20 @@ class InMemoryMetricsStore(MetricsStore):
         else:
             return None
 
-    def _get(self, name, task, operation_type, sample_type, node_name, mapper):
+    def get_op_window(self, task, name="service_time", sample_type=SampleType.Normal, cluster_name=None):
+        # Every service_time sample carries a response-timestamp, so each doc
+        # yields a (start, end) pair. The list is only empty when the task/phase produced no samples.
+        windows = self._get(name, task, None, sample_type, None, cluster_name, lambda d: (d["@timestamp"], d["response-timestamp"]))
+        if not windows:
+            return None
+        return int(min(start for start, _ in windows)), int(max(end for _, end in windows))
+
+    def task_cluster_names(self):
+        return {
+            doc["meta"]["cluster"] for doc in self.docs if doc.get("task") is not None and doc.get("meta", {}).get("cluster") is not None
+        }
+
+    def _get(self, name, task, operation_type, sample_type, node_name, cluster_name, mapper):
         return [
             mapper(doc)
             for doc in self.docs
@@ -1279,10 +1758,19 @@ class InMemoryMetricsStore(MetricsStore):
             and (operation_type is None or doc["operation-type"] == operation_type)
             and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
             and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
+            and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
         ]
 
     def get_one(
-        self, name, sample_type=None, node_name=None, task=None, mapper=lambda doc: doc["value"], sort_key=None, sort_reverse=False
+        self,
+        name,
+        sample_type=None,
+        node_name=None,
+        task=None,
+        cluster_name=None,
+        mapper=lambda doc: doc["value"],
+        sort_key=None,
+        sort_reverse=False,
     ):
         if sort_key:
             docs = sorted(self.docs, key=lambda k: k[sort_key], reverse=sort_reverse)
@@ -1294,6 +1782,7 @@ class InMemoryMetricsStore(MetricsStore):
                 and (task is None or doc["task"] == task)
                 and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
                 and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
+                and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
             ):
                 return mapper(doc)
         return None
@@ -1415,6 +1904,7 @@ def create_race(cfg: types.Config, track, challenge, track_revision=None):
     race_timestamp = cfg.opts("system", "time.start")
     user_tags = cfg.opts("race", "user.tags", default_value={}, mandatory=False)
     pipeline = cfg.opts("race", "pipeline")
+    multi_cluster = cfg.opts("driver", "multi.cluster", mandatory=False, default_value=False)
     track_params = cfg.opts("track", "params")
     car_params = cfg.opts("mechanic", "car.params")
     plugin_params = cfg.opts("mechanic", "plugin.params")
@@ -1436,6 +1926,7 @@ def create_race(cfg: types.Config, track, challenge, track_revision=None):
         car_params,
         plugin_params,
         track_revision,
+        multi_cluster=multi_cluster,
     )
 
 
@@ -1462,6 +1953,10 @@ class Race:
         revision=None,
         results=None,
         meta_data=None,
+        target_id=None,
+        target_platform=None,
+        target_auth_type=None,
+        multi_cluster=False,
     ):
         if results is None:
             results = {}
@@ -1478,6 +1973,7 @@ class Race:
         self.race_id = race_id
         self.race_timestamp = race_timestamp
         self.pipeline = pipeline
+        self.multi_cluster = multi_cluster
         self.user_tags = user_tags
         self.track = track
         self.track_params = track_params
@@ -1492,6 +1988,9 @@ class Race:
         self.revision = revision
         self.results = results
         self.meta_data = meta_data
+        self.target_id = target_id
+        self.target_platform = target_platform
+        self.target_auth_type = target_auth_type
 
     @property
     def track_name(self):
@@ -1513,12 +2012,14 @@ class Race:
         :return: A dict representation suitable for persisting this race instance as JSON.
         """
         d = {
+            "@timestamp": time.to_epoch_millis(self.race_timestamp.timestamp()),
             "rally-version": self.rally_version,
             "rally-revision": self.rally_revision,
             "environment": self.environment_name,
             "race-id": self.race_id,
             "race-timestamp": time.to_iso8601(self.race_timestamp),
             "pipeline": self.pipeline,
+            "multi-cluster": self.multi_cluster,
             "user-tags": self.user_tags,
             "track": self.track_name,
             "car": self.car,
@@ -1530,7 +2031,9 @@ class Race:
             },
         }
         if self.results:
-            if hasattr(self.results, "as_dict"):
+            if isinstance(self.results, list):
+                d["results"] = [r.as_dict() if hasattr(r, "as_dict") else r for r in self.results]
+            elif hasattr(self.results, "as_dict"):
                 d["results"] = self.results.as_dict()
             else:
                 d["results"] = self.results
@@ -1539,19 +2042,21 @@ class Race:
         if self.challenge:
             if not hasattr(self.challenge, "auto_generated") or not self.challenge.auto_generated:
                 d["challenge"] = self.challenge_name
-        if self.track_params:
-            d["track-params"] = self.track_params
+        reporting_params = track_params_for_reporting(self.track_params)
+        if reporting_params:
+            d["track-params"] = reporting_params
         if self.car_params:
             d["car-params"] = self.car_params
         if self.plugin_params:
             d["plugin-params"] = self.plugin_params
         return d
 
-    def to_result_dicts(self):
+    def result_doc_base(self):
         """
-        :return: a list of dicts, suitable for persisting the results of this race in a format that is Kibana-friendly.
+        :return: Metadata shared by every ``rally-results-*`` document for this race.
         """
         result_template = {
+            "@timestamp": time.to_epoch_millis(self.race_timestamp.timestamp()),
             "rally-version": self.rally_version,
             "rally-revision": self.rally_revision,
             "environment": self.environment_name,
@@ -1572,21 +2077,55 @@ class Race:
             result_template["team-revision"] = self.team_revision
         if self.track_revision:
             result_template["track-revision"] = self.track_revision
-        if self.track_params:
-            result_template["track-params"] = self.track_params
+        reporting_params = track_params_for_reporting(self.track_params)
+        if reporting_params:
+            result_template["track-params"] = reporting_params
         if self.car_params:
             result_template["car-params"] = self.car_params
         if self.plugin_params:
             result_template["plugin-params"] = self.plugin_params
+        if self.target_id:
+            result_template["target-id"] = self.target_id
+        if self.target_platform:
+            result_template["target-platform"] = self.target_platform
+        if self.target_auth_type:
+            result_template["target-auth-type"] = self.target_auth_type
         if self.meta_data:
             result_template["meta"] = self.meta_data
+        return result_template
 
+    def time_window_result_doc(self, task, operation, window):
+        doc = self.result_doc_base()
+        doc.update({"name": "time_window", "task": task, "operation": operation})
+        doc.update(window)
+        return doc
+
+    def to_result_dicts(self):
+        """
+        :return: a list of dicts, suitable for persisting the results of this race in a format that is Kibana-friendly.
+        """
+        result_template = self.result_doc_base()
         all_results = []
+        # Per-task wall-clock window fields copied from a reported op_metrics entry onto its own time_window doc.
+        time_window_fields = (
+            "start_timestamp",
+            "end_timestamp",
+            "warmup_start_timestamp",
+            "warmup_end_timestamp",
+            "normal_start_timestamp",
+            "normal_end_timestamp",
+        )
 
-        for item in self.results.as_flat_list():
-            result = result_template.copy()
-            result.update(item)
-            all_results.append(result)
+        results_list = self.results if isinstance(self.results, list) else [self.results]
+        for stats in results_list:
+            for item in stats.as_flat_list():
+                result = result_template.copy()
+                result.update(item)
+                all_results.append(result)
+            for op in getattr(stats, "op_metrics", None) or []:
+                window = {k: op[k] for k in time_window_fields if k in op}
+                if window:
+                    all_results.append(self.time_window_result_doc(op.get("task"), op.get("operation"), window))
 
         return all_results
 
@@ -1616,6 +2155,7 @@ class Race:
             revision=cluster.get("revision"),
             results=d.get("results"),
             meta_data=d.get("meta", {}),
+            multi_cluster=d.get("multi-cluster", False),
         )
 
 
@@ -1793,9 +2333,11 @@ class FileRaceStore(RaceStore):
 
 
 class EsRaceStore(RaceStore):
-    INDEX_PREFIX = "rally-races-"
+    """
+    A metric store for race information backed by Elasticsearch.
+    """
 
-    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory):
         """
         Creates a new metrics store.
 
@@ -1805,17 +2347,42 @@ class EsRaceStore(RaceStore):
         """
         super().__init__(cfg)
         self.client = client_factory_class(cfg).create()
-        self.index_template_provider = index_template_provider_class(cfg)
+        self._index_handler = IndexHandler(self.cfg, self.client, EsStoreType.races)
+        self._race_stored = False
 
     def store_race(self, race):
-        doc = race.as_dict()
-        # always update the mapping to the latest version
-        self.client.put_template("rally-races", self.index_template_provider.races_template())
-        self.client.index(index=self.index_name(race), item=doc, id=race.race_id)
+        assert race.race_timestamp is not None, "Attempted to store race with race_timestamp=None"
 
-    def index_name(self, race):
-        race_timestamp = race.race_timestamp
-        return f"{EsRaceStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+        self._index_handler.ensure_index_template(create=True)
+        index = self._index_handler.index_name(race.race_timestamp)
+
+        if self._index_handler.use_data_streams and self._race_stored:
+            self.client.refresh(index)
+            self.client.update_by_query(
+                index=index,
+                body={
+                    "query": {"term": {"race-id": race.race_id}},
+                    "script": {
+                        "source": "ctx._source.putAll(params)",
+                        "lang": "painless",
+                        "params": race.as_dict(),
+                    },
+                },
+            )
+        elif self._index_handler.use_data_streams:
+            self.client.index(
+                index=index,
+                item=race.as_dict(),
+                use_data_streams=True,
+            )
+            self._race_stored = True
+        else:
+            self.client.index(
+                index=index,
+                item=race.as_dict(),
+                id=race.race_id,
+                use_data_streams=False,
+            )
 
     def add_annotation(self):
         def _at_midnight(race_timestamp):
@@ -1843,7 +2410,7 @@ class EsRaceStore(RaceStore):
         else:
             if not self.client.exists(index="rally-annotations"):
                 # create or overwrite template on index creation
-                self.client.put_template("rally-annotations", self.index_template_provider.annotations_template())
+                self.client.put_template("rally-annotations", self._index_handler.annotations_template())
                 self.client.create_index(index="rally-annotations")
             self.client.index(
                 index="rally-annotations",
@@ -1856,6 +2423,7 @@ class EsRaceStore(RaceStore):
                     "chart-name": chart_name,
                     "message": message,
                 },
+                use_data_streams=False,
             )
             console.println(f"Successfully added annotation [{annotation_id}].")
 
@@ -1985,7 +2553,7 @@ class EsRaceStore(RaceStore):
             query["query"]["bool"]["filter"].append({"term": {"challenge": challenge}})
         if user_tags:
             query["query"]["bool"]["filter"].extend([{"term": {f"user-tags.{k}": v}} for k, v in user_tags.items()])
-        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
+        result = self.client.search(index="%s*" % EsStoreType.races.index_prefix, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
         if isinstance(hits, dict):
@@ -2009,7 +2577,7 @@ class EsRaceStore(RaceStore):
                 },
             },
         }
-        result = self.client.search(index="%s*" % EsRaceStore.INDEX_PREFIX, body=query)
+        result = self.client.search(index="%s*" % EsStoreType.races.index_prefix, body=query)
         hits = result["hits"]["total"]
         # Elasticsearch 7.0+
         if isinstance(hits, dict):
@@ -2027,9 +2595,7 @@ class EsResultsStore:
     Stores the results of a race in a format that is better suited for reporting with Kibana.
     """
 
-    INDEX_PREFIX = "rally-results-"
-
-    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory, index_template_provider_class=IndexTemplateProvider):
+    def __init__(self, cfg: types.Config, client_factory_class=EsClientFactory):
         """
         Creates a new results store.
 
@@ -2039,16 +2605,17 @@ class EsResultsStore:
         """
         self.cfg = cfg
         self.client = client_factory_class(cfg).create()
-        self.index_template_provider = index_template_provider_class(cfg)
+        self._index_handler = IndexHandler(self.cfg, self.client, EsStoreType.results)
 
     def store_results(self, race):
-        # always update the mapping to the latest version
-        self.client.put_template("rally-results", self.index_template_provider.results_template())
-        self.client.bulk_index(index=self.index_name(race), items=race.to_result_dicts())
+        assert race.race_timestamp is not None, "Attempted to store race with race_timestamp=None"
 
-    def index_name(self, race):
-        race_timestamp = race.race_timestamp
-        return f"{EsResultsStore.INDEX_PREFIX}{race_timestamp:%Y-%m}"
+        self._index_handler.ensure_index_template(create=True)
+        self.client.bulk_index(
+            index=self._index_handler.index_name(race.race_timestamp),
+            items=race.to_result_dicts(),
+            use_data_streams=self._index_handler.use_data_streams,
+        )
 
 
 class NoopResultsStore:
@@ -2092,27 +2659,28 @@ class GlobalStatsCalculator:
         self.track = track
         self.challenge = challenge
 
-    def __call__(self):
-        result = GlobalStats()
+    def __call__(self, cluster_name=None):
+        result = GlobalStats(cluster_name=cluster_name)
 
         for tasks in self.challenge.schedule:
             for task in tasks:
                 t = task.name
                 op_type = task.operation.type
-                error_rate = self.error_rate(t, op_type)
-                duration = self.duration(t)
+                error_rate = self.error_rate(t, op_type, cluster_name=cluster_name)
                 if task.operation.include_in_reporting or error_rate > 0:
                     self.logger.debug("Gathering request metrics for [%s].", t)
+                    time_window = self.time_window(t, cluster_name=cluster_name)
                     result.add_op_metrics(
                         t,
                         task.operation.name,
-                        self.summary_stats("throughput", t, op_type),
-                        self.single_latency(t, op_type),
-                        self.single_latency(t, op_type, metric_name="service_time"),
-                        self.single_latency(t, op_type, metric_name="processing_time"),
+                        self.summary_stats("throughput", t, op_type, cluster_name=cluster_name),
+                        self.single_latency(t, op_type, cluster_name=cluster_name),
+                        self.single_latency(t, op_type, metric_name="service_time", cluster_name=cluster_name),
+                        self.single_latency(t, op_type, metric_name="processing_time", cluster_name=cluster_name),
                         error_rate,
-                        duration,
+                        self.duration(time_window),
                         self.merge(self.track.meta_data, self.challenge.meta_data, task.operation.meta_data, task.meta_data),
+                        time_window=time_window,
                     )
         self.logger.debug("Gathering indexing metrics.")
         result.total_time = self.sum("indexing_total_time")
@@ -2199,11 +2767,29 @@ class GlobalStatsCalculator:
     def one(self, metric_name):
         return self.store.get_one(metric_name)
 
-    def summary_stats(self, metric_name, task_name, operation_type):
-        mean = self.store.get_mean(metric_name, task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
-        median = self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
-        unit = self.store.get_unit(metric_name, task=task_name, operation_type=operation_type)
-        stats = self.store.get_stats(metric_name, task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
+    def summary_stats(self, metric_name, task_name, operation_type, cluster_name=None):
+        mean = self.store.get_mean(
+            metric_name,
+            task=task_name,
+            operation_type=operation_type,
+            sample_type=SampleType.Normal,
+            cluster_name=cluster_name,
+        )
+        median = self.store.get_median(
+            metric_name,
+            task=task_name,
+            operation_type=operation_type,
+            sample_type=SampleType.Normal,
+            cluster_name=cluster_name,
+        )
+        unit = self.store.get_unit(metric_name, task=task_name, operation_type=operation_type, cluster_name=cluster_name)
+        stats = self.store.get_stats(
+            metric_name,
+            task=task_name,
+            operation_type=operation_type,
+            sample_type=SampleType.Normal,
+            cluster_name=cluster_name,
+        )
         if mean and median and stats:
             return {
                 "min": stats["min"],
@@ -2267,20 +2853,57 @@ class GlobalStatsCalculator:
                     result.append({"index": index, "field": field, "value": v["value"], "unit": v["unit"]})
         return result
 
-    def error_rate(self, task_name, operation_type):
-        return self.store.get_error_rate(task=task_name, operation_type=operation_type, sample_type=SampleType.Normal)
-
-    def duration(self, task_name):
-        return self.store.get_one(
-            "service_time", task=task_name, mapper=lambda doc: doc["relative-time"], sort_key="relative-time", sort_reverse=True
+    def error_rate(self, task_name, operation_type, cluster_name=None):
+        return self.store.get_error_rate(
+            task=task_name, operation_type=operation_type, sample_type=SampleType.Normal, cluster_name=cluster_name
         )
 
-    def median(self, metric_name, task_name=None, operation_type=None, sample_type=None):
-        return self.store.get_median(metric_name, task=task_name, operation_type=operation_type, sample_type=sample_type)
+    def duration(self, time_window):
+        start = time_window.get("start_timestamp")
+        end = time_window.get("end_timestamp")
+        if start is None or end is None:
+            return None
+        return end - start
 
-    def single_latency(self, task, operation_type, metric_name="latency"):
+    def time_window(self, task_name, cluster_name=None):
+        phases = {
+            "warmup": self.store.get_op_window(task_name, sample_type=SampleType.Warmup, cluster_name=cluster_name),
+            "normal": self.store.get_op_window(task_name, sample_type=SampleType.Normal, cluster_name=cluster_name),
+        }
+        window = {}
+        for phase, op_window in phases.items():
+            # a phase window is None when that phase produced no samples
+            if op_window:
+                window[f"{phase}_start_timestamp"] = int(op_window[0])
+                window[f"{phase}_end_timestamp"] = int(op_window[1])
+        starts = [op_window[0] for op_window in phases.values() if op_window]
+        ends = [op_window[1] for op_window in phases.values() if op_window]
+        if starts:
+            # start_timestamp is the earliest op start across phases (the first issued operation)
+            window["start_timestamp"] = int(min(starts))
+        if ends:
+            # end_timestamp is the timestamp of last response across phases (the last operation to complete)
+            window["end_timestamp"] = int(max(ends))
+        return window
+
+    def median(self, metric_name, task_name=None, operation_type=None, sample_type=None, cluster_name=None):
+        return self.store.get_median(
+            metric_name,
+            task=task_name,
+            operation_type=operation_type,
+            sample_type=sample_type,
+            cluster_name=cluster_name,
+        )
+
+    def single_latency(self, task, operation_type, metric_name="latency", cluster_name=None):
         sample_type = SampleType.Normal
-        stats = self.store.get_stats(metric_name, task=task, operation_type=operation_type, sample_type=sample_type)
+        stats = self.store.get_stats(
+            metric_name,
+            task=task,
+            operation_type=operation_type,
+            sample_type=sample_type,
+            cluster_name=cluster_name,
+        )
         sample_size = stats["count"] if stats else 0
         if sample_size > 0:
             percentiles = self.store.get_percentiles(
@@ -2289,9 +2912,16 @@ class GlobalStatsCalculator:
                 operation_type=operation_type,
                 sample_type=sample_type,
                 percentiles=percentiles_for_sample_size(sample_size),
+                cluster_name=cluster_name,
             )
-            mean = self.store.get_mean(metric_name, task=task, operation_type=operation_type, sample_type=sample_type)
-            unit = self.store.get_unit(metric_name, task=task, operation_type=operation_type)
+            mean = self.store.get_mean(
+                metric_name,
+                task=task,
+                operation_type=operation_type,
+                sample_type=sample_type,
+                cluster_name=cluster_name,
+            )
+            unit = self.store.get_unit(metric_name, task=task, operation_type=operation_type, cluster_name=cluster_name)
             stats = collections.OrderedDict()
             for k, v in percentiles.items():
                 # safely encode so we don't have any dots in field names
@@ -2304,7 +2934,8 @@ class GlobalStatsCalculator:
 
 
 class GlobalStats:
-    def __init__(self, d=None):
+    def __init__(self, d=None, cluster_name=None):
+        self.cluster_name = cluster_name
         self.op_metrics = self.v(d, "op_metrics", default=[])
         self.total_time = self.v(d, "total_time")
         self.total_time_per_shard = self.v(d, "total_time_per_shard", default={})
@@ -2372,11 +3003,15 @@ class GlobalStats:
                 doc["value"] = op_item[key]
             if "meta" in op_item:
                 doc["meta"] = op_item["meta"]
+            if self.cluster_name is not None:
+                doc["cluster"] = self.cluster_name
             return doc
 
         all_results = []
         for metric, value in self.as_dict().items():
-            if metric == "op_metrics":
+            if metric == "cluster_name":
+                pass
+            elif metric == "op_metrics":
                 for item in value:
                     if "throughput" in item:
                         all_results.append(op_metrics(item, "throughput"))
@@ -2415,9 +3050,21 @@ class GlobalStats:
         return sorted(all_results, key=lambda m: m["name"])
 
     def v(self, d, k, default=None):
-        return d.get(k, default) if d else default
+        return d.get(k, default) if isinstance(d, dict) else default
 
-    def add_op_metrics(self, task, operation, throughput, latency, service_time, processing_time, error_rate, duration, meta):
+    def add_op_metrics(
+        self,
+        task,
+        operation,
+        throughput,
+        latency,
+        service_time,
+        processing_time,
+        error_rate,
+        duration,
+        meta,
+        time_window,
+    ):
         doc = {
             "task": task,
             "operation": operation,
@@ -2428,6 +3075,8 @@ class GlobalStats:
             "error_rate": error_rate,
             "duration": duration,
         }
+        if time_window:
+            doc.update(time_window)
         if meta:
             doc["meta"] = meta
         self.op_metrics.append(doc)
