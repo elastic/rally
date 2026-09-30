@@ -246,7 +246,11 @@ class FlightRecorder(TelemetryDevice):
         return java_opts
 
     def java_opts(self, log_file):
-        recording_template = self.telemetry_params.get("recording-template")
+        recording_template = self.telemetry_params.get("jfr-recording-template")
+        if recording_template is None and "recording-template" in self.telemetry_params:
+            # Deprecated name without the "jfr-" prefix; kept for backwards compatibility.
+            self.logger.warning("jfr: Telemetry parameter [recording-template] is deprecated. Please use [jfr-recording-template] instead.")
+            recording_template = self.telemetry_params.get("recording-template")
         delay = self.telemetry_params.get("jfr-delay")
         duration = self.telemetry_params.get("jfr-duration")
         java_opts = ["-XX:+UnlockDiagnosticVMOptions", "-XX:+DebugNonSafepoints"]
