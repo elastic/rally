@@ -77,4 +77,3 @@ def test_prepare_track_parser_accepts_arguments():
     assert args.serverless_operator is True
     assert args.test_mode is True
     assert args.kill_running_processes is True
-
