@@ -419,6 +419,52 @@ class TestTrackPreparationActor:
         assert actor_under_test.driver_actor is driver_actor
         assert actor_under_test.cfg is local_cfg
 
+    @mock.patch("esrally.actor.log.post_configure_actor_logging")
+    @mock.patch.object(driver.TrackPreparationActor, "_prepare_track")
+    @mock.patch("esrally.driver.driver.load_track")
+    @mock.patch("esrally.driver.driver.load_local_config")
+    def test_prepare_track_standalone_delegates_without_reloading(
+        self, load_local_config, load_track, prepare_track, post_configure_actor_logging
+    ):
+        local_cfg = mock.sentinel.local_cfg
+        load_local_config.return_value = local_cfg
+        start_sender = mock.sentinel.start_sender
+        coordinator_cfg = mock.sentinel.coordinator_cfg
+        t = mock.sentinel.track
+        actor_under_test = driver.TrackPreparationActor()
+        actor_under_test.send = mock.Mock()
+
+        actor_under_test.receiveMsg_PrepareTrackStandalone(driver.PrepareTrackStandalone(coordinator_cfg, t), start_sender)
+
+        load_local_config.assert_called_once_with(coordinator_cfg)
+        # the handler must not reload the track; _prepare_track handles (re)loading
+        load_track.assert_not_called()
+        prepare_track.assert_called_once_with(t)
+        assert actor_under_test.standalone is True
+        assert actor_under_test.start_sender is start_sender
+        assert actor_under_test.cfg is local_cfg
+
+    @mock.patch("esrally.actor.log.post_configure_actor_logging")
+    def test_resume_standalone_replies_to_start_sender(self, post_configure_actor_logging):
+        start_sender = mock.sentinel.start_sender
+        actor_under_test = driver.TrackPreparationActor()
+        actor_under_test.send = mock.Mock()
+        actor_under_test.cfg = mock.sentinel.local_cfg
+        actor_under_test.standalone = True
+        actor_under_test.start_sender = start_sender
+        child = mock.sentinel.task_executor
+        actor_under_test.children = [child]
+
+        actor_under_test.resume()
+
+        exit_target, exit_msg = actor_under_test.send.call_args_list[0].args
+        assert exit_target is child
+        assert isinstance(exit_msg, driver.thespian.actors.ActorExitRequest)
+        reply_target, reply_msg = actor_under_test.send.call_args_list[1].args
+        assert reply_target is start_sender
+        assert isinstance(reply_msg, driver.TrackPrepared)
+        assert actor_under_test.children == []
+
 
 def op(name, operation_type):
     return track.Operation(name, operation_type, param_source="driver-test-param-source")
