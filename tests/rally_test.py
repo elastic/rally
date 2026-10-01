@@ -16,11 +16,10 @@
 # under the License.
 
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
-from esrally import config, exceptions, rally
+from esrally import exceptions, rally
 
 
 def test_creates_default_configuration_when_missing(tmp_path, monkeypatch):
@@ -54,7 +53,7 @@ def test_rejects_missing_named_configuration(tmp_path, monkeypatch):
     assert not config_file.exists()
 
 
-def test_prepare_track_parser_accepts_validate_track_arguments():
+def test_prepare_track_parser_accepts_arguments():
     arg_parser = rally.create_arg_parser()
     args = arg_parser.parse_args(
         [
@@ -79,23 +78,3 @@ def test_prepare_track_parser_accepts_validate_track_arguments():
     assert args.test_mode is True
     assert args.kill_running_processes is True
 
-
-def test_prepare_track_dispatch_runs_actor_system(monkeypatch):
-    arg_parser = rally.create_arg_parser()
-    args = arg_parser.parse_args(
-        [
-            "prepare-track",
-            "--track-path=/path/to/track",
-            "--challenge=my-challenge",
-            "--test-mode",
-        ]
-    )
-    cfg = config.Config()
-    run_mock = mock.Mock()
-    monkeypatch.setattr(rally, "run_with_actor_system", run_mock)
-
-    assert rally.dispatch_sub_command(arg_parser, args, cfg) == rally.ExitStatus.SUCCESSFUL
-
-    run_mock.assert_called_once_with(rally.racecontrol.prepare_track, cfg, False)
-    assert cfg.opts("track", "challenge.name") == "my-challenge"
-    assert cfg.opts("track", "test.mode.enabled") is True
