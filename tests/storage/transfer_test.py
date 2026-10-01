@@ -16,10 +16,13 @@
 # under the License.
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import json
 import os
+import threading
 from collections.abc import Generator, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 import pytest
@@ -290,3 +293,48 @@ def test_transfer_requeues_remaining_bytes_on_timeout_error(executor: dummy.Dumm
     # The raised TimeoutError is treated as retryable. The remaining
     # bytes are requeued with no terminal error recorded
     assert transfer.errors == []
+
+
+def test_save_status_serializes_writers(executor: dummy.DummyExecutor, local_dir: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = StorageConfig()
+    transfer = Transfer(client=DummyClient.from_config(cfg), url=URL, executor=executor, document_length=len(DATA), cfg=cfg)
+    first_opened = threading.Event()
+    release_first = threading.Event()
+    second_started = threading.Event()
+    second_opened = threading.Event()
+    real_open = open
+
+    @contextlib.contextmanager
+    def status_open(filename, mode):
+        with real_open(filename, mode) as fd:
+            if not first_opened.is_set():
+                first_opened.set()
+                if not release_first.wait(timeout=5):
+                    raise TimeoutError("First status writer was not released")
+            else:
+                second_opened.set()
+            yield fd
+
+    def second_save():
+        second_started.set()
+        transfer.save_status()
+
+    monkeypatch.setattr("esrally.storage._transfer.open", status_open, raising=False)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(transfer.save_status)
+        try:
+            assert first_opened.wait(timeout=5)
+            second = pool.submit(second_save)
+            assert second_started.wait(timeout=5)
+            # The second writer must not open/truncate the file while the first owns it.
+            assert not second_opened.wait(timeout=0.2)
+        finally:
+            release_first.set()
+        first.result(timeout=5)
+        second.result(timeout=5)
+
+    assert second_opened.is_set()
+    with real_open(transfer.status_file_path) as fd:
+        status = json.load(fd)
+    assert status["url"] == URL
+    assert status["document_length"] == len(DATA)
