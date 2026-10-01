@@ -364,7 +364,7 @@ def create_arg_parser():
         "--kill-running-processes",
         action="store_true",
         default=False,
-        help="If any processes is running, it is going to kill them and allow Rally to continue to run.",
+        help="If any other Rally processes are running, kill them and allow Rally to continue.",
     )
 
     create_track_parser = subparsers.add_parser("create-track", help="Create a Rally track from existing data")
@@ -934,7 +934,7 @@ def create_arg_parser():
         "--kill-running-processes",
         action="store_true",
         default=False,
-        help="If any processes is running, it is going to kill them and allow Rally to continue to run.",
+        help="If any other Rally processes are running, kill them and allow Rally to continue.",
     )
     race_parser.add_argument(
         "--source-build-method",
