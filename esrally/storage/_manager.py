@@ -208,7 +208,8 @@ class TransferManager:
                 raise FileNotFoundError(
                     f"Unable to find any valid status files: {found_status_files_output}.",
                 )
-        transfers = [self.get(url, local_dir=local_dir, todo=todo, start=start) for url in urls]
+        # Repeated URLs would create separate transfers writing the same files.
+        transfers = [self.get(url, local_dir=local_dir, todo=todo, start=start) for url in dict.fromkeys(urls)]
         transfers.sort(key=lambda tr: tr.url)
         return transfers
 
