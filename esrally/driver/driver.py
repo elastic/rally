@@ -1035,7 +1035,7 @@ class Driver:
                 self.most_recent_sample_per_client[s.client_id] = s
 
     def update_progress_message(self, task_finished=False):
-        if not self.quiet and self.current_step >= 0:
+        if not self.quiet and self.tasks_per_join_point and 0 <= self.current_step < len(self.tasks_per_join_point):
             tasks = ",".join([t.name for t in self.tasks_per_join_point[self.current_step]])
 
             if task_finished:
