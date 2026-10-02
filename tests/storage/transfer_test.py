@@ -406,6 +406,21 @@ def test_transfer_save_status_keeps_previous_file_on_failure(
     assert [f for f in os.listdir(status_dir) if f.endswith(".tmp")] == []
 
 
+def test_transfer_finishes_when_status_cannot_be_saved(executor: dummy.DummyExecutor, tmpdir, monkeypatch: pytest.MonkeyPatch) -> None:
+    transfer = _new_transfer(executor, tmpdir)
+
+    def failing_save_status():
+        raise RuntimeError("failing save")
+
+    monkeypatch.setattr(transfer, "save_status", failing_save_status)
+    transfer.start()
+    executor.execute_tasks()
+
+    transfer.wait(timeout=0.0)
+    assert transfer.verified
+    assert transfer.done == rangeset("0-1023")
+
+
 class NoDownloadDummyClient(DummyClient):
 
     def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:

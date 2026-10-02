@@ -472,7 +472,8 @@ class Transfer:
                 document["verified"] = True
             status_filename = self.status_file_path
             os.makedirs(os.path.dirname(status_filename), exist_ok=True)
-            tmp_filename = f"{status_filename}.{os.getpid()}.tmp"
+            # Each Transfer object has its own lock, so the name must be unique per object.
+            tmp_filename = f"{status_filename}.{os.getpid()}.{id(self)}.tmp"
             try:
                 with open(tmp_filename, "w") as fd:
                     json.dump(document, fd)
@@ -585,8 +586,11 @@ class Transfer:
     def _finish_task(self) -> None:
         # It decreases the number of scheduled tasks, allowing another task to be submitted.
         self._workers.done()
-        # It updates the status file.
-        self.save_status()
+        # A failed progress save must not prevent the transfer from completing.
+        try:
+            self.save_status()
+        except Exception:
+            LOG.exception("failed to save transfer status: %s", self.url)
 
         if self.todo:
             # It eventually starts a new task unless the work is complete.
