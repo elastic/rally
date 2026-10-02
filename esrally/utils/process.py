@@ -228,9 +228,12 @@ def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:
 def for_all_other_processes(predicate: Callable[[psutil.Process], bool], action: Callable[[psutil.Process], None]) -> None:
     # no harakiri please
     my_pid = os.getpid()
+    # the process that launched us is not a competing Rally process either, even if its command line
+    # happens to mention Rally (e.g. a debugger or wrapper script that invokes esrally)
+    my_ppid = os.getppid()
     for p in psutil.process_iter():
         try:
-            if p.pid != my_pid and predicate(p):
+            if p.pid not in (my_pid, my_ppid) and predicate(p):
                 action(p)
         except (psutil.ZombieProcess, psutil.AccessDenied, psutil.NoSuchProcess):
             pass
