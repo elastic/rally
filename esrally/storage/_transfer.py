@@ -321,10 +321,13 @@ class Transfer:
                 if self._todo:
                     self._errors = []
                     self._finished.clear()
-            if not self._todo or self._finished:
-                # There are no more tasks to do.
+            if self._finished:
                 return False
-            if self._workers.count >= self._max_connections:
+            if not self._todo:
+                # One task is enough to verify a complete file that hasn't been verified yet.
+                if not self._needs_verification() or self._workers.count:
+                    return False
+            elif self._workers.count >= self._max_connections:
                 # There are already enough connections.
                 return False
             try:
@@ -336,6 +339,14 @@ class Transfer:
             # It submits a new task.
             self._executor.submit(self._run)
             return True
+
+    def _needs_verification(self) -> bool:
+        return (
+            bool(self._crc32c)
+            and not self._verified
+            and self._document_length is not None
+            and self._done == Range(0, self._document_length)
+        )
 
     def _resume_status(self):
         status_filename = self.status_file_path
@@ -390,12 +401,13 @@ class Transfer:
 
         # It updates the resumed size so that it will compute download speed only on the new parts.
         self._resumed_size = done.size
-        if not self._todo:
-            # There is nothing more to do.
-            self._finished.set()
 
         if document.get("verified") is True and self._done == Range(0, document_length):
             self._verified = True
+
+        # A complete but unverified file is checked on the next start().
+        if not self._todo and not self._needs_verification():
+            self._finished.set()
 
         for mirror_failure in document.get("mirror_failures", []):
             if not isinstance(mirror_failure, dict):
@@ -473,7 +485,8 @@ class Transfer:
     def _run(self) -> None:
         """It downloads part of the file."""
         if self._finished:
-            # Anything else to do.
+            # Finished or closed after this task was submitted: release the slot taken by start().
+            self._workers.done()
             return
 
         if self._started.set():
@@ -600,11 +613,12 @@ class Transfer:
                 LOG.error("file verification failed: %s", self.url)
                 raise
             finally:
-                self._finished.set()
                 try:
                     self.save_status()
                 except Exception:
                     LOG.exception("failed to save transfer status: %s", self.url)
+                finally:
+                    self._finished.set()
 
     def close(self):
         """It cancels all transfer tasks and closes all open streams."""

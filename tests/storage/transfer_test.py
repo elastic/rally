@@ -141,7 +141,7 @@ class TransferCase:
         want_final_document_length=50,
         want_final_error=ValueError,
     ),
-    # It tests multipart working when multipart_size < content_length.
+    # It tests learning the document length from the first response.
     no_document_length=TransferCase(want_init_document_length=None, want_init_todo="0-", want_final_done="0-1023", document_length=None),
     # It tests when max_connections == 0.
     invalid_max_connections=TransferCase(multipart_size=128, max_connections=0, want_init_error=ValueError),
@@ -318,12 +318,12 @@ def _new_transfer(executor: dummy.DummyExecutor, tmpdir, client: Client | None =
     cfg = StorageConfig()
     kwargs.setdefault("document_length", len(DATA))
     kwargs.setdefault("crc32c", CRC32C)
+    kwargs.setdefault("resume", False)
     return Transfer(
         client=client or DummyClient.from_config(cfg),
         url=URL,
         path=os.path.join(str(tmpdir), os.path.basename(urlparse(URL).path)),
         executor=executor,
-        resume=False,
         cfg=cfg,
         **kwargs,
     )
@@ -404,3 +404,62 @@ def test_transfer_save_status_keeps_previous_file_on_failure(
         assert fd.read() == want_status
     status_dir = os.path.dirname(transfer.status_file_path)
     assert [f for f in os.listdir(status_dir) if f.endswith(".tmp")] == []
+
+
+class NoDownloadDummyClient(DummyClient):
+
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
+        raise AssertionError("unexpected download")
+
+
+def _write_complete_status(tmpdir, data: bytes, **status) -> None:
+    path = os.path.join(str(tmpdir), os.path.basename(urlparse(URL).path))
+    with open(path, "wb") as fd:
+        fd.write(data)
+    status_path = StorageConfig().transfer_status_path(URL)
+    os.makedirs(os.path.dirname(status_path), exist_ok=True)
+    with open(status_path, "w") as fd:
+        json.dump({"url": URL, "document_length": len(DATA), "done": "0-1023", "crc32c": CRC32C, **status}, fd)
+
+
+def test_transfer_resumed_verified_file_is_finished(executor: dummy.DummyExecutor, tmpdir) -> None:
+    _write_complete_status(tmpdir, DATA, verified=True)
+    transfer = _new_transfer(executor, tmpdir, client=NoDownloadDummyClient.from_config(StorageConfig()), resume=True)
+
+    assert transfer.finished
+    assert transfer.verified
+    assert not transfer.start()
+
+
+def test_transfer_resumed_unverified_file_is_verified_on_start(executor: dummy.DummyExecutor, tmpdir) -> None:
+    _write_complete_status(tmpdir, DATA)
+    transfer = _new_transfer(executor, tmpdir, client=NoDownloadDummyClient.from_config(StorageConfig()), resume=True)
+    assert not transfer.finished
+    assert not transfer.verified
+
+    assert transfer.start()
+    # Only one verification task is submitted.
+    assert not transfer.start()
+    executor.execute_tasks()
+
+    transfer.wait(timeout=0.0)
+    assert transfer.verified
+    assert transfer.done == rangeset("0-1023")
+    assert read_status(transfer)["verified"] is True
+
+
+def test_transfer_resumed_corrupted_file_is_reset_on_start(executor: dummy.DummyExecutor, tmpdir) -> None:
+    _write_complete_status(tmpdir, DATA[:-1] + b"\0")
+    transfer = _new_transfer(executor, tmpdir, client=NoDownloadDummyClient.from_config(StorageConfig()), resume=True)
+
+    assert transfer.start()
+    with pytest.raises(ValueError, match="Unexpected checksum"):
+        executor.execute_tasks()
+
+    assert transfer.finished
+    assert not transfer.verified
+    assert transfer.done == NO_RANGE
+    assert transfer.todo == rangeset("0-1023")
+    status = read_status(transfer)
+    assert status["done"] == ""
+    assert "verified" not in status
