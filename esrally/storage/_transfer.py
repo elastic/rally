@@ -23,7 +23,7 @@ import os
 import threading
 import time
 from collections.abc import Generator, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Any, Literal
 
 from esrally import types
@@ -229,9 +229,10 @@ class Transfer:
         self._fds: list[FileWriter] = []
         self._executor = executor
         self._errors: list[Exception] = []
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._resumed_size = 0
         self._crc32c = crc32c
+        self._verified = False
         self._mirror_failures: dict[str, TransferMirrorFailure] = {}
         self._stats: dict[str, TransferStats] = {}
         if resume and self.status_file_path and os.path.isfile(self.status_file_path):
@@ -393,6 +394,9 @@ class Transfer:
             # There is nothing more to do.
             self._finished.set()
 
+        if document.get("verified") is True and self._done == Range(0, document_length):
+            self._verified = True
+
         for mirror_failure in document.get("mirror_failures", []):
             if not isinstance(mirror_failure, dict):
                 raise ValueError(
@@ -436,24 +440,35 @@ class Transfer:
         """It updates the status file."""
         # It synchronizes mirror failures with the client.
         mirror_failures = self.client.mirror_failures(self.url)
+        # The lock keeps file writes in the same order as the snapshots they contain.
         with self._lock:
             for f in mirror_failures:
                 self._add_mirror_failure(url=f.mirror_url, error=f.error)
-        document = {
-            "url": self.url,
-            "path": self.path,
-            "document_length": self.document_length,
-            "done": str(self.done),
-            "crc32c": self.crc32c,
-            # Mirror failures is intended to be consumed by a tool in charge to upload downloaded files that was missing
-            # in any mirror server to keep it in sync with source file repository.
-            "mirror_failures": [dataclasses.asdict(f) for f in self.mirror_failures],
-            "stats": [dataclasses.asdict(s) for s in self.stats],
-        }
-        status_filename = self.status_file_path
-        os.makedirs(os.path.dirname(status_filename), exist_ok=True)
-        with open(status_filename, "w") as fd:
-            json.dump(document, fd)
+            document: dict[str, Any] = {
+                "url": self.url,
+                "path": self.path,
+                "document_length": self.document_length,
+                # Only completed parts are saved. The self.done getter might report parts that were not flushed yet.
+                "done": str(self._done),
+                "crc32c": self.crc32c,
+                # Mirror failures are intended to be consumed by esrally-storage CLI to upload downloaded files that were
+                # missing in any mirrors to keep them in sync with source repository.
+                "mirror_failures": [dataclasses.asdict(f) for f in self.mirror_failures],
+                "stats": [dataclasses.asdict(s) for s in self.stats],
+            }
+            if self._verified:
+                document["verified"] = True
+            status_filename = self.status_file_path
+            os.makedirs(os.path.dirname(status_filename), exist_ok=True)
+            tmp_filename = f"{status_filename}.{os.getpid()}.tmp"
+            try:
+                with open(tmp_filename, "w") as fd:
+                    json.dump(document, fd)
+                os.replace(tmp_filename, status_filename)
+            except BaseException:
+                with suppress(FileNotFoundError):
+                    os.remove(tmp_filename)
+                raise
 
     def _run(self) -> None:
         """It downloads part of the file."""
@@ -566,21 +581,30 @@ class Transfer:
             return
 
         # Only the last worker will continue further this point to finalize the transfer.
+        # Holding the lock prevents a concurrent status save between the check and the reset.
         with self._lock:
             if self._workers.count:
                 return
 
-        # The transfer has been completed and this is the last worker.
-        # It checks the download file before firing the finished event.
-        try:
-            self._check_finished_document()
-            LOG.info("transfer completed: %s", self.url)
-        except Exception as ex:
-            self._errors.append(ex)
-            LOG.error("file verification failed: %s", self.url)
-            raise
-        finally:
-            self._finished.set()
+            # The transfer has been completed and this is the last worker.
+            # It checks the download file before firing the finished event.
+            try:
+                self._check_finished_document()
+                LOG.info("transfer completed: %s", self.url)
+            except Exception as ex:
+                self._errors.append(ex)
+                # The file content can't be trusted: it will be downloaded again on next start.
+                self._todo |= self._done
+                self._done = NO_RANGE
+                self._verified = False
+                LOG.error("file verification failed: %s", self.url)
+                raise
+            finally:
+                self._finished.set()
+                try:
+                    self.save_status()
+                except Exception:
+                    LOG.exception("failed to save transfer status: %s", self.url)
 
     def close(self):
         """It cancels all transfer tasks and closes all open streams."""
@@ -644,9 +668,10 @@ class Transfer:
         with self._lock:
             done = self._done
             for fd in self._fds:
-                if fd.position > 0:
+                start = fd.ranges.start if fd.ranges else 0
+                if fd.position > start:
                     # It sums up all the file parts that have been writen by currently running tasks.
-                    done |= Range(0, fd.position)
+                    done |= Range(start, fd.position)
         return done
 
     @property
@@ -737,6 +762,11 @@ class Transfer:
         return bool(self._finished)
 
     @property
+    def verified(self) -> bool:
+        """It tells whether the whole file has been verified against its CRC32C checksum."""
+        return self._verified
+
+    @property
     def crc32c(self) -> str | None:
         return self._crc32c
 
@@ -775,6 +805,7 @@ class Transfer:
                 checksum = _crc32c.Checksum.from_filename(self.path)
                 if checksum != want_checksum:
                     raise ValueError(f"Unexpected checksum: {checksum}, want {want_checksum}")
+                self._verified = True
 
     def ls_files(self, *, file_types: set[TransferFileType] | None = None) -> list[str]:
         filenames = []
