@@ -250,3 +250,30 @@ def test_run_subprocess_with_logging_timeout_handles_already_exited_process(pope
     assert returncode == -signal.SIGKILL
     killpg.assert_called_once_with(4242, signal.SIGKILL)
     assert proc.communicate.call_count == 2
+
+
+@mock.patch("esrally.utils.process.os.execv")
+class TestDisableOsLogOnMacos:
+    @mock.patch("esrally.utils.process.sys.platform", "darwin")
+    @mock.patch.dict("esrally.utils.process.os.environ", {}, clear=True)
+    def test_reexecs_on_macos(self, execv):
+        process.disable_os_log_on_macos()
+
+        assert os.environ["OS_ACTIVITY_MODE"] == "disable"
+        execv.assert_called_once_with(process.sys.executable, process.sys.orig_argv)
+
+    @mock.patch("esrally.utils.process.sys.platform", "darwin")
+    @mock.patch.dict("esrally.utils.process.os.environ", {"OS_ACTIVITY_MODE": "debug"}, clear=True)
+    def test_respects_existing_value(self, execv):
+        process.disable_os_log_on_macos()
+
+        assert os.environ["OS_ACTIVITY_MODE"] == "debug"
+        execv.assert_not_called()
+
+    @mock.patch("esrally.utils.process.sys.platform", "linux")
+    @mock.patch.dict("esrally.utils.process.os.environ", {}, clear=True)
+    def test_noop_on_other_platforms(self, execv):
+        process.disable_os_log_on_macos()
+
+        assert "OS_ACTIVITY_MODE" not in os.environ
+        execv.assert_not_called()

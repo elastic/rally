@@ -107,6 +107,19 @@ Example with a local track that registers validators (see :ref:`adding_tracks_cu
 
 On success the process exits zero. Confirmation text is suppressed by default (``--quiet``); pass ``--no-quiet`` to see whether validators ran. Exit code 0 with no registered validators for the resolved challenge means the track loaded successfully, **not** that custom parameter checks passed — only that there was nothing to validate. On failure it exits non-zero and prints the error (for example a ``TrackConfigError`` from a validator).
 
+.. _clr_prepare_track:
+
+``prepare-track``
+~~~~~~~~~~~~~~~~~
+
+The ``prepare-track`` subcommand loads a track and prepares its corpora (downloading and decompressing the configured document sets) without starting a benchmark or contacting a cluster. Use it to pre-populate the local data cache (``~/.rally/benchmarks/data``) ahead of a race, for example to separate a slow one-time download from the measured run.
+
+It accepts the same arguments as ``validate-track`` and additionally ``--test-mode`` (prepare only the small test-mode subset of each corpus) and ``--kill-running-processes``. Like ``validate-track`` it resolves the challenge the same way ``race`` does and validates track parameters before preparing; an unknown challenge or invalid parameters fail with a non-zero exit code. Unlike ``validate-track`` it boots the Rally actor system to run preparation across multiple cores, so only one Rally instance may run at a time on the machine (pass ``--kill-running-processes`` to terminate others).
+
+Preparation runs locally only; it does not provision nodes or contact Elasticsearch. Example::
+
+    esrally prepare-track --track=geonames --challenge=append-no-conflicts
+
 ``compare``
 ~~~~~~~~~~~
 
