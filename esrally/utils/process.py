@@ -20,7 +20,6 @@ import os
 import shlex
 import signal
 import subprocess
-import sys
 import time
 from collections.abc import Iterable, Mapping
 from typing import IO, Callable, Optional, Union
@@ -29,20 +28,6 @@ import psutil
 
 LogLevel = int
 FileId = int
-
-
-def disable_os_log_on_macos() -> None:
-    """
-    On macOS, re-executes the current process with ``OS_ACTIVITY_MODE=disable`` unless the variable is already set.
-
-    Rally's actors are forked without exec. In such processes ``getaddrinfo`` may crash inside ``os_log`` (reached via
-    Network.framework's NAT64 check) and Thespian's signal handler turns the crash into a hang. ``libtrace`` reads
-    ``OS_ACTIVITY_MODE`` only at process start, hence the re-exec. See https://github.com/elastic/rally/issues/2104.
-    """
-    if sys.platform != "darwin" or "OS_ACTIVITY_MODE" in os.environ:
-        return
-    os.environ["OS_ACTIVITY_MODE"] = "disable"
-    os.execv(sys.executable, sys.orig_argv)
 
 
 def run_subprocess(command_line: str) -> int:

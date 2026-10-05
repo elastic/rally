@@ -90,7 +90,6 @@ def status():
 
 
 def main():
-    process.disable_os_log_on_macos()
     check_python_version()
     log.install_default_log_config()
     log.configure_logging()
