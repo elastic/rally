@@ -1413,10 +1413,10 @@ def load_configuration(config_name):
 
 
 def main():
-    process.disable_os_log_on_macos()
     check_python_version()
     log.install_default_log_config()
     log.configure_logging()
+    process.disable_os_log_on_macos()
     logger = logging.getLogger(__name__)
     start = time.time()
 

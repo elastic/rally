@@ -15,10 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import ipaddress
 import logging
 import os
 import shlex
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -31,9 +33,23 @@ LogLevel = int
 FileId = int
 
 
+def _has_global_ipv6_address() -> bool:
+    for addrs in psutil.net_if_addrs().values():
+        for addr in addrs:
+            if addr.family != socket.AF_INET6:
+                continue
+            try:
+                if ipaddress.IPv6Address(addr.address.split("%", 1)[0]).is_global:
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
 def disable_os_log_on_macos() -> None:
     """
-    On macOS, re-executes the current process with ``OS_ACTIVITY_MODE=disable`` unless the variable is already set.
+    On macOS, re-executes the current process with ``OS_ACTIVITY_MODE=disable`` unless the variable is already set
+    or the host has a global IPv6 address.
 
     Rally's actors are forked without exec. In such processes ``getaddrinfo`` may crash inside ``os_log`` (reached via
     Network.framework's NAT64 check) and Thespian's signal handler turns the crash into a hang. ``libtrace`` reads
@@ -41,6 +57,9 @@ def disable_os_log_on_macos() -> None:
     """
     if sys.platform != "darwin" or "OS_ACTIVITY_MODE" in os.environ:
         return
+    if _has_global_ipv6_address():
+        return
+    logging.getLogger(__name__).info("Disabling os_log (OS_ACTIVITY_MODE=disable) and re-executing to avoid NAT64 bug.")
     os.environ["OS_ACTIVITY_MODE"] = "disable"
     os.execv(sys.executable, sys.orig_argv)
 
