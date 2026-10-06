@@ -1082,6 +1082,119 @@ class TestTrackPreparation:
         assert prepare_file_offset_table.call_count == 0
 
 
+class TestOtlpDocumentPreparation:
+    """Tests for the OTLP-specific path in DocumentSetPreparator — specifically the compressed
+    .pb download support that mirrors the JSON corpus's archive compression."""
+
+    def _doc_set(self, *, archive=None, compressed_size=0, base_url="http://example.com/otlp"):
+        return track.Documents(
+            source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+            document_file="metrics.otlp.json",
+            document_archive=archive,
+            number_of_documents=10,
+            base_url=base_url,
+            uncompressed_size_in_bytes=2000,
+            compressed_size_in_bytes=compressed_size,
+        )
+
+    def _preparator(self):
+        return loader.DocumentSetPreparator(
+            track_name="unit-test",
+            downloader=mock.MagicMock(spec=loader.Downloader),
+            decompressor=mock.MagicMock(spec=loader.Decompressor),
+        )
+
+    @staticmethod
+    def _write_file(path, size=1):
+        with open(path, "wb") as f:
+            f.write(b"\x00" * size)
+
+    def test_skips_when_pb_already_valid(self):
+        p = self._preparator()
+        with mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=True):
+            p.prepare_otlp_document_set(self._doc_set(), data_root="/tmp")
+        p.downloader.download.assert_not_called()
+
+    @mock.patch.object(io.OtlpProtobufFile, "create")
+    def test_downloads_pb_and_offset(self, create, tmp_path):
+        p = self._preparator()
+        p.downloader.download.side_effect = lambda base_url, target_path, *args: self._write_file(target_path)
+
+        p.prepare_otlp_document_set(self._doc_set(), data_root=str(tmp_path))
+
+        pb_path = str(tmp_path / "metrics.otlp.json.pb")
+        assert p.downloader.download.call_args_list == [
+            mock.call("http://example.com/otlp", pb_path),
+            mock.call("http://example.com/otlp", pb_path + ".offset"),
+        ]
+        create.assert_not_called()
+
+    @mock.patch.object(io.OtlpProtobufFile, "create")
+    def test_offset_download_failure_is_non_fatal(self, create, tmp_path):
+        def download(base_url, target_path, *args):
+            if target_path.endswith(".offset"):
+                raise exceptions.DataError("not found")
+            self._write_file(target_path)
+
+        p = self._preparator()
+        p.downloader.download.side_effect = download
+
+        p.prepare_otlp_document_set(self._doc_set(), data_root=str(tmp_path))
+
+        assert (tmp_path / "metrics.otlp.json.pb").exists()
+        assert not (tmp_path / "metrics.otlp.json.pb.offset").exists()
+        create.assert_not_called()
+
+    @mock.patch.object(io.OtlpProtobufFile, "create")
+    def test_removes_stale_offset_when_pb_downloaded(self, create, tmp_path):
+        def download(base_url, target_path, *args):
+            if target_path.endswith(".offset"):
+                raise RuntimeError("connection reset")
+            self._write_file(target_path)
+
+        offset_path = tmp_path / "metrics.otlp.json.pb.offset"
+        offset_path.write_text("0;0\n1000;12345\n")
+        p = self._preparator()
+        p.downloader.download.side_effect = download
+
+        p.prepare_otlp_document_set(self._doc_set(), data_root=str(tmp_path))
+
+        assert not offset_path.exists()
+        create.assert_not_called()
+
+    @mock.patch.object(io.OtlpProtobufFile, "create", return_value=10)
+    def test_falls_back_to_local_json_when_pb_download_fails(self, create, tmp_path):
+        self._write_file(tmp_path / "metrics.otlp.json", size=2000)
+        p = self._preparator()
+        p.downloader.download.side_effect = exceptions.DataError("not found")
+
+        p.prepare_otlp_document_set(self._doc_set(), data_root=str(tmp_path))
+
+        p.downloader.download.assert_called_once_with("http://example.com/otlp", str(tmp_path / "metrics.otlp.json.pb"))
+        create.assert_called_once_with()
+
+    @mock.patch.object(io.OtlpProtobufFile, "create", return_value=10)
+    def test_no_pb_download_without_base_url(self, create, tmp_path):
+        self._write_file(tmp_path / "metrics.otlp.json", size=2000)
+        p = self._preparator()
+
+        p.prepare_otlp_document_set(self._doc_set(base_url=None), data_root=str(tmp_path))
+
+        p.downloader.download.assert_not_called()
+        create.assert_called_once_with()
+
+    @mock.patch.object(io.OtlpProtobufFile, "remove")
+    @mock.patch.object(io.OtlpProtobufFile, "create", return_value=3)
+    def test_record_count_mismatch_raises_and_removes_pb(self, create, remove, tmp_path):
+        self._write_file(tmp_path / "metrics.otlp.json", size=2000)
+        p = self._preparator()
+
+        with pytest.raises(exceptions.DataError, match=r"Expected \[10\] records but got \[3\]"):
+            p.prepare_otlp_document_set(self._doc_set(base_url=None), data_root=str(tmp_path))
+
+        remove.assert_called_once_with()
+
+
 class TestTemplateSource:
     @mock.patch("esrally.utils.io.dirname")
     @mock.patch.object(loader.TemplateSource, "read_glob_files")
@@ -1703,6 +1816,40 @@ class TestTrackPath:
 
         assert t.corpora[0].documents[0].document_file == "/data/unittest/docs/documents.json"
         assert t.corpora[0].documents[0].document_archive == "/data/unittest/docs/documents.json.bz2"
+
+    @mock.patch("os.path.exists")
+    def test_otlp_resolves_via_pb_when_json_missing(self, path_exists):
+        # OTLP corpora are special: the hot path only needs the .pb (and .pb.offset). If we
+        # downloaded just the .pb (no source JSON), document_file would otherwise stay None and
+        # the param source would later try to open "None.pb".
+        def fake_exists(path: str) -> bool:
+            # JSON doesn't exist locally; only the .pb does
+            return path.endswith(".pb")
+
+        path_exists.side_effect = fake_exists
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
+
+        t = track.Track(
+            name="u",
+            corpora=[
+                track.DocumentCorpus(
+                    "otlp",
+                    documents=[
+                        track.Documents(
+                            source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                            document_file="metrics.otlp.json",
+                        )
+                    ],
+                )
+            ],
+        )
+
+        loader.set_absolute_data_path(cfg, t)
+
+        # document_file points to where the JSON would be — so the derived .pb path is correct
+        assert t.corpora[0].documents[0].document_file == "/data/otlp/metrics.otlp.json"
 
 
 class TestTrackFilter:

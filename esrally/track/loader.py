@@ -416,6 +416,13 @@ def set_absolute_data_path(cfg: types.Config, t):
                 return p
         return None
 
+    def first_existing_with_suffix(root_dirs, f, suffix):
+        for root_dir in root_dirs:
+            candidate = os.path.join(root_dir, f)
+            if os.path.exists(candidate + suffix):
+                return candidate
+        return None
+
     for corpus in t.corpora:
         data_root = data_dir(cfg, t.name, corpus.name)
         for document_set in corpus.documents:
@@ -423,7 +430,14 @@ def set_absolute_data_path(cfg: types.Config, t):
             if document_set.document_archive:
                 document_set.document_archive = first_existing(data_root, document_set.document_archive)
             if document_set.document_file:
-                document_set.document_file = first_existing(data_root, document_set.document_file)
+                resolved = first_existing(data_root, document_set.document_file)
+                # For OTLP corpora, the hot path reads the .pb (and .pb.offset) — the source JSON is
+                # only needed during prepare-track when generating the .pb locally. If only the .pb
+                # has been downloaded, the JSON path won't exist; resolve document_file to the path
+                # the JSON *would* have so the derived ``.pb`` path is correct.
+                if resolved is None and document_set.is_otlp:
+                    resolved = first_existing_with_suffix(data_root, document_set.document_file, ".pb")
+                document_set.document_file = resolved
 
 
 def is_simple_track_mode(cfg: types.Config):
@@ -583,6 +597,14 @@ class DefaultTrackPreparator(TrackProcessor):
                         "preparator": prep,
                         "document_set": document_set,
                     }
+                elif document_set.is_otlp:
+                    yield prepare_otlp_document, {
+                        "cfg": self.cfg,
+                        "track": track,
+                        "corpus": corpus,
+                        "preparator": prep,
+                        "document_set": document_set,
+                    }
 
 
 def prepare_document(cfg: types.Config, track, corpus, preparator, document_set):
@@ -593,6 +615,15 @@ def prepare_document(cfg: types.Config, track, corpus, preparator, document_set)
     # attempt to prepare everything in the current directory and fallback to the corpus directory
     elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
         preparator.prepare_document_set(document_set, data_root[1])
+
+
+def prepare_otlp_document(cfg: types.Config, track, corpus, preparator, document_set):
+    data_root = data_dir(cfg, track.name, corpus.name)
+    LOG.info("Resolved data root directory for OTLP corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root)
+    if len(data_root) == 1:
+        preparator.prepare_otlp_document_set(document_set, data_root[0])
+    elif not preparator.prepare_bundled_otlp_document_set(document_set, data_root[0]):
+        preparator.prepare_otlp_document_set(document_set, data_root[1])
 
 
 class Decompressor:
@@ -731,6 +762,16 @@ class DocumentSetPreparator:
                 f"Expected [{expected_number_of_lines}] lines but got [{lines_read}]."
             )
 
+    def create_otlp_protobuf_file(self, pb_file, expected_number_of_records):
+        records_read = pb_file.create()
+        if records_read != expected_number_of_records:
+            # otherwise is_valid() would accept the bad .pb on the next run
+            pb_file.remove()
+            raise exceptions.DataError(
+                f"Data in [{pb_file.source_json_path}] for track [{self.track_name}] are invalid. "
+                f"Expected [{expected_number_of_records}] records but got [{records_read}]."
+            )
+
     def prepare_document_set(self, document_set, data_root):
         """
         Prepares a document set locally.
@@ -828,6 +869,112 @@ class DocumentSetPreparator:
                     )
             else:
                 return False
+
+    def prepare_otlp_document_set(self, document_set, data_root):
+        """
+        Prepares an OTLP binary protobuf corpus file locally.
+
+        Strategy:
+        1. If a valid .pb file already exists, nothing to do.
+        2. Try downloading the .pb from the corpus base URL (avoids downloading the JSON source).
+        3. Download and decompress the JSON source, then convert it to .pb locally.
+
+        :param document_set: A document set with source_format == SOURCE_FORMAT_OTLP_PROTOBUF.
+        :param data_root: The data root directory for this document set.
+        """
+        doc_path = os.path.join(data_root, document_set.document_file)
+        archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
+        pb_file = io.OtlpProtobufFile.for_source_file(doc_path)
+
+        # 1. Valid .pb already present
+        if pb_file.is_valid():
+            return
+
+        # 2. Try downloading .pb directly — avoids downloading the larger JSON source
+        if document_set.base_url:
+            pb_path = doc_path + ".pb"
+            try:
+                self.downloader.download(document_set.base_url, pb_path)
+            except exceptions.DataError:
+                pass  # .pb not available remotely, fall through
+            else:
+                if pb_file.is_valid():
+                    # an existing offset may belong to a previously built .pb
+                    pb_file.remove_offset_file()
+                    offset_path = pb_path + ".offset"
+                    try:
+                        self.downloader.download(document_set.base_url, offset_path)
+                    except Exception:
+                        LOG.debug("Could not download [%s]; it will be generated on first use.", offset_path, exc_info=True)
+                    return
+
+        # 3. Ensure JSON source is available
+        while True:
+            if self.is_locally_available(doc_path) and self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
+                break
+            if (
+                archive_path
+                and self.is_locally_available(archive_path)
+                and self.has_expected_size(archive_path, document_set.compressed_size_in_bytes)
+            ):
+                self.decompressor.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
+            else:
+                if document_set.has_compressed_corpus():
+                    target_path = archive_path
+                    expected_size = document_set.compressed_size_in_bytes
+                elif document_set.has_uncompressed_corpus():
+                    target_path = doc_path
+                    expected_size = document_set.uncompressed_size_in_bytes
+                else:
+                    raise exceptions.RallyAssertionError(f"Track {self.track_name} specifies documents but no corpus")
+                try:
+                    self.downloader.download(document_set.base_url, target_path, expected_size)
+                except exceptions.DataError as e:
+                    if e.message == "Cannot download data because no base URL is provided." and self.is_locally_available(target_path):
+                        raise exceptions.DataError(
+                            f"[{target_path}] is present but does not have the expected "
+                            f"size of [{expected_size}] bytes and it cannot be downloaded "
+                            f"because no base URL is provided."
+                        ) from None
+                    raise
+
+        # 4. Convert JSON to .pb
+        self.create_otlp_protobuf_file(pb_file, document_set.number_of_documents)
+
+    def prepare_bundled_otlp_document_set(self, document_set, data_root):
+        """
+        Prepares a bundled OTLP document set (files in the same directory as the track).
+
+        :return: True if the .pb file is ready, False if required files were not found locally.
+        """
+        doc_path = os.path.join(data_root, document_set.document_file)
+        archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
+        pb_file = io.OtlpProtobufFile.for_source_file(doc_path)
+
+        if pb_file.is_valid():
+            return True
+
+        if self.is_locally_available(doc_path):
+            if self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
+                self.create_otlp_protobuf_file(pb_file, document_set.number_of_documents)
+                return True
+            else:
+                raise exceptions.DataError(
+                    f"[{doc_path}] is present but does not have the expected size " f"of [{document_set.uncompressed_size_in_bytes}] bytes."
+                )
+
+        if archive_path and self.is_locally_available(archive_path):
+            if self.has_expected_size(archive_path, document_set.compressed_size_in_bytes):
+                self.decompressor.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
+                self.create_otlp_protobuf_file(pb_file, document_set.number_of_documents)
+                return True
+            else:
+                raise exceptions.DataError(
+                    f"[{archive_path}] is present but does not have "
+                    f"the expected size of [{document_set.compressed_size_in_bytes}] bytes."
+                )
+
+        return False
 
 
 class TemplateSource:
@@ -1671,6 +1818,29 @@ class TrackSpecificationReader:
                         uncompressed_size_in_bytes=uncompressed_bytes,
                         target_index=target_idx,
                         target_data_stream=target_ds,
+                        meta_data=doc_meta_data,
+                    )
+                    corpus.documents.append(docs)
+                elif source_format == track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF:
+                    source_file = self._r(doc_spec, "source-file")
+                    if io.is_archive(source_file):
+                        document_archive = source_file
+                        document_file = io.splitext(source_file)[0]
+                    else:
+                        document_archive = None
+                        document_file = source_file
+                    num_docs = self._r(doc_spec, "document-count")
+                    compressed_bytes = self._r(doc_spec, "compressed-bytes", mandatory=False)
+                    uncompressed_bytes = self._r(doc_spec, "uncompressed-bytes", mandatory=False)
+                    doc_meta_data = self._r(doc_spec, "meta", error_ctx=name, mandatory=False)
+                    docs = track.Documents(
+                        source_format=source_format,
+                        document_file=document_file,
+                        document_archive=document_archive,
+                        base_url=base_url,
+                        number_of_documents=num_docs,
+                        compressed_size_in_bytes=compressed_bytes,
+                        uncompressed_size_in_bytes=uncompressed_bytes,
                         meta_data=doc_meta_data,
                     )
                     corpus.documents.append(docs)
