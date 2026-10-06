@@ -294,7 +294,7 @@ class TestPrepareFileOffsetTable:
         assert result is None
 
 
-class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
+class TestOtlpProtobufFile:
     """Tests for OTLP JSON → length-prefixed binary protobuf conversion + read-back."""
 
     SAMPLE_OTLP_JSON_LINE = (
@@ -337,6 +337,16 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         json_mtime = os.path.getmtime(json_path)
         os.utime(pb.pb_path, (json_mtime - 10, json_mtime - 10))
         assert pb.is_valid() is False
+
+    def test_remove_offset(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        # no-op when absent
+        pb.remove_offset_file()
+        with open(pb.pb_path + ".offset", "w", encoding="utf-8") as f:
+            f.write("0;0\n")
+        pb.remove_offset_file()
+        assert not os.path.exists(pb.pb_path + ".offset")
 
     def test_create_then_read_round_trip(self, tmp_path):
         # write 3 identical lines so we get 3 distinct records back
@@ -436,79 +446,3 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         os.remove(pb.pb_path + ".offset")
         records = list(pb.read_records(2, 4))
         assert len(records) == 2
-
-    def test_try_download_returns_false_without_base_url(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
-        pb = io.OtlpProtobufFile.for_source_file(json_path)
-        assert pb.try_download_from_corpus_location(None) is False
-
-    def test_try_download_pb_and_offset(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
-        pb = io.OtlpProtobufFile.for_source_file(json_path)
-
-        downloaded = []
-
-        def fake_download(url, dest, **kwargs):
-            downloaded.append(url)
-            with open(dest, "wb") as f:
-                f.write(b"\x00")
-
-        with mock.patch("esrally.utils.net.download", side_effect=fake_download):
-            assert pb.try_download_from_corpus_location("http://example.com/corpus/") is True
-
-        # both .pb and .pb.offset should have been attempted, with trailing slash stripped
-        assert downloaded == [
-            "http://example.com/corpus/metrics.otlp.json.pb",
-            "http://example.com/corpus/metrics.otlp.json.pb.offset",
-        ]
-
-    def test_try_download_offset_failure_is_non_fatal(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
-        pb = io.OtlpProtobufFile.for_source_file(json_path)
-
-        def fake_download(url, dest, **kwargs):
-            if url.endswith(".offset"):
-                raise RuntimeError("not found")
-            with open(dest, "wb") as f:
-                f.write(b"\x00")
-
-        with mock.patch("esrally.utils.net.download", side_effect=fake_download):
-            # .pb succeeds, .offset fails → overall result is still True
-            assert pb.try_download_from_corpus_location("http://example.com/corpus") is True
-        assert os.path.exists(pb.pb_path)
-        assert not os.path.exists(pb.pb_path + ".offset")
-
-    def test_try_download_pb_failure_returns_false(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
-        pb = io.OtlpProtobufFile.for_source_file(json_path)
-
-        with mock.patch("esrally.utils.net.download", side_effect=Exception("404")):
-            assert pb.try_download_from_corpus_location("http://example.com/corpus") is False
-
-    def test_prepare_skips_when_pb_already_valid(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
-        # pre-create the .pb so it's already valid
-        io.OtlpProtobufFile.for_source_file(json_path).create()
-
-        with mock.patch("esrally.utils.net.download") as mock_dl:
-            result = io.prepare_otlp_protobuf_file(json_path, "http://example.com/corpus")
-
-        mock_dl.assert_not_called()
-        assert result is None
-
-    def test_prepare_falls_back_to_local_when_download_fails(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 2)
-
-        with mock.patch("esrally.utils.net.download", side_effect=Exception("404")):
-            result = io.prepare_otlp_protobuf_file(json_path, "http://example.com/corpus")
-
-        assert result == 2
-
-    def test_prepare_returns_none_when_no_local_json_and_download_fails(self, tmp_path):
-        # source JSON does not exist
-        json_path = str(tmp_path / "missing.otlp.json")
-
-        with mock.patch("esrally.utils.net.download", side_effect=Exception("404")):
-            result = io.prepare_otlp_protobuf_file(json_path, "http://example.com/corpus")
-
-        assert result is None

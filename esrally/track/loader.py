@@ -885,10 +885,18 @@ class DocumentSetPreparator:
             pb_path = doc_path + ".pb"
             try:
                 self.downloader.download(document_set.base_url, pb_path)
-                if pb_file.is_valid():
-                    return
             except exceptions.DataError:
                 pass  # .pb not available remotely, fall through
+            else:
+                if pb_file.is_valid():
+                    # an existing offset may belong to a previously built .pb
+                    pb_file.remove_offset_file()
+                    offset_path = pb_path + ".offset"
+                    try:
+                        self.downloader.download(document_set.base_url, offset_path)
+                    except Exception:
+                        LOG.debug("Could not download [%s]; it will be generated on first use.", offset_path, exc_info=True)
+                    return
 
         # 3. Ensure JSON source is available
         while True:
