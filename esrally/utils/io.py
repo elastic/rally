@@ -742,6 +742,11 @@ class OtlpProtobufFile:
         if os.path.exists(offset_path):
             os.remove(offset_path)
 
+    def remove(self) -> None:
+        if os.path.exists(self.pb_path):
+            os.remove(self.pb_path)
+        self.remove_offset_file()
+
     def create(self) -> int:
         """
         Parse the source OTLP JSON file and write binary protobuf records to the .pb file,

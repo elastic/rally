@@ -1162,7 +1162,7 @@ class TestOtlpDocumentPreparation:
         assert not offset_path.exists()
         create.assert_not_called()
 
-    @mock.patch.object(io.OtlpProtobufFile, "create")
+    @mock.patch.object(io.OtlpProtobufFile, "create", return_value=10)
     def test_falls_back_to_local_json_when_pb_download_fails(self, create, tmp_path):
         self._write_file(tmp_path / "metrics.otlp.json", size=2000)
         p = self._preparator()
@@ -1173,7 +1173,7 @@ class TestOtlpDocumentPreparation:
         p.downloader.download.assert_called_once_with("http://example.com/otlp", str(tmp_path / "metrics.otlp.json.pb"))
         create.assert_called_once_with()
 
-    @mock.patch.object(io.OtlpProtobufFile, "create")
+    @mock.patch.object(io.OtlpProtobufFile, "create", return_value=10)
     def test_no_pb_download_without_base_url(self, create, tmp_path):
         self._write_file(tmp_path / "metrics.otlp.json", size=2000)
         p = self._preparator()
@@ -1182,6 +1182,17 @@ class TestOtlpDocumentPreparation:
 
         p.downloader.download.assert_not_called()
         create.assert_called_once_with()
+
+    @mock.patch.object(io.OtlpProtobufFile, "remove")
+    @mock.patch.object(io.OtlpProtobufFile, "create", return_value=3)
+    def test_record_count_mismatch_raises_and_removes_pb(self, create, remove, tmp_path):
+        self._write_file(tmp_path / "metrics.otlp.json", size=2000)
+        p = self._preparator()
+
+        with pytest.raises(exceptions.DataError, match=r"Expected \[10\] records but got \[3\]"):
+            p.prepare_otlp_document_set(self._doc_set(base_url=None), data_root=str(tmp_path))
+
+        remove.assert_called_once_with()
 
 
 class TestTemplateSource:

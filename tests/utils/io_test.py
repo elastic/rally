@@ -348,6 +348,16 @@ class TestOtlpProtobufFile:
         pb.remove_offset_file()
         assert not os.path.exists(pb.pb_path + ".offset")
 
+    def test_remove(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        # no-op when absent
+        pb.remove()
+        pb.create()
+        pb.remove()
+        assert not os.path.exists(pb.pb_path)
+        assert not os.path.exists(pb.pb_path + ".offset")
+
     def test_create_then_read_round_trip(self, tmp_path):
         # write 3 identical lines so we get 3 distinct records back
         lines = [self.SAMPLE_OTLP_JSON_LINE] * 3
