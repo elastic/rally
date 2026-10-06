@@ -51,3 +51,29 @@ def test_rejects_missing_named_configuration(tmp_path, monkeypatch):
         rally.load_configuration("missing")
 
     assert not config_file.exists()
+
+
+def test_prepare_track_parser_accepts_arguments():
+    arg_parser = rally.create_arg_parser()
+    args = arg_parser.parse_args(
+        [
+            "prepare-track",
+            "--track-path=/path/to/track",
+            "--track-params=k:v",
+            "--ignore-unused-track-params",
+            "--challenge=my-challenge",
+            "--build-flavor=serverless",
+            "--serverless-operator",
+            "--test-mode",
+            "--kill-running-processes",
+        ]
+    )
+    assert args.subcommand == "prepare-track"
+    assert args.track_path == "/path/to/track"
+    assert args.track_params == "k:v"
+    assert args.ignore_unused_track_params is True
+    assert args.challenge == "my-challenge"
+    assert args.build_flavor == "serverless"
+    assert args.serverless_operator is True
+    assert args.test_mode is True
+    assert args.kill_running_processes is True
