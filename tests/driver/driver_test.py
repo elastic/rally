@@ -353,6 +353,40 @@ class TestDriver:
         assert driver_actor.on_task_finished.call_count == 1
         assert driver_actor.drive_at.call_count == 4
 
+    def test_update_progress_message_handles_out_of_bounds_current_step(self):
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        d.prepare_benchmark(t=self.track)
+        d.quiet = False
+        task_mock = mock.Mock()
+        task_mock.name = "index-append"
+        d.tasks_per_join_point = [[task_mock]]
+        d.progress_reporter = mock.Mock()
+
+        # Step within bounds
+        d.current_step = 0
+        d.update_progress_message()
+        assert d.progress_reporter.print.called
+
+        # Step out of bounds (should not raise IndexError)
+        d.progress_reporter.reset_mock()
+        d.current_step = 10
+        d.update_progress_message()
+        assert not d.progress_reporter.print.called
+
+    def test_update_progress_message_handles_none_tasks_per_join_point(self):
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticClientFactory)
+        d.prepare_benchmark(t=self.track)
+        d.quiet = False
+        d.tasks_per_join_point = None
+        d.progress_reporter = mock.Mock()
+
+        d.current_step = 0
+        # Should not raise TypeError
+        d.update_progress_message()
+        assert not d.progress_reporter.print.called
+
     @mock.patch("esrally.driver.driver.delete_api_keys")
     def test_creates_api_keys_on_start_and_deletes_on_end(self, delete):
         client_opts = {
