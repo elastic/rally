@@ -22,6 +22,8 @@ import json
 import logging
 import os
 import random
+import socket
+import sys
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -30,6 +32,8 @@ from unittest import mock
 import elasticsearch.exceptions
 import elasticsearch.helpers
 import pytest
+import urllib3.connection
+from elastic_transport import NodeConfig
 
 from esrally import client, config, exceptions, metrics, paths, time, track
 from esrally.metrics import GlobalStatsCalculator
@@ -49,6 +53,7 @@ def rally_metric_template():
                 "@timestamp": {"format": "epoch_millis", "type": "date"},
                 "car": {"type": "keyword"},
                 "challenge": {"type": "keyword"},
+                "response-timestamp": {"format": "epoch_millis", "type": "date"},
                 "environment": {"type": "keyword"},
                 "job": {"type": "keyword"},
                 "max": {"type": "float"},
@@ -156,6 +161,9 @@ class TestEsClient:
         def __init__(self, hosts):
             self.transport = TestEsClient.TransportMock(hosts)
 
+        def options(self, **kwargs):
+            return self
+
     @pytest.mark.parametrize("password_configuration", [None, "config", "environment"])
     def test_config_opts_parsing_basic(self, password_configuration, monkeypatch):
         cfg = config.Config()
@@ -201,6 +209,7 @@ class TestEsClient:
             "basic_auth_user": _datastore_user,
             "basic_auth_password": _datastore_password,
             "verify_certs": _datastore_verify_certs,
+            "node_class": metrics.KeepaliveUrllib3HttpNode,
         }
 
         client_factory.assert_called_with(
@@ -251,6 +260,7 @@ class TestEsClient:
             "timeout": 120,
             "verify_certs": _datastore_verify_certs,
             "api_key": _datastore_apikey,
+            "node_class": metrics.KeepaliveUrllib3HttpNode,
         }
 
         client_factory.assert_called_with(
@@ -439,10 +449,10 @@ class TestEsClient:
             BulkIndexError(bulk_index_errors),
         ]
 
-        max_retry = 10
+        max_retry = 3
 
-        # The sec to sleep for 10 transport errors is
-        # [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] ~> 17.05min in total
+        # Sleep slots for 3 retries: [1, 2, 4] ~> 7s total.
+        # Reduced from 10 to prevent blocking the Thespian actor event loop for ~39 minutes.
         sleep_slots = [float(2**i) for i in range(0, max_retry)]
 
         # we want deterministic timings to assess logging statements
@@ -576,7 +586,7 @@ class TestEsClient:
         bulk_index_errors = [
             {
                 "create": {
-                    "_index": "rally-metrics-v1",
+                    "_index": "rally-metrics-v2",
                     "_id": None,
                     "status": 429,
                     "error": {"type": "circuit_breaking_exception", "reason": "Data too large"},
@@ -602,7 +612,7 @@ class TestEsClient:
         bulk_index_errors = [
             {
                 "create": {
-                    "_index": "rally-metrics-v1",
+                    "_index": "rally-metrics-v2",
                     "_id": None,
                     "status": 409,
                     "error": {"type": "version_conflict_engine_exception"},
@@ -621,7 +631,85 @@ class TestEsClient:
             client.guarded(raise_bulk_index_error)
 
 
+class TestKeepaliveUrllib3HttpNode:
+    """Tests for the TCP keepalive node subclass."""
+
+    def _make_node(self, monkeypatch, conn_kw=None):
+        """Return a KeepaliveUrllib3HttpNode with a mocked pool, bypassing real network setup."""
+        pool = mock.MagicMock()
+        pool.conn_kw = conn_kw if conn_kw is not None else {}
+
+        def fake_urllib3_init(self, config):
+            self.pool = pool
+
+        monkeypatch.setattr(metrics.Urllib3HttpNode, "__init__", fake_urllib3_init)
+        return metrics.KeepaliveUrllib3HttpNode(config=None)
+
+    def test_enables_so_keepalive(self, monkeypatch):
+        node = self._make_node(monkeypatch)
+        assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
+
+    def test_preserves_existing_socket_options(self, monkeypatch):
+        sentinel = (socket.IPPROTO_TCP, 200, 42)
+        node = self._make_node(monkeypatch, conn_kw={"socket_options": [sentinel]})
+        assert sentinel in node.pool.conn_kw["socket_options"]
+        assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
+
+    def test_does_not_mutate_original_socket_options_list(self, monkeypatch):
+        # Pass the original list object directly (no copy) so mutation is detectable.
+        original = []
+        node = self._make_node(monkeypatch, conn_kw={"socket_options": original})
+        assert original == []  # the production code must not mutate the original list in-place
+        assert (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1) in node.pool.conn_kw["socket_options"]
+
+    def test_includes_tcp_nodelay_from_urllib3_default(self, monkeypatch):
+        # When conn_kw starts without socket_options the implementation must seed from
+        # urllib3's default (which carries TCP_NODELAY) before appending keepalive opts.
+        node = self._make_node(monkeypatch, conn_kw={})
+        opts = node.pool.conn_kw["socket_options"]
+        for default_opt in urllib3.connection.HTTPConnection.default_socket_options:
+            assert default_opt in opts, f"Expected urllib3 default socket option {default_opt} to be preserved"
+
+    def test_platform_specific_keepalive_options(self, monkeypatch):
+        node = self._make_node(monkeypatch)
+        opts = node.pool.conn_kw["socket_options"]
+        if sys.platform == "linux" and hasattr(socket, "TCP_KEEPIDLE"):
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60) in opts
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10) in opts
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6) in opts
+        elif sys.platform == "darwin" and hasattr(socket, "TCP_KEEPALIVE"):
+            assert (socket.IPPROTO_TCP, socket.TCP_KEEPALIVE, 60) in opts
+
+    def test_socket_options_applied_to_real_connection(self):
+        # Verify urllib3 actually applies conn_kw["socket_options"] to a real socket.
+        listener = socket.socket()
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        conn = None
+        try:
+            node = metrics.KeepaliveUrllib3HttpNode(NodeConfig(scheme="http", host="127.0.0.1", port=port))
+            conn = node.pool._new_conn()
+            conn.connect()
+            assert conn.sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE) != 0
+        finally:
+            if conn is not None:
+                conn.close()
+            listener.close()
+
+
 class TestIndexTemplateProvider:
+
+    TIME_WINDOW_FIELDS = (
+        "start_timestamp",
+        "end_timestamp",
+        "warmup_start_timestamp",
+        "warmup_end_timestamp",
+        "normal_start_timestamp",
+        "normal_end_timestamp",
+    )
+
     def setup_method(self, method):
         self.cfg = config.Config()
         self.cfg.add(config.Scope.application, "node", "root.dir", os.path.join(tempfile.gettempdir(), str(uuid.uuid4())))
@@ -714,6 +802,20 @@ class TestIndexTemplateProvider:
             t = json.loads(provider.get_template(es_store_type))
             assert t["index_patterns"] == [f"{es_store_type.index_prefix}*"]
             assert t["template"]["mappings"]["properties"]["@timestamp"] == {"type": "date", "format": "epoch_millis"}
+
+    def test_templates_map_task_time_windows(self):
+        provider = self._make_provider()
+        date_mapping = {"type": "date", "format": "epoch_millis"}
+        metrics_props = json.loads(provider.get_template(metrics.EsStoreType.metrics))["template"]["mappings"]["properties"]
+        assert metrics_props["response-timestamp"] == date_mapping
+
+        results_props = json.loads(provider.get_template(metrics.EsStoreType.results))["template"]["mappings"]["properties"]
+        races_op = json.loads(provider.get_template(metrics.EsStoreType.races))["template"]["mappings"]["properties"]["results"][
+            "properties"
+        ]["op_metrics"]["properties"]
+        for name in self.TIME_WINDOW_FIELDS:
+            assert results_props[name] == date_mapping
+            assert races_op[name] == date_mapping
 
 
 class TestComponentTemplateProvider:
@@ -1601,6 +1703,49 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
 
         assert actual_index_size == index_size
 
+    def test_get_op_window(self):
+        search_result = {
+            "aggregations": {
+                "start": {"value": float(StaticClock.NOW * 1000 + 10000)},
+                "end": {"value": float(StaticClock.NOW * 1000 + 10050)},
+            },
+        }
+        self.es_mock.search = mock.MagicMock(return_value=search_result)
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        expected_query = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"race-id": self.RACE_ID}},
+                        {"term": {"name": "service_time"}},
+                        {"term": {"task": "index"}},
+                        {"term": {"sample-type": "warmup"}},
+                    ]
+                }
+            },
+            "size": 0,
+            "aggs": {
+                "start": {"min": {"field": "@timestamp"}},
+                "end": {"max": {"field": "response-timestamp"}},
+            },
+        }
+
+        assert self.metrics_store.get_op_window("index", sample_type=metrics.SampleType.Warmup) == (
+            StaticClock.NOW * 1000 + 10000,
+            StaticClock.NOW * 1000 + 10050,
+        )
+        self.es_mock.search.assert_called_with(
+            index=f"{metrics.EsStoreType.metrics.index_prefix}{metrics.EsStoreType.metrics.data_stream_version}",
+            body=expected_query,
+        )
+
+    def test_get_op_window_none_when_empty(self):
+        self.es_mock.search = mock.MagicMock(return_value={"aggregations": {"start": {"value": None}, "end": {"value": None}}})
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults")
+
+        assert self.metrics_store.get_op_window("index") is None
+
     def test_get_mean(self):
         mean_throughput = 1734
         search_result = {
@@ -1877,6 +2022,148 @@ class TestEsMetricsStore:  # pylint: disable=too-many-public-methods
             use_data_streams=True,
         )
 
+    # ------------------------------------------------------------------ #
+    #  flush() error-path tests                                           #
+    # ------------------------------------------------------------------ #
+
+    def test_flush_requeues_docs_on_transient_error(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        doc = {"name": "metric"}
+        ms._add(doc)
+        es_mock.bulk_index.side_effect = exceptions.RallyError("connection failed")
+        es_mock.refresh.reset_mock()  # ignore the refresh issued by open()
+
+        ms.flush()  # must not raise
+
+        assert ms._flush_consecutive_failures == 1
+        assert ms._docs == [doc]
+        ms.logger.warning.assert_called_once()
+        es_mock.refresh.assert_not_called()  # nothing was indexed, so no refresh
+
+    def test_flush_increments_counter_across_cycles(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        es_mock.bulk_index.side_effect = exceptions.RallyError("timeout")
+        for i in range(1, 4):
+            ms._add({"name": f"doc{i}"})
+            ms.flush()
+            assert ms._flush_consecutive_failures == i
+
+    def test_flush_raises_after_max_consecutive_failures(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        original = exceptions.RallyError("unreachable")
+        es_mock.bulk_index.side_effect = original
+        ms._flush_consecutive_failures = metrics.EsMetricsStore._MAX_FLUSH_FAILURES - 1
+        ms._add({"name": "doc"})
+
+        with pytest.raises(exceptions.RallyError) as exc_info:
+            ms.flush()
+
+        # Context is in the exception; the cause is chained for both tracebacks and full_message.
+        assert "consecutive flush failures" in str(exc_info.value)
+        assert exc_info.value.__cause__ is original
+        assert exc_info.value.cause is original
+        assert "unreachable" in exc_info.value.full_message
+        assert ms._flush_consecutive_failures == metrics.EsMetricsStore._MAX_FLUSH_FAILURES
+
+    def test_flush_resets_counter_on_empty_cycle(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._flush_consecutive_failures = 7
+        # No docs added — quiet cycle.
+        ms.flush()
+
+        assert ms._flush_consecutive_failures == 0
+        es_mock.bulk_index.assert_not_called()
+
+    def test_flush_resets_counter_on_success(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._flush_consecutive_failures = 7
+        ms._add({"name": "doc"})
+        es_mock.bulk_index.side_effect = None
+        es_mock.refresh.reset_mock()  # ignore the refresh issued by open()
+
+        ms.flush()
+
+        assert ms._flush_consecutive_failures == 0
+        es_mock.refresh.assert_called_once()  # indexed docs are refreshed
+
+    def test_flush_reraises_system_setup_error_immediately(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        es_mock.bulk_index.side_effect = exceptions.SystemSetupError("auth failed")
+
+        with pytest.raises(exceptions.SystemSetupError):
+            ms.flush()
+
+        # Docs must not be re-queued — a config error is not transient.
+        assert ms._docs == []
+
+    def test_flush_closing_raises_and_chains_error(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        original = exceptions.RallyError("gone")
+        es_mock.bulk_index.side_effect = original
+
+        # On close there is no next cycle, so the failure must surface rather than be dropped.
+        with pytest.raises(exceptions.RallyError) as exc_info:
+            ms.flush(closing=True)
+
+        assert "on close" in str(exc_info.value)
+        assert exc_info.value.__cause__ is original
+        assert exc_info.value.cause is original
+        assert "gone" in exc_info.value.full_message
+        # Closing raises before the counter increment, so it is left untouched.
+        assert ms._flush_consecutive_failures == 0
+
+    def test_flush_closing_without_docs_is_noop(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        # A normal close with an already-drained buffer must not raise or hit the store.
+        ms.flush(closing=True)
+
+        es_mock.bulk_index.assert_not_called()
+
+    def test_flush_closing_reraises_system_setup_error_unwrapped(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        original = exceptions.SystemSetupError("auth failed")
+        es_mock.bulk_index.side_effect = original
+
+        # A config/auth error must propagate as-is, not be wrapped in the "on close" error.
+        with pytest.raises(exceptions.SystemSetupError) as exc_info:
+            ms.flush(closing=True)
+
+        assert exc_info.value is original
+
+    def test_flush_refresh_failure_is_warned_not_raised(self):
+        ms, es_mock = self._make_metrics_store(use_data_streams=False)
+        ms.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append", "defaults", create=True)
+
+        ms._add({"name": "doc"})
+        es_mock.bulk_index.side_effect = None
+        es_mock.refresh.side_effect = exceptions.RallyError("refresh timed out")
+
+        ms.flush()  # must not raise
+
+        ms.logger.warning.assert_called_once()
+        assert ms._flush_consecutive_failures == 0  # bulk succeeded, counter stays at 0
+
 
 class TestEsRaceStore:
     RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
@@ -2046,6 +2333,7 @@ class TestEsRaceStore:
             "race-timestamp": "20160131T000000Z",
             "@timestamp": time.to_epoch_millis(self.RACE_TIMESTAMP.timestamp()),
             "pipeline": "from-sources",
+            "multi-cluster": False,
             "user-tags": {"os": "Linux"},
             "track": "unittest",
             "track-params": {"shard-count": 3},
@@ -2702,6 +2990,89 @@ class TestInMemoryMetricsStore:
 
         assert actual_duration is None
 
+    def _put_service_time(self, task, sample_type, absolute_time, relative_time, service_time_ms):
+        self.metrics_store.put_value_cluster_level(
+            "service_time",
+            service_time_ms,
+            "ms",
+            task=task,
+            sample_type=sample_type,
+            absolute_time=absolute_time,
+            relative_time=relative_time,
+        )
+
+    def test_service_time_records_completion_time(self):
+        self.metrics_store.open(
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
+            "test",
+            "append-no-conflicts",
+            "defaults",
+            create=True,
+        )
+        self._put_service_time(
+            "index", metrics.SampleType.Normal, absolute_time=StaticClock.NOW + 10.0, relative_time=10.0, service_time_ms=200
+        )
+        self.metrics_store.put_value_cluster_level(
+            "throughput",
+            100,
+            "docs/s",
+            task="index",
+            absolute_time=StaticClock.NOW + 10.0,
+            relative_time=10.0,
+        )
+
+        service_time = next(d for d in self.metrics_store.docs if d["name"] == "service_time")
+        throughput = next(d for d in self.metrics_store.docs if d["name"] == "throughput")
+        assert service_time["response-timestamp"] == StaticClock.NOW * 1000 + 10200
+        # response-timestamp is only present in 'service-time' samples
+        assert "response-timestamp" not in throughput
+
+    def test_get_op_window_uses_completion_end_over_normal_samples(self):
+        self.metrics_store.open(
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
+            "test",
+            "append-no-conflicts",
+            "defaults",
+            create=True,
+        )
+        # last-started Normal op (+10.050s, 5ms) finishes before the earlier 200ms op
+        self._put_service_time(
+            "index", metrics.SampleType.Warmup, absolute_time=StaticClock.NOW + 1.0, relative_time=1.0, service_time_ms=5
+        )
+        self._put_service_time(
+            "index", metrics.SampleType.Normal, absolute_time=StaticClock.NOW + 10.0, relative_time=10.0, service_time_ms=200
+        )
+        self._put_service_time(
+            "index", metrics.SampleType.Normal, absolute_time=StaticClock.NOW + 10.050, relative_time=10.050, service_time_ms=5
+        )
+        self._put_service_time(
+            "search", metrics.SampleType.Normal, absolute_time=StaticClock.NOW + 30.0, relative_time=1.0, service_time_ms=100
+        )
+
+        assert self.metrics_store.get_op_window("index") == (StaticClock.NOW * 1000 + 10000, StaticClock.NOW * 1000 + 10200)
+        assert self.metrics_store.get_op_window("index", sample_type=metrics.SampleType.Warmup) == (
+            StaticClock.NOW * 1000 + 1000,
+            StaticClock.NOW * 1000 + 1005,
+        )
+
+    def test_get_op_window_none_when_empty(self):
+        self.metrics_store.open(
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
+            "test",
+            "append-no-conflicts",
+            "defaults",
+            create=True,
+        )
+        self._put_service_time(
+            "index", metrics.SampleType.Warmup, absolute_time=StaticClock.NOW + 1.0, relative_time=1.0, service_time_ms=5
+        )
+
+        assert self.metrics_store.get_op_window("index") is None
+        assert self.metrics_store.get_op_window("missing") is None
+
     def test_get_value(self):
         throughput = 5000
         self.metrics_store.open(
@@ -2903,7 +3274,7 @@ class TestInMemoryMetricsStore:
 
 
 class TestFileRaceStore:
-    RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    RACE_TIMESTAMP = datetime.datetime(2016, 1, 31, tzinfo=datetime.timezone.utc)
     RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
 
     class DictHolder:
@@ -3083,6 +3454,7 @@ class TestStatsCalculator:
             operation_type=track.OperationType.Bulk,
             sample_type=metrics.SampleType.Warmup,
             meta_data={"success": False},
+            absolute_time=StaticClock.NOW,
             relative_time=536,
         )
         store.put_value_cluster_level(
@@ -3092,6 +3464,7 @@ class TestStatsCalculator:
             task="index #1",
             operation_type=track.OperationType.Bulk,
             meta_data={"success": True},
+            absolute_time=StaticClock.NOW,
             relative_time=595,
         )
         store.put_value_cluster_level(
@@ -3101,6 +3474,7 @@ class TestStatsCalculator:
             task="index #1",
             operation_type=track.OperationType.Bulk,
             meta_data={"success": False},
+            absolute_time=StaticClock.NOW,
             relative_time=709,
         )
         store.put_value_cluster_level(
@@ -3110,6 +3484,7 @@ class TestStatsCalculator:
             task="index #1",
             operation_type=track.OperationType.Bulk,
             meta_data={"success": True},
+            absolute_time=StaticClock.NOW,
             relative_time=653,
         )
 
@@ -3132,6 +3507,7 @@ class TestStatsCalculator:
             task="index #2",
             operation_type=track.OperationType.Bulk,
             sample_type=metrics.SampleType.Warmup,
+            absolute_time=StaticClock.NOW,
             relative_time=600,
         )
 
@@ -3173,7 +3549,8 @@ class TestStatsCalculator:
             "unit": "ms",
         }
         assert round(abs(0.3333333333333333 - opm["error_rate"]), 7) == 0
-        assert opm["duration"] == 709 * 1000
+        # All samples share StaticClock.NOW as @timestamp, so duration is last completion minus first start.
+        assert opm["duration"] == 250
 
         opm2 = stats.metrics("index #2")
         assert opm2["throughput"] == {
@@ -3194,7 +3571,7 @@ class TestStatsCalculator:
                 "unit": "ms",
             }
         ]
-        assert opm2["duration"] == 600 * 1000
+        assert opm2["duration"] == 250
 
         assert stats.young_gc_time == 100
         assert stats.young_gc_count == 1
@@ -3280,6 +3657,7 @@ class TestGlobalStatsCalculator:
         self.metrics_store.put_doc(
             doc={
                 "@timestamp": 1595896761994,
+                "response-timestamp": 1595896762066,
                 "relative-time": 283.382,
                 "race-id": "fb26018b-428d-4528-b36b-cf8c54a303ec",
                 "race-timestamp": "20200728T003905Z",
@@ -3306,8 +3684,96 @@ class TestGlobalStatsCalculator:
         result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name="geonames", meta_data={}), challenge=challenge)()
         assert "delete-index" in [op_metric.get("task") for op_metric in result.op_metrics]
 
+    def _put_service_time(self, task, sample_type, absolute_time, relative_time, service_time_ms, operation_type="bulk"):
+        self.metrics_store.put_value_cluster_level(
+            "service_time",
+            service_time_ms,
+            "ms",
+            task=task,
+            operation=task,
+            operation_type=operation_type,
+            sample_type=sample_type,
+            absolute_time=absolute_time,
+            relative_time=relative_time,
+            meta_data={"success": True},
+        )
+
+    def test_op_metrics_include_task_time_windows(self):
+        index = Task("index", operation=Operation(name="index", operation_type="bulk"))
+        search = Task("search", operation=Operation(name="search", operation_type="search"))
+        challenge = Challenge(name="default", schedule=[index, search], meta_data={})
+
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "default", "defaults", create=True)
+        # origin = StaticClock.NOW, warmup [+1s, +20ms], measure [+5s, +80ms]
+        self._put_service_time("index", metrics.SampleType.Warmup, StaticClock.NOW + 1.0, 1.0, 20)
+        self._put_service_time("index", metrics.SampleType.Normal, StaticClock.NOW + 5.0, 5.0, 80)
+        self._put_service_time("search", metrics.SampleType.Normal, StaticClock.NOW + 20.0, 2.0, 15, operation_type="search")
+
+        result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name="test", meta_data={}), challenge=challenge)()
+        index_metrics = result.metrics("index")
+        search_metrics = result.metrics("search")
+
+        assert index_metrics["start_timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup_start_timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup_end_timestamp"] == StaticClock.NOW * 1000 + 1020
+        assert index_metrics["normal_start_timestamp"] == StaticClock.NOW * 1000 + 5000
+        assert index_metrics["normal_end_timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert index_metrics["end_timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert index_metrics["duration"] == 4080
+
+        assert search_metrics["start_timestamp"] == StaticClock.NOW * 1000 + 20000
+        assert "warmup_start_timestamp" not in search_metrics
+        assert search_metrics["normal_start_timestamp"] == StaticClock.NOW * 1000 + 20000
+        assert search_metrics["normal_end_timestamp"] == StaticClock.NOW * 1000 + 20015
+        assert search_metrics["end_timestamp"] == StaticClock.NOW * 1000 + 20015
+        assert search_metrics["duration"] == 15
+
+    def test_op_metrics_warmup_only_omits_normal_window(self):
+        index = Task("index", operation=Operation(name="index", operation_type="bulk"))
+        challenge = Challenge(name="default", schedule=[index], meta_data={})
+
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "default", "defaults", create=True)
+        self._put_service_time("index", metrics.SampleType.Warmup, StaticClock.NOW + 1.0, 1.0, 20)
+
+        result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name="test", meta_data={}), challenge=challenge)()
+        index_metrics = result.metrics("index")
+
+        assert index_metrics["start_timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup_start_timestamp"] == StaticClock.NOW * 1000 + 1000
+        assert index_metrics["warmup_end_timestamp"] == StaticClock.NOW * 1000 + 1020
+        assert index_metrics["end_timestamp"] == StaticClock.NOW * 1000 + 1020
+        assert index_metrics["duration"] == 20
+        assert "normal_start_timestamp" not in index_metrics
+        assert "normal_end_timestamp" not in index_metrics
+
+    def test_duration_includes_last_request_service_time(self):
+        index = Task("index", operation=Operation(name="index", operation_type="bulk"))
+        challenge = Challenge(name="default", schedule=[index], meta_data={})
+
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "default", "defaults", create=True)
+        # last-started op (+50ms, 5ms) finishes before the earlier 200ms op
+        self._put_service_time("index", metrics.SampleType.Normal, StaticClock.NOW, 0.0, 200)
+        self._put_service_time("index", metrics.SampleType.Normal, StaticClock.NOW + 0.050, 0.050, 5)
+
+        result = GlobalStatsCalculator(store=self.metrics_store, track=Track(name="test", meta_data={}), challenge=challenge)()
+        index_metrics = result.metrics("index")
+
+        assert index_metrics["start_timestamp"] == StaticClock.NOW * 1000
+        assert index_metrics["end_timestamp"] == StaticClock.NOW * 1000 + 200
+        assert index_metrics["duration"] == 200
+        assert index_metrics["duration"] == index_metrics["end_timestamp"] - index_metrics["start_timestamp"]
+
 
 class TestGlobalStats:
+    TIME_WINDOW_FIELDS = (
+        "start_timestamp",
+        "end_timestamp",
+        "warmup_start_timestamp",
+        "warmup_end_timestamp",
+        "normal_start_timestamp",
+        "normal_end_timestamp",
+    )
+
     def test_as_flat_list(self):
         d = {
             "op_metrics": [
@@ -3633,6 +4099,124 @@ class TestGlobalStats:
                 "single": 0,
             },
         }
+
+    def test_as_flat_list_does_not_emit_time_window_metrics(self):
+        s = metrics.GlobalStats(
+            {
+                "op_metrics": [
+                    {
+                        "task": "index",
+                        "operation": "index",
+                        "start_timestamp": StaticClock.NOW * 1000,
+                        "end_timestamp": StaticClock.NOW * 1000 + 5080,
+                        "warmup_start_timestamp": StaticClock.NOW * 1000 + 1000,
+                        "warmup_end_timestamp": StaticClock.NOW * 1000 + 1020,
+                        "normal_start_timestamp": StaticClock.NOW * 1000 + 5000,
+                        "normal_end_timestamp": StaticClock.NOW * 1000 + 5080,
+                    }
+                ]
+            }
+        )
+        metric_list = s.as_flat_list()
+        assert select(metric_list, "time_window") is None
+        for name in self.TIME_WINDOW_FIELDS:
+            assert select(metric_list, name) is None
+
+    def test_round_trip_preserves_task_time_windows(self):
+        original = {
+            "op_metrics": [
+                {
+                    "task": "index",
+                    "operation": "index",
+                    "error_rate": 0.0,
+                    "duration": 12.0,
+                    "start_timestamp": StaticClock.NOW * 1000,
+                    "end_timestamp": StaticClock.NOW * 1000 + 5080,
+                    "warmup_start_timestamp": StaticClock.NOW * 1000 + 1000,
+                    "warmup_end_timestamp": StaticClock.NOW * 1000 + 1020,
+                    "normal_start_timestamp": StaticClock.NOW * 1000 + 5000,
+                    "normal_end_timestamp": StaticClock.NOW * 1000 + 5080,
+                }
+            ]
+        }
+        assert metrics.GlobalStats(original).as_dict()["op_metrics"] == original["op_metrics"]
+        metrics.GlobalStats({"op_metrics": [{"task": "index", "operation": "index"}]})
+
+    def test_time_window_result_doc(self):
+        race = metrics.Race(
+            "1.0.0",
+            None,
+            "unittest",
+            "race-1",
+            datetime.datetime(2016, 1, 31, tzinfo=datetime.timezone.utc),
+            "benchmark-only",
+            {},
+            Track(name="test"),
+            {},
+            Challenge(name="default", schedule=[]),
+            "defaults",
+            {},
+            {},
+        )
+        window = {
+            "start_timestamp": StaticClock.NOW * 1000,
+            "end_timestamp": StaticClock.NOW * 1000 + 5080,
+            "normal_start_timestamp": StaticClock.NOW * 1000 + 5000,
+            "normal_end_timestamp": StaticClock.NOW * 1000 + 5080,
+        }
+        doc = race.time_window_result_doc("index", "index", window)
+        assert doc["name"] == "time_window"
+        assert doc["task"] == "index"
+        assert doc["operation"] == "index"
+        assert doc["race-id"] == "race-1"
+        assert doc["start_timestamp"] == StaticClock.NOW * 1000
+        assert doc["end_timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert "warmup_start_timestamp" not in doc
+
+    def test_to_result_dicts_includes_time_window_docs(self):
+        race = metrics.Race(
+            "1.0.0",
+            None,
+            "unittest",
+            "race-1",
+            datetime.datetime(2016, 1, 31, tzinfo=datetime.timezone.utc),
+            "benchmark-only",
+            {},
+            Track(name="test"),
+            {},
+            Challenge(name="default", schedule=[]),
+            "defaults",
+            {},
+            {},
+        )
+        race.add_results(
+            metrics.GlobalStats(
+                {
+                    "op_metrics": [
+                        {
+                            "task": "index",
+                            "operation": "index",
+                            "error_rate": 0.0,
+                            "duration": 12.0,
+                            "start_timestamp": StaticClock.NOW * 1000,
+                            "end_timestamp": StaticClock.NOW * 1000 + 5080,
+                            "normal_start_timestamp": StaticClock.NOW * 1000 + 5000,
+                            "normal_end_timestamp": StaticClock.NOW * 1000 + 5080,
+                        },
+                        {
+                            "task": "admin",
+                            "operation": "admin",
+                            "error_rate": 0.0,
+                        },
+                    ]
+                }
+            )
+        )
+        windows = [d for d in race.to_result_dicts() if d.get("name") == "time_window"]
+        assert len(windows) == 1
+        assert windows[0]["task"] == "index"
+        assert windows[0]["end_timestamp"] == StaticClock.NOW * 1000 + 5080
+        assert "warmup_start_timestamp" not in windows[0]
 
 
 class TestSystemStats:

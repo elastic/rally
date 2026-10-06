@@ -36,6 +36,10 @@
         "challenge": {
           "type": "keyword"
         },
+        "response-timestamp": {
+          "type": "date",
+          "format": "epoch_millis"
+        },
         "environment": {
           "type": "keyword"
         },

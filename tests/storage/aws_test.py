@@ -14,17 +14,21 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+# pylint: disable=protected-access
 
 import dataclasses
+import threading
 from collections.abc import Iterable
 from typing import Any
 from unittest import mock
 
 import boto3
+import botocore.exceptions
 import pytest
 from typing_extensions import Self
 
 from esrally.storage import Head, StorageConfig, rangeset
+from esrally.storage._adapter import ClientUnavailableError, ServiceUnavailableError
 from esrally.storage.aws import S3Adapter, S3Client, head_from_response
 from esrally.utils.cases import cases
 
@@ -183,3 +187,157 @@ def test_from_config(case: FromConfigCase) -> None:
     assert isinstance(adapter, S3Adapter)
     assert adapter.chunk_size == case.want_chunk_size
     assert adapter.aws_profile == case.want_aws_profile
+
+
+def _client_error(code: str, status_code: int = 400, operation_name: str = "GetObject") -> botocore.exceptions.ClientError:
+    return botocore.exceptions.ClientError(
+        error_response={
+            "Error": {"Code": code, "Message": "some message"},
+            "ResponseMetadata": {
+                "RequestId": "some-request-id",
+                "HostId": "some-host-id",
+                "HTTPStatusCode": status_code,
+                "HTTPHeaders": {},
+                "RetryAttempts": 0,
+            },
+        },
+        operation_name=operation_name,
+    )
+
+
+@dataclasses.dataclass
+class TransientErrorCase:
+    error: Exception
+    want_error: type[Exception] = ServiceUnavailableError
+
+
+@cases(
+    # Genuine transient failures of the S3 service itself: `Client` fails over to another mirror, and additionally
+    # reduces the number of concurrent connections allowed to this server, assuming it is overwhelmed.
+    throttling=TransientErrorCase(_client_error("SlowDown"), want_error=ServiceUnavailableError),
+    internal_error=TransientErrorCase(_client_error("InternalError"), want_error=ServiceUnavailableError),
+    server_error_status=TransientErrorCase(_client_error("SomeOtherCode", status_code=503), want_error=ServiceUnavailableError),
+    # Local/client-side connectivity or credentials problems: `Client` still fails over to another mirror, but does
+    # not assume the server itself is overwhelmed, so it leaves the connection count for this server untouched.
+    no_credentials=TransientErrorCase(botocore.exceptions.NoCredentialsError(), want_error=ClientUnavailableError),
+    endpoint_connection=TransientErrorCase(
+        botocore.exceptions.EndpointConnectionError(endpoint_url=SOME_URL), want_error=ClientUnavailableError
+    ),
+)
+def test_head_translates_transient_errors(case: TransientErrorCase, s3_client) -> None:
+    s3_client.head_object.side_effect = case.error
+    adapter = S3Adapter(s3_client=s3_client)
+    with pytest.raises(case.want_error):
+        adapter.head(SOME_URL)
+
+
+@cases(
+    throttling=TransientErrorCase(_client_error("SlowDown"), want_error=ServiceUnavailableError),
+    internal_error=TransientErrorCase(_client_error("InternalError"), want_error=ServiceUnavailableError),
+    server_error_status=TransientErrorCase(_client_error("SomeOtherCode", status_code=503), want_error=ServiceUnavailableError),
+    no_credentials=TransientErrorCase(botocore.exceptions.NoCredentialsError(), want_error=ClientUnavailableError),
+    endpoint_connection=TransientErrorCase(
+        botocore.exceptions.EndpointConnectionError(endpoint_url=SOME_URL), want_error=ClientUnavailableError
+    ),
+)
+def test_get_translates_transient_errors(case: TransientErrorCase, s3_client) -> None:
+    s3_client.get_object.side_effect = case.error
+    adapter = S3Adapter(s3_client=s3_client)
+    with pytest.raises(case.want_error):
+        adapter.get(SOME_URL)
+
+
+def test_get_does_not_translate_non_transient_client_errors(s3_client) -> None:
+    # An "AccessDenied" (403) response is not a transient failure: it should keep being raised as-is instead of
+    # being turned into a `ServiceUnavailableError` (which would make `Client` keep retrying other mirrors forever
+    # for what is actually a configuration/permission problem).
+    error = _client_error("AccessDenied", status_code=403)
+    s3_client.get_object.side_effect = error
+    adapter = S3Adapter(s3_client=s3_client)
+    with pytest.raises(botocore.exceptions.ClientError) as excinfo:
+        adapter.get(SOME_URL)
+    assert excinfo.value is error
+
+
+def test_head_does_not_translate_non_transient_client_errors(s3_client) -> None:
+    error = _client_error("AccessDenied", status_code=403, operation_name="HeadObject")
+    s3_client.head_object.side_effect = error
+    adapter = S3Adapter(s3_client=s3_client)
+    with pytest.raises(botocore.exceptions.ClientError) as excinfo:
+        adapter.head(SOME_URL)
+    assert excinfo.value is error
+
+
+def test_s3_client_creation_is_thread_safe(monkeypatch) -> None:
+    # It simulates several threads (as used by the multipart transfer manager) accessing the lazily created S3
+    # client of the very same `S3Adapter` instance for the first time, concurrently. It asserts that only one
+    # underlying `boto3.Session` (and client) gets created, and that every thread ends up using that same client.
+    created_sessions: list[Any] = []
+    session_creation_started = threading.Event()
+    release_session_creation = threading.Event()
+
+    class FakeSession:
+        def __init__(self, profile_name=None):
+            created_sessions.append(self)
+            session_creation_started.set()
+            # It gives every other thread a chance to reach the lock before this one proceeds, to maximize
+            # the chances of exposing a race condition if the lazy initialization wasn't thread-safe.
+            release_session_creation.wait(timeout=5)
+            self.profile_name = profile_name
+
+        def get_credentials(self):
+            return None
+
+        def client(self, name):
+            assert name == "s3"
+            return mock.Mock(name=f"s3-client-{len(created_sessions)}")
+
+    monkeypatch.setattr(boto3, "Session", FakeSession)
+
+    adapter = S3Adapter()
+    results: list[S3Client] = []
+    results_lock = threading.Lock()
+
+    def worker():
+        client = adapter._s3
+        with results_lock:
+            results.append(client)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    session_creation_started.wait(timeout=5)
+    release_session_creation.set()
+    for t in threads:
+        t.join(timeout=5)
+
+    assert len(created_sessions) == 1
+    assert len(results) == 8
+    assert len({id(r) for r in results}) == 1
+
+
+def test_s3_client_warms_up_credentials_once(monkeypatch) -> None:
+    credentials = mock.Mock()
+    session = mock.Mock()
+    session.get_credentials.return_value = credentials
+    monkeypatch.setattr(boto3, "Session", mock.Mock(return_value=session))
+
+    adapter = S3Adapter()
+    _ = adapter._s3
+    _ = adapter._s3
+
+    session.get_credentials.assert_called_once()
+    credentials.get_frozen_credentials.assert_called_once()
+    session.client.assert_called_once_with("s3")
+
+
+def test_s3_client_creation_survives_credentials_warm_up_failure(monkeypatch) -> None:
+    session = mock.Mock()
+    session.get_credentials.side_effect = botocore.exceptions.NoCredentialsError()
+    monkeypatch.setattr(boto3, "Session", mock.Mock(return_value=session))
+
+    adapter = S3Adapter()
+    # Warming up credentials must never prevent the client from being created: any persistent credentials problem
+    # will simply surface (and be translated to `ClientUnavailableError`) on the first real request instead.
+    client = adapter._s3
+    assert client is session.client.return_value

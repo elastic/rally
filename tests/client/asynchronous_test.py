@@ -21,6 +21,7 @@ import math
 import random
 from unittest import mock
 
+import aiohttp
 import elastic_transport
 import pytest
 
@@ -60,6 +61,21 @@ class TestResponseMatcher:
 
 
 @pytest.mark.asyncio
+async def test_static_response_reports_request_output_size(monkeypatch):
+    matcher = asynchronous.ResponseMatcher(responses=[{"path": "*", "body": {"response-type": "default"}}])
+    monkeypatch.setattr(asynchronous.StaticRequest, "RESPONSES", matcher)
+
+    async with aiohttp.ClientSession(
+        connector=asynchronous.StaticConnector(),
+        request_class=asynchronous.StaticRequest,
+        response_class=asynchronous.StaticResponse,
+    ) as session:
+        async with session.get("http://localhost:9200/") as response:
+            assert response.output_size == 0
+            assert await response.json(content_type=None) == {"response-type": "default"}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "num_of_dns_resp, num_clients",
     [(1, 256), (2, 128), (3, 1), (3, 64), (4, 16), (3, 2000)],
@@ -92,9 +108,9 @@ async def test_resolve_host_even_client_allocation(
     for i in range(num_clients):
         hostinfo.append(
             # pylint: disable=protected-access
-            await asynchronous.RallyTCPConnector(
-                limit_per_host=256, use_dns_cache=True, enable_cleanup_closed=True, client_id=i
-            )._resolve_host("rally-dns-test.es.us-east-1.aws.found.io", 443)
+            await asynchronous.RallyTCPConnector(limit_per_host=256, use_dns_cache=True, client_id=i)._resolve_host(
+                "rally-dns-test.es.us-east-1.aws.found.io", 443
+            )
         )
 
     first_host_per_client = []

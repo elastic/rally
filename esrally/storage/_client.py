@@ -31,6 +31,7 @@ from typing_extensions import Self
 from esrally import types
 from esrally.storage._adapter import (
     AdapterRegistry,
+    ClientUnavailableError,
     GetResponse,
     Head,
     ServiceUnavailableError,
@@ -237,7 +238,13 @@ class Client:
             - document_length: the document length of the file to transfer.
             - crc32c: the crc32c checksum of the file to transfer.
             - ranges: the portion of the file to transfer.
-        :raises ServiceUnavailableError: in case on temporary service failure.
+        :raises ServiceUnavailableError: once no more mirrors are left to try, in case of temporary service
+            failure (or when it could not be established that every attempt failed because of a client-side
+            problem, see `ClientUnavailableError` below).
+        :raises ClientUnavailableError: once no more mirrors are left to try, if every single attempt failed with
+            a client-side problem (for example missing/invalid credentials) rather than because a remote service
+            was overwhelmed. Retrying with reduced concurrency would not help in that case, so this lets the
+            caller fail fast instead.
         """
         if check_head is None:
             resolve_head = None
@@ -247,6 +254,12 @@ class Client:
             )
         else:
             resolve_head = Head(url=url, content_length=check_head.content_length, date=check_head.date, crc32c=check_head.crc32c)
+
+        # It counts how many `GetResponse` attempts were made, and how many of those failed specifically with
+        # `ClientUnavailableError`, so that it can tell apart "every mirror we tried has a client-side problem"
+        # from "some mirrors were skipped or failed for other reasons" once all mirrors are exhausted.
+        attempts = 0
+        client_unavailable_attempts = 0
 
         # It iterates heads from all servers
         for head in self.resolve(url, check_head=resolve_head):
@@ -258,6 +271,7 @@ class Client:
                 LOG.debug("Connection limit exceeded for url '%s'", head.url)
                 continue
 
+            attempts += 1
             try:
                 got = self._get(head.url, check_head=check_head)
             except ServiceUnavailableError as ex:
@@ -265,6 +279,13 @@ class Client:
                 with self._lock:
                     # It corrects the maximum number of connections for this server.
                     wg.max_count = max(1, wg.count)
+                wg.done()
+                continue
+            except ClientUnavailableError as ex:
+                # Unlike ServiceUnavailableError, this does not indicate that the server is overwhelmed, so it
+                # does not reduce the number of concurrent connections allowed for it.
+                LOG.warning("client unavailable error received: url='%s' %s", url, ex)
+                client_unavailable_attempts += 1
                 wg.done()
                 continue
 
@@ -279,6 +300,11 @@ class Client:
             got.chunks = iter_chunks(wg, got.chunks)
             return got
 
+        if attempts > 0 and attempts == client_unavailable_attempts:
+            # Every mirror actually attempted failed because of a client-side problem (e.g. credentials), not
+            # because any remote service was overwhelmed. Backing off and retrying with fewer connections (as
+            # ServiceUnavailableError would trigger upstream) would not help here, so this fails fast instead.
+            raise ClientUnavailableError(f"no connections available for getting URL '{url}': every mirror is client-unavailable")
         raise ServiceUnavailableError(f"no connections available for getting URL '{url}'")
 
     def _get(self, url: str, check_head: Head | None = None) -> GetResponse:

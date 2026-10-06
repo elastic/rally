@@ -90,6 +90,36 @@ You can also pass track parameters to see how they affect the rendered output::
 
 It is also possible to refer to a track via its path (``--track-path``) or use a different track repository (``--track-repository``).
 
+.. _clr_validate_track:
+
+``validate-track``
+~~~~~~~~~~~~~~~~~~
+
+The ``validate-track`` subcommand loads a track and runs any registered challenge validators without starting a benchmark or contacting a cluster. Use it to fail fast on invalid track parameters (for example from automation before provisioning load drivers).
+
+It resolves the challenge the same way ``race`` does: an explicit ``--challenge``, or the track's default challenge when ``--challenge`` is omitted. An unknown challenge name fails with a non-zero exit code. Loading includes Jinja rendering, schema checks, unused-parameter checks, track plugins, and installing any track ``dependencies``. It does **not** download corpora or provision nodes. Track repository git fetch/update may still occur unless you pass ``--offline``.
+
+Unlike ``race`` (which detects build flavor from the target cluster), ``validate-track`` defaults to the ``default`` build flavor. For tracks whose Jinja templates depend on serverless conditionals, pass ``--build-flavor=serverless`` and optionally ``--serverless-operator`` so rendering matches the intended race environment.
+
+Example with a local track that registers validators (see :ref:`adding_tracks_custom_validators`)::
+
+    esrally validate-track --track-path=/path/to/my-track --challenge=autoscaling --track-params='{"scheduling": [1]}' --build-flavor=serverless --no-quiet
+
+On success the process exits zero. Confirmation text is suppressed by default (``--quiet``); pass ``--no-quiet`` to see whether validators ran. Exit code 0 with no registered validators for the resolved challenge means the track loaded successfully, **not** that custom parameter checks passed — only that there was nothing to validate. On failure it exits non-zero and prints the error (for example a ``TrackConfigError`` from a validator).
+
+.. _clr_prepare_track:
+
+``prepare-track``
+~~~~~~~~~~~~~~~~~
+
+The ``prepare-track`` subcommand loads a track and prepares its corpora (downloading and decompressing the configured document sets) without starting a benchmark or contacting a cluster. Use it to pre-populate the local data cache (``~/.rally/benchmarks/data``) ahead of a race, for example to separate a slow one-time download from the measured run.
+
+It accepts the same arguments as ``validate-track`` and additionally ``--test-mode`` (prepare only the small test-mode subset of each corpus) and ``--kill-running-processes``. Like ``validate-track`` it resolves the challenge the same way ``race`` does and validates track parameters before preparing; an unknown challenge or invalid parameters fail with a non-zero exit code. Unlike ``validate-track`` it boots the Rally actor system to run preparation across multiple cores, so only one Rally instance may run at a time on the machine (pass ``--kill-running-processes`` to terminate others).
+
+Preparation runs locally only; it does not provision nodes or contact Elasticsearch. Example::
+
+    esrally prepare-track --track=geonames --challenge=append-no-conflicts
+
 ``compare``
 ~~~~~~~~~~~
 
@@ -571,9 +601,9 @@ Allows to set parameters for telemetry devices. It accepts a list of comma-separ
 
 Example::
 
-    esrally race --track=geonames --telemetry=jfr --telemetry-params="recording-template:'profile'"
+    esrally race --track=geonames --telemetry=jfr --telemetry-params="jfr-recording-template:'profile'"
 
-This enables the Java flight recorder telemetry device and sets the ``recording-template`` parameter to "profile".
+This enables the Java flight recorder telemetry device and sets the ``jfr-recording-template`` parameter to "profile".
 
 For more complex cases specify a JSON file. Store the following as ``telemetry-params.json``::
 
@@ -741,7 +771,7 @@ Default value: ``timeout:60`` (applies any time ``timeout`` is not specified. Se
 Rally recognizes the following client options in addition:
 
 * ``max_connections``: By default, Rally will choose the maximum allowed number of connections automatically (equal to the number of simulated clients but at least 256 connections). With this property it is possible to override that logic but a minimum of 256 is enforced internally.
-* ``enable_cleanup_closed`` (default: ``true``): In some cases, `Elasticsearch does not properly close SSL connections <https://github.com/elastic/elasticsearch/issues/76642>`_ and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections.
+* ``enable_cleanup_closed`` (default: ``true`` on affected Python versions): In some cases, `Elasticsearch does not properly close SSL connections <https://github.com/elastic/elasticsearch/issues/76642>`_ and the number of open connections increases as a result. When this client option is set to ``true``, the Elasticsearch client will check and forcefully close these connections. Rally disables this option on Python 3.12.8+, excluding Python 3.13.0, because these versions contain the upstream asyncio fix and aiohttp ignores the option.
 * ``static_responses``: The path to a JSON file containing path patterns and the corresponding responses. When this value is set to ``true``, Rally will not send requests to Elasticsearch but return static responses as specified by the file. This is useful to diagnose performance issues in Rally itself. See below for a specific example.
 * ``create_api_key_per_client`` (default: ``false``): If set to ``true``, Rally will create a unique `Elasticsearch API key <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html>`_ for each simulated client that issues requests against Elasticsearch during the benchmark. This is useful for simulating workloads where data is indexed by many distinct agents, each configured with its own API key, as is typical with Elastic Agent. Note that ``basic_auth_user`` and ``basic_auth_password`` must also be provided, and the ``basic_auth_user`` must have `sufficient privileges <https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html#security-api-create-api-key-prereqs>`_ to create API keys. These basic auth credentials are used to create the API keys at the start of the benchmark and delete them at the end, but only the generated API keys will be used during benchmark execution.
 
@@ -869,8 +899,8 @@ Save the above responses as ``responses.json`` and execute a benchmark as follow
 
 This option controls how Rally behaves when a response error occurs. The following values are possible:
 
-* ``continue``: (default) only records that an error has happened and will continue with the benchmark unless there is a fatal error. At the end of a race, errors show up in the "error rate" metric.
-* ``abort``: aborts the benchmark on the first request error with a detailed error message. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`.
+* ``continue``: only records that an error has happened and will continue with the benchmark unless there is a fatal error. At the end of a race, errors show up in the "error rate" metric.
+* ``abort``: (default) aborts the benchmark on the first request error with a detailed error message. It is possible to permit *individual* tasks to ignore non-fatal errors using :ref:`ignore-response-error-level <track_schedule>`.
 * ``continue-on-network``: As with ``continue``, but also continues on network errors (such as connection refused).
 
 .. attention::
@@ -906,7 +936,26 @@ If multiple Elasticsearch nodes are hidden behind a proxy, it is possible to add
 
 This will run the benchmark against the hosts 10.17.0.5 and 10.17.0.6 on port 9200. See ``client-options`` if you use X-Pack Security and need to authenticate or Rally should use https.
 
-You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`.
+You can also target multiple clusters with ``--target-hosts`` for specific use cases. This is described in the :ref:`Advanced topics section <command_line_reference_advanced_topics>`. To benchmark multiple clusters simultaneously, combine the JSON format for ``--target-hosts`` with the :ref:`--multi-cluster flag <multi_cluster_mode>`.
+
+``multi-cluster``
+~~~~~~~~~~~~~~~~~
+
+Enables :ref:`multi-cluster mode <multi_cluster_mode>`. For each task in the schedule, Rally runs that task against **all clusters in parallel** before advancing to the next task, and reports results side-by-side.
+
+Requires a JSON object with two or more named clusters in ``--target-hosts`` and matching keys in ``--client-options``. Must be combined with the ``benchmark-only`` pipeline.
+
+Telemetry devices are disabled when this flag is active.
+
+The default value is ``false``.
+
+**Example**
+
+ ::
+
+   esrally race --track=geonames --pipeline=benchmark-only --multi-cluster \
+     --target-hosts='{"cluster-a":["host1:9200"],"cluster-b":["host2:9200"]}' \
+     --client-options='{"cluster-a":{"timeout":60},"cluster-b":{"timeout":60}}'
 
 ``limit``
 ~~~~~~~~~
@@ -1103,6 +1152,8 @@ Examples:
 
 .. NOTE::
    **All** :ref:`built-in operations <track_operations>` will use the connection to the ``default`` cluster. However, you can utilize the client connections to the additional clusters in your :ref:`custom runners <adding_tracks_custom_runners>`.
+
+For :ref:`multi-cluster mode <multi_cluster_mode>`, use the same JSON format for ``--target-hosts`` and add ``--multi-cluster`` to the command line. Each task then runs against all clusters in parallel within a single race, and results are stored with a ``cluster`` field on each document so you can filter by cluster in your results store.
 
 ``client-options``
 ~~~~~~~~~~~~~~~~~~

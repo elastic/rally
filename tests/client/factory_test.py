@@ -33,6 +33,7 @@ from elastic_transport import ApiResponseMeta, HttpHeaders, NodeConfig
 from pytest_httpserver import HTTPServer
 
 from esrally import client, doc_link, exceptions
+from esrally.client import factory
 from esrally.client.asynchronous import RallyAsyncTransport
 from esrally.utils import console
 
@@ -51,8 +52,39 @@ def _api_error(status, message):
     )
 
 
+@pytest.mark.parametrize(
+    "python_version, expected",
+    [
+        ((3, 11, 9), True),
+        ((3, 12, 7), True),
+        ((3, 12, 8), False),
+        ((3, 13, 0), True),
+        ((3, 13, 1), False),
+        ((3, 14, 0), False),
+    ],
+)
+def test_needs_cleanup_closed(python_version, expected):
+    # pylint: disable=protected-access
+    assert factory._needs_cleanup_closed(python_version) is expected
+
+
 class TestEsClientFactory:
     cwd = os.path.dirname(__file__)
+
+    @pytest.mark.parametrize(
+        "requested, needed, expected",
+        [
+            (True, True, True),
+            (True, False, False),
+            (False, True, False),
+        ],
+    )
+    def test_enables_cleanup_closed_only_when_requested_and_needed(self, monkeypatch, requested, needed, expected):
+        monkeypatch.setattr(factory, "_needs_cleanup_closed", lambda _: needed)
+
+        f = client.EsClientFactory(hosts=[{"host": "localhost", "port": 9200}], client_options={"enable_cleanup_closed": requested})
+
+        assert f.enable_cleanup_closed is expected
 
     def test_create_http_connection(self):
         hosts = [{"host": "localhost", "port": 9200}]
