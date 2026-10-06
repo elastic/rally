@@ -148,12 +148,12 @@ class ConnectOptions:
         Race expects the cfg object to be subscriptable
         Just return 'default'
         """
-        return self.default
+        return self.default_or_first
 
     @property
-    def default(self):
-        """Return a list with the options assigned to the 'default' key"""
-        return self.parsed_options["default"]
+    def default_or_first(self):
+        """Return the 'default' entry, or the first entry if there is no 'default' key."""
+        return self.parsed_options.get("default") or next(iter(self.parsed_options.values()))
 
     @property
     def all_options(self):
@@ -282,7 +282,7 @@ class ClientOptions(ConnectOptions):
 
     @property
     def uses_static_responses(self):
-        return self.default.get("static_responses", False)
+        return self.default_or_first.get("static_responses", False)
 
     def with_max_connections(self, max_connections):
         final_client_options = {}

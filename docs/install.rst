@@ -145,6 +145,10 @@ Offline Install
 
 If you are in a corporate environment using Linux servers that do not have any access to the Internet, you can use Rally's offline installation package. Follow these steps to install Rally:
 
+.. note::
+
+    The offline installation package bundles dependencies for Python 3.11. Ensure ``python3`` on the target machine(s) is Python 3.11 (verify with ``python3 --version``), otherwise the installation may fail as some bundled dependencies cannot be installed with other Python versions.
+
 1. Install all prerequisites as documented above.
 2. Download the offline installation package for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
 3. Decompress the installation package with ``tar -xzf esrally-dist-linux-*.tar.gz``.

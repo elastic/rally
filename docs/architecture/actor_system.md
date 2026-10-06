@@ -86,6 +86,32 @@ sequenceDiagram
     BenchmarkActor ->> BenchmarkCoordinator: on_preparation_complete()
 ```
 
+### PrepareTrackStandalone
+
+A subset of benchmark preparation flow takes place when `esrally prepare-track` command is used. In this case,
+`TrackPreparationActor` is created not from `DriverActor` but directly from main Rally process in
+`racecontrol.prepare_track()`. Unlike in `PrepareBenchmark` case, there is only one `TrackPreparationActor` instance
+used, the one from the coordinator host.
+
+```mermaid
+sequenceDiagram
+    racecontrol.prepare_track ->> TrackPreparationActor: createActor()
+    racecontrol.prepare_track -->> TrackPreparationActor: PrepareTrackStandalone
+    TrackPreparationActor ->> TaskExecutionActor: createActor()
+    TrackPreparationActor -->> TaskExecutionActor: StartTaskLoop
+    loop
+        TaskExecutionActor -->> TrackPreparationActor: ReadyForWork
+        TrackPreparationActor -->> TaskExecutionActor: DoTask
+        loop
+            TaskExecutionActor -->> TaskExecutionActor: WakeupMessage
+        end
+    end
+    TaskExecutionActor -->> TrackPreparationActor: WorkerIdle
+    TrackPreparationActor -->> TaskExecutionActor: ActorExitRequest
+    TrackPreparationActor -->> racecontrol.prepare_track: TrackPrepared
+    racecontrol.prepare_track -->> TrackPreparationActor: ActorExitRequest
+```
+
 ### StartBenchmark
 
 Once the preparation is complete, `BenchmarkActor` starts the

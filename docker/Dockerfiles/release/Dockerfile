@@ -40,7 +40,7 @@ RUN chgrp 0 /entrypoint.sh && \
 RUN mkdir -p /rally/.rally && \
     chown -R 1000:0 /rally/
 
-COPY --from=ghcr.io/astral-sh/uv:0.8.22 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.19 /uv /uvx /bin/
 
 USER 1000
 

@@ -17,6 +17,7 @@
 
 import contextlib
 import logging
+import sys
 import time
 from typing import Any
 
@@ -25,6 +26,13 @@ from urllib3.connection import is_ipaddress
 
 from esrally import doc_link, exceptions
 from esrally.utils import console, convert, versions
+
+
+def _needs_cleanup_closed(python_version):
+    # Python 3.12.8 got rid of the need for this
+    # param. 3.13.0 had a bug that required it again.
+    # That bug was fixed in 3.13.1.
+    return python_version < (3, 12, 8) or (3, 13, 0) <= python_version < (3, 13, 1)
 
 
 class EsClientFactory:
@@ -159,7 +167,8 @@ class EsClientFactory:
         else:
             self.logger.debug("HTTP compression: off")
 
-        self.enable_cleanup_closed = convert.to_bool(self.client_options.pop("enable_cleanup_closed", True))
+        enable_cleanup_closed = convert.to_bool(self.client_options.pop("enable_cleanup_closed", True))
+        self.enable_cleanup_closed = enable_cleanup_closed and _needs_cleanup_closed(sys.version_info)
         self.max_connections = max(256, self.client_options.pop("max_connections", 0))
         self.static_responses = self.client_options.pop("static_responses", None)
 

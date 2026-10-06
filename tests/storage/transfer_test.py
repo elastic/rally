@@ -19,12 +19,14 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import threading
 from collections.abc import Generator, Iterator
 from urllib.parse import urlparse
 
 import pytest
 
 from esrally.storage import (
+    NO_RANGE,
     Client,
     GetResponse,
     Head,
@@ -34,6 +36,7 @@ from esrally.storage import (
     dummy,
     rangeset,
 )
+from esrally.storage._io import FileWriter
 from esrally.utils import cases, crc32c
 from tests.storage import local_dir  # pylint: disable=unused-import
 
@@ -57,6 +60,33 @@ class DummyClient(Client):
 
         def iter_chunks() -> Generator[bytes]:
             yield from (data,)
+
+        return GetResponse(head, iter_chunks())
+
+
+class NoChecksumDummyClient(DummyClient):
+
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
+        response = super().get(url, check_head=check_head)
+        response.head.crc32c = None
+        return response
+
+
+class ErroringDummyClient(Client):
+    def head(self, url: str, *, cache_ttl: float | None = None) -> Head:
+        return Head(url, content_length=len(DATA), accept_ranges=True, crc32c=CRC32C)
+
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
+        data = DATA
+        if check_head is not None and check_head.ranges:
+            data = data[check_head.ranges.start : check_head.ranges.end]
+        head = Head(url, ranges=check_head.ranges, content_length=len(data), document_length=len(DATA), crc32c=CRC32C)
+
+        def iter_chunks() -> Generator[bytes]:
+            cut = 128
+            # chopping data at max of 128 bytes
+            yield data[:cut]
+            raise TimeoutError("connection broken")
 
         return GetResponse(head, iter_chunks())
 
@@ -87,6 +117,7 @@ class TransferCase:
     want_final_todo: str = ""
     want_final_written: str = ""
     want_final_document_length: int = len(DATA)
+    want_verified: bool = False
     want_mirror_failures: list[dict[str, str]] = dataclasses.field(default_factory=list)
     resume: bool = True
     resume_status: dict[str, str] | None = None
@@ -94,7 +125,7 @@ class TransferCase:
 
 @cases.cases(
     # It tests default behavior for small transfers (content_length < multipart_size).
-    default=TransferCase(want_final_done="0-1023", want_final_written="0-1023"),
+    default=TransferCase(want_final_done="0-1023", want_final_written="0-1023", want_verified=True),
     # It tests limiting transfers scope to some ranges.
     todo=TransferCase(
         todo="10-20, 30-40", want_init_todo="10-20, 30-40", want_final_done="10-20", want_final_todo="30-40", want_final_written="10-20"
@@ -110,7 +141,7 @@ class TransferCase:
         want_final_document_length=50,
         want_final_error=ValueError,
     ),
-    # It tests multipart working when multipart_size < content_length.
+    # It tests learning the document length from the first response.
     no_document_length=TransferCase(want_init_document_length=None, want_init_todo="0-", want_final_done="0-1023", document_length=None),
     # It tests when max_connections == 0.
     invalid_max_connections=TransferCase(multipart_size=128, max_connections=0, want_init_error=ValueError),
@@ -124,18 +155,25 @@ class TransferCase:
     ),
     # It tests disabling resuming from an existing status.
     no_resume=TransferCase(
-        resume=False, resume_status={"done": "128-255", "url": URL, "document_length": len(DATA)}, want_final_done="0-1023"
+        resume=False,
+        resume_status={"done": "128-255", "url": URL, "document_length": len(DATA)},
+        want_final_done="0-1023",
+        want_verified=True,
     ),
     # It tests mismatching URL in the status file produces re-starting transfer from the beginning
     mismach_status_url=TransferCase(
-        resume_status={"done": "128-255", "url": MISMATCH_URL, "document_length": len(DATA)}, want_final_done="0-1023"
+        resume_status={"done": "128-255", "url": MISMATCH_URL, "document_length": len(DATA)},
+        want_final_done="0-1023",
+        want_verified=True,
     ),
     # It tests mismatching content_length in the status file produces re-starting transfer from the beginning
     mismach_status_document_length=TransferCase(
-        resume_status={"done": "128-255", "url": URL, "document_length": 212}, want_final_done="0-1023"
+        resume_status={"done": "128-255", "url": URL, "document_length": 212}, want_final_done="0-1023", want_verified=True
     ),
     mismach_status_crc32c=TransferCase(
-        resume_status={"done": "128-255", "url": URL, "document_length": len(DATA), "crc32c": MISMATCH_CRC32C}, want_final_done="0-1023"
+        resume_status={"done": "128-255", "url": URL, "document_length": len(DATA), "crc32c": MISMATCH_CRC32C},
+        want_final_done="0-1023",
+        want_verified=True,
     ),
 )
 def test_transfer(case: TransferCase, executor: dummy.DummyExecutor, local_dir: str, tmpdir) -> None:
@@ -228,6 +266,8 @@ def test_transfer(case: TransferCase, executor: dummy.DummyExecutor, local_dir: 
     assert status["document_length"] == case.want_final_document_length
     assert status["done"] == case.want_final_done
     assert status["mirror_failures"] == case.want_mirror_failures
+    assert status.get("verified", False) == case.want_verified
+    assert transfer.verified == case.want_verified
 
     # It verifies the transfer can be resumed from the file status
     transfer2 = Transfer(
@@ -244,3 +284,197 @@ def test_transfer(case: TransferCase, executor: dummy.DummyExecutor, local_dir: 
     assert transfer2.done == transfer.done
     assert transfer2.todo == transfer.todo
     assert transfer2.document_length == transfer.document_length
+    assert transfer2.verified == transfer.verified
+
+
+def test_transfer_requeues_remaining_bytes_on_timeout_error(executor: dummy.DummyExecutor, tmpdir) -> None:
+    """
+    Requeues remaining bytes after a TimeoutError.
+    """
+    cfg = StorageConfig()
+    client = ErroringDummyClient.from_config(cfg)
+    path = os.path.join(str(tmpdir), os.path.basename(urlparse(URL).path))
+
+    transfer = Transfer(
+        client=client,
+        url=URL,
+        document_length=len(DATA),
+        path=path,
+        executor=executor,
+        crc32c=CRC32C,
+        cfg=cfg,
+    )
+    transfer.start()
+    executor.execute_tasks()
+
+    assert transfer.done == rangeset("0-127")
+    assert transfer.todo == rangeset("128-1023")
+    # The raised TimeoutError is treated as retryable. The remaining
+    # bytes are requeued with no terminal error recorded
+    assert transfer.errors == []
+
+
+def _new_transfer(executor: dummy.DummyExecutor, tmpdir, client: Client | None = None, **kwargs) -> Transfer:
+    cfg = StorageConfig()
+    kwargs.setdefault("document_length", len(DATA))
+    kwargs.setdefault("crc32c", CRC32C)
+    kwargs.setdefault("resume", False)
+    return Transfer(
+        client=client or DummyClient.from_config(cfg),
+        url=URL,
+        path=os.path.join(str(tmpdir), os.path.basename(urlparse(URL).path)),
+        executor=executor,
+        cfg=cfg,
+        **kwargs,
+    )
+
+
+def read_status(transfer: Transfer) -> dict:
+    with open(transfer.status_file_path) as fd:
+        return json.load(fd)
+
+
+def test_transfer_done_includes_only_written_part_of_running_task(executor: dummy.DummyExecutor, tmpdir) -> None:
+    transfer = _new_transfer(executor, tmpdir)
+    with FileWriter.open(transfer.path, rangeset("512-1023")) as fd:
+        fd.write(DATA[512:600])
+        transfer._fds.append(fd)  # pylint: disable=protected-access
+        assert transfer.done == rangeset("512-599")
+        transfer.save_status()
+
+    # Parts still being written are not saved to the status file.
+    assert read_status(transfer)["done"] == ""
+
+
+def test_transfer_verification_failure_resets_done(executor: dummy.DummyExecutor, tmpdir) -> None:
+    transfer = _new_transfer(executor, tmpdir, client=NoChecksumDummyClient.from_config(StorageConfig()), crc32c=MISMATCH_CRC32C)
+    transfer.start()
+    with pytest.raises(ValueError, match="Unexpected checksum"):
+        executor.execute_tasks()
+
+    assert transfer.finished
+    assert not transfer.verified
+    assert transfer.errors
+    assert transfer.done == NO_RANGE
+    assert transfer.todo == rangeset("0-1023")
+    status = read_status(transfer)
+    assert status["done"] == ""
+    assert "verified" not in status
+
+
+def test_transfer_without_crc32c_is_not_verified(executor: dummy.DummyExecutor, tmpdir) -> None:
+    transfer = _new_transfer(executor, tmpdir, client=NoChecksumDummyClient.from_config(StorageConfig()), crc32c=None)
+    transfer.start()
+    executor.execute_tasks()
+
+    assert transfer.finished
+    assert transfer.done == rangeset("0-1023")
+    assert not transfer.verified
+    status = read_status(transfer)
+    assert status["done"] == "0-1023"
+    assert "verified" not in status
+
+
+def test_transfer_increasing_max_connections_does_not_deadlock(executor: dummy.DummyExecutor, tmpdir) -> None:
+    transfer = _new_transfer(executor, tmpdir, multipart_size=128, max_connections=1)
+    thread = threading.Thread(target=setattr, args=(transfer, "max_connections", 4), daemon=True)
+    thread.start()
+    thread.join(timeout=5.0)
+
+    assert not thread.is_alive()
+    assert transfer.max_connections == 4
+
+
+def test_transfer_save_status_keeps_previous_file_on_failure(
+    executor: dummy.DummyExecutor, tmpdir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transfer = _new_transfer(executor, tmpdir)
+    transfer.save_status()
+    with open(transfer.status_file_path) as fd:
+        want_status = fd.read()
+
+    def failing_dump(*args, **kwargs):
+        raise RuntimeError("failing dump")
+
+    monkeypatch.setattr(json, "dump", failing_dump)
+    with pytest.raises(RuntimeError, match="failing dump"):
+        transfer.save_status()
+
+    with open(transfer.status_file_path) as fd:
+        assert fd.read() == want_status
+    status_dir = os.path.dirname(transfer.status_file_path)
+    assert [f for f in os.listdir(status_dir) if f.endswith(".tmp")] == []
+
+
+def test_transfer_finishes_when_status_cannot_be_saved(executor: dummy.DummyExecutor, tmpdir, monkeypatch: pytest.MonkeyPatch) -> None:
+    transfer = _new_transfer(executor, tmpdir)
+
+    def failing_save_status():
+        raise RuntimeError("failing save")
+
+    monkeypatch.setattr(transfer, "save_status", failing_save_status)
+    transfer.start()
+    executor.execute_tasks()
+
+    transfer.wait(timeout=0.0)
+    assert transfer.verified
+    assert transfer.done == rangeset("0-1023")
+
+
+class NoDownloadDummyClient(DummyClient):
+
+    def get(self, url: str, *, check_head: Head | None = None) -> GetResponse:
+        raise AssertionError("unexpected download")
+
+
+def _write_complete_status(tmpdir, data: bytes, **status) -> None:
+    path = os.path.join(str(tmpdir), os.path.basename(urlparse(URL).path))
+    with open(path, "wb") as fd:
+        fd.write(data)
+    status_path = StorageConfig().transfer_status_path(URL)
+    os.makedirs(os.path.dirname(status_path), exist_ok=True)
+    with open(status_path, "w") as fd:
+        json.dump({"url": URL, "document_length": len(DATA), "done": "0-1023", "crc32c": CRC32C, **status}, fd)
+
+
+def test_transfer_resumed_verified_file_is_finished(executor: dummy.DummyExecutor, tmpdir) -> None:
+    _write_complete_status(tmpdir, DATA, verified=True)
+    transfer = _new_transfer(executor, tmpdir, client=NoDownloadDummyClient.from_config(StorageConfig()), resume=True)
+
+    assert transfer.finished
+    assert transfer.verified
+    assert not transfer.start()
+
+
+def test_transfer_resumed_unverified_file_is_verified_on_start(executor: dummy.DummyExecutor, tmpdir) -> None:
+    _write_complete_status(tmpdir, DATA)
+    transfer = _new_transfer(executor, tmpdir, client=NoDownloadDummyClient.from_config(StorageConfig()), resume=True)
+    assert not transfer.finished
+    assert not transfer.verified
+
+    assert transfer.start()
+    # Only one verification task is submitted.
+    assert not transfer.start()
+    executor.execute_tasks()
+
+    transfer.wait(timeout=0.0)
+    assert transfer.verified
+    assert transfer.done == rangeset("0-1023")
+    assert read_status(transfer)["verified"] is True
+
+
+def test_transfer_resumed_corrupted_file_is_reset_on_start(executor: dummy.DummyExecutor, tmpdir) -> None:
+    _write_complete_status(tmpdir, DATA[:-1] + b"\0")
+    transfer = _new_transfer(executor, tmpdir, client=NoDownloadDummyClient.from_config(StorageConfig()), resume=True)
+
+    assert transfer.start()
+    with pytest.raises(ValueError, match="Unexpected checksum"):
+        executor.execute_tasks()
+
+    assert transfer.finished
+    assert not transfer.verified
+    assert transfer.done == NO_RANGE
+    assert transfer.todo == rangeset("0-1023")
+    status = read_status(transfer)
+    assert status["done"] == ""
+    assert "verified" not in status

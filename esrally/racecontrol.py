@@ -111,7 +111,12 @@ class BenchmarkActor(actor.RallyActor):
         self.cfg = msg.cfg
         assert self.cfg is not None
         self.coordinator = BenchmarkCoordinator(msg.cfg)
-        self.coordinator.setup(sources=msg.sources)
+        try:
+            self.coordinator.setup(sources=msg.sources)
+        except exceptions.RallyError as e:
+            self.logger.info("Setup failed due to a Rally error.", exc_info=e)
+            self.send(sender, actor.BenchmarkFailure(e.full_message))
+            return
         self.logger.info("Asking mechanic to start the engine.")
         self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
         self.send(
@@ -200,8 +205,10 @@ class BenchmarkCoordinator:
         # but there are rare cases (external pipeline and user did not specify the distribution version) where we need
         # to derive it ourselves. For source builds we always assume "main"
         if not sources and not self.cfg.exists("mechanic", "distribution.version"):
-            hosts = self.cfg.opts("client", "hosts").default
-            client_options = self.cfg.opts("client", "options").default
+            hosts_cfg = self.cfg.opts("client", "hosts")
+            options_cfg = self.cfg.opts("client", "options")
+            hosts = hosts_cfg.default_or_first
+            client_options = options_cfg.default_or_first
             (
                 distribution_flavor,
                 distribution_version,
@@ -232,16 +239,13 @@ class BenchmarkCoordinator:
                         f"Cluster version must be at least [{min_es_version}] but was [{distribution_version}]"
                     )
 
-        self.current_track = track.load_track(self.cfg, install_dependencies=True)
+        loaded_track = track.load_track(self.cfg, install_dependencies=True)
+        self.current_track = loaded_track
         self.track_revision = self.cfg.opts("track", "repository.revision", mandatory=False)
-        challenge_name = self.cfg.opts("track", "challenge.name")
-        self.current_challenge = self.current_track.find_challenge_or_default(challenge_name)
-        if self.current_challenge is None:
-            raise exceptions.SystemSetupError(
-                "Track [{}] does not provide challenge [{}]. List the available tracks with {} list tracks.".format(
-                    self.current_track.name, challenge_name, PROGRAM_NAME
-                )
-            )
+        # Resolve the challenge and validate track parameters before provisioning the engine so that
+        # invalid parameters fail fast. Track plugins were loaded (and any validators registered)
+        # during load_track above. Shared with ``esrally validate-track``.
+        self.current_challenge = track.resolve_challenge_and_invoke_validators(loaded_track, self.cfg)
         if self.current_challenge.user_info:
             console.info(self.current_challenge.user_info)
         for message in self.current_challenge.serverless_info:
@@ -328,11 +332,41 @@ def race(cfg: types.Config, sources=False, distribution=False, external=False, d
         actor_system.tell(benchmark_actor, thespian.actors.ActorExitRequest())
 
 
+def prepare_track(cfg: types.Config):
+    logger = logging.getLogger(__name__)
+    track_description = cfg.opts("track", "track.name", mandatory=False) or cfg.opts("track", "track.path", mandatory=False)
+    assert track_description is not None, "track description missing"
+    logger.info("Preparing track [%s] ...", track_description)
+    console.println(f"Preparing track [{track_description}] ...")
+    # at this point an actor system has to run and we should only join
+    actor_system = actor.bootstrap_actor_system(try_join=True)
+    # load the track in the coordinating process so track parameters are validated before preparing corpora
+    t = track.load_track(cfg, install_dependencies=True)
+    track.resolve_challenge_and_invoke_validators(t, cfg)
+    track_preparation_actor = actor_system.createActor(driver.TrackPreparationActor, targetActorRequirements={"coordinator": True})
+    try:
+        result = actor_system.ask(track_preparation_actor, driver.PrepareTrackStandalone(cfg, t))
+        if isinstance(result, driver.TrackPrepared):
+            logger.info("Track [%s] has been prepared successfully.", t.name)
+            console.println(f"Track [{t.name}] has been prepared successfully.")
+        elif isinstance(result, actor.BenchmarkFailure):
+            logger.error("A track preparation failure has occurred")
+            raise exceptions.RallyError(result.message, result.cause)
+        else:
+            raise exceptions.RallyError("Got an unexpected result while preparing track: [%s]." % str(result))
+    except KeyboardInterrupt:
+        logger.info("User has cancelled track preparation.")
+        raise exceptions.UserInterrupted("User has cancelled track preparation.") from None
+    finally:
+        logger.info("Telling track preparation actor to exit.")
+        actor_system.tell(track_preparation_actor, thespian.actors.ActorExitRequest())
+
+
 def set_default_hosts(cfg: types.Config, host="127.0.0.1", port=9200):
     logger = logging.getLogger(__name__)
     configured_hosts = cfg.opts("client", "hosts")
-    if len(configured_hosts.default) != 0:
-        logger.info("Using configured hosts %s", configured_hosts.default)
+    if len(configured_hosts.default_or_first) != 0:
+        logger.info("Using configured hosts %s", configured_hosts.default_or_first)
     else:
         logger.info("Setting default host to [%s:%d]", host, port)
         default_host_object = opts.TargetHosts(f"{host}:{port}")
@@ -353,7 +387,8 @@ def from_distribution(cfg: types.Config):
 
 
 def benchmark_only(cfg: types.Config):
-    set_default_hosts(cfg)
+    if not cfg.opts("driver", "multi.cluster", mandatory=False):
+        set_default_hosts(cfg)
     # We'll use a special car name for external benchmarks.
     cfg.add(config.Scope.benchmark, "mechanic", "car.names", ["external"])
     return race(cfg, external=True)
@@ -407,7 +442,7 @@ def run(cfg: types.Config):
             raise exceptions.SystemSetupError(
                 "Only the [benchmark-only] pipeline is supported by the Rally Docker image.\n"
                 "Add --pipeline=benchmark-only in your Rally arguments and try again.\n"
-                "For more details read the docs for the benchmark-only pipeline in {}\n".format(doc_link("pipelines.html#benchmark-only"))
+                "For more details read the docs at {}\n".format(doc_link("pipelines.html"))
             )
 
     try:

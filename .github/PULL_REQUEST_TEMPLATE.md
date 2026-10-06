@@ -4,7 +4,7 @@ are a few simple things to check before submitting your pull request
 that can help with the review process.
 
 * Have you followed the [contributor guidelines](https://github.com/elastic/rally/blob/master/CONTRIBUTING.md)?
-* Have you successfully run `make int test`?
+* Have you successfully run `make lint test`?
 * Have you chosen a [descriptive title and description](https://chris.beams.io/posts/git-commit/) for your PR?
 * (Only for maintainers) Have you applied the appropriate labels?
 -->

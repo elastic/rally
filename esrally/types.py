@@ -109,6 +109,7 @@ Key = Literal[
     "metrics.log.dir",
     "metrics.request.downsample.factor",
     "metrics.url",
+    "multi.cluster",
     "network.host",
     "network.http.port",
     "node.http.port",

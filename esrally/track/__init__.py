@@ -22,9 +22,11 @@ from .loader import (
     load_track_plugins,
     operation_parameters,
     render_track,
+    resolve_challenge_and_invoke_validators,
     set_absolute_data_path,
     track_info,
     track_repo,
+    validate_track,
 )
 
 # expose the complete track API

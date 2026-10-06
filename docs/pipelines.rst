@@ -24,6 +24,7 @@ To benchmark a cluster, you also have to specify the hosts to connect to. An exa
 
     esrally race --track=geonames --pipeline=benchmark-only --target-hosts=search-node-a.intranet.acme.com:9200,search-node-b.intranet.acme.com:9200
 
+To benchmark multiple clusters simultaneously, add ``--multi-cluster``. See :ref:`multi-cluster mode <multi_cluster_mode>` in the race documentation.
 
 from-distribution
 ~~~~~~~~~~~~~~~~~

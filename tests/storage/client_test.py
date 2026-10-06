@@ -38,6 +38,7 @@ from esrally.storage import (
     dummy,
     rangeset,
 )
+from esrally.storage._adapter import ClientUnavailableError, ServiceUnavailableError
 from esrally.utils.cases import cases
 
 BASE_URL = "https://example.com"
@@ -295,6 +296,92 @@ def test_get(case: GetCase, client: Client) -> None:
     with client.get(case.url, check_head=Head(ranges=case.ranges, document_length=case.document_length)) as got:
         assert check_any(got.head, case.want_any) != []
         assert list(got.chunks) == case.want_chunks
+
+
+def _make_flaky(adapter, fail_url: str, error: Exception):
+    """It wraps `adapter.get` so that it raises `error` for `fail_url`, and behaves normally for any other URL."""
+    original_get = adapter.get
+
+    def flaky_get(url, *, check_head=None):
+        if url == fail_url:
+            raise error
+        return original_get(url, check_head=check_head)
+
+    return flaky_get
+
+
+def test_get_failover_on_client_unavailable_error_does_not_reduce_connections(client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
+    # pylint: disable=protected-access
+    # It forces a deterministic mirror order regardless of mirror weighting/shuffling.
+    monkeypatch.setattr(client, "resolve", lambda url, **kwargs: iter([MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD]))
+
+    adapter = client._adapters.get(MIRRORED_URL)
+    monkeypatch.setattr(adapter, "get", _make_flaky(adapter, MIRRORED_URL, ClientUnavailableError("boom")))
+
+    wg = client._server_connections(MIRRORED_URL)
+    default_max_count = wg.max_count
+
+    with client.get(MIRRORING_URL) as got:
+        assert list(got.chunks) == [SOME_BODY]
+
+    # A client-side connectivity/credentials problem does not imply the server is overwhelmed, so the connection
+    # limit for the failing mirror is left untouched.
+    assert wg.max_count == default_max_count
+
+
+def test_get_failover_on_service_unavailable_error_reduces_connections(client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
+    # pylint: disable=protected-access
+    monkeypatch.setattr(client, "resolve", lambda url, **kwargs: iter([MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD]))
+
+    adapter = client._adapters.get(MIRRORED_URL)
+    monkeypatch.setattr(adapter, "get", _make_flaky(adapter, MIRRORED_URL, ServiceUnavailableError("boom")))
+
+    wg = client._server_connections(MIRRORED_URL)
+    default_max_count = wg.max_count
+
+    with client.get(MIRRORING_URL) as got:
+        assert list(got.chunks) == [SOME_BODY]
+
+    # A `ServiceUnavailableError` signals that the server is overwhelmed, so the connection limit is reduced.
+    assert wg.max_count < default_max_count
+
+
+def test_get_raises_client_unavailable_error_when_every_mirror_is_client_unavailable(
+    client: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # pylint: disable=protected-access
+    monkeypatch.setattr(client, "resolve", lambda url, **kwargs: iter([MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD]))
+
+    adapter = client._adapters.get(MIRRORED_URL)
+
+    def always_client_unavailable(url, *, check_head=None):
+        raise ClientUnavailableError(f"boom: {url}")
+
+    monkeypatch.setattr(adapter, "get", always_client_unavailable)
+
+    # Every mirror failed for a client-side reason (e.g. credentials), not because a service was overwhelmed, so
+    # this should fail fast with `ClientUnavailableError` instead of the usual `ServiceUnavailableError`.
+    with pytest.raises(ClientUnavailableError):
+        client.get(MIRRORING_URL)
+
+
+def test_get_raises_service_unavailable_error_when_mirrors_fail_for_mixed_reasons(client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
+    # pylint: disable=protected-access
+    monkeypatch.setattr(client, "resolve", lambda url, **kwargs: iter([MIRRORED_HEAD, MIRRORED_NO_RANGE_HEAD]))
+
+    adapter = client._adapters.get(MIRRORED_URL)
+
+    def mixed_failures(url, *, check_head=None):
+        if url == MIRRORED_URL:
+            raise ClientUnavailableError("boom")
+        raise ServiceUnavailableError("boom")
+
+    monkeypatch.setattr(adapter, "get", mixed_failures)
+
+    # Not every mirror failed because of a client-side problem, so it is not safe to assume the whole transfer is
+    # unrecoverable: it should keep the usual `ServiceUnavailableError` "back off and retry" behavior.
+    with pytest.raises(ServiceUnavailableError):
+        client.get(MIRRORING_URL)
 
 
 def check_any(head: Head, any_head: list[Head]) -> list[Head]:

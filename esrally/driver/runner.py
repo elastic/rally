@@ -63,7 +63,7 @@ def register_default_runners(config: Optional[types.Config] = None):
     register_runner(track.OperationType.ClosePointInTime, ClosePointInTime(), async_runner=True)
     register_runner(track.OperationType.Sql, Sql(), async_runner=True)
     register_runner(track.OperationType.FieldCaps, FieldCaps(), async_runner=True)
-    register_runner(track.OperationType.Esql, Esql(), async_runner=True)
+    register_runner(track.OperationType.Esql, Esql(config=config), async_runner=True)
     register_runner(track.OperationType.EsqlProfile, EsqlProfile(), async_runner=True)
 
     # This is an administrative operation but there is no need for a retry here as we don't issue a request
@@ -239,6 +239,38 @@ class Runner:
             headers.update({"x-opaque-id": opaque_id})
 
         return params, request_params, transport_params, headers
+
+    async def _clear_blob_cache(self, es, params):
+        """
+        Clears the serverless blob cache before an iteration if the ``clear-blob-cache`` param
+        is set to ``True``. Only applies when running against a serverless target. The clear
+        request is issued in its own request context so it is excluded from the calling
+        runner's ``service_time`` / ``latency`` measurements. A failed clear re-raises the
+        original transport/API error so ``execute_single`` can apply the normal ``--on-error``
+        logic for that iteration.
+        """
+        if not (self.serverless_mode and params.get("clear-blob-cache", False)):
+            return
+        # pylint: disable=import-outside-toplevel
+        import elasticsearch
+
+        # A nested `new_request_context()` propagates its start/end times to the parent context
+        # on exit, so it would still be included in the parent's timing. Swapping in a throwaway
+        # context via the classmethods below avoids that propagation entirely.
+        _, token = es.init_request_context()
+        exc = None
+        try:
+            await es.perform_request(method="POST", path="/_internal/blob_caches/clear")
+        except (elasticsearch.ApiError, elasticsearch.TransportError) as e:
+            exc = e
+        finally:
+            es.restore_context(token)
+        if exc is not None:
+            # Stamp the outer context so driver.py timing arithmetic has valid values.
+            # The value will be close to 0 in this case.
+            es.on_request_start()
+            es.on_request_end()
+            raise exc
 
 
 class Delegator:
@@ -556,7 +588,6 @@ class BulkIndex(Runner):
         * ``action_metadata_present``: if ``True``, assume that an action and metadata line is present (meaning only half of the lines
         contain actual documents to index)
         * ``index``: The name of the affected index in case ``action_metadata_present`` is ``False``.
-        * ``type``: The name of the affected type in case ``action_metadata_present`` is ``False``.
 
         The following keys are optional:
 
@@ -600,9 +631,7 @@ class BulkIndex(Runner):
 
         if with_action_metadata:
             api_kwargs.pop("index", None)
-            response = await es.bulk(params=bulk_params, **api_kwargs)
-        else:
-            response = await es.bulk(doc_type=params.get("type"), params=bulk_params, **api_kwargs)
+        response = await es.bulk(params=bulk_params, **api_kwargs)
 
         stats = self._parse_stats(params, bulk_size, unit, response, api_kwargs, detailed_results)
 
@@ -1204,7 +1233,6 @@ class Query(Runner):
 
     * `operation-type`: One of `search`, `paginated-search`, `scroll-search`, or `composite-agg`
     * `index`: The index or indices against which to issue the query.
-    * `type`: See `index`
     * `cache`: True iff the request cache should be used.
     * `body`: Query body
 
@@ -1218,6 +1246,9 @@ class Query(Runner):
                            defaults to ``None`` and potentially falls back to the global timeout setting.
     * `results-per-page`: Number of results to retrieve per page.  This maps to the Search API's ``size`` parameter, and
                            can be used for paginated and non-paginated searches.  Defaults to ``10``
+    * `clear-blob-cache` (default: ``False``): On serverless targets, clears the blob cache before this
+                                               iteration is issued. The clear request is excluded from the
+                                               measured time. Ignored on non-serverless targets.
 
     If the following parameters are present in addition, a paginated query will be issued:
 
@@ -1251,6 +1282,7 @@ class Query(Runner):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         # we don't set headers at the options level because the Query runner sets them via the client's '_perform_request' method
         es = es.options(**transport_params)
+        await self._clear_blob_cache(es, params)
         # Mandatory to ensure it is always provided. This is especially important when this runner is used in a
         # composite context where there is no actual parameter source and the entire request structure must be provided
         # by the composite's parameter source.
@@ -1296,7 +1328,7 @@ class Query(Runner):
                     pit_id = CompositeContext.get(pit_op)
                     body["pit"] = {"id": pit_id, "keep_alive": "1m"}
 
-                response = await self._raw_search(es, doc_type=None, index=index, body=body.copy(), params=request_params, headers=headers)
+                response = await self._raw_search(es, index=index, body=body.copy(), params=request_params, headers=headers)
                 parsed, last_sort = self._search_after_extractor(
                     response,
                     bool(pit_op),
@@ -1357,7 +1389,7 @@ class Query(Runner):
                     composite_agg_body["size"] = size
 
                 body_to_send = tree_copy_composite_agg(body, path_to_composite)
-                response = await self._raw_search(es, doc_type=None, index=index, body=body_to_send, params=request_params, headers=headers)
+                response = await self._raw_search(es, index=index, body=body_to_send, params=request_params, headers=headers)
                 parsed = self._composite_agg_extractor(
                     response,
                     bool(pit_op),
@@ -1424,9 +1456,7 @@ class Query(Runner):
             return obj
 
         async def _request_body_query(es, params):
-            doc_type = params.get("type")
-
-            r = await self._raw_search(es, doc_type, index, body, request_params, headers=headers)
+            r = await self._raw_search(es, index, body, request_params, headers=headers)
 
             if detailed_results:
                 props = parse(
@@ -1519,12 +1549,11 @@ class Query(Runner):
                     if page == 0:
                         sort = "_doc"
                         scroll = "10s"
-                        doc_type = params.get("type")
                         params = request_params.copy()
                         params["sort"] = sort
                         params["scroll"] = scroll
                         params["size"] = size
-                        r = await self._raw_search(es, doc_type, index, body, params, headers=headers)
+                        r = await self._raw_search(es, index, body, params, headers=headers)
 
                         props = parse(
                             r, ["_scroll_id", "hits.total", "hits.total.value", "hits.total.relation", "timed_out", "took"], ["hits.hits"]
@@ -1592,12 +1621,10 @@ class Query(Runner):
         else:
             raise exceptions.RallyError(f"No runner available for operation-type: [{operation_type}]")
 
-    async def _raw_search(self, es, doc_type, index, body, params, headers=None):
+    async def _raw_search(self, es, index, body, params, headers=None):
         components = []
         if index:
             components.append(index)
-        if doc_type:
-            components.append(doc_type)
         components.append("_search")
         path = "/".join(components)
         return await es.perform_request(method="GET", path="/" + path, params=params, body=body, headers=headers)
@@ -3010,6 +3037,14 @@ class CompositeContext:
         except LookupError:
             raise exceptions.RallyAssertionError("This operation is only allowed inside a composite operation.") from None
 
+    @staticmethod
+    def has_active_context():
+        try:
+            CompositeContext.ctx.get()
+            return True
+        except LookupError:
+            return False
+
 
 class Composite(Runner):
     """
@@ -3021,6 +3056,7 @@ class Composite(Runner):
         # Since Composite is marked as serverless.Status.Public, only add public
         # operation types here.
         self.supported_op_types = [
+            "composite",
             "open-point-in-time",
             "close-point-in-time",
             "search",
@@ -3033,6 +3069,7 @@ class Composite(Runner):
             "delete-async-search",
             "field-caps",
         ]
+        self.operations_without_request_timing = ["composite"]
 
     async def run_stream(self, es, stream, connection_limit):
         streams = []
@@ -3053,20 +3090,30 @@ class Composite(Runner):
                         raise exceptions.RallyAssertionError(
                             f"Unsupported operation-type [{op_type}]. Use one of [{', '.join(self.supported_op_types)}]."
                         )
-                    runner = RequestTiming(runner_for(op_type))
-                    async with connection_limit:
+                    if op_type not in self.operations_without_request_timing:
+                        runner = RequestTiming(runner_for(op_type))
+                    else:
+                        runner = runner_for(op_type)
+                    if op_type == "composite":
+                        nested_item = dict(item)
+                        nested_item["_rally_connection_limit"] = connection_limit
                         async with runner:
-                            response = await runner({"default": es}, item)
-                            if response:
-                                # TODO: support calculating dependent's throughput
-                                # drop weight and unit metadata but keep the rest
-                                response.pop("weight")
-                                response.pop("unit")
-                                timing = response.get("dependent_timing")
-                                if timing:
-                                    timings.append(response)
-                            else:
-                                timings.append(None)
+                            response = await runner({"default": es}, nested_item)
+                    else:
+                        async with connection_limit:
+                            async with runner:
+                                response = await runner({"default": es}, item)
+
+                    if response:
+                        # TODO: support calculating dependent's throughput
+                        # drop weight and unit metadata but keep the rest
+                        response.pop("weight")
+                        response.pop("unit")
+                        timing = response.get("dependent_timing")
+                        if timing:
+                            timings.append(response)
+                    else:
+                        timings.append(None)
 
                 else:
                     raise exceptions.RallyAssertionError("Requests structure must contain [stream] or [operation-type].")
@@ -3086,9 +3133,15 @@ class Composite(Runner):
 
     async def __call__(self, es, params):
         requests = mandatory(params, "requests", self)
-        max_connections = params.get("max-connections", sys.maxsize)
-        async with CompositeContext():
-            response = await self.run_stream(es, requests, asyncio.BoundedSemaphore(max_connections))
+        connection_limit = params.get("_rally_connection_limit")
+        if connection_limit is None:
+            max_connections = params.get("max-connections", sys.maxsize)
+            connection_limit = asyncio.BoundedSemaphore(max_connections)
+        if CompositeContext.has_active_context():
+            response = await self.run_stream(es, requests, connection_limit)
+        else:
+            async with CompositeContext():
+                response = await self.run_stream(es, requests, connection_limit)
         return {
             "weight": 1,
             "unit": "ops",
@@ -3287,6 +3340,9 @@ class Esql(Runner):
     * `detailed-results` (default: ``False``): Records more detailed meta-data about queries. As it analyzes the
                                                corresponding response in more detail, this might incur additional
                                                overhead which can skew measurement results.
+    * `clear-blob-cache` (default: ``False``): On serverless targets, clears the blob cache before this
+                                               iteration is issued. The clear request is excluded from the
+                                               measured time. Ignored on non-serverless targets.
 
     If the response contains ``is_partial: true``, the operation is marked as failed. This will cause the benchmark
     to abort if ``--on-error=abort`` is specified, or record an error and continue otherwise.
@@ -3295,6 +3351,7 @@ class Esql(Runner):
     async def __call__(self, es, params):
         params, request_params, transport_params, headers = self._transport_request_params(params)
         es = es.options(**transport_params)
+        await self._clear_blob_cache(es, params)
         query = mandatory(params, "query", self)
         body = params.get("body", {})
         body["query"] = query
