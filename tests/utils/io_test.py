@@ -16,6 +16,7 @@
 # under the License.
 # pylint: disable=protected-access
 
+import concurrent.futures
 import gzip
 import logging
 import os
@@ -526,103 +527,29 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         records = list(pb.read_records(2, 4))
         assert len(records) == 2
 
-    def test_try_download_returns_false_without_base_url(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
-        pb = io.OtlpProtobufFile.for_source_file(json_path)
-        assert pb.try_download_from_corpus_location(None) is False
-
-    def test_try_download_pb_and_offset(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
-        pb = io.OtlpProtobufFile.for_source_file(json_path)
-
-        downloaded = []
-
-        def fake_download(url, dest, **kwargs):
-            downloaded.append(url)
-            with open(dest, "wb") as f:
-                f.write(b"\x00")
-
-        with mock.patch("esrally.utils.net.download", side_effect=fake_download):
-            assert pb.try_download_from_corpus_location("http://example.com/corpus/") is True
-
-        # both .pb and .pb.offset should have been attempted, with trailing slash stripped
-        assert downloaded == [
-            "http://example.com/corpus/metrics.otlp.json.pb",
-            "http://example.com/corpus/metrics.otlp.json.pb.offset",
-        ]
-
-    def test_try_download_offset_failure_is_non_fatal(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
-        pb = io.OtlpProtobufFile.for_source_file(json_path)
-
-        def fake_download(url, dest, **kwargs):
-            if url.endswith(".offset"):
-                raise RuntimeError("not found")
-            with open(dest, "wb") as f:
-                f.write(b"\x00")
-
-        with mock.patch("esrally.utils.net.download", side_effect=fake_download):
-            # .pb succeeds, .offset fails → overall result is still True
-            assert pb.try_download_from_corpus_location("http://example.com/corpus") is True
-        assert os.path.exists(pb.pb_path)
-        assert not os.path.exists(pb.pb_path + ".offset")
-
-    def test_try_download_pb_failure_returns_false(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
-        pb = io.OtlpProtobufFile.for_source_file(json_path)
-
-        with mock.patch("esrally.utils.net.download", side_effect=Exception("404")):
-            assert pb.try_download_from_corpus_location("http://example.com/corpus") is False
-
-    def test_prepare_skips_when_pb_already_valid(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
-        # pre-create the .pb so it's already valid
-        io.OtlpProtobufFile.for_source_file(json_path).create()
-
-        with mock.patch("esrally.utils.net.download") as mock_dl:
-            result = io.prepare_otlp_protobuf_file(json_path, "http://example.com/corpus")
-
-        mock_dl.assert_not_called()
-        assert result is None
-
-    def test_prepare_falls_back_to_local_when_download_fails(self, tmp_path):
+    def _create_and_capture_worker_count(self, tmp_path, workers=None):
         json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 2)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        with mock.patch(
+            "concurrent.futures.ProcessPoolExecutor",
+            side_effect=lambda max_workers: concurrent.futures.ThreadPoolExecutor(max_workers=max_workers),
+        ) as pool_mock:
+            assert pb.create(workers=workers) == 2
+        pool_mock.assert_called_once()
+        return pool_mock.call_args.kwargs["max_workers"]
 
-        with mock.patch("esrally.utils.net.download", side_effect=Exception("404")):
-            result = io.prepare_otlp_protobuf_file(json_path, "http://example.com/corpus")
+    def test_create_uses_workers_from_env(self, tmp_path):
+        with mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "12"}):
+            assert self._create_and_capture_worker_count(tmp_path) == 12
 
-        assert result == 2
+    def test_create_ignores_invalid_workers_env(self, tmp_path):
+        with mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "not-a-number"}):
+            assert self._create_and_capture_worker_count(tmp_path) == (os.cpu_count() or 1)
 
-    def test_prepare_returns_none_when_no_local_json_and_download_fails(self, tmp_path):
-        # source JSON does not exist
-        json_path = str(tmp_path / "missing.otlp.json")
+    def test_create_ignores_zero_workers_env(self, tmp_path):
+        with mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "0"}):
+            assert self._create_and_capture_worker_count(tmp_path) == (os.cpu_count() or 1)
 
-        with mock.patch("esrally.utils.net.download", side_effect=Exception("404")):
-            result = io.prepare_otlp_protobuf_file(json_path, "http://example.com/corpus")
-
-        assert result is None
-
-    def test_prepare_passes_workers_from_env(self, tmp_path):
-        # env var lets users dial up parallelism without code changes
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 2)
-
-        with (
-            mock.patch("esrally.utils.net.download", side_effect=Exception("404")),
-            mock.patch.object(io.OtlpProtobufFile, "create", return_value=2) as create_mock,
-            mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "12"}),
-        ):
-            result = io.prepare_otlp_protobuf_file(json_path, None)
-
-        assert result == 2
-        create_mock.assert_called_once_with(workers=12)
-
-    def test_prepare_ignores_invalid_workers_env(self, tmp_path):
-        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
-
-        with (
-            mock.patch.object(io.OtlpProtobufFile, "create", return_value=1) as create_mock,
-            mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "not-a-number"}),
-        ):
-            io.prepare_otlp_protobuf_file(json_path, None)
-
-        create_mock.assert_called_once_with(workers=None)
+    def test_create_explicit_workers_override_env(self, tmp_path):
+        with mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "12"}):
+            assert self._create_and_capture_worker_count(tmp_path, workers=2) == 2

@@ -1112,15 +1112,18 @@ class TestOtlpDocumentPreparation:
 
     def test_tries_compressed_pb_first_when_corpus_is_compressed(self):
         p = self._preparator()
-        # is_valid: False initially, False before download, True after decompress
+        # is_valid: False before download, True after decompress
         with mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]), mock.patch("os.remove"):
             p.prepare_otlp_document_set(
                 self._doc_set(archive="metrics.otlp.json.zst", compressed_size=500),
                 data_root="/tmp",
             )
 
-        # downloaded the .pb.zst from the base URL
-        p.downloader.download.assert_called_once_with("http://example.com/otlp", "/tmp/metrics.otlp.json.pb.zst")
+        # downloaded the .pb.zst and the offset index from the base URL
+        assert p.downloader.download.call_args_list == [
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb.zst"),
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb.offset"),
+        ]
         # decompressed it into the .pb path
         p.decompressor.decompress.assert_called_once_with(
             "/tmp/metrics.otlp.json.pb.zst", "/tmp/metrics.otlp.json.pb", uncompressed_size=None
@@ -1128,17 +1131,18 @@ class TestOtlpDocumentPreparation:
 
     def test_falls_back_to_uncompressed_pb_when_compressed_unavailable(self):
         p = self._preparator()
-        # first download (compressed) raises DataError, second (uncompressed) succeeds
-        p.downloader.download.side_effect = [exceptions.DataError("not found"), None]
+        # compressed .pb is missing, uncompressed .pb and its offset index succeed
+        p.downloader.download.side_effect = [exceptions.DataError("not found"), None, None]
         with mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]):
             p.prepare_otlp_document_set(
                 self._doc_set(archive="metrics.otlp.json.zst", compressed_size=500),
                 data_root="/tmp",
             )
 
-        assert p.downloader.download.call_count == 2
-        # second call is the uncompressed .pb
-        assert p.downloader.download.call_args_list[1] == mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb")
+        assert p.downloader.download.call_args_list[1:] == [
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb"),
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb.offset"),
+        ]
         # never decompressed
         p.decompressor.decompress.assert_not_called()
 
@@ -1147,9 +1151,80 @@ class TestOtlpDocumentPreparation:
         with mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]):
             p.prepare_otlp_document_set(self._doc_set(), data_root="/tmp")
 
-        # only one download — the uncompressed .pb — no archive attempt
-        p.downloader.download.assert_called_once_with("http://example.com/otlp", "/tmp/metrics.otlp.json.pb")
+        # no archive attempt — only the uncompressed .pb and its offset index
+        assert p.downloader.download.call_args_list == [
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb"),
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb.offset"),
+        ]
         p.decompressor.decompress.assert_not_called()
+
+    def test_downloads_pbgz_offset_when_gzip_records(self):
+        p = self._preparator()
+        with mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]):
+            p.prepare_otlp_document_set(self._doc_set(), data_root="/tmp", gzip_records=True)
+
+        assert p.downloader.download.call_args_list == [
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pbgz"),
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pbgz.offset"),
+        ]
+
+    def test_offset_download_failure_is_non_fatal_and_removes_stale_index(self, tmp_path):
+        stale_offset = tmp_path / "metrics.otlp.json.pb.offset"
+        stale_offset.write_text("0;0\n")
+        p = self._preparator()
+        p.downloader.download.side_effect = [None, exceptions.DataError("not found")]
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]),
+            mock.patch.object(io.OtlpProtobufFile, "create") as create,
+        ):
+            p.prepare_otlp_document_set(self._doc_set(), data_root=str(tmp_path))
+
+        assert not stale_offset.exists()
+        create.assert_not_called()
+
+    def test_offset_download_failure_without_existing_index(self, tmp_path):
+        p = self._preparator()
+        p.downloader.download.side_effect = [None, exceptions.SystemSetupError("not found")]
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]),
+            mock.patch.object(io.OtlpProtobufFile, "create") as create,
+        ):
+            p.prepare_otlp_document_set(self._doc_set(), data_root=str(tmp_path))
+
+        assert p.downloader.download.call_count == 2
+        create.assert_not_called()
+
+    def test_converts_local_json_when_pb_unavailable(self):
+        p = self._preparator()
+        p.downloader.download.side_effect = exceptions.DataError("not found")
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=False),
+            mock.patch.object(io.OtlpProtobufFile, "create") as create,
+            mock.patch.object(p, "is_locally_available", return_value=True),
+            mock.patch.object(p, "has_expected_size", return_value=True),
+        ):
+            p.prepare_otlp_document_set(self._doc_set(), data_root="/tmp")
+
+        # only the .pb was attempted — no offset index and no JSON download
+        p.downloader.download.assert_called_once_with("http://example.com/otlp", "/tmp/metrics.otlp.json.pb")
+        create.assert_called_once_with()
+
+    def test_downloads_and_converts_json_when_pb_unavailable(self):
+        p = self._preparator()
+        p.downloader.download.side_effect = [exceptions.DataError("not found"), None]
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=False),
+            mock.patch.object(io.OtlpProtobufFile, "create") as create,
+            mock.patch.object(p, "is_locally_available", side_effect=[False, True]),
+            mock.patch.object(p, "has_expected_size", return_value=True),
+        ):
+            p.prepare_otlp_document_set(self._doc_set(), data_root="/tmp")
+
+        assert p.downloader.download.call_args_list == [
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb"),
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json", 2000),
+        ]
+        create.assert_called_once_with()
 
 
 class TestTemplateSource:

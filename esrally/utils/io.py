@@ -775,40 +775,6 @@ class OtlpProtobufFile:
                 return False
         return True
 
-    def try_download_from_corpus_location(self, corpus_base_url: str | None) -> bool:
-        """
-        Attempts to download the pre-built .pb file from the corpus URL. Also attempts to
-        download the companion .pb.offset file; if that's not available, partitioning will
-        still work by scanning the .pb from the start (just slightly slower on startup).
-
-        :return: True if the .pb file was downloaded successfully, False otherwise.
-        """
-        if not corpus_base_url:
-            return False
-        logger = logging.getLogger(__name__)
-        pb_name = os.path.basename(self.pb_path)
-        remote_url = f"{corpus_base_url.rstrip('/')}/{pb_name}"
-        logger.info("Attempting to download binary protobuf file from [%s]", remote_url)
-        os.makedirs(os.path.dirname(self.pb_path), exist_ok=True)
-        try:
-            net.download(remote_url, self.pb_path)
-            logger.info("Successfully downloaded binary protobuf file from [%s]", remote_url)
-        except Exception:
-            logger.debug("Could not download binary protobuf file from [%s]", remote_url)
-            return False
-
-        # Best-effort: also fetch the offset index. Failure is non-fatal — read_records()
-        # falls back to scanning from the start of the .pb if .offset is missing.
-        offset_path = self.pb_path + ".offset"
-        offset_url = f"{corpus_base_url.rstrip('/')}/{os.path.basename(offset_path)}"
-        try:
-            net.download(offset_url, offset_path)
-            logger.info("Successfully downloaded offset index from [%s]", offset_url)
-        except Exception:
-            logger.debug("Could not download offset index from [%s] (will scan .pb directly)", offset_url)
-
-        return True
-
     # batch size for parallel conversion. Smaller batches → less memory per in-flight batch.
     # The actual memory cost per batch is ~5× the raw input size (Python object overhead + parsed
     # protobuf message tree during conversion), so 500 lines × ~50 KB ≈ ~125 MB per in-flight batch.
@@ -828,8 +794,9 @@ class OtlpProtobufFile:
         file (which is what ``ProcessPoolExecutor.map`` would do, since it eagerly consumes its
         iterable up front).
 
-        :param workers: Number of worker processes for conversion. Defaults to ``os.cpu_count()``.
-                        Peak memory ≈ ``workers × 325 MB`` regardless of source file size:
+        :param workers: Number of worker processes for conversion. Defaults to ``RALLY_OTLP_CONVERSION_WORKERS``
+                        if set to a positive integer, otherwise ``os.cpu_count()``.
+                        Peak memory ≈ ``workers x 325 MB`` regardless of source file size:
                         ~200 MB per worker process (interpreter + loaded protobuf bindings) plus
                         ~125 MB per in-flight batch (input strings + parsed proto tree + output).
                         Override via ``RALLY_OTLP_CONVERSION_WORKERS`` if you need to cap memory.
@@ -850,8 +817,11 @@ class OtlpProtobufFile:
         import collections  # pylint: disable=import-outside-toplevel
         import concurrent.futures  # pylint: disable=import-outside-toplevel
 
+        workers_env = os.environ.get("RALLY_OTLP_CONVERSION_WORKERS", "")
         if workers and workers > 0:
             worker_count = workers
+        elif workers_env.isdigit() and int(workers_env) > 0:
+            worker_count = int(workers_env)
         else:
             worker_count = os.cpu_count() or 1
         # Bounded queue depth = workers + small buffer. Pickling each batch costs ~5× the raw input
@@ -1070,52 +1040,6 @@ class OtlpProtobufFile:
             )
         ext = ".pbgz" if gzip_records else ".pb"
         return cls(source_json_path, f"{source_json_path}{ext}", gzip_records=gzip_records)
-
-
-def prepare_otlp_protobuf_file(source_json_path: str, corpus_base_url: str | None) -> int | None:
-    """
-    Ensures a binary protobuf (.pb) file exists for the given OTLP JSON corpus.
-
-    Strategy:
-    1. If .pb is already valid locally, return None immediately.
-    2. Try downloading the .pb from corpus_base_url (avoids downloading the larger JSON source).
-    3. If JSON is present locally, convert it to .pb.
-
-    Returns the record count if the .pb was created locally, or None if it already existed or
-    was downloaded. Returns None without creating the file if the JSON source is absent and the
-    download failed — the caller is responsible for ensuring the JSON is present if needed.
-    """
-    pb_file = OtlpProtobufFile.for_source_file(source_json_path)
-    if pb_file.is_valid():
-        return None
-
-    if corpus_base_url:
-        console.info(
-            "Attempting to download binary protobuf file for [%s] ... " % os.path.basename(source_json_path),
-            end="",
-            flush=True,
-        )
-        if pb_file.try_download_from_corpus_location(corpus_base_url) and pb_file.is_valid():
-            console.println("[DOWNLOADED]")
-            return None
-        console.println("[NOT FOUND - will create locally]")
-
-    if not os.path.exists(source_json_path):
-        return None
-
-    console.info(
-        "Converting OTLP JSON to binary protobuf for [%s] ... " % os.path.basename(source_json_path),
-        end="",
-        flush=True,
-    )
-    # honor RALLY_OTLP_CONVERSION_WORKERS for environments where the default (os.cpu_count()) needs
-    # tuning. Each worker process consumes ~200 MB for the interpreter + protobuf bindings, plus an
-    # in-flight batch of ~125 MB while it's parsing. Reduce on low-RAM machines, leave alone otherwise.
-    workers_env = os.environ.get("RALLY_OTLP_CONVERSION_WORKERS")
-    workers = int(workers_env) if workers_env and workers_env.isdigit() else None
-    record_count = pb_file.create(workers=workers)
-    console.println("[OK]")
-    return record_count
 
 
 def skip_lines(data_file_path: str, data_file: IO[AnyStr], number_of_lines_to_skip: int) -> None:

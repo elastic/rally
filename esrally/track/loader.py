@@ -988,6 +988,7 @@ class DocumentSetPreparator:
                     except OSError:
                         pass
                     if pb_file.is_valid():
+                        self._try_download_pb_offset(document_set, pb_path)
                         return True
 
         # uncompressed .pb fallback
@@ -995,7 +996,26 @@ class DocumentSetPreparator:
             self.downloader.download(document_set.base_url, pb_path)
         except exceptions.DataError:
             return False
-        return pb_file.is_valid()
+        if not pb_file.is_valid():
+            return False
+        self._try_download_pb_offset(document_set, pb_path)
+        return True
+
+    def _try_download_pb_offset(self, document_set, pb_path):
+        """
+        Best-effort download of the ``.offset`` index for a downloaded corpus file. On failure, any
+        pre-existing index is removed as it may not match the new corpus file; ``OtlpProtobufFile``
+        regenerates it on demand.
+        """
+        offset_path = pb_path + ".offset"
+        try:
+            self.downloader.download(document_set.base_url, offset_path)
+        except (exceptions.DataError, exceptions.SystemSetupError) as e:
+            LOG.debug("Offset index [%s] not available remotely, it will be generated locally: %s", offset_path, e)
+            try:
+                os.remove(offset_path)
+            except FileNotFoundError:
+                pass
 
     def prepare_bundled_otlp_document_set(self, document_set, data_root, gzip_records: bool = False):
         """
