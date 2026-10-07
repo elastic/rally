@@ -847,15 +847,14 @@ class OtlpParamSource(ParamSource):
             self._cached_total_records = actual if actual is not None else self._doc.number_of_documents
         return self._cached_total_records
 
-    def size(self):
-        """
-        Return the partition size so Rally treats this as a finite (non-infinite) source.
-        Without this, the base class returns None → infinite=True → Rally defaults
-        iterations=1 and each worker runs exactly one operation.
-        """
+    @property
+    def infinite(self):
+        return False
+
+    def _partition_record_count(self):
         total_records = self._total_records()
         if total_records <= 0:
-            return None
+            return 0
         if self._total_partitions > 1:
             records_per_partition = total_records / self._total_partitions
             start_record = round(records_per_partition * self._partition_index)
@@ -865,23 +864,9 @@ class OtlpParamSource(ParamSource):
 
     @property
     def percent_completed(self):
-        """
-        Fraction of this partition's records that have been yielded so far.
-
-        Rally pulls this per-client and averages across all clients to render the [N% done] bar.
-        Without this property the bar stays stuck at 0% because the loop control falls into the
-        ``infinite`` branch (we don't set a time_period/iterations explicitly — the param source
-        itself terminates the task by raising StopIteration in non-looped mode).
-
-        Returns ``None`` in looped mode because the cursor cycles back to 0 indefinitely, so a
-        cursor-based percentage is meaningless. The schedule's time_period / iterations bounds
-        progress instead in that case.
-        """
-        if self.looped:
-            return None
-        partition_size = self.size()
-        if not partition_size:
-            return None
+        partition_size = self._partition_record_count()
+        if partition_size == 0:
+            return 1.0
         return min(self._cursor / partition_size, 1.0)
 
     def _open_iter(self):
@@ -1008,7 +993,10 @@ class PartitionBulkIndexParamSource:
         self.current_bulk = 0
         # use a value > 0 so percent_completed returns a sensible value
         self.total_bulks = 1
-        self.infinite = False
+
+    @property
+    def infinite(self):
+        return False
 
     def partition(self, partition_index, total_partitions):
         if self.total_partitions is None:

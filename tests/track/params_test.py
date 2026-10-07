@@ -1145,6 +1145,23 @@ class TestBulkIndexParamSource:
         partition = source.partition(0, 1)
         assert partition.corpora == corpora
 
+    def test_is_not_infinite(self):
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                )
+            ],
+        )
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=[corpus]),
+            params={"bulk-size": 5},
+        )
+        assert source.partition(0, 1).infinite is False
+
     def test_filters_corpora(self):
         corpora = [
             track.DocumentCorpus(
@@ -3507,7 +3524,7 @@ class TestOtlpParamSource:
         )
         assert source.corpora == [corpus]
 
-    def test_size_uses_actual_pb_count_not_document_count(self, tmp_path):
+    def test_partitions_use_actual_pb_count_not_document_count(self, tmp_path):
         # Critical correctness test: if the track's document-count doesn't match the actual .pb,
         # we MUST use the actual count or partitioning silently breaks (most workers seek past EOF
         # or get empty partitions, and only one client ends up doing any work).
@@ -3529,33 +3546,39 @@ class TestOtlpParamSource:
             track_obj=track.Track(name="unit-test", corpora=[corpus]),
             params={},
         )
-        p = source.partition(0, 4)
-        # Partition size should be derived from the ACTUAL 100 records, not the (wrong) 10
-        assert p.size() == 25
-        # And all 100 records should actually be reachable across 4 partitions
-        sizes = [source.partition(i, 4).size() for i in range(4)]
-        assert sum(sizes) == 100
+        # partition sizes must be derived from the ACTUAL 100 records, not the (wrong) 10
+        sizes = [self._count_records(source.partition(i, 4)) for i in range(4)]
+        assert sizes == [25, 25, 25, 25]
 
-    def test_size_returns_finite_value_not_none(self, tmp_path):
-        # critical: size() must NOT be None, otherwise Rally treats us as infinite and defaults iterations=1
+    @staticmethod
+    def _count_records(param_source):
+        count = 0
+        while True:
+            try:
+                param_source.params()
+            except StopIteration:
+                return count
+            count += 1
+
+    def test_is_not_infinite(self, tmp_path):
+        # if infinite, Rally defaults iterations=1 and each client sends exactly one request
         corpus = self._build_corpus(tmp_path, num_records=10)
         source = params.OtlpParamSource(
             track_obj=track.Track(name="unit-test", corpora=[corpus]),
             params={},
         )
-        assert source.size() == 10
         assert source.infinite is False
+        assert source.partition(0, 1).infinite is False
 
-    def test_size_accounts_for_partition(self, tmp_path):
+    def test_partitions_split_records(self, tmp_path):
         corpus = self._build_corpus(tmp_path, num_records=100)
         source = params.OtlpParamSource(
             track_obj=track.Track(name="unit-test", corpora=[corpus]),
             params={},
         )
         # 100 records / 8 partitions = 12 or 13 per partition (depending on rounding)
-        sizes = [source.partition(i, 8).size() for i in range(8)]
+        sizes = [self._count_records(source.partition(i, 8)) for i in range(8)]
         assert sum(sizes) == 100
-        # each worker should have at least 12, at most 13
         assert all(12 <= s <= 13 for s in sizes)
 
     def test_partition_returns_separate_instances(self, tmp_path):
@@ -3627,19 +3650,19 @@ class TestOtlpParamSource:
             p.params()
             assert p.percent_completed == i / 10
 
-    def test_percent_completed_is_none_when_looped(self, tmp_path):
-        # in looped mode the cursor cycles back to 0 — Rally must fall back to time/iteration
-        # based progress, so we return None to avoid misleading numbers.
+    def test_percent_completed_cycles_when_looped(self, tmp_path):
         corpus = self._build_corpus(tmp_path, num_records=3)
         source = params.OtlpParamSource(
             track_obj=track.Track(name="unit-test", corpora=[corpus]),
             params={"looped": True},
         )
         p = source.partition(0, 1)
-        assert p.percent_completed is None
-        for _ in range(7):
+        assert p.percent_completed == 0.0
+        for _ in range(3):
             p.params()
-        assert p.percent_completed is None
+        assert p.percent_completed == 1.0
+        p.params()
+        assert p.percent_completed == 1 / 3
 
     def test_gzip_param_defaults_to_false_and_uses_pb(self, tmp_path):
         corpus = self._build_corpus(tmp_path, num_records=1)
