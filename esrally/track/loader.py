@@ -81,7 +81,7 @@ class TrackProcessor(abc.ABC):
         """
         To minimize complexity here, we use a no-op function to return a no-op result in the base class.
         Alternatively we could use an ABC with some refactoring. We def the function since lambdas cannot be
-        pickled for Thespian's sake.
+        pickled to send them to Rally's actors.
         """
         return
 

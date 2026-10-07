@@ -18,7 +18,6 @@
 import asyncio
 import collections
 import concurrent.futures
-import datetime
 import itertools
 import logging
 import math
@@ -28,11 +27,8 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from enum import Enum
 from io import BytesIO
 from typing import Callable, Optional
-
-import thespian.actors
 
 from esrally import (
     PROGRAM_NAME,
@@ -55,80 +51,9 @@ from esrally.utils.error_behavior import OnErrorBehavior
 
 ##################################
 #
-# Messages sent between drivers
+# Data exchanged between actors
 #
 ##################################
-class PrepareBenchmark:
-    """
-    Initiates preparation steps for a benchmark. The benchmark should only be started after StartBenchmark is sent.
-    """
-
-    def __init__(self, config: types.Config, track):
-        """
-        :param config: Rally internal configuration object.
-        :param track: The track to use.
-        """
-        self.config = config
-        self.track = track
-
-
-class StartBenchmark:
-    pass
-
-
-class Bootstrap:
-    """
-    Prompts loading of track code on new actors
-    """
-
-    def __init__(self, cfg: types.Config, worker_id=None):
-        self.config = cfg
-        self.worker_id = worker_id
-
-
-class PrepareTrack:
-    """
-    Initiates preparation of a track.
-
-    """
-
-    def __init__(self, track):
-        """
-        :param track: The track to use.
-        """
-        self.track = track
-
-
-class PrepareTrackStandalone:
-    """
-    Initiates track preparation directly on a ``TrackPreparationActor`` without a ``DriverActor`` parent.
-    """
-
-    def __init__(self, config: types.Config, track):
-        """
-        :param config: Rally internal configuration object.
-        :param track: The track to prepare.
-        """
-        self.config = config
-        self.track = track
-
-
-class TrackPrepared:
-    pass
-
-
-class StartTaskLoop:
-    def __init__(self, track_name, cfg: types.Config):
-        self.track_name = track_name
-        self.cfg = cfg
-
-
-class DoTask:
-    def __init__(self, task, cfg: types.Config):
-        self.task = task
-        self.cfg = cfg
-
-
 @dataclass(frozen=True)
 class WorkerTask:
     """
@@ -139,265 +64,307 @@ class WorkerTask:
     params: dict
 
 
-class ReadyForWork:
-    pass
-
-
-class WorkerIdle:
-    pass
-
-
+@dataclass(frozen=True)
 class PreparationComplete:
-    def __init__(self, distribution_flavor, distribution_version, revision, target_id=None, target_platform=None, target_auth_type=None):
-        self.distribution_flavor = distribution_flavor
-        self.distribution_version = distribution_version
-        self.revision = revision
-        self.target_id = target_id
-        self.target_platform = target_platform
-        self.target_auth_type = target_auth_type
-
-
-class StartWorker:
     """
-    Starts a worker.
+    Result of the preparation of a benchmark.
     """
 
-    def __init__(self, worker_id, config: types.Config, track, client_allocations, client_contexts):
-        """
-        :param worker_id: Unique (numeric) id of the worker.
-        :param config: Rally internal configuration object.
-        :param track: The track to use.
-        :param client_allocations: A structure describing which clients need to run which tasks.
-        :param client_contexts: A dict ``ClientContext`` objects keyed by client ID
-        """
-        self.worker_id = worker_id
-        self.config = config
-        self.track = track
-        self.client_allocations = client_allocations
-        self.client_contexts = client_contexts
+    distribution_flavor: str
+    distribution_version: str
+    revision: str
+    target_id: Optional[str] = None
+    target_platform: Optional[str] = None
+    target_auth_type: Optional[str] = None
 
 
-class Drive:
-    """
-    Tells a load generator to drive (either after a join point or initially).
-    """
-
-    def __init__(self, client_start_timestamp):
-        self.client_start_timestamp = client_start_timestamp
-
-
-class CompleteCurrentTask:
-    """
-    Tells a load generator to prematurely complete its current task. This is used to model task dependencies for parallel tasks (i.e. if a
-    specific task that is marked accordingly in the track finishes, it will also signal termination of all other tasks in the same parallel
-    element).
-    """
-
-
-class UpdateSamples:
-    """
-    Used to send samples from a load generator node to the master.
-    """
-
-    def __init__(self, client_id, samples):
-        self.client_id = client_id
-        self.samples = samples
-
-
-class JoinPointReached:
-    """
-    Tells the master that a load generator has reached a join point. Used for coordination across multiple load generators.
-    """
-
-    def __init__(self, worker_id, task):
-        self.worker_id = worker_id
-        # Using perf_counter here is fine even in the distributed case. Although we "leak" this value to other
-        # machines, we will only ever interpret this value on the same machine (see `Drive` and the implementation
-        # in `Driver#joinpoint_reached()`).
-        self.worker_timestamp = time.perf_counter()
-        self.task = task
-
-
-class BenchmarkComplete:
-    """
-    Indicates that the benchmark is complete.
-    """
-
-    def __init__(self, metrics):
-        self.metrics = metrics
-
-
+@dataclass(frozen=True)
 class TaskFinished:
-    def __init__(self, metrics, next_task_scheduled_in):
-        self.metrics = metrics
-        self.next_task_scheduled_in = next_task_scheduled_in
+    """
+    Request metrics of a finished task.
+    """
+
+    metrics: Optional[bytes]
+    next_task_scheduled_in: float
 
 
-class DriverActor(actor.RallyActor):
-    RESET_RELATIVE_TIME_MARKER = "reset_relative_time"
+@dataclass(frozen=True)
+class DriverStatus:
+    """
+    What happened in the driver since race control polled it last time.
 
-    WAKEUP_INTERVAL_SECONDS = 1
+    :param progress: Progress updates, i.e. arguments for ``CmdLineProgressReporter.print()``, or ``None`` for a call to
+                     ``CmdLineProgressReporter.finish()``.
+    :param finished_tasks: Tasks that have finished.
+    """
+
+    progress: list[Optional[tuple[str, str]]]
+    finished_tasks: list[TaskFinished]
+
+
+class RecordingProgressReporter:
+    """
+    A replacement for ``CmdLineProgressReporter`` that records progress so that race control can print it in the process
+    that owns the user's terminal.
+    """
+
+    def __init__(self):
+        self.events: list[Optional[tuple[str, str]]] = []
+
+    def print(self, message, progress):
+        # only the most recent update of the current line matters
+        if self.events and self.events[-1] is not None:
+            self.events[-1] = (message, progress)
+        else:
+            self.events.append((message, progress))
+
+    def finish(self):
+        if self.events and self.events[-1] is None:
+            return
+        self.events.append(None)
+
+    def drain(self) -> list[Optional[tuple[str, str]]]:
+        events = self.events
+        self.events = []
+        return events
+
+
+def _share(obj):
+    """
+    Puts an object into Ray's object store so that it is serialized only once when it is passed to several actors.
+    """
+    import ray  # pylint: disable=import-outside-toplevel
+
+    return ray.put(obj)
+
+
+class DriverActor(actor.RallyActorBase):
+    """
+    Coordinates all workers. This is a thin actor wrapper around ``Driver`` which does the actual work.
+
+    Race control calls ``prepare_benchmark()`` and then ``run_benchmark()``, and polls ``poll()`` regularly in the meantime.
+    """
+
+    TICK_INTERVAL_SECONDS = 1
 
     # post-process request metrics every N seconds and send it to the metrics store
     POST_PROCESS_INTERVAL_SECONDS = 30
 
-    """
-    Coordinates all workers. This is actually only a thin actor wrapper layer around ``Driver`` which does the actual work.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.benchmark_actor = None
-        self.driver = None
+    def __init__(self, cfg: types.Config, node_mechanics: Optional[list] = None):
+        """
+        :param cfg: Rally internal configuration object.
+        :param node_mechanics: Handles of the ``NodeMechanicActor`` instances whose relative time should be reset together
+                               with the driver's.
+        """
+        super().__init__(name="driver", cfg=cfg)
+        self.cfg = cfg
+        self.node_mechanics = node_mechanics or []
+        self.progress = RecordingProgressReporter()
+        self.driver = Driver(self, cfg, progress_reporter=self.progress)
         self.status = "init"
-        self.post_process_timer = 0
+        # set by Driver
         self.cluster_details = {}
         self.target_platform = None
         self.target_auth_type = None
+        self.workers: dict[int, object] = {}
+        # futures of the Worker#run() calls, which only complete when the worker stops or fails.
+        self.worker_runs: dict[int, tuple[object, concurrent.futures.Future]] = {}
+        self.track_preparators: list = []
+        self._track_preparation: Optional[asyncio.Future] = None
+        self._shared_track = None
+        self._finished_tasks: list[TaskFinished] = []
+        self._done = asyncio.Event()
+        self._result = None
+        self._cancelled = False
+        self._tick_task: Optional[asyncio.Task] = None
+        self._reset_task: Optional[asyncio.Task] = None
 
-    def receiveMsg_PoisonMessage(self, poisonmsg, sender):
-        self.logger.error("Main driver received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
-        self.driver.close()
-        self.send(self.benchmark_actor, actor.BenchmarkFailure("Fatal track or load generator indication", poisonmsg.details))
+    def _fail(self, failure):
+        super()._fail(failure)
+        self._done.set()
 
-    def receiveMsg_BenchmarkFailure(self, msg, sender):
-        self.logger.error("Main driver received a fatal exception from a load generator. Shutting down.")
-        self.driver.close()
-        self.send(self.benchmark_actor, msg)
+    # ---- called by race control ----
 
-    def receiveMsg_BenchmarkCancelled(self, msg, sender):
+    @actor.convert_failures("driver")
+    async def prepare_benchmark(self, t) -> PreparationComplete:
+        self.driver.prepare_benchmark(t)
+        await self._track_preparation
+        return self._preparation_complete()
+
+    @actor.convert_failures("driver")
+    async def run_benchmark(self) -> Optional[bytes]:
+        """
+        Runs the benchmark and returns the request metrics of the last task when it is complete.
+        """
+        if self._failure is None:
+            self.status = "running"
+            self._shared_track = _share(self.driver.track)
+            self.driver.start_benchmark()
+            self._tick_task = asyncio.create_task(self._tick_loop())
+        await self._done.wait()
+        if self._failure is not None:
+            raise self._failure
+        if self._cancelled:
+            raise actor.BenchmarkCancelled()
+        return self._result
+
+    def poll(self) -> DriverStatus:
+        finished_tasks = self._finished_tasks
+        self._finished_tasks = []
+        return DriverStatus(progress=self.progress.drain(), finished_tasks=finished_tasks)
+
+    async def cancel(self):
+        """
+        Cancels the benchmark: stops all workers. ``run_benchmark()`` raises ``BenchmarkCancelled``.
+        """
         self.logger.info("Main driver received a notification that the benchmark has been cancelled.")
-        self.driver.close()
-        self.send(self.benchmark_actor, msg)
-
-    def receiveMsg_ActorExitRequest(self, msg, sender):
-        self.logger.info("Main driver received ActorExitRequest and will terminate all load generators.")
+        self._cancelled = True
         self.status = "exiting"
+        await self._stop_workers()
+        self._done.set()
 
-    def receiveMsg_ChildActorExited(self, msg, sender):
-        # is it a worker?
-        if msg.childAddress in self.driver.workers:
-            worker_index = self.driver.workers.index(msg.childAddress)
-            if self.status == "exiting":
-                self.logger.debug("Worker [%d] has exited.", worker_index)
-            else:
-                self.logger.error("Worker [%d] has exited prematurely. Aborting benchmark.", worker_index)
-                self.send(self.benchmark_actor, actor.BenchmarkFailure(f"Worker [{worker_index}] has exited prematurely."))
-        else:
-            self.logger.debug("A track preparator has exited.")
+    async def stop(self):
+        """
+        Stops the driver and all actors it has created.
+        """
+        self.logger.info("Main driver is stopping and will terminate all load generators.")
+        self.status = "exiting"
+        for task in (self._tick_task, self._reset_task, self._track_preparation):
+            if task is not None and not task.done():
+                task.cancel()
+        await self._stop_workers()
+        for preparator in self.track_preparators:
+            actor.kill_actor(preparator)
+        self.track_preparators = []
+        self.driver.close()
+        self._done.set()
 
-    def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.debug("Main driver received unknown message [%s] (ignoring).", str(msg))
+    # ---- called by workers ----
 
-    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_PrepareBenchmark(self, msg, sender):
-        self.benchmark_actor = sender
-        self.driver = Driver(self, msg.config)
-        self.driver.prepare_benchmark(msg.track)
+    def update_samples(self, worker_id, samples):
+        self.driver.update_samples(samples)
 
-    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_StartBenchmark(self, msg, sender):
-        self.benchmark_actor = sender
-        self.driver.start_benchmark()
-        self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
+    @actor.report_failures("driver")
+    def joinpoint_reached(self, worker_id, worker_timestamp, task_allocations):
+        self.driver.joinpoint_reached(worker_id, worker_timestamp, task_allocations)
 
-    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_TrackPrepared(self, msg, track_preparation_actor):
-        self.transition_when_all_children_responded(
-            track_preparation_actor, msg, expected_status=None, new_status=None, transition=self._after_track_prepared
-        )
-
-    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_JoinPointReached(self, msg, sender):
-        self.driver.joinpoint_reached(msg.worker_id, msg.worker_timestamp, msg.task)
-
-    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_UpdateSamples(self, msg, sender):
-        self.driver.update_samples(msg.samples)
-
-    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_WakeupMessage(self, msg, sender):
-        if msg.payload == DriverActor.RESET_RELATIVE_TIME_MARKER:
-            self.driver.reset_relative_time()
-        elif not self.driver.finished():
-            self.post_process_timer += DriverActor.WAKEUP_INTERVAL_SECONDS
-            if self.post_process_timer >= DriverActor.POST_PROCESS_INTERVAL_SECONDS:
-                self.post_process_timer = 0
-                self.driver.post_process_samples()
-            self.driver.update_progress_message()
-            self.wakeupAfter(datetime.timedelta(seconds=DriverActor.WAKEUP_INTERVAL_SECONDS))
+    # ---- called by Driver ----
 
     def create_client(self, host, cfg: types.Config, worker_id):
-        worker = self.createActor(Worker, targetActorRequirements=self._requirements(host))
-        self.send(worker, Bootstrap(cfg, worker_id))
+        worker = actor.create_actor(Worker, self.self_handle, worker_id, cfg, host=host, name=f"worker-{worker_id}")
+        self.workers[worker_id] = worker
         return worker
 
     def start_worker(self, driver, worker_id, cfg: types.Config, track, allocations, client_contexts=None):
-        self.send(driver, StartWorker(worker_id, cfg, track, allocations, client_contexts))
+        shared_track = self._shared_track if self._shared_track is not None else track
+        run = driver.run.remote(shared_track, allocations, client_contexts)
+        self.worker_runs[worker_id] = (run, run.future())
 
     def drive_at(self, driver, client_start_timestamp):
-        self.send(driver, Drive(client_start_timestamp))
+        driver.drive_at.remote(client_start_timestamp)
 
     def complete_current_task(self, driver):
-        self.send(driver, CompleteCurrentTask())
+        driver.complete_current_task.remote()
 
     def on_task_finished(self, metrics, next_task_scheduled_in):
+        if self._reset_task is not None:
+            self._reset_task.cancel()
         if next_task_scheduled_in > 0:
-            self.wakeupAfter(datetime.timedelta(seconds=next_task_scheduled_in), payload=DriverActor.RESET_RELATIVE_TIME_MARKER)
+            self._reset_task = asyncio.get_running_loop().create_task(self._reset_relative_time_after(next_task_scheduled_in))
         else:
-            self.driver.reset_relative_time()
-        self.send(self.benchmark_actor, TaskFinished(metrics, next_task_scheduled_in))
-
-    def _requirements(self, host):
-        if host == "localhost":
-            return {"coordinator": True}
-        else:
-            return {"ip": host}
+            self._reset_relative_time()
+        self._finished_tasks.append(TaskFinished(metrics, next_task_scheduled_in))
 
     def prepare_track(self, hosts, cfg: types.Config, track):
-        self.track = track
-        self.logger.info("Starting prepare track process on hosts [%s]", hosts)
-        self.children = [self._create_track_preparator(h) for h in hosts]
-        msg = Bootstrap(cfg)
-        for child in self.children:
-            self.send(child, msg)
+        self._track_preparation = asyncio.ensure_future(self._prepare_track(hosts, cfg, track))
 
-    @actor.no_retry("driver")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_ReadyForWork(self, msg, task_preparation_actor):
-        msg = PrepareTrack(self.track)
-        self.send(task_preparation_actor, msg)
+    def on_benchmark_complete(self, metrics):
+        self._result = metrics
+        self._done.set()
 
-    def _create_track_preparator(self, host):
-        return self.createActor(TrackPreparationActor, targetActorRequirements=self._requirements(host))
+    # ---- internals ----
 
-    def _after_track_prepared(self):
+    def _preparation_complete(self) -> PreparationComplete:
         cluster_version = self.cluster_details["version"] if self.cluster_details else {}
         # manually compiled versions don't expose build_flavor but Rally expects a value in telemetry devices
         # we should default to trial/basic, but let's default to oss for now to avoid breaking the charts
         build_flavor = cluster_version.get("build_flavor", "oss")
         build_version = cluster_version.get("number", build_flavor)
         build_hash = cluster_version.get("build_hash", build_flavor)
-
         # Determine target_id (cluster_name from GET /)
         target_id = self.cluster_details.get("cluster_name") if self.cluster_details else None
-
-        for child in self.children:
-            self.send(child, thespian.actors.ActorExitRequest())
-        self.children = []
-        self.send(
-            self.benchmark_actor,
-            PreparationComplete(
-                build_flavor,
-                build_version,
-                build_hash,
-                target_id=target_id,
-                target_platform=self.target_platform,
-                target_auth_type=self.target_auth_type,
-            ),
+        return PreparationComplete(
+            build_flavor,
+            build_version,
+            build_hash,
+            target_id=target_id,
+            target_platform=self.target_platform,
+            target_auth_type=self.target_auth_type,
         )
 
-    def on_benchmark_complete(self, metrics):
-        self.send(self.benchmark_actor, BenchmarkComplete(metrics))
+    async def _prepare_track(self, hosts, cfg: types.Config, track):
+        self.logger.info("Starting prepare track process on hosts [%s]", hosts)
+        for host in hosts:
+            await actor.require_node_async(host)
+        self.track_preparators = [
+            actor.create_actor(TrackPreparationActor, cfg, host=host, name=f"track-preparator-{idx}") for idx, host in enumerate(hosts)
+        ]
+        try:
+            await asyncio.gather(*[p.prepare_track.remote(track, install_dependencies=True) for p in self.track_preparators])
+        finally:
+            for preparator in self.track_preparators:
+                actor.kill_actor(preparator)
+            self.track_preparators = []
+
+    async def _reset_relative_time_after(self, seconds):
+        await asyncio.sleep(seconds)
+        self._reset_relative_time()
+
+    def _reset_relative_time(self):
+        self.driver.reset_relative_time()
+        for node_mechanic in self.node_mechanics:
+            node_mechanic.reset_relative_time.remote()
+
+    @actor.report_failures("driver")
+    async def _tick_loop(self):
+        post_process_timer = 0
+        while True:
+            await asyncio.sleep(DriverActor.TICK_INTERVAL_SECONDS)
+            if self.status == "exiting" or self.driver.finished():
+                return
+            self._check_workers()
+            post_process_timer += DriverActor.TICK_INTERVAL_SECONDS
+            if post_process_timer >= DriverActor.POST_PROCESS_INTERVAL_SECONDS:
+                post_process_timer = 0
+                self.driver.post_process_samples()
+            self.driver.update_progress_message()
+
+    def _check_workers(self):
+        # Worker#run() only returns when a worker is stopped. If it completes otherwise, the worker has failed or died.
+        for worker_id, (_, future) in list(self.worker_runs.items()):
+            if not future.done():
+                continue
+            del self.worker_runs[worker_id]
+            if self.status == "exiting":
+                self.logger.debug("Worker [%d] has exited.", worker_id)
+                continue
+            exception = future.exception()
+            cause = actor.unwrap(exception) if exception is not None else None
+            if isinstance(cause, actor.BenchmarkCancelled):
+                self.logger.info("Worker [%d] has cancelled the benchmark.", worker_id)
+                self._cancelled = True
+                self._done.set()
+            elif isinstance(cause, actor.BenchmarkFailure):
+                self.logger.error("Main driver received a fatal exception from load generator [%d]. Shutting down.", worker_id)
+                self._fail(cause)
+            else:
+                self.logger.error("Worker [%d] has exited prematurely. Aborting benchmark.", worker_id)
+                self._fail(actor.BenchmarkFailure(f"Worker [{worker_id}] has exited prematurely.", str(cause) if cause else None))
+
+    async def _stop_workers(self):
+        workers = self.workers
+        self.workers = {}
+        await asyncio.gather(*[actor.stop_actor(w, name=f"worker-{worker_id}") for worker_id, w in workers.items()])
 
 
 def load_local_config(coordinator_config) -> types.Config:
@@ -418,188 +385,90 @@ def load_local_config(coordinator_config) -> types.Config:
     return cfg
 
 
-class TaskExecutionActor(actor.RallyActor):
+class TaskExecutionActor(actor.RallyActorBase):
     """
-    This class should be used for long-running tasks, as it ensures they do not block the actor's messaging system
+    Executes the (potentially long-running) tasks of track processors, e.g. downloading or decompressing data.
     """
 
-    def __init__(self):
-        super().__init__()
-        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        self.executor_future = None
-        self.wakeup_interval = 5
-        self.task_preparation_actor = None
-        self.logger = logging.getLogger(__name__)
-        self.track_name = None
-        self.cfg: Optional[types.Config] = None
+    def __init__(self, cfg: types.Config, executor_id: int = 0):
+        super().__init__(name=f"task-executor-{executor_id}", cfg=cfg)
+        self.cfg = load_local_config(cfg)
 
-    @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_StartTaskLoop(self, msg, sender):
-        self.task_preparation_actor = sender
-        self.track_name = msg.track_name
-        self.cfg = load_local_config(msg.cfg)
-        if self.cfg.opts("track", "test.mode.enabled"):
-            self.wakeup_interval = 0.5
-        track.load_track_plugins(self.cfg, self.track_name)
-        self.send(self.task_preparation_actor, ReadyForWork())
+    @actor.convert_failures("task executor")
+    def bootstrap(self, track_name):
+        track.load_track_plugins(self.cfg, track_name)
 
-    @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_DoTask(self, msg, sender):
-        # actor can arbitrarily execute code based on these messages. if anyone besides our parent sends a task, ignore
-        if sender != self.task_preparation_actor:
-            msg = (
-                f"TaskExecutionActor expected message from [{self.task_preparation_actor}]"
-                " but the received the following from [{sender}]: {vars(msg)}"
-            )
-            raise exceptions.RallyError(msg)
-        task = msg.task
-        if self.executor_future is not None:
-            msg = f"TaskExecutionActor received DoTask message [{vars(msg)}], but was already busy"
-            raise exceptions.RallyError(msg)
-        if task is None:
-            self.send(self.task_preparation_actor, WorkerIdle())
-        else:
-            # this is a potentially long-running operation so we offload it a background thread so we don't block
-            # the actor (e.g. logging works properly as log messages are forwarded timely).
-            self.executor_future = self.pool.submit(task.func, **task.params)
-            self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
-
-    @actor.no_retry("task executor")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_WakeupMessage(self, msg, sender):
-        if self.executor_future is not None and self.executor_future.done():
-            e = self.executor_future.exception(timeout=0)
-            if e:
-                self.logger.exception("Worker failed. Notifying parent...", exc_info=e)
-                # the exception might be user-defined and not be on the load path of the original sender. Hence, it
-                # cannot be deserialized on the receiver so we convert it here to a plain string.
-                self.send(self.task_preparation_actor, actor.BenchmarkFailure("Error in task executor", str(e)))
-            else:
-                self.executor_future = None
-                self.send(self.task_preparation_actor, ReadyForWork())
-        else:
-            self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
-
-    def receiveMsg_BenchmarkFailure(self, msg, sender):
-        # sent by our no_retry infrastructure; forward to master
-        self.send(self.task_preparation_actor, msg)
+    @actor.convert_failures("task executor")
+    def execute(self, task: WorkerTask):
+        task.func(**task.params)
 
 
-class TrackPreparationActor(actor.RallyActor):
-    class Status(Enum):
-        INITIALIZING = "initializing"
-        PROCESSOR_RUNNING = "processor running"
-        PROCESSOR_COMPLETE = "processor complete"
+class TrackPreparationActor(actor.RallyActorBase):
+    """
+    Prepares a track on one host by running the tasks of all track processors on a pool of ``TaskExecutionActor``
+    instances on the same host.
+    """
 
-    def __init__(self):
-        super().__init__()
-        self.processors = queue.Queue()
-        self.driver_actor = None
-        # set when the actor is driven directly (e.g. by the ``prepare-track`` command) instead of by a DriverActor
-        self.start_sender = None
-        self.standalone = False
+    def __init__(self, cfg: types.Config):
+        super().__init__(name="track-preparator", cfg=cfg)
+        # load node-specific config to have correct paths available
+        self.cfg = load_local_config(cfg)
+        self.executors: list = []
         self.logger.info("Track Preparator started")
-        self.status = self.Status.INITIALIZING
-        self.children = []
-        self.tasks = []
-        self.cfg: Optional[types.Config] = None
-        self.data_root_dir = None
-        self.track = None
 
-    @property
-    def _reply_to(self):
-        return self.start_sender if self.standalone else self.driver_actor
+    @actor.convert_failures("track preparator")
+    async def prepare_track(self, t, install_dependencies: bool = False):
+        """
+        :param t: The track to prepare.
+        :param install_dependencies: Whether to install the track's dependencies. This happens once per host, so it is
+                                     not necessary if the process that loaded the track runs on the same host.
+        """
+        try:
+            if install_dependencies:
+                load_track(self.cfg, install_dependencies=True)
+            data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
+            tpr = TrackProcessorRegistry(self.cfg)
+            self.logger.info("Preparing track [%s]", t.name)
+            self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", t.name)
+            # the track might have been loaded on a different machine (the coordinator machine) so we force a track
+            # update to ensure we use the latest version of plugins.
+            load_track(self.cfg)
+            load_track_plugins(self.cfg, t.name, register_track_processor=tpr.register_track_processor, force_update=True)
+            # processors run one after the other, tasks of a processor run in parallel
+            for processor in tpr.processors:
+                tasks = [WorkerTask(func, params) for func, params in processor.on_prepare_track(t, data_root_dir)]
+                await self._run_tasks(t.name, tasks)
+            self.logger.info("Track [%s] is prepared.", t.name)
+        finally:
+            self._kill_executors()
 
-    def receiveMsg_PoisonMessage(self, poisonmsg, sender):
-        self.logger.error("Track Preparator received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
-        self.send(self._reply_to, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
+    async def stop(self):
+        self._kill_executors()
 
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_Bootstrap(self, msg, sender):
-        self.driver_actor = sender
-        # load node-specific config to have correct paths available
-        self.cfg = load_local_config(msg.config)
-        # this instance of load_track occurs once per host, so install dependencies if necessary
-        load_track(self.cfg, install_dependencies=True)
-        self.send(self.driver_actor, ReadyForWork())
+    async def _run_tasks(self, track_name, tasks):
+        if not tasks:
+            return
+        await self._ensure_executors(track_name, min(num_cores(self.cfg), len(tasks)))
+        pending = list(tasks)
 
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_ActorExitRequest(self, msg, sender):
-        self.logger.debug("ActorExitRequest received. Forwarding to children")
-        for child in self.children:
-            self.send(child, msg)
+        async def feed(executor):
+            while pending:
+                await executor.execute.remote(pending.pop())
 
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_BenchmarkFailure(self, msg, sender):
-        # sent by our generic worker; forward to parent
-        self.send(self._reply_to, msg)
+        await asyncio.gather(*[feed(executor) for executor in self.executors])
 
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_PrepareTrackStandalone(self, msg, sender):
-        self.standalone = True
-        self.start_sender = sender
-        # load node-specific config to have correct paths available
-        self.cfg = load_local_config(msg.config)
-        # dependencies were already installed by the coordinating process; _prepare_track reloads the track itself
-        self._prepare_track(msg.track)
+    async def _ensure_executors(self, track_name, count):
+        new_executors = [
+            actor.create_actor(TaskExecutionActor, self.cfg, len(self.executors) + idx, strategy=self.this_node_strategy())
+            for idx in range(count - len(self.executors))
+        ]
+        self.executors.extend(new_executors)
+        await asyncio.gather(*[executor.bootstrap.remote(track_name) for executor in new_executors])
 
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_PrepareTrack(self, msg, sender):
-        self._prepare_track(msg.track)
-
-    def _prepare_track(self, track):
-        assert self.cfg is not None
-        self.data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
-        tpr = TrackProcessorRegistry(self.cfg)
-        self.track = track
-        self.logger.info("Preparing track [%s]", self.track.name)
-        self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", self.track.name)
-        # the track might have been loaded on a different machine (the coordinator machine) so we force a track
-        # update to ensure we use the latest version of plugins.
-        load_track(self.cfg)
-        load_track_plugins(self.cfg, self.track.name, register_track_processor=tpr.register_track_processor, force_update=True)
-        # we expect on_prepare_track can take a long time. seed a queue of tasks and delegate to child workers
-        self.children = [self._create_task_executor() for _ in range(num_cores(self.cfg))]
-        for processor in tpr.processors:
-            self.processors.put(processor)
-        self._seed_tasks(self.processors.get())
-        self.send_to_children_and_transition(
-            self, StartTaskLoop(self.track.name, self.cfg), self.Status.INITIALIZING, self.Status.PROCESSOR_RUNNING
-        )
-
-    def resume(self):
-        assert self.cfg is not None
-        if not self.processors.empty():
-            self._seed_tasks(self.processors.get())
-            self.send_to_children_and_transition(
-                self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE, self.Status.PROCESSOR_RUNNING
-            )
-        else:
-            if self.standalone:
-                for child in self.children:
-                    self.send(child, thespian.actors.ActorExitRequest())
-                self.children = []
-            self.send(self._reply_to, TrackPrepared())
-
-    def _seed_tasks(self, processor):
-        self.tasks = list(WorkerTask(func, params) for func, params in processor.on_prepare_track(self.track, self.data_root_dir))
-
-    def _create_task_executor(self):
-        return self.createActor(TaskExecutionActor)
-
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_ReadyForWork(self, msg, task_execution_actor):
-        assert self.cfg is not None
-        if self.tasks:
-            next_task = self.tasks.pop()
-        else:
-            next_task = None
-        new_msg = DoTask(next_task, self.cfg)
-        self.logger.debug("Track Preparator sending %s to %s", vars(new_msg), task_execution_actor)
-        self.send(task_execution_actor, new_msg)
-
-    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_WorkerIdle(self, msg, sender):
-        self.transition_when_all_children_responded(sender, msg, self.Status.PROCESSOR_RUNNING, self.Status.PROCESSOR_COMPLETE, self.resume)
+    def _kill_executors(self):
+        for executor in self.executors:
+            actor.kill_actor(executor)
+        self.executors = []
 
 
 def num_cores(cfg: types.Config):
@@ -632,7 +501,7 @@ class EsClients(dict):
 
 
 class Driver:
-    def __init__(self, driver_actor, config: types.Config, es_client_factory_class=client.EsClientFactory):
+    def __init__(self, driver_actor, config: types.Config, es_client_factory_class=client.EsClientFactory, progress_reporter=None):
         """
         Coordinates all workers. It is technology-agnostic, i.e. it does not know anything about actors. To allow us to hook in an actor,
         we provide a ``target`` parameter which will be called whenever some event has occurred. The ``target`` can use this to send
@@ -640,6 +509,7 @@ class Driver:
 
         :param target: A target that will be notified of important events.
         :param config: The current config object.
+        :param progress_reporter: Reports the progress of the benchmark. Prints on the console by default.
         """
         self.logger = logging.getLogger(__name__)
         self.driver_actor = driver_actor
@@ -656,7 +526,7 @@ class Driver:
         self.client_contexts = {}
         self.generated_api_key_ids = []
 
-        self.progress_reporter = console.progress()
+        self.progress_reporter = progress_reporter if progress_reporter is not None else console.progress()
         self.progress_counter = 0
         self.quiet = False
         self.allocations = None
@@ -1092,7 +962,7 @@ class Driver:
                 self.progress_reporter.finish()
 
     def post_process_samples(self):
-        # we do *not* do this here to avoid concurrent updates (actors are single-threaded) but rather to make it clear that we use
+        # we do *not* do this here to avoid concurrent updates (actors run on a single event loop) but rather to make it clear that we use
         # only a snapshot and that new data will go to a new sample set.
         raw_samples = self.raw_samples
         self.raw_samples = []
@@ -1286,155 +1156,149 @@ class ClientAllocations:
         return current_tasks
 
 
-class Worker(actor.RallyActor):
+class Worker(actor.RallyActorBase):
     """
     The actual worker that applies load against the cluster(s).
 
-    It will also regularly send measurements to the master node so it can consolidate them.
+    It runs the tasks of its clients on the actor's event loop and regularly sends measurements to the driver so it can
+    consolidate them.
     """
 
-    WAKEUP_INTERVAL_SECONDS = 5
+    # how often samples are sent to the driver
+    SAMPLE_PUSH_INTERVAL_SECONDS = 5
+    # how long a worker waits for its clients to finish their current request when it is stopped
+    STOP_TIMEOUT_SECONDS = 30
 
-    def __init__(self):
-        super().__init__()
-        self.driver_actor = None
-        self.worker_id = None
-        self.config: Optional[types.Config] = None
+    def __init__(self, driver_actor, worker_id, cfg: types.Config):
+        """
+        :param driver_actor: Handle of the ``DriverActor`` that coordinates this worker.
+        :param worker_id: Unique (numeric) id of the worker.
+        :param cfg: Rally internal configuration object of the coordinator.
+        """
+        super().__init__(name=f"worker-{worker_id}", cfg=cfg)
+        self.driver_actor = driver_actor
+        self.worker_id = worker_id
+        # load node-specific config to have correct paths available
+        self.config: types.Config = load_local_config(cfg)
+        load_track(self.config, install_dependencies=False)
+        self.logger.debug("Worker[%d] has Python load path %s after bootstrap.", self.worker_id, sys.path)
         self.track = None
         self.client_allocations = None
         self.client_contexts = None
         self.current_task_index = 0
         self.next_task_index = 0
         self.on_error: OnErrorBehavior = OnErrorBehavior.CONTINUE
-        self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        # cancellation via future does not work, hence we use our own mechanism with a shared variable and polling
+        # set when the worker is stopped; checked by clients after each request
         self.cancel = threading.Event()
         # used to indicate that we want to prematurely consider this completed. This is *not* due to cancellation
         # but a regular event in a benchmark and used to model task dependency of parallel tasks.
         self.complete = threading.Event()
-        self.executor_future = None
         self.sampler = None
-        self.start_driving = False
-        self.wakeup_interval = Worker.WAKEUP_INTERVAL_SECONDS
+        self.sample_push_interval = Worker.SAMPLE_PUSH_INTERVAL_SECONDS
         self.sample_queue_size = None
+        self._step: Optional[asyncio.Task] = None
+        self._scheduled_drive: Optional[asyncio.TimerHandle] = None
+        self._stopped = asyncio.Event()
 
-    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_Bootstrap(self, msg, sender):
-        self.driver_actor = sender
-        self.worker_id = msg.worker_id
-        # load node-specific config to have correct paths available
-        self.config = load_local_config(msg.config)
-        load_track(self.config, install_dependencies=False)
-        self.logger.debug("Worker[%d] has Python load path %s after bootstrap.", self.worker_id, sys.path)
+    def _fail(self, failure):
+        super()._fail(failure)
+        self._stopped.set()
 
-    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_StartWorker(self, msg, sender):
-        assert self.config is not None
-        self.logger.info("Worker[%d] is about to start.", msg.worker_id)
+    @actor.convert_failures("worker")
+    async def run(self, t, client_allocations, client_contexts):
+        """
+        Starts executing the first step of the benchmark. Subsequent steps are started by ``drive_at()``.
+
+        :param t: The track to use.
+        :param client_allocations: A structure describing which clients need to run which tasks.
+        :param client_contexts: A dict of ``ClientContext`` objects keyed by client ID.
+        :return: only when the worker is stopped. Raises ``BenchmarkFailure`` if the worker failed.
+        """
+        self.logger.info("Worker[%d] is about to start.", self.worker_id)
         self.on_error = self.config.opts("driver", "on.error")
         self.sample_queue_size = int(self.config.opts("reporting", "sample.queue.size", mandatory=False, default_value=1 << 20))
-        self.track = msg.track
+        self.track = t
         track.set_absolute_data_path(self.config, self.track)
-        self.client_allocations = msg.client_allocations
-        self.client_contexts = msg.client_contexts
+        self.client_allocations = client_allocations
+        self.client_contexts = client_contexts
         self.current_task_index = 0
-        self.cancel.clear()
-        # we need to wake up more often in test mode
+        # we need to send samples more often in test mode
         if self.config.opts("track", "test.mode.enabled"):
-            self.wakeup_interval = 0.5
+            self.sample_push_interval = 0.5
+        loop = asyncio.get_running_loop()
+        loop.set_debug(self.config.opts("system", "async.debug", mandatory=False, default_value=False))
+        loop.set_exception_handler(self._logging_exception_handler)
         runner.register_default_runners(self.config)
         if self.track.has_plugins:
             track.load_track_plugins(self.config, self.track.name, runner.register_runner, scheduler.register_scheduler)
-        self.drive()
+        sample_pusher = asyncio.create_task(self._push_samples_periodically())
+        try:
+            self._drive()
+            await self._stopped.wait()
+        finally:
+            sample_pusher.cancel()
+        if self._failure is not None:
+            raise self._failure
 
-    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_Drive(self, msg, sender):
-        sleep_time = datetime.timedelta(seconds=msg.client_start_timestamp - time.perf_counter())
+    def drive_at(self, client_start_timestamp):
+        """
+        Starts the next step at the provided time.
+
+        :param client_start_timestamp: When to start the next step, as a ``time.perf_counter()`` value of this worker.
+        """
+        sleep_time = client_start_timestamp - time.perf_counter()
         self.logger.debug(
-            "Worker[%d] is continuing its work at task index [%d] on [%f], that is in [%s].",
+            "Worker[%d] is continuing its work at task index [%d] on [%f], that is in [%f] seconds.",
             self.worker_id,
             self.current_task_index,
-            msg.client_start_timestamp,
+            client_start_timestamp,
             sleep_time,
         )
-        self.start_driving = True
-        self.wakeupAfter(sleep_time)
+        self._scheduled_drive = asyncio.get_running_loop().call_later(max(sleep_time, 0), self._drive)
 
-    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_CompleteCurrentTask(self, msg, sender):
-        # finish now ASAP. Remaining samples will be sent with the next WakeupMessage. We will also need to skip to the next
+    def complete_current_task(self):
+        # finish now ASAP. Remaining samples will be sent with the next periodic push. We will also need to skip to the next
         # JoinPoint. But if we are already at a JoinPoint at the moment, there is nothing to do.
         if self.at_joinpoint():
             self.logger.info(
-                "Worker[%s] has received CompleteCurrentTask but is currently at join point at index [%d]. Ignoring.",
+                "Worker[%s] has been asked to complete its current task but is currently at join point at index [%d]. Ignoring.",
                 str(self.worker_id),
                 self.current_task_index,
             )
         else:
             self.logger.info(
-                "Worker[%s] has received CompleteCurrentTask. Completing tasks at index [%d].", str(self.worker_id), self.current_task_index
+                "Worker[%s] has been asked to complete its current task. Completing tasks at index [%d].",
+                str(self.worker_id),
+                self.current_task_index,
             )
             self.complete.set()
 
-    @actor.no_retry("worker")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_WakeupMessage(self, msg, sender):
-        # it would be better if we could send ourselves a message at a specific time, simulate this with a boolean...
-        if self.start_driving:
-            self.start_driving = False
-            self.drive()
-        else:
-            current_samples = self.send_samples()
-            if self.cancel.is_set():
-                self.logger.info("Worker[%s] has detected that benchmark has been cancelled. Notifying master...", str(self.worker_id))
-                self.send(self.driver_actor, actor.BenchmarkCancelled())
-            elif self.executor_future is not None and self.executor_future.done():
-                e = self.executor_future.exception(timeout=0)
-                if e:
-                    self.logger.exception(
-                        "Worker[%s] has detected a benchmark failure. Notifying master...", str(self.worker_id), exc_info=e
-                    )
-                    # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
-                    # deserialized on the receiver so we convert it here to a plain string.
-                    self.send(self.driver_actor, actor.BenchmarkFailure(f"Error in load generator [{self.worker_id}]", str(e)))
-                else:
-                    self.logger.debug("Worker[%s] is ready for the next task.", str(self.worker_id))
-                    self.executor_future = None
-                    self.drive()
-            else:
-                if current_samples and len(current_samples) > 0:
-                    most_recent_sample = current_samples[-1]
-                    if most_recent_sample.percent_completed is not None:
-                        self.logger.debug(
-                            "Worker[%s] is executing [%s] (%.2f%% complete).",
-                            str(self.worker_id),
-                            most_recent_sample.task,
-                            most_recent_sample.percent_completed * 100.0,
-                        )
-                    else:
-                        # TODO: This could be misleading given that one worker could execute more than one task...
-                        self.logger.debug(
-                            "Worker[%s] is executing [%s] (dependent eternal task).", str(self.worker_id), most_recent_sample.task
-                        )
-                else:
-                    self.logger.debug("Worker[%s] is executing (no samples).", str(self.worker_id))
-                self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
+    async def stop(self):
+        """
+        Stops the worker: clients finish their current request and ``run()`` returns.
+        """
+        self.logger.debug("Worker[%s] is stopping.", str(self.worker_id))
+        self.cancel.set()
+        if self._scheduled_drive is not None:
+            self._scheduled_drive.cancel()
+        step = self._step
+        if step is not None and not step.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(step), Worker.STOP_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                self.logger.warning("Worker[%s] did not stop within [%d] seconds.", str(self.worker_id), Worker.STOP_TIMEOUT_SECONDS)
+                step.cancel()
+        self._stopped.set()
+        self.logger.debug("Worker[%s] has stopped.", str(self.worker_id))
 
-    def receiveMsg_ActorExitRequest(self, msg, sender):
-        self.logger.debug("Worker[%s] has received ActorExitRequest.", str(self.worker_id))
-        if self.executor_future is not None and self.executor_future.running():
-            self.cancel.set()
-        self.pool.shutdown()
-        self.logger.debug("Worker[%s] is exiting due to ActorExitRequest.", str(self.worker_id))
+    def _logging_exception_handler(self, loop, context):
+        self.logger.error("Uncaught exception in event loop: %s", context)
 
-    def receiveMsg_BenchmarkFailure(self, msg, sender):
-        # sent by our no_retry infrastructure; forward to master
-        self.send(self.driver_actor, msg)
-
-    def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.debug("Worker[%d] received unknown message [%s] (ignoring).", self.worker_id, str(msg))
-
-    def drive(self):
-        assert self.config is not None
+    @actor.report_failures("worker")
+    def _drive(self):
+        self._scheduled_drive = None
+        if self._stopped.is_set() or self.cancel.is_set():
+            return
         task_allocations = self.current_tasks_and_advance()
         # skip non-tasks in the task list
         while len(task_allocations) == 0:
@@ -1442,41 +1306,78 @@ class Worker(actor.RallyActor):
 
         if self.at_joinpoint():
             self.logger.debug("Worker[%d] reached join point at index [%d].", self.worker_id, self.current_task_index)
-            # clients that don't execute tasks don't need to care about waiting
-            if self.executor_future is not None:
-                self.executor_future.result()
-            self.send_samples()
-            self.cancel.clear()
+            self._push_samples()
             self.complete.clear()
-            self.executor_future = None
             self.sampler = None
-            self.send(self.driver_actor, JoinPointReached(self.worker_id, task_allocations))
-        else:
+            # Using perf_counter here is fine even in the distributed case. Although we "leak" this value to other
+            # machines, we will only ever interpret this value on the same machine (see `drive_at()` and the
+            # implementation in `Driver#joinpoint_reached()`).
+            self.driver_actor.joinpoint_reached.remote(self.worker_id, time.perf_counter(), task_allocations)
+        elif self.complete.is_set():
             # There may be a situation where there are more (parallel) tasks than workers. If we were asked to complete all tasks, we not
             # only need to complete actively running tasks but actually all scheduled tasks until we reach the next join point.
-            if self.complete.is_set():
-                self.logger.info(
-                    "Worker[%d] skips tasks at index [%d] because it has been asked to complete all tasks until next join point.",
-                    self.worker_id,
-                    self.current_task_index,
-                )
-            else:
-                self.logger.debug("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
-                self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=self.sample_queue_size)
-                executor = AsyncIoAdapter(
-                    self.config,
-                    self.track,
-                    task_allocations,
-                    self.sampler,
-                    self.cancel,
-                    self.complete,
-                    self.on_error,
-                    self.client_contexts,
-                    self.worker_id,
-                )
+            self.logger.info(
+                "Worker[%d] skips tasks at index [%d] because it has been asked to complete all tasks until next join point.",
+                self.worker_id,
+                self.current_task_index,
+            )
+            asyncio.get_running_loop().call_soon(self._drive)
+        else:
+            self.logger.debug("Worker[%d] is executing tasks at index [%d].", self.worker_id, self.current_task_index)
+            self.sampler = Sampler(start_timestamp=time.perf_counter(), buffer_size=self.sample_queue_size)
+            executor = AsyncIoAdapter(
+                self.config,
+                self.track,
+                task_allocations,
+                self.sampler,
+                self.cancel,
+                self.complete,
+                self.on_error,
+                self.client_contexts,
+                self.worker_id,
+            )
+            self._step = asyncio.get_running_loop().create_task(self._run_step(executor))
 
-                self.executor_future = self.pool.submit(executor)
-                self.wakeupAfter(datetime.timedelta(seconds=self.wakeup_interval))
+    async def _run_step(self, executor):
+        try:
+            await executor.run()
+        except asyncio.CancelledError:
+            raise
+        except BaseException as e:
+            self.logger.exception("Worker[%s] has detected a benchmark failure. Notifying master...", str(self.worker_id))
+            # the exception might be user-defined and not be on the load path of the master driver. Hence, it cannot be
+            # deserialized on the receiver so we convert it here to a plain string.
+            self._fail(actor.BenchmarkFailure(f"Error in load generator [{self.worker_id}]", str(e)))
+            return
+        if self.cancel.is_set():
+            self.logger.info("Worker[%s] has stopped executing tasks because it is stopping.", str(self.worker_id))
+            return
+        self.logger.debug("Worker[%s] is ready for the next task.", str(self.worker_id))
+        # the next step uses a new sampler
+        self._push_samples()
+        self._drive()
+
+    @actor.report_failures("worker")
+    async def _push_samples_periodically(self):
+        while True:
+            await asyncio.sleep(self.sample_push_interval)
+            current_samples = self._push_samples()
+            if current_samples:
+                most_recent_sample = current_samples[-1]
+                if most_recent_sample.percent_completed is not None:
+                    self.logger.debug(
+                        "Worker[%s] is executing [%s] (%.2f%% complete).",
+                        str(self.worker_id),
+                        most_recent_sample.task,
+                        most_recent_sample.percent_completed * 100.0,
+                    )
+                else:
+                    # TODO: This could be misleading given that one worker could execute more than one task...
+                    self.logger.debug(
+                        "Worker[%s] is executing [%s] (dependent eternal task).", str(self.worker_id), most_recent_sample.task
+                    )
+            else:
+                self.logger.debug("Worker[%s] is executing (no samples).", str(self.worker_id))
 
     def at_joinpoint(self):
         return self.client_allocations.is_joinpoint(self.current_task_index)
@@ -1488,11 +1389,11 @@ class Worker(actor.RallyActor):
         self.logger.debug("Worker[%d] is at task index [%d].", self.worker_id, self.current_task_index)
         return current
 
-    def send_samples(self):
+    def _push_samples(self):
         if self.sampler:
             samples = self.sampler.samples
             if len(samples) > 0:
-                self.send(self.driver_actor, UpdateSamples(self.worker_id, samples))
+                self.driver_actor.update_samples.remote(self.worker_id, samples)
             return samples
         return None
 
@@ -1879,6 +1780,7 @@ class AsyncIoAdapter:
             asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(self.run())
+            loop.run_until_complete(loop.shutdown_asyncgens())
         finally:
             loop.close()
 
@@ -1988,14 +1890,14 @@ class AsyncIoAdapter:
                 task_names,
                 (run_end - run_start),
             )
-            await asyncio.get_event_loop().shutdown_asyncgens()
-            shutdown_asyncgens_end = time.perf_counter()
-            self.logger.debug("Total time to shutdown asyncgens: %f seconds.", (shutdown_asyncgens_end - run_end))
+            # Do not shut down async generators here: run() may execute on a long-lived event loop (the one of a
+            # Worker actor) that executes more steps later. Async generators of this step are finalized when they are
+            # garbage-collected.
             for c in clients:
                 for conn in c.values():
                     await conn.close()
             transport_close_end = time.perf_counter()
-            self.logger.debug("Total time to close transports: %f seconds.", (transport_close_end - shutdown_asyncgens_end))
+            self.logger.debug("Total time to close transports: %f seconds.", (transport_close_end - run_end))
 
 
 class AsyncProfiler:
@@ -2536,7 +2438,7 @@ def schedule_for(task_allocation, parameter_source):
     client_index = task_allocation.client_index_in_task
 
     # guard all logging statements with the client index and only emit them for the first client. This information is
-    # repetitive and may cause issues in thespian with many clients (an excessive number of actor messages is sent).
+    # repetitive and floods the log with many clients.
     if client_index == 0:
         logger.debug("Choosing [%s] for [%s].", sched, task)
     runner_for_op = runner.runner_for(op.type)

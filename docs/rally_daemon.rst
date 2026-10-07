@@ -11,30 +11,45 @@ Rally daemon needs to run on every machine that should be under Rally's control.
 
 The two latter roles are not statically preassigned but rather determined by Rally based on the command line parameter ``--load-driver-hosts`` (for the load driver) and ``--target-hosts`` (for the provisioner).
 
+Rally runs its components as actors on `Ray <https://docs.ray.io/en/latest/ray-core/walkthrough.html>`_. The Rally daemon is a Ray node: the daemon on the benchmark coordinator is the head of a Ray cluster, and the daemons on all other machines join that cluster.
+
 Preparation
 -----------
 
-First, :doc:`install </install>` and :doc:`configure </configuration>` Rally on all machines that are involved in the benchmark. If you want to automate this, there is no need to use the interactive configuration routine of Rally. You can copy `~/.rally/rally.ini` to the target machines adapting the paths in the file as necessary. We also recommend that you copy ``~/.rally/benchmarks/data`` to all load driver machines before-hand. Otherwise, each load driver machine will need to download a complete copy of the benchmark data.
+First, :doc:`install </install>` and :doc:`configure </configuration>` Rally on all machines that are involved in the benchmark. Use the same version of Rally *and of Python* on all machines: Ray refuses to form a cluster of nodes with different versions. If you want to automate this, there is no need to use the interactive configuration routine of Rally. You can copy `~/.rally/rally.ini` to the target machines adapting the paths in the file as necessary. We also recommend that you copy ``~/.rally/benchmarks/data`` to all load driver machines before-hand. Otherwise, each load driver machine will need to download a complete copy of the benchmark data.
 
-.. note::
+The Rally daemon must be started from the same Python environment (e.g. virtualenv) as ``esrally`` because it starts Rally's actors on its machine.
 
-   Rally Daemon will listen on port 1900 and the actor system that Rally uses internally require access to arbitrary (unprivileged) ports. Be sure to open up these ports between the Rally nodes.
+Network
+~~~~~~~
+
+The Rally daemon on the benchmark coordinator listens on port 1900. All Rally nodes also need to reach each other on further ports: Ray's node manager, object manager and agents listen on random ports by default, and Ray's worker processes use ports 10002 to 19999. See `Ray's port configuration <https://docs.ray.io/en/latest/ray-core/configure.html#ports-configurations>`_ for details. Be sure to open up these ports between the Rally nodes, ideally by allowing all TCP traffic between them.
+
+Authentication
+~~~~~~~~~~~~~~
+
+All Rally nodes and ``esrally`` authenticate with each other using a shared token. When you start the Rally daemon on the benchmark coordinator, it creates the token in ``~/.ray/auth_token`` unless the file exists already. Copy this file to the same location on all other machines before you start the Rally daemon on them. You can also provide the token with the environment variable ``RAY_AUTH_TOKEN`` or the path to it with ``RAY_AUTH_TOKEN_PATH``. See `Ray's token authentication <https://docs.ray.io/en/latest/ray-security/token-auth.html>`_ for details.
+
+.. warning::
+
+   The token is transmitted unencrypted. Only run Rally on networks that you trust.
+
+To disable authentication, set the environment variable ``RAY_AUTH_MODE=disabled`` on all machines, for both ``esrallyd`` and ``esrally``. The setting must be the same everywhere, otherwise nodes cannot connect to each other. Without authentication, anybody who can connect to the Rally nodes can run code on them, as was the case before Rally used Ray.
 
 Starting
 --------
 
-For all this to work, Rally needs to form a cluster. This is achieved with the binary ``esrallyd`` (note the "d" - for daemon - at the end). You need to start the Rally daemon on all nodes: First on the coordinator node, then on all others. The order does matter, because nodes attempt to connect to the coordinator on startup.
+For all this to work, Rally needs to form a cluster. This is achieved with the binary ``esrallyd`` (note the "d" - for daemon - at the end). You need to start the Rally daemon on all nodes: First on the coordinator node, then on all others. The order does matter, because nodes connect to the coordinator on startup.
 
 On the benchmark coordinator, issue::
 
     esrallyd start --node-ip=IP_OF_COORDINATOR_NODE --coordinator-ip=IP_OF_COORDINATOR_NODE
 
-
-On all other nodes, issue::
+Then copy ``~/.ray/auth_token`` from the benchmark coordinator to all other nodes (see above) and issue on all other nodes::
 
     esrallyd start --node-ip=IP_OF_THIS_NODE --coordinator-ip=IP_OF_COORDINATOR_NODE
 
-After that, all Rally nodes, know about each other and you can use Rally as usual. See the :doc:`tips and tricks </recipes>` for more examples.
+After that, all Rally nodes know about each other and you can use Rally as usual. Rally places its actors on nodes by IP address, so use the IP addresses given as ``--node-ip`` in ``--load-driver-hosts`` and ``--target-hosts``. See the :doc:`tips and tricks </recipes>` for more examples.
 
 Stopping
 --------
@@ -55,67 +70,18 @@ You can query the status of the local Rally daemon with::
 Troubleshooting
 ---------------
 
-Rally uses the actor system `Thespian <https://github.com/kquick/Thespian>`_ under the hood.
+Rally uses `Ray <https://docs.ray.io/>`__ under the hood. ``esrallyd start`` and ``esrallyd stop`` run ``ray start`` and ``ray stop``; their output is written to Rally's log file.
 
-At startup, `Thespian attempts to detect an appropriate IP address <https://thespianpy.com/doc/using#hH-9d33a877-b4f0-4012-9510-442d81b0837c>`_. If Rally fails to startup the actor system indicated by the following message::
+To inspect the cluster that the Rally daemons have formed, run the following command on any node of the cluster (in the same Python environment as Rally)::
 
-    thespian.actors.InvalidActorAddress: ActorAddr-(T|:1900) is not a valid ActorSystem admin
+    RAY_AUTH_MODE=token ray status --address=IP_OF_COORDINATOR_NODE:1900
 
-then set a routable IP address yourself by setting the environment variable ``THESPIAN_BASE_IPADDR`` before starting Rally.
+It shows all nodes that have joined the cluster. If a node is missing, check that the Rally daemon runs on it, that it uses the same token as the benchmark coordinator and that the network allows traffic between the nodes.
 
-.. note::
+``RAY_AUTH_MODE=token`` makes ``ray`` authenticate with the cluster's token, which Rally does by default. It may take a few seconds after starting the daemon until ``ray status`` reports the cluster.
 
-   This issue often occurs when Rally is started on a machine that is connected via a VPN to the Internet. We advise against such a setup for benchmarking and suggest to setup the load generator and the target machines close to each other, ideally in the same subnet.
+Ray writes its own log files to ``/tmp/ray/session_latest/logs`` on each machine (set the environment variable ``RAY_TMPDIR`` to use another directory than ``/tmp``). Check them when Rally's actors fail to start or to communicate. Rally's log files contain the name of the actor that wrote each log line (e.g. ``worker-3``).
 
+If ``esrallyd stop`` fails to stop the daemon, you can stop all Ray processes on a machine with::
 
-To inspect Thespian's status in more detail you can use the `Thespian shell <https://thespianpy.com/doc/in_depth.html#hH-058d8939-b973-4270-975b-3afd9c607176>`_. Below is an example invocation that demonstrates how to retrieve the actor system status::
-
-    python3 -m thespian.shell
-    Thespian Actor shell.  Type help or '?' to list commands.'
-
-    thespian> start multiprocTCPBase
-    Starting multiprocTCPBase ActorSystem
-    Capabilities: {}
-    Started multiprocTCPBase ActorSystem
-    thespian> address localhost 1900
-    Args is: {'port': '1900', 'ipaddr': 'localhost'}
-    Actor Address 0:  ActorAddr-(T|:1900)
-    thespian> status
-    Requesting status from Actor (or Admin) @ ActorAddr-(T|:1900) (#0)
-    Status of ActorSystem @ ActorAddr-(T|192.168.14.2:1900) [#1]:
-      |Capabilities[9]:
-                                   ip: 192.168.14.2
-              Convention Address.IPv4: 192.168.14.2:1900
-                  Thespian Generation: (3, 9)
-             Thespian Watch Supported: True
-                       Python Version: (3, 5, 2, 'final', 0)
-            Thespian ActorSystem Name: multiprocTCPBase
-         Thespian ActorSystem Version: 2
-                     Thespian Version: 1581669778176
-                          coordinator: True
-      |Convention Leader: ActorAddr-(T|192.168.14.2:1900) [#1]
-      |Convention Attendees [3]:
-        @ ActorAddr-(T|192.168.14.4:1900) [#2]: Expires_in_0:21:41.056599
-        @ ActorAddr-(T|192.168.14.3:1900) [#3]: Expires_in_0:21:41.030934
-        @ ActorAddr-(T|192.168.14.5:1900) [#4]: Expires_in_0:21:41.391251
-      |Primary Actors [0]:
-      |Rate Governer: Rate limit: 4480 messages/sec (currently low with 1077 ticks)
-      |Pending Messages [0]:
-      |Received Messages [0]:
-      |Pending Wakeups [0]:
-      |Pending Address Resolution [0]:
-      |>        1077 - Actor.Message Send.Transmit Started
-      |>          84 - Admin Handle Convention Registration
-      |>        1079 - Admin Message Received.Total
-      |>           6 - Admin Message Received.Type.QueryExists
-      |>         988 - Admin Message Received.Type.StatusReq
-      |> sock#0-fd10 - Idle-socket <socket.socket fd=10, family=AddressFamily.AF_INET, type=2049, proto=6, laddr=('192.168.14.2', 1900), raddr=('192.168.14.4', 44024)>->ActorAddr-(T|192.168.14.4:1900) (Expires_in_0:19:35.060480)
-      |> sock#2-fd11 - Idle-socket <socket.socket fd=11, family=AddressFamily.AF_INET, type=2049, proto=6, laddr=('192.168.14.2', 1900), raddr=('192.168.14.3', 40244)>->ActorAddr-(T|192.168.14.3:1900) (Expires_in_0:19:35.034779)
-      |> sock#3-fd12 - Idle-socket <socket.socket fd=12, family=AddressFamily.AF_INET, type=2049, proto=6, laddr=('192.168.14.2', 1900), raddr=('192.168.14.5', 58358)>->ActorAddr-(T|192.168.14.5:1900) (Expires_in_0:19:35.394918)
-      |> sock#1-fd13 - Idle-socket <socket.socket fd=13, family=AddressFamily.AF_INET, type=2049, proto=6, laddr=('127.0.0.1', 1900), raddr=('127.0.0.1', 34320)>->ActorAddr-(T|:46419) (Expires_in_0:19:59.999337)
-      |DeadLetter Addresses [0]:
-      |Source Authority: None
-      |Loaded Sources [0]:
-      |Global Actors [0]:
-
-
+    ray stop --force

@@ -4,6 +4,28 @@ Migration Guide
 Migrating to Rally 2.14.0 (unreleased)
 --------------------------------------
 
+Rally's actors run on Ray
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally used the `Thespian <https://github.com/kquick/Thespian>`_ actor library to run its components (race control, load generators, track preparation and node provisioning) in separate processes and on remote machines. Rally now uses `Ray Core <https://docs.ray.io/en/latest/ray-core/walkthrough.html>`_ instead. For most users this changes nothing. However:
+
+* Rally's Python package depends on ``ray``, which is significantly larger than ``thespian``. Ray does not provide packages for macOS on Intel processors, so Rally no longer supports them.
+* ``~/.rally/logging.json`` is migrated automatically on the first start of Rally: references to ``thespian.director.ActorAddressLogFilter`` are replaced with ``esrally.log.ActorAddressLogFilter``. If the file cannot be written, Rally applies the migration on each start. In JSON log files, the field ``rally.thespian.address`` is now named ``rally.actor.address``. Log lines contain the name of the actor that wrote them (e.g. ``worker-3``) instead of a Thespian actor address.
+* The configuration option ``actor.process.startup.method`` in the ``[actor]`` section of ``rally.ini`` is no longer supported and ignored.
+* The environment variables ``THESPLOG_FILE``, ``THESPLOG_FILE_MAXSIZE``, ``THESPLOG_THRESHOLD`` and ``THESPIAN_BASE_IPADDR`` have no effect anymore. The file ``~/.rally/logs/actor-system-internal.log`` is not written anymore; Ray writes its own logs to ``/tmp/ray/session_latest/logs``.
+* Rally no longer falls back to a "degraded mode" when it cannot determine a network address. A local Ray instance only uses the loopback interface. The ``--offline`` command line option is not affected.
+* When running the Rally Docker image, increase Docker's shared memory limit with ``--shm-size`` (see :ref:`the Docker documentation <docker_shared_memory>`).
+* Ray uses more resources than Thespian. Ray runs a few processes of its own on each machine, and each of Rally's actors (e.g. each load generator) is a process with some background activity. In our measurements on a single machine with four load generators, Rally used about 1.3 GB of memory and 9% of a CPU core in the background, compared to 400 MB and 1% before. Most of the CPU usage scales with the number of load generators, i.e. with the number of CPU cores of load driver machines.
+* If you go back to an older Rally version, delete ``~/.rally/logging.json`` (or restore a backup): older versions cannot load the migrated file. Rally recreates it on the next start.
+
+The following changes apply only if you use the :doc:`Rally daemon </rally_daemon>` to benchmark on multiple machines:
+
+* ``esrallyd`` starts and stops Ray nodes. Its command line options are unchanged and it still listens on port 1900 on the benchmark coordinator. Rally nodes now also need to reach each other on further ports, see :doc:`Rally daemon </rally_daemon>`.
+* All machines must run the same versions of Rally *and* Python.
+* All machines need the same authentication token: after starting ``esrallyd`` on the benchmark coordinator, copy ``~/.ray/auth_token`` to all other machines before starting ``esrallyd`` on them. Alternatively, disable authentication by setting ``RAY_AUTH_MODE=disabled`` on all machines, see :doc:`Rally daemon </rally_daemon>`.
+* Hosts in ``--load-driver-hosts`` and ``--target-hosts`` must resolve to the IP addresses passed as ``--node-ip`` to ``esrallyd start``.
+* Rally waits up to two minutes for the daemons of remote target hosts to join the cluster and fails with a clear error message otherwise, instead of waiting forever.
+
 Document type fields are no longer supported
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

@@ -49,6 +49,26 @@ def configure_utc_formatter(*args: Any, **kwargs: Any) -> logging.Formatter:
 
 MutatorType = Callable[[logging.LogRecord, dict[str, Any]], None]
 
+# Value of the ``actorAddress`` log record attribute in processes that do not host a Rally actor (e.g. the main ``esrally``
+# process or ``esrallyd``). This string is part of Rally's log format since its early days, keep it stable.
+NOT_AN_ACTOR = "-not-actor-"
+
+_ACTOR_ADDRESS = NOT_AN_ACTOR
+
+
+class ActorAddressLogFilter(logging.Filter):
+    """
+    Adds the ``actorAddress`` attribute to log records so that ``%(actorAddress)s`` can be used in format strings.
+
+    In Ray actor processes the address is the name of the actor that owns the process (e.g. ``worker-3``), otherwise it
+    is ``-not-actor-``.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not hasattr(record, "actorAddress"):
+            record.actorAddress = _ACTOR_ADDRESS
+        return True
+
 
 class RallyEcsFormatter(ecs_logging.StdlibFormatter):
     def __init__(
@@ -75,10 +95,9 @@ def rename_actor_fields(record: logging.LogRecord, log_dict: dict[str, Any]) -> 
     if log_dict.get("actorAddress"):
         fields["address"] = log_dict.pop("actorAddress")
     if fields:
-        collections.deep_update(log_dict, {"rally": {"thespian": fields}})
-    # Thespian does not serialize exception objects kept in exc_info log record attribute when
-    # forwarding logs to the logger actor but populates exc_text attribute instead, and sets
-    # exc_info to None. This is not recognized as stack trace by ECS Logging package, so we need to
+        collections.deep_update(log_dict, {"rally": {"actor": fields}})
+    # Some handlers serialize log records and keep only the formatted traceback in exc_text, with
+    # exc_info set to None. This is not recognized as stack trace by ECS Logging package, so we need to
     # work it around setting "error.stack_trace" ECS field explicitly.
     if record.exc_info is None and record.exc_text:
         collections.deep_update(log_dict, {"error": {"stack_trace": record.exc_text}})
@@ -116,6 +135,51 @@ def log_config_path():
 CONFIG_PATH = log_config_path()
 TEMPLATE_PATH = io.normalize_path(os.path.join(os.path.dirname(__file__), "resources", "logging.json"))
 
+# Callables that older Rally versions referenced in logging.json and their replacements. Rally used the Thespian actor
+# library until it moved to Ray. Without this migration, logging.config.dictConfig() fails with an ImportError.
+_RENAMED_CALLABLES = {
+    "thespian.director.ActorAddressLogFilter": "esrally.log.ActorAddressLogFilter",
+}
+_OBSOLETE_CALLABLE_PREFIXES = ("thespian.",)
+
+
+def migrate_logger_config(log_config: dict[str, Any]) -> bool:
+    """
+    Rewrites references to callables that no longer exist in a logging configuration, in place.
+
+    Known callables are renamed. Filters pointing to any other obsolete module are removed, together with all references
+    to them from handlers.
+
+    :return: ``True`` if the configuration has been changed.
+    """
+    changed = False
+    removed_filters: set[str] = set()
+    for section in ("filters", "formatters", "handlers"):
+        entries = log_config.get(section)
+        if not isinstance(entries, dict):
+            continue
+        for name, entry in list(entries.items()):
+            if not isinstance(entry, dict):
+                continue
+            for key in ("()", "class"):
+                target = entry.get(key)
+                if not isinstance(target, str):
+                    continue
+                if target in _RENAMED_CALLABLES:
+                    entry[key] = _RENAMED_CALLABLES[target]
+                    changed = True
+                elif section == "filters" and target.startswith(_OBSOLETE_CALLABLE_PREFIXES):
+                    del entries[name]
+                    removed_filters.add(name)
+                    changed = True
+                    break
+
+    if removed_filters:
+        for handler in (log_config.get("handlers") or {}).values():
+            if isinstance(handler, dict) and isinstance(handler.get("filters"), list):
+                handler["filters"] = [f for f in handler["filters"] if f not in removed_filters]
+    return changed
+
 
 def update_logger_config(
     *,
@@ -137,6 +201,8 @@ def update_logger_config(
         return
 
     updated = copy.deepcopy(original)
+    if migrate_logger_config(updated):
+        LOG.info("Migrated obsolete entries in logging configuration file '%s'.", config_path)
     updated.setdefault("disable_existing_loggers", template.get("disable_existing_loggers", False))
 
     template_loggers: dict[str, Any] = template.get("loggers", {})
@@ -146,8 +212,12 @@ def update_logger_config(
 
     if original != updated:
         LOG.info("Update logging configuration file with new values from template: '%s' -> '%s'", template_path, config_path)
-        with open(config_path, "w", encoding="UTF-8") as fd:
-            json.dump(updated, fd, indent=2)
+        try:
+            with open(config_path, "w", encoding="UTF-8") as fd:
+                json.dump(updated, fd, indent=2)
+        except OSError as e:
+            # load_configuration() applies the same migration in memory, so Rally still starts.
+            LOG.warning("Could not update logging configuration file '%s': %s", config_path, e)
 
 
 def install_default_log_config():
@@ -191,88 +261,69 @@ def load_configuration() -> dict[str, Any]:
     Loads the logging configuration. This is a low-level method and usually
     `configure_logging()` should be used instead.
 
+    Obsolete entries are migrated in memory (see ``migrate_logger_config``) so that Rally can start even if the
+    configuration file could not be rewritten.
+
     :return: The logging configuration as `dict` instance.
     """
     with open(log_config_path()) as f:
-        return json.load(f)
+        log_config = json.load(f)
+    migrate_logger_config(log_config)
+    return log_config
 
 
-_OLD_ROOT = logging.Logger.root
-_OLD_MANAGER = logging.Logger.manager
+_ACTOR_LOGGING_CONFIGURED_PID: int | None = None
 
 
-def post_configure_actor_logging() -> None:
+def configure_actor_logging(actor_name: str) -> None:
     """
-    Reconfigures all loggers in actor processes.
+    Configures logging in a process that hosts a Rally actor.
 
-    See https://groups.google.com/forum/#!topic/thespianpy/FntU9umtvhc for the rationale.
+    Ray starts actor processes from its own worker entry point, so they do not inherit the logging configuration of the
+    process that created them. This applies Rally's configuration once per process and records the actor name that is
+    reported in the ``actorAddress`` log record attribute.
     """
-    # see configure_logging()
-    logging.captureWarnings(True)
+    global _ACTOR_ADDRESS, _ACTOR_LOGGING_CONFIGURED_PID
+    _ACTOR_ADDRESS = actor_name
+    pid = os.getpid()
+    if _ACTOR_LOGGING_CONFIGURED_PID != pid:
+        if not io.exists(log_config_path()):
+            install_default_log_config()
+        configure_logging()
+        _ACTOR_LOGGING_CONFIGURED_PID = pid
 
-    # At this point we can assume that a log configuration exists. It has been created already during startup.
-    config = load_configuration()
-    if root_config := config.get("root"):
-        if level := root_config.get("level"):
-            logging.root.setLevel(level)
 
-    for name, cfg in config.get("loggers", {}).items():
-        if level := cfg.get("level"):
-            logging.getLogger(name).setLevel(level)
+_ACTOR_ADDRESS_RECORD_FACTORY_INSTALLED = False
 
-    # For debugging purpose it we will finally report all recovered logger names here.
-    recovered: list[str] = []
 
-    root = logging.Logger.root
-    manager = logging.Logger.manager
-    if root is not _OLD_ROOT or manager is not _OLD_MANAGER:
-        # It replaces attributes values of pre-existing loggers with the attributes of loggers created by the new manager.
-        # In this way old logger should behave as the new ones, and dispatch records to the new root logger.
-        old_loggers: dict[str, Any] = _OLD_MANAGER.loggerDict
-        for name, old_logger in sorted(old_loggers.items()):
-            if not isinstance(old_logger, logging.Logger):
-                # It filters out for instance place-holders.
-                old_loggers.pop(name)
-                continue  # Skip place holders and adapters
-            logger = logging.getLogger(name)
-            old_logger.__class__ = logger.__class__
-            old_logger.__dict__ = logger.__dict__
-            recovered.append(name)
-            old_loggers.pop(name)
+def _install_actor_address_record_factory() -> None:
+    """
+    Adds the ``actorAddress`` attribute to all log records so that format strings can use ``%(actorAddress)s`` even if a
+    handler does not use ``ActorAddressLogFilter``.
+    """
+    global _ACTOR_ADDRESS_RECORD_FACTORY_INSTALLED
+    if _ACTOR_ADDRESS_RECORD_FACTORY_INSTALLED:
+        return
+    default_factory = logging.getLogRecordFactory()
 
-        # Redirect messages to the same handlers as the new root handler. This way as the very last resort lost logger
-        # will still emit messages to the same destination.
-        _OLD_MANAGER.__dict__ = manager.__dict__
-        _OLD_MANAGER.__class__ = manager.__class__
-        _OLD_ROOT.__dict__ = root.__dict__
-        _OLD_ROOT.__class__ = root.__class__
-        if recovered:
-            LOG.debug("Recovered loggers from old manager: %s", ", ".join(recovered))
-        if old_loggers:
-            LOG.warning("Lost loggers from old manager: %s", old_loggers)
+    def factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
+        record = default_factory(*args, **kwargs)
+        record.actorAddress = _ACTOR_ADDRESS
+        return record
+
+    logging.setLogRecordFactory(factory)
+    _ACTOR_ADDRESS_RECORD_FACTORY_INSTALLED = True
 
 
 def configure_logging() -> None:
     """
     Configures logging for the current process.
     """
-
+    _install_actor_address_record_factory()
     logging.config.dictConfig(load_configuration())
 
-    # Avoid failures such as the following (shortened a bit):
-    #
-    # ---------------------------------------------------------------------------------------------
-    # "esrally/driver/driver.py", line 220, in create_client
-    # "thespian-3.8.0-py3.5.egg/thespian/actors.py", line 187, in createActor
-    # [...]
-    # "thespian-3.8.0-py3.5.egg/thespian/system/multiprocCommon.py", line 348, in _startChildActor
-    # "python3.5/multiprocessing/process.py", line 105, in start
-    # "python3.5/multiprocessing/context.py", line 267, in _Popen
-    # "python3.5/multiprocessing/popen_fork.py", line 18, in __init__
-    # sys.stderr.flush()
-    #
-    # OSError: [Errno 5] Input/output error
-    # ---------------------------------------------------------------------------------------------
+    # Avoid failures such as "OSError: [Errno 5] Input/output error" when flushing stderr in processes that are not
+    # attached to a terminal.
     #
     # This is caused by urllib3 wanting to send warnings about insecure SSL connections to stderr when we disable them (in client.py) with:
     #

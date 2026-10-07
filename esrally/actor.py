@@ -14,317 +14,547 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+"""
+Rally's thin layer on top of Ray Core.
+
+Rally actors are plain Python classes deriving from ``RallyActorBase``. They are turned into Ray actor classes lazily
+with ``remote_class()`` so that:
+
+* ``ray`` is only imported by the subcommands that need it (``race``, ``prepare-track`` and ``esrallyd``);
+* unit tests can instantiate actor classes directly, without a Ray runtime.
+
+See ``docs/architecture/actor_system.md`` for an overview of the actors and how they interact.
+"""
+
+import asyncio
+import functools
 import logging
 import os
+import signal
 import socket
+import sys
+import time
 import traceback
-import typing
-from typing import Any
-
-import thespian.actors  # type: ignore[import-untyped]
-import thespian.system.messages.status  # type: ignore[import-untyped]
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any, TypeVar
 
 from esrally import exceptions, log
-from esrally.utils import console
+from esrally.utils import console, net
 
 LOG = logging.getLogger(__name__)
 
+# Port of the Ray head (GCS) when Rally runs as a daemon (esrallyd). Rally's daemon has always used port 1900, which also
+# avoids colliding with Ray's default port 6379 that is also Redis' default port.
+RAY_GCS_PORT = 1900
+# Resource that Ray adds to the head node of a cluster. Actors placed on "localhost" use it.
+HEAD_NODE_RESOURCE = "node:__internal_head__"
+# Every node has a "node:<ip>" resource with capacity 1.0. Each Rally actor consumes this fraction of it, which allows up to
+# 1000 Rally actors per node.
+NODE_RESOURCE_UNITS = 0.001
+# How long to wait for a remote Rally daemon to be part of the cluster before giving up.
+DEFAULT_NODE_WAIT_TIMEOUT = 120.0
+# How long to wait for an actor to stop gracefully before killing it.
+DEFAULT_STOP_TIMEOUT = 60.0
+# Default size of the object store of a local, ephemeral Ray instance. Rally exchanges only small objects.
+DEFAULT_OBJECT_STORE_MEMORY = 1 << 30
+# Environment variables that Rally sets (unless the user did) before importing Ray.
+RAY_ENVIRONMENT_DEFAULTS = {
+    # Do not send usage statistics to Anyscale.
+    "RAY_USAGE_STATS_ENABLED": "0",
+    # Do not hide repeated log lines that actors print to stdout / stderr.
+    "RAY_DEDUP_LOGS": "0",
+    # Do not prefix console output of actors with "(Worker pid=..., ip=...)".
+    "RAY_DISABLE_WORKER_LOG_PREFIX": "1",
+    # Authenticate all connections within a Ray cluster with a token (stored in ~/.ray/auth_token by default). This is
+    # Ray's default for local instances; setting it explicitly also silences Ray's notice about it.
+    "RAY_AUTH_MODE": "token",
+    # Ray keeps idle worker processes (one per CPU) to start actors quickly. Rally creates its actors when a race starts
+    # and idle workers would consume CPU and memory on load drivers during the benchmark: stop them after 30 seconds.
+    "RAY_num_workers_soft_limit": "0",
+    "RAY_idle_worker_killing_time_threshold_ms": "30000",
+    # When Rally runs with `uv run` (directly or in a parent process), Ray would package the current directory and start
+    # actors with `uv run` in a new environment. Rally's actors must run in the same environment as Rally itself.
+    "RAY_ENABLE_UV_RUN_RUNTIME_ENV": "0",
+}
 
-class BenchmarkFailure:
+
+class BenchmarkFailure(exceptions.RallyError):
     """
-    Indicates a failure in the benchmark execution due to an exception
+    Indicates a failure in the benchmark execution.
+
+    ``cause`` is always a string (usually a formatted traceback) because exception classes defined in track plugins may
+    not be importable in the process that receives the failure.
     """
 
-    def __init__(self, message, cause=None):
-        self.message = message
-        self.cause = cause
+    @classmethod
+    def from_current_exception(cls, message: str) -> "BenchmarkFailure":
+        """
+        Creates a failure for the exception that is currently being handled. Must be called in an ``except`` block.
+        """
+        return cls(message, traceback.format_exc())
 
 
-class BenchmarkCancelled:
+class BenchmarkCancelled(exceptions.RallyError):
     """
     Indicates that the benchmark has been cancelled (by the user).
     """
 
+    def __init__(self, message: str = "The benchmark has been cancelled.", cause: str | None = None):
+        super().__init__(message, cause)
 
-def parametrized(decorator):
+
+def unwrap(e: BaseException) -> BaseException:
+    """
+    Returns the exception raised in an actor method for exceptions raised by Ray when awaiting the result of that method.
+    """
+    cause = getattr(e, "cause", None)
+    if type(e).__name__.startswith("RayTaskError") and isinstance(cause, BaseException):
+        return cause
+    return e
+
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _as_failure(e: BaseException, actor_name: str) -> BaseException:
+    """
+    Converts an exception to ``BenchmarkFailure`` unless it already is one or ``BenchmarkCancelled`` (possibly raised in
+    another actor and wrapped by Ray). Must be called in an ``except`` block.
+    """
+    cause = unwrap(e)
+    if isinstance(cause, (BenchmarkFailure, BenchmarkCancelled)):
+        return cause
+    LOG.exception("Error in %s", actor_name)
+    if isinstance(cause, exceptions.RallyError):
+        # Rally's own errors carry a message for the user
+        return BenchmarkFailure.from_current_exception(f"Error in {actor_name}: {cause.full_message}")
+    return BenchmarkFailure.from_current_exception(f"Error in {actor_name}")
+
+
+def convert_failures(actor_name: str) -> Callable[[F], F]:
+    """
+    Decorator for actor methods whose result is awaited by the caller.
+
+    Any exception other than ``BenchmarkFailure`` or ``BenchmarkCancelled`` is logged and raised as ``BenchmarkFailure``
+    so that the caller can always deserialize it.
     """
 
-    Helper meta-decorator that allows us to provide parameters to a decorator.
+    def decorator(f: F) -> F:
+        if asyncio.iscoroutinefunction(f):
 
-    :param decorator: The decorator that should accept parameters.
+            @functools.wraps(f)
+            async def async_guard(*args: Any, **kwargs: Any) -> Any:
+                try:
+                    return await f(*args, **kwargs)
+                except asyncio.CancelledError:
+                    raise
+                except BaseException as e:
+                    raise _as_failure(e, actor_name) from None
+
+            return async_guard  # type: ignore[return-value]
+
+        @functools.wraps(f)
+        def guard(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return f(*args, **kwargs)
+            except BaseException as e:
+                raise _as_failure(e, actor_name) from None
+
+        return guard  # type: ignore[return-value]
+
+    return decorator
+
+
+def report_failures(actor_name: str) -> Callable[[F], F]:
+    """
+    Decorator for actor methods whose result nobody awaits: fire-and-forget calls and background tasks.
+
+    Any exception is converted to ``BenchmarkFailure`` (``BenchmarkCancelled`` is kept as is) and handed to the actor's
+    ``_fail()`` method, which decides how the failure surfaces.
     """
 
-    def inner(*args, **kwargs):
-        def g(f):
-            return decorator(f, *args, **kwargs)
+    def decorator(f: F) -> F:
+        if asyncio.iscoroutinefunction(f):
 
-        return g
+            @functools.wraps(f)
+            async def async_guard(self: "RallyActorBase", *args: Any, **kwargs: Any) -> Any:
+                try:
+                    return await f(self, *args, **kwargs)
+                except asyncio.CancelledError:
+                    raise
+                except BaseException as e:
+                    self._fail(_as_failure(e, actor_name))  # pylint: disable=protected-access
+                return None
 
-    return inner
+            return async_guard  # type: ignore[return-value]
+
+        @functools.wraps(f)
+        def guard(self: "RallyActorBase", *args: Any, **kwargs: Any) -> Any:
+            try:
+                return f(self, *args, **kwargs)
+            except BaseException as e:
+                self._fail(_as_failure(e, actor_name))  # pylint: disable=protected-access
+            return None
+
+        return guard  # type: ignore[return-value]
+
+    return decorator
 
 
-@parametrized
-def no_retry(f, actor_name):
+class RallyActorBase:
+    """
+    Base class for all Rally actors. Subclasses are plain Python classes; use ``create_actor()`` to start them as Ray actors.
     """
 
-    Decorator intended for Thespian message handlers with the signature ``receiveMsg_$MSG_NAME(self, msg, sender)``. Thespian will
-    assume that a message handler that raises an exception can be retried. It will then retry once and give up afterwards just leaving
-    a trace of that in the actor system's internal log file. However, this is usually *not* what we want in Rally. If handling of a
-    message fails we instead want to notify a node higher up in the actor hierarchy.
-
-    We achieve that by sending a ``BenchmarkFailure`` message to the original sender. Note that this might as well be the current
-    actor (e.g. when handling a ``Wakeup`` message). In that case the actor itself is responsible for forwarding the benchmark failure
-    to its parent actor.
-
-    Example usage:
-
-    @no_retry("special forces actor")
-    def receiveMsg_DefuseBomb(self, msg, sender):
-        # might raise an exception
-        pass
-
-    If this message handler raises an exception, the decorator will turn it into a ``BenchmarkFailure`` message with its ``message``
-    property set to "Error in special forces actor" which is returned to the original sender.
-
-    :param f: The message handler. Does not need to passed directly, this is handled by the decorator infrastructure.
-    :param actor_name: A human readable name of the current actor that should be used in the exception message.
-    """
-
-    def guard(self, msg, sender):
-        # noinspection PyBroadException
-        try:
-            return f(self, msg, sender)
-        except BaseException:
-            # log here as the full trace might get lost.
-            logging.getLogger(__name__).exception("Error in %s", actor_name)
-            # don't forward the exception as is because the main process might not have this class available on the load path
-            # and will fail then while deserializing the cause.
-            self.send(sender, BenchmarkFailure(traceback.format_exc()))
-
-    return guard
-
-
-class RallyActor(thespian.actors.ActorTypeDispatcher):
-
-    def __init__(self):
-        super().__init__()
-        self.children: list[thespian.actors.ActorAddress] = []
-        self.received_responses = []
-        self.status = None
-        log.post_configure_actor_logging()
+    def __init__(self, name: str | None = None, cfg: Any = None):
+        self.name = name or type(self).__name__
+        log.configure_actor_logging(self.name)
+        # Ray forwards console output of actors line by line to the process that started the benchmark, which prints it
+        # on the user's terminal. Hence, actors print even though their stdout is not a terminal.
+        quiet = bool(cfg.opts("system", "quiet.mode", mandatory=False, default_value=False)) if cfg is not None else False
+        console.init(quiet=quiet, assume_tty=True)
         self.logger = logging.getLogger(type(self).__module__)
-        console.set_assume_tty(assume_tty=False)
-        LOG.info("Actor initialized: %s (pid=%s)", type(self).__name__, os.getpid())
+        self._failure: BaseException | None = None
+        LOG.info("Actor initialized: %s (pid=%s)", self.name, os.getpid())
 
-    # The method name is required by the actor framework
-    # noinspection PyPep8Naming
-    @staticmethod
-    def actorSystemCapabilityCheck(capabilities, requirements):
-        for name, value in requirements.items():
-            current = capabilities.get(name, None)
-            if current != value:
-                # A mismatch by is not a problem by itself as long as at least one actor system instance matches the requirements.
-                return False
-        return True
-
-    def transition_when_all_children_responded(self, sender, msg, expected_status, new_status, transition):
+    def _fail(self, failure: BaseException) -> None:
         """
-
-        Waits until all children have sent a specific response message and then transitions this actor to a new status.
-
-        :param sender: The child actor that has responded.
-        :param msg: The response message.
-        :param expected_status: The status in which this actor should be upon calling this method.
-        :param new_status: The new status once all child actors have responded.
-        :param transition: A parameter-less function to call immediately after changing the status.
+        Records a failure that happened outside of an awaited call. Subclasses override this to surface it.
         """
-        if self.is_current_status_expected(expected_status):
-            self.received_responses.append(msg)
-            response_count = len(self.received_responses)
-            expected_count = len(self.children)
+        if self._failure is None:
+            self._failure = failure
 
-            self.logger.debug(
-                "[%d] of [%d] child actors have responded for transition from [%s] to [%s].",
-                response_count,
-                expected_count,
-                self.status,
-                new_status,
-            )
-            if response_count == expected_count:
-                self.logger.debug(
-                    "All [%d] child actors have responded. Transitioning now from [%s] to [%s].", expected_count, self.status, new_status
-                )
-                # all nodes have responded, change status
-                self.status = new_status
-                self.received_responses = []
-                transition()
-            elif response_count > expected_count:
-                raise exceptions.RallyAssertionError(
-                    "Received [%d] responses but only [%d] were expected to transition from [%s] to [%s]. The responses are: %s"
-                    % (response_count, expected_count, self.status, new_status, self.received_responses)
-                )
-        else:
-            raise exceptions.RallyAssertionError(
-                "Received [%s] from [%s] but we are in status [%s] instead of [%s]." % (type(msg), sender, self.status, expected_status)
-            )
-
-    def send_to_children_and_transition(self, sender, msg, expected_status, new_status):
+    @functools.cached_property
+    def self_handle(self) -> Any:
         """
-
-        Sends the provided message to all child actors and immediately transitions to the new status.
-
-        :param sender: The actor from which we forward this message (in case it is message forwarding). Otherwise our own address.
-        :param msg: The message to send.
-        :param expected_status: The status in which this actor should be upon calling this method.
-        :param new_status: The new status.
+        The Ray handle of this actor, which can be passed to other actors so that they can call it.
         """
-        if self.is_current_status_expected(expected_status):
-            self.logger.debug("Transitioning from [%s] to [%s].", self.status, new_status)
-            self.status = new_status
-            child: thespian.actors.ActorAddress
-            for child in filter(None, self.children):
-                self.send(child, msg)
-        else:
-            raise exceptions.RallyAssertionError(
-                "Received [%s] from [%s] but we are in status [%s] instead of [%s]." % (type(msg), sender, self.status, expected_status)
-            )
+        import ray  # pylint: disable=import-outside-toplevel
 
-    def is_current_status_expected(self, expected_status):
-        # if we don't expect anything, we're always in the right status
-        if not expected_status:
-            return True
-        # do an explicit check for a list here because strings are also iterable and we have very tight control over this code anyway.
-        elif isinstance(expected_status, list):
-            return self.status in expected_status
-        else:
-            return self.status == expected_status
+        return ray.get_runtime_context().current_actor
+
+    def this_node_strategy(self) -> Any:
+        """
+        Scheduling strategy that places an actor on the same node as this actor.
+        """
+        import ray  # pylint: disable=import-outside-toplevel
+        from ray.util.scheduling_strategies import (  # pylint: disable=import-outside-toplevel
+            NodeAffinitySchedulingStrategy,
+        )
+
+        return NodeAffinitySchedulingStrategy(node_id=ray.get_runtime_context().get_node_id(), soft=False)
 
 
-SystemBase = typing.Literal["simpleSystemBase", "multiprocQueueBase", "multiprocTCPBase", "multiprocUDPBase"]
+_REMOTE_CLASSES: dict[type, Any] = {}
 
 
-__SYSTEM_BASE: SystemBase = "multiprocTCPBase"
-
-
-def actor_system_already_running(
-    ip: str | None = None,
-    port: int | None = None,
-    system_base: SystemBase | None = None,
-) -> bool | None:
-    """It determines whether an actor system is already running by opening a socket connection.
-
-    Notes:
-        - It may be possible that another system is running on the same port.
-        - This is working only when system base is "multiprocTCPBase"
+def remote_class(cls: type) -> Any:
     """
-    if system_base is None:
-        system_base = __SYSTEM_BASE
-    if system_base != "multiprocTCPBase":
-        # This system is not supported yet.
+    Returns the Ray actor class for a Rally actor class.
+
+    Rally actors do not reserve CPUs: Rally sizes its workers itself and places actors explicitly with node resources.
+    Actors are not restarted when they die; Rally treats that as a benchmark failure.
+    """
+    import ray  # pylint: disable=import-outside-toplevel
+
+    if cls not in _REMOTE_CLASSES:
+        _REMOTE_CLASSES[cls] = ray.remote(num_cpus=0, max_restarts=0)(cls)
+    return _REMOTE_CLASSES[cls]
+
+
+def node_resource(host: str) -> str:
+    """
+    Returns the name of the Ray resource that places an actor on ``host``.
+
+    ``localhost`` (and loopback addresses) denote the coordinator node, i.e. the head of the Ray cluster.
+    """
+    if host == "localhost" or host.startswith("127."):
+        return HEAD_NODE_RESOURCE
+    return f"node:{net.resolve(host) or host}"
+
+
+def create_actor(cls: type, *args: Any, host: str | None = None, strategy: Any = None, name: str | None = None, **kwargs: Any) -> Any:
+    """
+    Starts a Rally actor and returns its handle.
+
+    :param cls: A subclass of ``RallyActorBase``.
+    :param host: Host to place the actor on (see ``node_resource()``). Mutually exclusive with ``strategy``.
+    :param strategy: A Ray scheduling strategy.
+    :param name: Optional name of the actor (unique per race).
+    """
+    options: dict[str, Any] = {}
+    if name:
+        options["name"] = name
+    if strategy is not None:
+        options["scheduling_strategy"] = strategy
+    elif host is not None:
+        options["resources"] = {node_resource(host): NODE_RESOURCE_UNITS}
+    return remote_class(cls).options(**options).remote(*args, **kwargs)
+
+
+def _node_is_alive(ip: str) -> bool:
+    import ray  # pylint: disable=import-outside-toplevel
+
+    return any(n.get("Alive") and n.get("NodeManagerAddress") == ip for n in ray.nodes())
+
+
+def _no_daemon_error(ip: str, timeout: float) -> exceptions.LaunchError:
+    return exceptions.LaunchError(
+        f"No Rally daemon is running on [{ip}]: it did not join the cluster within [{timeout:.0f}] seconds. "
+        f"Are Rally daemons on all targeted machines running?"
+    )
+
+
+def require_node(host: str, timeout: float = DEFAULT_NODE_WAIT_TIMEOUT) -> None:
+    """
+    Waits until a Rally daemon on ``host`` is part of the cluster.
+
+    Without this check, Ray would wait forever for a node to place an actor on.
+    """
+    if node_resource(host) == HEAD_NODE_RESOURCE:
+        return
+    ip = net.resolve(host) or host
+    deadline = time.monotonic() + timeout
+    while not _node_is_alive(ip):
+        if time.monotonic() >= deadline:
+            raise _no_daemon_error(ip, timeout)
+        time.sleep(1)
+
+
+async def require_node_async(host: str, timeout: float = DEFAULT_NODE_WAIT_TIMEOUT) -> None:
+    """
+    Same as ``require_node()``, for asyncio code.
+    """
+    if node_resource(host) == HEAD_NODE_RESOURCE:
+        return
+    ip = net.resolve(host) or host
+    deadline = time.monotonic() + timeout
+    while not _node_is_alive(ip):
+        if time.monotonic() >= deadline:
+            raise _no_daemon_error(ip, timeout)
+        await asyncio.sleep(1)
+
+
+def ray_address_file() -> str:
+    """
+    Path to the file in which ``ray start`` records the address of the cluster that this machine is part of.
+    """
+    temp_dir = os.environ.get("RAY_TMPDIR", "/tmp")
+    return os.path.join(temp_dir, "ray", "ray_current_cluster")
+
+
+def daemon_address() -> str | None:
+    """
+    Returns the address of the Ray head recorded by ``esrallyd start`` on this machine, if any.
+    """
+    try:
+        with open(ray_address_file(), encoding="utf-8") as f:
+            return f.read().strip() or None
+    except OSError:
         return None
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        try:
-            ip = ip or "127.0.0.1"
-            port = port or 1900
-            LOG.info("Looking for an already running actor system (ip='%s', port=%d)...", ip, port)
-            sock.connect((ip, port))
-            return True
-        except OSError as ex:
-            LOG.info("Failed to connect to already running actor system (ip='%s', port=%d): %s", ip, port, ex)
 
+def _can_connect(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1.0)
+        try:
+            sock.connect((host, port))
+            return True
+        except OSError:
+            return False
+
+
+def is_cluster_running() -> bool:
+    """
+    Determines whether this machine is part of a Rally daemon cluster (started with ``esrallyd start``) that is reachable.
+    """
+    address = daemon_address()
+    if address:
+        host, _, port = address.rpartition(":")
+        # Local Ray instances started by Rally use a random port. Only connect to Rally daemons.
+        if host and port == str(RAY_GCS_PORT) and _can_connect(host, RAY_GCS_PORT):
+            return True
+    return _can_connect("127.0.0.1", RAY_GCS_PORT)
+
+
+def is_daemon_running_locally() -> bool:
+    """
+    Determines whether a Rally daemon runs on this machine, i.e. a Ray node that is part of a cluster on Rally's port.
+    """
+    import psutil  # pylint: disable=import-outside-toplevel
+
+    suffix = f":{RAY_GCS_PORT}"
+    for p in psutil.process_iter():
+        try:
+            if p.name() == "raylet" and any(arg.startswith("--gcs-address=") and arg.endswith(suffix) for arg in p.cmdline()):
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
     return False
 
 
-def use_offline_actor_system() -> None:
-    global __SYSTEM_BASE
-    __SYSTEM_BASE = "multiprocQueueBase"
-    LOG.info("Actor system base set to [%s]", __PROCESS_STARTUP_METHOD)
+# Ray fails to start if these variables change after it has been imported.
+_RAY_IMPORT_TIME_VARIABLES = frozenset(["RAY_AUTH_MODE"])
 
 
-ProcessStartupMethod = typing.Literal[
-    "fork",
-    "forkserver",
-    "spawn",
-]
+def _apply_import_time_settings() -> None:
+    """
+    Applies settings that Ray only reads when it is imported, in case ``ray`` has been imported before
+    ``configure_ray_environment()`` was called.
+    """
+    from ray._private import ray_constants  # pylint: disable=import-outside-toplevel
+
+    if os.environ.get("RAY_ENABLE_UV_RUN_RUNTIME_ENV", "").lower() in ("0", "false"):
+        ray_constants.RAY_ENABLE_UV_RUN_RUNTIME_ENV = False
 
 
-__PROCESS_STARTUP_METHOD: ProcessStartupMethod | None = None
+def configure_ray_environment() -> None:
+    """
+    Sets Rally's defaults for Ray's environment variables. Should be called before ``ray`` is imported.
+    """
+    ray_imported = "ray" in sys.modules
+    for key, value in RAY_ENVIRONMENT_DEFAULTS.items():
+        if ray_imported and key in _RAY_IMPORT_TIME_VARIABLES:
+            continue
+        os.environ.setdefault(key, value)
 
 
-def set_startup_method(method: ProcessStartupMethod) -> None:
-    global __PROCESS_STARTUP_METHOD
-    __PROCESS_STARTUP_METHOD = method
-    LOG.info("Actor process startup method set to [%s]", __PROCESS_STARTUP_METHOD)
+def init_ray(*, namespace: str, num_cpus: int | None = None, object_store_memory: int = DEFAULT_OBJECT_STORE_MEMORY) -> bool:
+    """
+    Connects to the Rally daemon if one is running, otherwise starts a local, ephemeral Ray instance.
+
+    :param namespace: Ray namespace for the actors of this invocation.
+    :param num_cpus: CPUs of the local instance. Ray pre-starts idle worker processes for these, which speeds up actor
+                     creation. Ignored when connecting to a daemon.
+    :param object_store_memory: Size of the object store of the local instance. Ignored when connecting to a daemon.
+    :return: ``True`` if Rally connected to a daemon, ``False`` if it started a local instance.
+    """
+    configure_ray_environment()
+    import ray  # pylint: disable=import-outside-toplevel
+
+    _apply_import_time_settings()
+    common: dict[str, Any] = {
+        "include_dashboard": False,
+        # Ray must not touch Rally's logging configuration.
+        "configure_logging": False,
+        # Forward console output of actors (e.g. download progress) to this process.
+        "log_to_driver": True,
+        "namespace": namespace,
+    }
+    if is_cluster_running():
+        address = daemon_address() or f"127.0.0.1:{RAY_GCS_PORT}"
+        LOG.info("Connecting to Rally daemon at [%s].", address)
+        ray.init(address=address, **common)
+        return True
+
+    LOG.info("Starting local Ray instance.")
+    ray.init(
+        address="local",
+        _node_ip_address="127.0.0.1",
+        num_cpus=num_cpus,
+        object_store_memory=object_store_memory,
+        **common,
+    )
+    return False
 
 
-def bootstrap_actor_system(
-    try_join: bool = False,
-    prefer_local_only: bool = False,
-    local_ip: str | None = None,
-    admin_port: int | None = None,
-    coordinator_ip: str | None = None,
-    coordinator_port: int | None = None,
-) -> thespian.actors.ActorSystem:
-    system_base = __SYSTEM_BASE
-    capabilities: dict[str, Any] = {}
-    log_defs: Any = None
-    if try_join and (
-        system_base != "multiprocTCPBase" or actor_system_already_running(ip=local_ip, port=admin_port, system_base=system_base)
-    ):
-        LOG.info("Try joining already running actor system with system base [%s].", system_base)
-    else:
-        # All actor system are coordinator unless another coordinator is known to exist.
-        capabilities["coordinator"] = True
+# Ray forwards console output of actors to this process every 0.1 seconds. Give it time to do so before disconnecting.
+LOG_FORWARDING_GRACE_PERIOD = 1.0
 
-        if system_base in ("multiprocTCPBase", "multiprocUDPBase"):
-            if prefer_local_only:
-                LOG.info("Bootstrapping locally running actor system with system base [%s].", system_base)
-                local_ip = coordinator_ip = "127.0.0.1"
 
-            if local_ip:
-                local_ip, admin_port = resolve(local_ip, admin_port)
-                capabilities["ip"] = local_ip
+async def await_actor_output() -> None:
+    """
+    Waits until Ray has (most likely) forwarded console output that actors have printed so far. Call it before printing
+    to the console in the main process so that messages appear in order.
+    """
+    await asyncio.sleep(LOG_FORWARDING_GRACE_PERIOD / 2)
 
-            if admin_port:
-                capabilities["Admin Port"] = admin_port
 
-            if coordinator_ip:
-                coordinator_ip, coordinator_port = resolve(coordinator_ip, coordinator_port)
-                if coordinator_port:
-                    coordinator_port = int(coordinator_port)
-                    if coordinator_port:
-                        coordinator_ip += f":{coordinator_port}"
-                capabilities["Convention Address.IPv4"] = coordinator_ip
+def shutdown_ray() -> None:
+    """
+    Disconnects from Ray. A local instance started by ``init_ray()`` is stopped, including all its actors.
+    """
+    import ray  # pylint: disable=import-outside-toplevel
 
-            if coordinator_ip and local_ip and coordinator_ip != local_ip:
-                capabilities["coordinator"] = False
+    if ray.is_initialized():
+        time.sleep(LOG_FORWARDING_GRACE_PERIOD)
+        ray.shutdown()
 
-        process_startup_method: ProcessStartupMethod | None = __PROCESS_STARTUP_METHOD
-        if process_startup_method:
-            capabilities["Process Startup Method"] = process_startup_method
 
-        log_defs = log.load_configuration()
-        LOG.info("Starting actor system with system base [%s] and capabilities [%s]...", system_base, capabilities)
+async def await_with_timeout(ref: Any, timeout: float) -> Any:
+    """
+    Awaits the result of an actor method call with a timeout.
+    """
+    return await asyncio.wait_for(_as_future(ref), timeout)
+
+
+def _as_future(ref: Any) -> Awaitable[Any]:
+    # ObjectRefs are awaitable but asyncio.wait_for() needs a coroutine or future.
+    return asyncio.wrap_future(ref.future())
+
+
+async def stop_actor(handle: Any, *, timeout: float = DEFAULT_STOP_TIMEOUT, name: str = "") -> None:
+    """
+    Stops an actor: calls its ``stop()`` method and waits up to ``timeout`` seconds, then kills it in any case.
+    """
+    try:
+        await await_with_timeout(handle.stop.remote(), timeout)
+    except asyncio.TimeoutError:
+        LOG.warning("Actor [%s] did not stop within [%s] seconds. Killing it.", name, timeout)
+    except BaseException as e:  # pylint: disable=broad-exception-caught
+        if isinstance(e, asyncio.CancelledError):
+            raise
+        LOG.warning("Actor [%s] did not stop cleanly: %s", name, e)
+    finally:
+        kill_actor(handle)
+
+
+def kill_actor(handle: Any) -> None:
+    """
+    Kills an actor immediately. Its ``stop()`` method is not called.
+    """
+    import ray  # pylint: disable=import-outside-toplevel
 
     try:
-        actor_system = thespian.actors.ActorSystem(
-            systemBase=system_base,
-            capabilities=capabilities,
-            logDefs=log_defs,
-        )
-    except thespian.actors.ActorSystemException:
-        LOG.exception("Could not initialize actor system with system base [%s] and capabilities [%s].", system_base, capabilities)
-        raise
-
-    LOG.info("Successfully initialized with system base [%s] and capabilities [%s].", system_base, actor_system.capabilities)
-    return actor_system
+        ray.kill(handle, no_restart=True)
+    except Exception:  # pylint: disable=broad-exception-caught
+        # the actor is already gone
+        pass
 
 
-def resolve(host: str, port: int | None = None, family: int = socket.AF_INET, proto: int = socket.IPPROTO_TCP) -> tuple[str, int | None]:
-    address_info: tuple[Any, Any, Any, Any, tuple[Any, ...]]
-    for address_info in socket.getaddrinfo(host, port=port or None, family=family, proto=proto):
-        address = address_info[4]
-        if len(address) == 2 and isinstance(address[0], str) and isinstance(address[1], int):
-            host, port = address
-    return host, port or None
+T = TypeVar("T")
+
+
+def run_async(main: Callable[[], Coroutine[Any, Any, T]]) -> T:
+    """
+    Runs a coroutine in a new event loop in the main thread.
+
+    The first Ctrl-C cancels the coroutine, which can clean up (e.g. stop actors) when it catches
+    ``asyncio.CancelledError``. A second Ctrl-C cancels the clean-up. In both cases ``KeyboardInterrupt`` is raised.
+
+    :param main: A function returning the coroutine to run.
+    """
+
+    async def runner() -> T:
+        loop = asyncio.get_running_loop()
+        task = asyncio.current_task()
+        assert task is not None
+        interrupted = False
+
+        def on_sigint() -> None:
+            nonlocal interrupted
+            interrupted = True
+            LOG.info("Received SIGINT. Cancelling.")
+            task.cancel()
+
+        loop.add_signal_handler(signal.SIGINT, on_sigint)
+        try:
+            return await main()
+        except asyncio.CancelledError:
+            if interrupted:
+                raise KeyboardInterrupt() from None
+            raise
+        finally:
+            loop.remove_signal_handler(signal.SIGINT)
+
+    return asyncio.run(runner())

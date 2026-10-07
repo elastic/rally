@@ -36,7 +36,7 @@ Task workflows live in `skills/`:
 - `skills/accessing-benchmark-results/` — list past races, get a race's overall results,
   chart a metric across runs, compare races, and check convergence from an external metrics store.
 - `skills/developing-rally/` — work *on* Rally's codebase: dev setup, make targets, source
-  layout, and the actor system.
+  layout, and the Ray-based actor system.
 
 ## Where to look next
 

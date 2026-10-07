@@ -24,7 +24,7 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import IO, Callable, Optional, Union
 
 import psutil
@@ -215,7 +215,53 @@ def run_subprocess_with_logging_and_output(
     return completed
 
 
+# Classes of Rally's Ray actors. Ray sets the title of an actor process to "ray::<class name>", possibly followed by the name
+# of the method that is currently executing (e.g. "ray::Worker.run").
+RALLY_ACTOR_CLASSES = frozenset(
+    [
+        "DriverActor",
+        "NodeMechanicActor",
+        "TaskExecutionActor",
+        "TrackPreparationActor",
+        "Worker",
+    ]
+)
+
+
+def _process_title(p: psutil.Process) -> str:
+    cmdline = p.cmdline()
+    if cmdline and cmdline[0].strip():
+        return cmdline[0].strip()
+    return p.name()
+
+
+def is_rally_actor_process(p: psutil.Process) -> bool:
+    """
+    Determines whether a process hosts one of Rally's Ray actors.
+    """
+    title = _process_title(p)
+    if not title.startswith("ray::"):
+        return False
+    actor_class = title[len("ray::") :].split(".", 1)[0].split("(", 1)[0].split(" ", 1)[0]
+    return actor_class in RALLY_ACTOR_CLASSES
+
+
+def is_ray_process(p: psutil.Process) -> bool:
+    """
+    Determines whether a process belongs to Ray itself (raylet, GCS, agents, idle workers). Rally never kills those: Ray
+    stops a local instance by itself when the process that started it terminates, and a Rally daemon is stopped with
+    ``esrallyd stop``.
+    """
+    if p.name() in ("raylet", "gcs_server") or _process_title(p).startswith("ray::"):
+        return True
+    return any("/ray/" in e and e.endswith(".py") for e in p.cmdline())
+
+
 def is_rally_process(p: psutil.Process) -> bool:
+    if is_rally_actor_process(p):
+        return True
+    if is_ray_process(p):
+        return False
     return (
         p.name() == "esrally"
         or p.name() == "rally"
@@ -247,8 +293,7 @@ def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:
             "Killing lingering process with PID [%s] and command line [%s].", p.pid, redact_cmdline(p.cmdline())
         )
         p.kill()
-        # wait until process has terminated, at most 3 seconds. Otherwise we might run into race conditions with actor system
-        # sockets that are still open.
+        # wait until process has terminated, at most 3 seconds, so that it has released its resources (e.g. sockets).
         for _ in range(3):
             try:
                 p.status()
@@ -271,40 +316,4 @@ def for_all_other_processes(predicate: Callable[[psutil.Process], bool], action:
 
 
 def kill_running_rally_instances() -> None:
-    def rally_process(p: psutil.Process) -> bool:
-        return (
-            p.name() == "esrally"
-            or p.name() == "rally"
-            or (
-                p.name().lower().startswith("python")
-                and any("esrally" in e for e in p.cmdline())
-                and not any("esrallyd" in e for e in p.cmdline())
-            )
-        )
-
-    kill_all(rally_process)
-
-
-def wait_for_child_processes(
-    timeout: Optional[float] = None,
-    callback: Optional[Callable[[psutil.Process], None]] = None,
-    list_callback: Optional[Callable[[Iterable[psutil.Process]], None]] = None,
-) -> bool:
-    """
-    Waits for all child processes to terminate.
-
-    :param timeout: The maximum time to wait for child processes to terminate (default: None).
-    :param callback: A callback to call as each child process terminates.
-        The callback will be passed the PID and the return code of the child process.
-    :param list_callback: A callback to tell caller about the child processes that are being waited for.
-
-    :return: False if no child processes found, True otherwise.
-    """
-    current = psutil.Process()
-    children = current.children(recursive=True)
-    if not children:
-        return False
-    if list_callback is not None:
-        list_callback(children)
-    psutil.wait_procs(children, timeout=timeout, callback=callback)
-    return True
+    kill_all(is_rally_process)

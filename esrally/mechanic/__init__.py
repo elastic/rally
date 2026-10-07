@@ -16,16 +16,4 @@
 # under the License.
 
 # expose only the minimum API
-from .mechanic import (
-    EngineStarted,
-    EngineStopped,
-    MechanicActor,
-    ResetRelativeTime,
-    StartEngine,
-    StopEngine,
-    build,
-    download,
-    install,
-    start,
-    stop,
-)
+from .mechanic import MechanicCoordinator, build, download, install, start, stop

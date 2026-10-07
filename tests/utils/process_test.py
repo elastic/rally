@@ -112,6 +112,57 @@ class TestProcess:
 
         assert process.find_all_other_rally_processes() == [rally_process_p, rally_process_r, rally_process_e, rally_process_mac]
 
+    @staticmethod
+    def ray_processes():
+        venv = "/home/rally/esrally-venv"
+        rally_actors = [
+            # Linux: the process name is the (truncated) process title
+            Process(200, "ray::Worker", ["ray::Worker"]),
+            Process(201, "ray::Worker.run", ["ray::Worker.run()", ""]),
+            # macOS: the process name is the name of the executable
+            Process(202, "python3.13", ["ray::TrackPreparationActor.prepare_track", ""]),
+            Process(203, "python3.13", ["ray::DriverActor"]),
+            Process(204, "python3.13", ["ray::NodeMechanicActor.start_nodes"]),
+            Process(205, "python3.13", ["ray::TaskExecutionActor.execute"]),
+        ]
+        ray_infrastructure = [
+            Process(300, "raylet", [f"{venv}/lib/python3.13/site-packages/ray/core/src/ray/raylet/raylet", "--gcs-address=10.0.0.1:1900"]),
+            Process(301, "gcs_server", [f"{venv}/lib/python3.13/site-packages/ray/core/src/ray/gcs/gcs_server"]),
+            Process(302, "python3.13", ["ray::IDLE"]),
+            Process(303, "python3.13", ["ray::DashboardAgent"]),
+            Process(304, "python3.13", ["ray::RuntimeEnvAgent"]),
+            Process(305, "python3.13", [f"{venv}/bin/python", "-u", f"{venv}/lib/python3.13/site-packages/ray/_private/log_monitor.py"]),
+            Process(
+                306,
+                "python3.13",
+                [
+                    f"{venv}/bin/python",
+                    f"{venv}/lib/python3.13/site-packages/ray/_private/workers/default_worker.py",
+                    "--node-ip-address=1",
+                ],
+            ),
+            # an actor of another application
+            Process(307, "python3.13", ["ray::SomeOtherActor"]),
+        ]
+        return rally_actors, ray_infrastructure
+
+    @mock.patch("psutil.process_iter")
+    def test_finds_rally_actors_but_not_ray_processes(self, process_iter):
+        rally_actors, ray_infrastructure = self.ray_processes()
+        process_iter.return_value = rally_actors + ray_infrastructure
+
+        assert process.find_all_other_rally_processes() == rally_actors
+
+    @mock.patch("psutil.process_iter")
+    def test_kills_rally_actors_but_not_ray_processes(self, process_iter):
+        rally_actors, ray_infrastructure = self.ray_processes()
+        process_iter.return_value = rally_actors + ray_infrastructure
+
+        process.kill_running_rally_instances()
+
+        assert all(p.killed for p in rally_actors)
+        assert not any(p.killed for p in ray_infrastructure)
+
     @mock.patch("psutil.process_iter")
     def test_find_no_other_rally_process_running(self, process_iter):
         metrics_store_process = Process(

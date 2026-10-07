@@ -70,10 +70,11 @@ dependencies = [
     # transitive dependency Markupsafe: BSD
     "Jinja2==3.1.6",
     "markupsafe==2.1.5",
-    # License: MIT
-    "thespian==4.0.1",
-    # recommended library for thespian to identify actors more easily with `ps`
-    # "setproctitle==1.1.10",
+    # License: Apache 2.0
+    # transitive dependencies:
+    #   msgpack: Apache 2.0
+    #   protobuf: BSD-3-Clause
+    "ray==2.59.0",
     # always use the latest version, these are certificate files...
     # License: MPL 2.0
     "certifi",
@@ -185,7 +186,8 @@ asyncio_mode = "strict"
 xfail_strict = true
 markers = [
     'track: used in it/track_repo_compatibility',
-    'slow: to mark tests that are slow'
+    'slow: to mark tests that are slow',
+    'ray: tests that start a real Ray instance',
 ]
 
 # With exceptions specified in mypy override section, Rally does not use type

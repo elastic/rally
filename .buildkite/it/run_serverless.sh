@@ -7,6 +7,10 @@ source .buildkite/retry.sh
 function upload_logs {
     echo "--- Upload artifacts"
     buildkite-agent artifact upload "${RALLY_HOME}/.rally/logs/*.log"
+    # internal logs of Ray, which runs Rally's actors
+    if tar zcf "${RALLY_HOME}/ray-logs.tar.gz" --dereference /tmp/ray/session_*/logs 2>/dev/null; then
+        buildkite-agent artifact upload "${RALLY_HOME}/ray-logs.tar.gz"
+    fi
 }
 
 export TERM=dumb
@@ -45,11 +49,8 @@ make venv
 echo "--- Run IT serverless test \"$TEST_NAME\" :pytest:"
 
 export RALLY_HOME=$HOME
-export THESPLOG_FILE="${THESPLOG_FILE:-${RALLY_HOME}/.rally/logs/actor-system-internal.log}"
-# this value is in bytes, the default is 50kB. We increase it to 200kiB.
-export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-204800}
-# adjust the default log level from WARNING
-export THESPLOG_THRESHOLD="INFO"
+# do not send usage statistics of Ray
+export RAY_USAGE_STATS_ENABLED=0
 
 trap upload_logs ERR
 
