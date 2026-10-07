@@ -797,6 +797,16 @@ class DocumentSetPreparator:
                 f"Expected [{expected_number_of_lines}] lines but got [{lines_read}]."
             )
 
+    def create_otlp_protobuf_file(self, pb_file, expected_number_of_records):
+        records_written = pb_file.create()
+        if records_written != expected_number_of_records:
+            # remove it, otherwise is_valid() would accept the corrupt file on the next run
+            pb_file.remove()
+            raise exceptions.DataError(
+                f"Data in [{pb_file.source_json_path}] for track [{self.track_name}] are invalid. "
+                f"Expected [{expected_number_of_records}] records but got [{records_written}]."
+            )
+
     def prepare_document_set(self, document_set, data_root):
         """
         Prepares a document set locally.
@@ -956,7 +966,7 @@ class DocumentSetPreparator:
                     raise
 
         # 4. Convert JSON to .pb / .pbgz
-        pb_file.create()
+        self.create_otlp_protobuf_file(pb_file, document_set.number_of_documents)
 
     def _try_download_pb(self, document_set, doc_path, pb_file) -> bool:
         """
@@ -1033,7 +1043,7 @@ class DocumentSetPreparator:
 
         if self.is_locally_available(doc_path):
             if self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
-                pb_file.create()
+                self.create_otlp_protobuf_file(pb_file, document_set.number_of_documents)
                 return True
             else:
                 raise exceptions.DataError(
@@ -1043,7 +1053,7 @@ class DocumentSetPreparator:
         if archive_path and self.is_locally_available(archive_path):
             if self.has_expected_size(archive_path, document_set.compressed_size_in_bytes):
                 self.decompressor.decompress(archive_path, doc_path, document_set.uncompressed_size_in_bytes)
-                pb_file.create()
+                self.create_otlp_protobuf_file(pb_file, document_set.number_of_documents)
                 return True
             else:
                 raise exceptions.DataError(

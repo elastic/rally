@@ -1199,7 +1199,7 @@ class TestOtlpDocumentPreparation:
         p.downloader.download.side_effect = exceptions.DataError("not found")
         with (
             mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=False),
-            mock.patch.object(io.OtlpProtobufFile, "create") as create,
+            mock.patch.object(io.OtlpProtobufFile, "create", return_value=10) as create,
             mock.patch.object(p, "is_locally_available", return_value=True),
             mock.patch.object(p, "has_expected_size", return_value=True),
         ):
@@ -1214,7 +1214,7 @@ class TestOtlpDocumentPreparation:
         p.downloader.download.side_effect = [exceptions.DataError("not found"), None]
         with (
             mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=False),
-            mock.patch.object(io.OtlpProtobufFile, "create") as create,
+            mock.patch.object(io.OtlpProtobufFile, "create", return_value=10) as create,
             mock.patch.object(p, "is_locally_available", side_effect=[False, True]),
             mock.patch.object(p, "has_expected_size", return_value=True),
         ):
@@ -1225,6 +1225,57 @@ class TestOtlpDocumentPreparation:
             mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json", 2000),
         ]
         create.assert_called_once_with()
+
+    def test_raises_and_removes_pb_when_record_count_mismatches(self):
+        p = self._preparator()
+        p.downloader.download.side_effect = exceptions.DataError("not found")
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=False),
+            mock.patch.object(io.OtlpProtobufFile, "create", return_value=9),
+            mock.patch.object(io.OtlpProtobufFile, "remove") as remove,
+            mock.patch.object(p, "is_locally_available", return_value=True),
+            mock.patch.object(p, "has_expected_size", return_value=True),
+        ):
+            with pytest.raises(exceptions.DataError) as exc:
+                p.prepare_otlp_document_set(self._doc_set(), data_root="/tmp")
+
+        assert exc.value.message == (
+            "Data in [/tmp/metrics.otlp.json] for track [unit-test] are invalid. Expected [10] records but got [9]."
+        )
+        remove.assert_called_once_with()
+
+    def test_bundled_converts_local_json(self):
+        p = self._preparator()
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=False),
+            mock.patch.object(io.OtlpProtobufFile, "create", return_value=10) as create,
+            mock.patch.object(p, "is_locally_available", return_value=True),
+            mock.patch.object(p, "has_expected_size", return_value=True),
+        ):
+            assert p.prepare_bundled_otlp_document_set(self._doc_set(), data_root="/tmp")
+
+        create.assert_called_once_with()
+
+    def test_bundled_raises_and_removes_pb_when_record_count_mismatches(self):
+        p = self._preparator()
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=False),
+            mock.patch.object(io.OtlpProtobufFile, "create", return_value=11),
+            mock.patch.object(io.OtlpProtobufFile, "remove") as remove,
+            mock.patch.object(p, "is_locally_available", side_effect=[False, True]),
+            mock.patch.object(p, "has_expected_size", return_value=True),
+        ):
+            with pytest.raises(exceptions.DataError) as exc:
+                p.prepare_bundled_otlp_document_set(
+                    self._doc_set(archive="metrics.otlp.json.zst", compressed_size=500),
+                    data_root="/tmp",
+                )
+
+        assert exc.value.message == (
+            "Data in [/tmp/metrics.otlp.json] for track [unit-test] are invalid. Expected [10] records but got [11]."
+        )
+        p.decompressor.decompress.assert_called_once_with("/tmp/metrics.otlp.json.zst", "/tmp/metrics.otlp.json", 2000)
+        remove.assert_called_once_with()
 
 
 class TestTemplateSource:

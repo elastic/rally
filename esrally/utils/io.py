@@ -881,6 +881,13 @@ class OtlpProtobufFile:
 
         return record_count
 
+    def remove(self) -> None:
+        for path in (self.pb_path, self.pb_path + ".offset"):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
     def _iter_line_batches(self, batch_size: int) -> Iterator[list[str]]:
         """Stream the source JSON file as batches of non-blank lines (each line stripped)."""
         batch: list[str] = []

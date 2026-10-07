@@ -366,6 +366,28 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         assert pb.create() == 2
 
+    def test_remove_deletes_pb_and_offset(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create()
+
+        pb.remove()
+
+        assert not os.path.exists(pb.pb_path)
+        assert not os.path.exists(pb.pb_path + ".offset")
+        assert os.path.exists(json_path)
+
+    def test_remove_tolerates_missing_files(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        with open(pb.pb_path, "wb") as f:
+            f.write(b"\x00\x00\x00\x01x")
+
+        pb.remove()
+        pb.remove()
+
+        assert not os.path.exists(pb.pb_path)
+
     def test_create_with_single_worker_matches_multi_worker(self, tmp_path):
         # source must span multiple batches to exercise parallel collection ordering
         lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile._CONVERSION_BATCH_SIZE * 2 + 17)
