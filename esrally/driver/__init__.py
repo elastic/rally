@@ -21,5 +21,6 @@ from .driver import (
     DriverStatus,
     PreparationComplete,
     TaskFinished,
+    TrackPayload,
     TrackPreparationActor,
 )

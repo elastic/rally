@@ -413,7 +413,10 @@ def test_prepare_track_succeeds(fake_ray):
     t = load_track.return_value
     preparator = _assert_preparation_actor_stopped(fake_ray)
     # dependencies have already been installed by the coordinating process
-    assert preparator.calls_to("prepare_track") == [((t,), {"install_dependencies": False})]
+    (track_payload,), kwargs = preparator.calls_to("prepare_track")[0]
+    assert isinstance(track_payload, driver.TrackPayload)
+    assert track_payload.track_name == t.name
+    assert kwargs == {"install_dependencies": False}
 
 
 def test_prepare_track_raises_on_benchmark_failure(fake_ray):

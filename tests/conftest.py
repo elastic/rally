@@ -154,6 +154,19 @@ def actor_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(actor.console, "init", lambda **kwargs: None)
 
 
+class FakeTrackPayload:
+    """
+    Stands in for ``driver.TrackPayload``, which would pickle the track (mocks cannot be pickled).
+    """
+
+    def __init__(self, t: Any):
+        self.track = t
+        self.track_name = getattr(t, "name", None)
+
+    def load(self, cfg: Any) -> Any:
+        return self.track
+
+
 def set_self_handle(instance: Any, handle: FakeHandle | None = None) -> FakeHandle:
     """
     Sets the handle that an actor instance passes to actors that it creates (``RallyActorBase.self_handle``).

@@ -22,6 +22,7 @@ import itertools
 import logging
 import math
 import multiprocessing
+import pickle
 import queue
 import sys
 import threading
@@ -102,6 +103,29 @@ class DriverStatus:
     finished_tasks: list[TaskFinished]
 
 
+class TrackPayload:
+    """
+    A track that is sent to an actor.
+
+    Tracks can reference code of track plugins, e.g. of a ``shared`` package next to the track. A process can only
+    deserialize such a track after it has loaded the track's plugins, which makes their code importable. Ray deserializes
+    the arguments of an actor method before it runs the method, so the track is serialized separately and only deserialized
+    by ``load()``.
+    """
+
+    def __init__(self, t):
+        self.track_name = t.name
+        self._serialized = pickle.dumps(t)
+
+    def load(self, cfg: types.Config):
+        """
+        :param cfg: Configuration of the receiving process, which determines where the track's plugins are.
+        :return: The track.
+        """
+        load_track_plugins(cfg, self.track_name)
+        return pickle.loads(self._serialized)
+
+
 class RecordingProgressReporter:
     """
     A replacement for ``CmdLineProgressReporter`` that records progress so that race control can print it in the process
@@ -171,6 +195,7 @@ class DriverActor(actor.RallyActorBase):
         self.worker_runs: dict[int, tuple[object, concurrent.futures.Future]] = {}
         self.track_preparators: list = []
         self._track_preparation: Optional[asyncio.Future] = None
+        self._track_payload: Optional[TrackPayload] = None
         self._shared_track = None
         self._finished_tasks: list[TaskFinished] = []
         self._done = asyncio.Event()
@@ -186,8 +211,9 @@ class DriverActor(actor.RallyActorBase):
     # ---- called by race control ----
 
     @actor.convert_failures("driver")
-    async def prepare_benchmark(self, t) -> PreparationComplete:
-        self.driver.prepare_benchmark(t)
+    async def prepare_benchmark(self, track_payload: TrackPayload) -> PreparationComplete:
+        self._track_payload = track_payload
+        self.driver.prepare_benchmark(track_payload.load(self.cfg))
         await self._track_preparation
         return self._preparation_complete()
 
@@ -198,7 +224,7 @@ class DriverActor(actor.RallyActorBase):
         """
         if self._failure is None:
             self.status = "running"
-            self._shared_track = _share(self.driver.track)
+            self._shared_track = _share(self._track_payload or TrackPayload(self.driver.track))
             self.driver.start_benchmark()
             self._tick_task = asyncio.create_task(self._tick_loop())
         await self._done.wait()
@@ -256,7 +282,7 @@ class DriverActor(actor.RallyActorBase):
         return worker
 
     def start_worker(self, driver, worker_id, cfg: types.Config, track, allocations, client_contexts=None):
-        shared_track = self._shared_track if self._shared_track is not None else track
+        shared_track = self._shared_track if self._shared_track is not None else TrackPayload(track)
         run = driver.run.remote(shared_track, allocations, client_contexts)
         self.worker_runs[worker_id] = (run, run.future())
 
@@ -310,7 +336,8 @@ class DriverActor(actor.RallyActorBase):
             actor.create_actor(TrackPreparationActor, cfg, host=host, name=f"track-preparator-{idx}") for idx, host in enumerate(hosts)
         ]
         try:
-            await asyncio.gather(*[p.prepare_track.remote(track, install_dependencies=True) for p in self.track_preparators])
+            track_payload = self._track_payload or TrackPayload(track)
+            await asyncio.gather(*[p.prepare_track.remote(track_payload, install_dependencies=True) for p in self.track_preparators])
         finally:
             for preparator in self.track_preparators:
                 actor.kill_actor(preparator)
@@ -417,15 +444,16 @@ class TrackPreparationActor(actor.RallyActorBase):
         self.logger.info("Track Preparator started")
 
     @actor.convert_failures("track preparator")
-    async def prepare_track(self, t, install_dependencies: bool = False):
+    async def prepare_track(self, track_payload: TrackPayload, install_dependencies: bool = False):
         """
-        :param t: The track to prepare.
+        :param track_payload: The track to prepare.
         :param install_dependencies: Whether to install the track's dependencies. This happens once per host, so it is
                                      not necessary if the process that loaded the track runs on the same host.
         """
         try:
             if install_dependencies:
                 load_track(self.cfg, install_dependencies=True)
+            t = track_payload.load(self.cfg)
             data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
             tpr = TrackProcessorRegistry(self.cfg)
             self.logger.info("Preparing track [%s]", t.name)
@@ -1205,11 +1233,11 @@ class Worker(actor.RallyActorBase):
         self._stopped.set()
 
     @actor.convert_failures("worker")
-    async def run(self, t, client_allocations, client_contexts):
+    async def run(self, track_payload: TrackPayload, client_allocations, client_contexts):
         """
         Starts executing the first step of the benchmark. Subsequent steps are started by ``drive_at()``.
 
-        :param t: The track to use.
+        :param track_payload: The track to use.
         :param client_allocations: A structure describing which clients need to run which tasks.
         :param client_contexts: A dict of ``ClientContext`` objects keyed by client ID.
         :return: only when the worker is stopped. Raises ``BenchmarkFailure`` if the worker failed.
@@ -1217,7 +1245,7 @@ class Worker(actor.RallyActorBase):
         self.logger.info("Worker[%d] is about to start.", self.worker_id)
         self.on_error = self.config.opts("driver", "on.error")
         self.sample_queue_size = int(self.config.opts("reporting", "sample.queue.size", mandatory=False, default_value=1 << 20))
-        self.track = t
+        self.track = track_payload.load(self.config)
         track.set_absolute_data_path(self.config, self.track)
         self.client_allocations = client_allocations
         self.client_contexts = client_contexts

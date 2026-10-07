@@ -262,7 +262,7 @@ class RaceCoordinator:
         self.logger.info("Mechanic has started engine successfully.")
         self.main_driver = actor.create_actor(driver.DriverActor, self.cfg, self.mechanic.node_mechanics, host="localhost", name="driver")
         self.logger.info("Telling driver to prepare for benchmarking.")
-        preparation = await self.main_driver.prepare_benchmark.remote(self.coordinator.current_track)
+        preparation = await self.main_driver.prepare_benchmark.remote(driver.TrackPayload(self.coordinator.current_track))
         await actor.await_actor_output()
         self.coordinator.on_preparation_complete(
             preparation.distribution_flavor,
@@ -354,7 +354,7 @@ async def _prepare_track(cfg: types.Config, t):
     track_preparation_actor = actor.create_actor(driver.TrackPreparationActor, cfg, host="localhost", name="track-preparator")
     try:
         # dependencies were already installed by this process, which runs on the same machine
-        await track_preparation_actor.prepare_track.remote(t, install_dependencies=False)
+        await track_preparation_actor.prepare_track.remote(driver.TrackPayload(t), install_dependencies=False)
         await actor.await_actor_output()
     except asyncio.CancelledError:
         raise

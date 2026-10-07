@@ -19,6 +19,7 @@ import asyncio
 import collections
 import copy
 import io
+import sys
 import threading
 import time
 from datetime import datetime
@@ -33,7 +34,7 @@ from esrally.driver import driver, runner, scheduler
 from esrally.driver.driver import ApiKey, ClientContext
 from esrally.track import params
 from esrally.utils.error_behavior import OnErrorBehavior
-from tests.conftest import FakeHandle, FakeObjectRef, set_self_handle
+from tests.conftest import FakeHandle, FakeObjectRef, FakeTrackPayload, set_self_handle
 
 
 class DriverTestParamSource:
@@ -433,7 +434,7 @@ class TestTrackPreparationActor:
         t = mock.Mock()
         t.name = "unittest"
 
-        await preparator.prepare_track(t, install_dependencies=True)
+        await preparator.prepare_track(FakeTrackPayload(t), install_dependencies=True)
 
         assert mock.call(preparator.cfg, install_dependencies=True) in driver.load_track.call_args_list
 
@@ -443,7 +444,7 @@ class TestTrackPreparationActor:
         t = mock.Mock()
         t.name = "unittest"
 
-        await preparator.prepare_track(t, install_dependencies=False)
+        await preparator.prepare_track(FakeTrackPayload(t), install_dependencies=False)
 
         assert driver.load_track.call_args_list == [mock.call(preparator.cfg)]
 
@@ -453,7 +454,7 @@ class TestTrackPreparationActor:
         t = mock.Mock()
         t.name = "unittest"
 
-        await preparator.prepare_track(t)
+        await preparator.prepare_track(FakeTrackPayload(t))
 
         executors = fake_ray.created_of(driver.TaskExecutionActor)
         # one executor per core but not more than tasks of the processor with most tasks
@@ -474,9 +475,42 @@ class TestTrackPreparationActor:
         t.name = "unittest"
 
         with pytest.raises(actor.BenchmarkFailure, match="Error in task executor"):
-            await preparator.prepare_track(t)
+            await preparator.prepare_track(FakeTrackPayload(t))
 
         assert len(fake_ray.killed) == len(fake_ray.created_of(driver.TaskExecutionActor)) > 0
+
+
+class TestTrackPayload:
+    def test_loads_track_plugins_before_deserializing_the_track(self, tmp_path, monkeypatch):
+        # a track that references code of a track plugin (e.g. the "shared" package of rally-tracks)
+        plugin_root = tmp_path / "tracks"
+        (plugin_root / "rally_test_shared_plugin").mkdir(parents=True)
+        (plugin_root / "rally_test_shared_plugin" / "__init__.py").write_text("class Processor:\n    pass\n")
+        monkeypatch.syspath_prepend(str(plugin_root))
+        import rally_test_shared_plugin  # pylint: disable=import-outside-toplevel,import-error
+
+        t = track.Track(name="unittest")
+        t.processor = rally_test_shared_plugin.Processor()
+        payload = driver.TrackPayload(t)
+
+        # in another process, the plugin is not importable until the track's plugins are loaded
+        monkeypatch.delitem(sys.modules, "rally_test_shared_plugin")
+        monkeypatch.setattr(sys, "path", [p for p in sys.path if p != str(plugin_root)])
+        loaded_plugins = []
+
+        def load_track_plugins(cfg, track_name):
+            loaded_plugins.append((cfg, track_name))
+            sys.path.insert(0, str(plugin_root))
+
+        monkeypatch.setattr(driver, "load_track_plugins", load_track_plugins)
+        cfg = config.Config()
+
+        loaded = payload.load(cfg)
+
+        assert payload.track_name == "unittest"
+        assert loaded_plugins == [(cfg, "unittest")]
+        assert loaded.name == "unittest"
+        assert type(loaded.processor).__name__ == "Processor"
 
 
 @pytest.mark.usefixtures("actor_environment")
@@ -535,6 +569,7 @@ class TestDriverActor:
         set_self_handle(driver_actor)
         driver_actor.driver = mock.create_autospec(driver.Driver, instance=True)
         driver_actor.driver.track = mock.sentinel.track
+        driver_actor._track_payload = FakeTrackPayload(mock.sentinel.track)  # pylint: disable=protected-access
         driver_actor.driver.finished.return_value = False
         return driver_actor
 
@@ -556,14 +591,15 @@ class TestDriverActor:
 
         driver_actor.driver.prepare_benchmark.side_effect = prepare_benchmark
 
-        result = await driver_actor.prepare_benchmark(mock.sentinel.track)
+        track_payload = FakeTrackPayload(mock.sentinel.track)
+        result = await driver_actor.prepare_benchmark(track_payload)
 
         assert result == driver.PreparationComplete("default", "9.2.7", "abc", target_id=None, target_platform="on-prem")
         assert fake_ray.required_hosts == ["localhost", "10.5.5.6"]
         preparators = fake_ray.created_of(driver.TrackPreparationActor)
         assert [p.kwargs["host"] for p in preparators] == ["localhost", "10.5.5.6"]
         for p in preparators:
-            assert p.handle.calls_to("prepare_track") == [((mock.sentinel.track,), {"install_dependencies": True})]
+            assert p.handle.calls_to("prepare_track") == [((track_payload,), {"install_dependencies": True})]
         assert sorted(h.name for h in fake_ray.killed) == sorted(p.handle.name for p in preparators)
 
     @pytest.mark.asyncio
@@ -572,7 +608,7 @@ class TestDriverActor:
         driver_actor.driver.prepare_benchmark.side_effect = lambda t: driver_actor.prepare_track(["localhost"], driver_actor.cfg, t)
 
         with pytest.raises(actor.BenchmarkFailure, match="Error in track preparator"):
-            await driver_actor.prepare_benchmark(mock.sentinel.track)
+            await driver_actor.prepare_benchmark(FakeTrackPayload(mock.sentinel.track))
 
     @pytest.mark.asyncio
     async def test_creates_workers_on_hosts(self, driver_actor, fake_ray):
@@ -593,7 +629,8 @@ class TestDriverActor:
 
         assert await benchmark == b"metrics"
         worker = driver_actor.workers[0]
-        assert worker.calls_to("run") == [((mock.sentinel.track, mock.sentinel.allocations, None), {})]
+        track_payload = driver_actor._track_payload  # pylint: disable=protected-access
+        assert worker.calls_to("run") == [((track_payload, mock.sentinel.allocations, None), {})]
         # the driver reports progress regularly
         assert driver_actor.driver.update_progress_message.called
 
@@ -718,7 +755,7 @@ class TestWorker:
 
     def _start(self, worker, *tasks):
         t = mock.Mock(has_plugins=False)
-        return asyncio.create_task(worker.run(t, self.allocations(*tasks), {0: driver.ClientContext(0, 0)}))
+        return asyncio.create_task(worker.run(FakeTrackPayload(t), self.allocations(*tasks), {0: driver.ClientContext(0, 0)}))
 
     @pytest.mark.asyncio
     async def test_executes_steps_between_join_points(self, worker):
