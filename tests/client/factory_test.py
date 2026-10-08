@@ -35,7 +35,7 @@ from pytest_httpserver import HTTPServer
 from esrally import client, doc_link, exceptions
 from esrally.client import factory
 from esrally.client.asynchronous import RallyAsyncTransport
-from esrally.utils import console
+from esrally.utils import console, opts
 
 
 def _api_error(status, message):
@@ -775,3 +775,38 @@ class TestApiKeys:
             client.delete_api_keys(es, ids, max_attempts=3)
 
         es.security.invalidate_api_key.assert_has_calls(calls)
+
+
+def test_serverless_operator_status_reads_authenticate_response():
+    es = mock.Mock()
+    es.perform_request.return_value = mock.Mock(body={"operator": True})
+
+    assert factory.serverless_operator_status(es) is True
+    es.perform_request.assert_called_once_with(method="GET", path="/_security/_authenticate")
+
+
+def test_serverless_operator_status_is_false_when_authenticate_is_rejected():
+    es = mock.Mock()
+    es.perform_request.side_effect = _api_error(403, "unauthorized")
+
+    assert factory.serverless_operator_status(es) is False
+
+
+def test_admin_client_factory_accepts_merged_options_without_per_client_api_keys():
+    merged = opts.merge_admin_client_options(
+        {
+            "default": {
+                "timeout": 30,
+                "basic_auth_user": "bench",
+                "basic_auth_password": "secret",
+                "create_api_key_per_client": True,
+            }
+        },
+        {"default": {"api_key": "admin-key"}},
+    )
+
+    es_factory = factory.EsClientFactory([{"host": "127.0.0.1", "port": 9200}], merged["default"])
+
+    assert es_factory.client_options["api_key"] == "admin-key"
+    assert "basic_auth" not in es_factory.client_options
+    assert "create_api_key_per_client" not in es_factory.client_options

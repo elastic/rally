@@ -204,7 +204,14 @@ def redact_cmdline(cmdline: list) -> list[str]:
     Redact client options in cmdline as it contains sensitive information like passwords
     """
 
-    return ["=".join((value.split("=")[0], '"*****"')) if "--client-options" in value else value for value in cmdline]
+    sensitive_flags = ("--client-options", "--admin-client-options")
+
+    def redact(value):
+        if any(flag in value for flag in sensitive_flags):
+            return "=".join((value.split("=")[0], '"*****"'))
+        return value
+
+    return [redact(value) for value in cmdline]
 
 
 def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:

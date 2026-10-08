@@ -438,19 +438,28 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
         # overwrite static serverless version number
         version_number = "serverless"
 
-        # determine serverless operator status if security enabled
-        # pylint: disable=import-outside-toplevel
-        from elasticsearch.exceptions import ApiError
-
-        with contextlib.suppress(ApiError):
-            authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
-            serverless_operator = authentication_info.body.get("operator", False)
+        serverless_operator = serverless_operator_status(es)
 
     if not versions.is_serverless(version_build_flavor) or serverless_operator is True:
         # if available, unconditionally wait for the REST layer - if it's not up, we'll intentionally raise the original error
         wait_for_rest_layer(es)
 
     return version_build_flavor, version_number, version_build_hash, serverless_operator
+
+
+def serverless_operator_status(es):
+    """Return whether ``es`` is authenticated as a serverless operator.
+
+    Callers decide when a cluster is serverless. Returns False when security is disabled or the call fails.
+    """
+    # pylint: disable=import-outside-toplevel
+    from elasticsearch.exceptions import ApiError
+
+    serverless_operator = False
+    with contextlib.suppress(ApiError):
+        authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
+        serverless_operator = bool(authentication_info.body.get("operator", False))
+    return serverless_operator
 
 
 def create_api_key(es, client_id, max_attempts=5):

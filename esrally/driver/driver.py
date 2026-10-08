@@ -49,7 +49,7 @@ from esrally import (
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
-from esrally.utils import console, convert, net
+from esrally.utils import console, convert, net, opts
 from esrally.utils.error_behavior import OnErrorBehavior
 
 
@@ -673,11 +673,12 @@ class Driver:
 
         self.telemetry = None
 
-    def create_es_clients(self):
+    def create_es_clients(self, all_client_options=None):
         all_hosts = self.config.opts("client", "hosts").all_hosts
         distribution_version = self.config.opts("mechanic", "distribution.version", mandatory=False)
         distribution_flavor = self.config.opts("mechanic", "distribution.flavor", mandatory=False)
-        all_client_options = self.config.opts("client", "options").all_client_options
+        if all_client_options is None:
+            all_client_options = self.config.opts("client", "options").all_client_options
         es = {}
         for cluster_name, cluster_hosts in all_hosts.items():
             cluster_client_options = dict(all_client_options[cluster_name])
@@ -687,6 +688,16 @@ class Driver:
                 cluster_hosts, cluster_client_options, distribution_version=distribution_version, distribution_flavor=distribution_flavor
             ).create()
         return EsClients(es)
+
+    def admin_client_options(self):
+        """Return merged telemetry client options, or None when ``--admin-client-options`` was not set."""
+        admin_options = self.config.opts("client", "admin.options", mandatory=False)
+        if not admin_options:
+            return None
+        return opts.merge_admin_client_options(
+            self.config.opts("client", "options").all_client_options,
+            admin_options.all_client_options,
+        )
 
     def prepare_telemetry(self, es, enable, index_names, data_stream_names, build_hash, serverless_mode, serverless_operator):
         enabled_devices = self.config.opts("telemetry", "devices")
@@ -831,14 +842,33 @@ class Driver:
 
         # Avoid issuing any requests to the target cluster when static responses are enabled. The results
         # are not useful and attempts to connect to a non-existing cluster just lead to exception traces in logs.
+        enable_telemetry = not uses_static_responses and not multi_cluster
+        telemetry_clients = es_clients
+        telemetry_operator = serverless_operator
+        admin_client_options = self.admin_client_options() if enable_telemetry else None
+        if admin_client_options:
+            self.logger.info("Using separate admin credentials for telemetry.")
+            telemetry_clients = self.create_es_clients(all_client_options=admin_client_options)
+            # Challenge tasks keep driver.serverless.operator from the benchmark user. Telemetry devices follow the
+            # admin user so a restricted benchmark client can still collect operator stats.
+            if serverless_mode:
+                telemetry_operator = client.serverless_operator_status(telemetry_clients.default)
+                if telemetry_operator:
+                    admin_build_hash = self.retrieve_build_hash_from_nodes_info(telemetry_clients)
+                    if admin_build_hash:
+                        build_hash = admin_build_hash
+                        self.logger.info("Retrieved actual build hash [%s] from serverless cluster with admin credentials.", build_hash)
+                        cluster_details = getattr(self.driver_actor, "cluster_details", None)
+                        if isinstance(cluster_details, dict) and "version" in cluster_details:
+                            cluster_details["version"]["build_hash"] = build_hash
         self.prepare_telemetry(
-            es_clients,
-            enable=not uses_static_responses and not multi_cluster,
+            telemetry_clients,
+            enable=enable_telemetry,
             index_names=self.track.index_names(),
             data_stream_names=self.track.data_stream_names(),
             build_hash=build_hash,
             serverless_mode=serverless_mode,
-            serverless_operator=serverless_operator,
+            serverless_operator=telemetry_operator,
         )
 
         for host in self.config.opts("driver", "load_driver_hosts"):

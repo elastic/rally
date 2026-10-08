@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from esrally import exceptions, rally
+from esrally import config, exceptions, rally
 
 
 def test_creates_default_configuration_when_missing(tmp_path, monkeypatch):
@@ -77,3 +77,35 @@ def test_prepare_track_parser_accepts_arguments():
     assert args.serverless_operator is True
     assert args.test_mode is True
     assert args.kill_running_processes is True
+
+
+def test_race_admin_client_options_are_stored_without_default_timeout():
+    arg_parser = rally.create_arg_parser()
+    args = arg_parser.parse_args(
+        [
+            "race",
+            "--pipeline=benchmark-only",
+            "--client-options=use_ssl:true,timeout:90,api_key:'bench'",
+            "--admin-client-options=api_key:'admin'",
+        ]
+    )
+    cfg = config.Config()
+
+    rally.configure_connection_params(arg_parser, args, cfg)
+
+    assert cfg.opts("client", "admin.options").default_or_first == {"api_key": "admin"}
+    benchmark = cfg.opts("client", "options").default_or_first
+    assert benchmark["api_key"] == "bench"
+    assert benchmark["timeout"] == 90
+    assert benchmark["use_ssl"] is True
+
+
+def test_create_track_does_not_require_admin_client_options():
+    arg_parser = rally.create_arg_parser()
+    args = arg_parser.parse_args(["create-track", "--track=t", "--indices=i", "--target-hosts=localhost:9200"])
+    cfg = config.Config()
+
+    rally.configure_connection_params(arg_parser, args, cfg)
+
+    assert not hasattr(args, "admin_client_options")
+    assert cfg.opts("client", "admin.options", mandatory=False) is None

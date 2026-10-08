@@ -204,6 +204,24 @@ class TestProcess:
         assert not night_rally_process.killed
 
 
+def test_redact_cmdline_hides_client_and_admin_credentials():
+    cmdline = [
+        "esrally",
+        "race",
+        "--client-options=basic_auth_user:'elastic',basic_auth_password:'secret'",
+        "--admin-client-options=api_key:'op-key'",
+        "--track=geonames",
+    ]
+
+    assert process.redact_cmdline(cmdline) == [
+        "esrally",
+        "race",
+        '--client-options="*****"',
+        '--admin-client-options="*****"',
+        "--track=geonames",
+    ]
+
+
 def test_run_subprocess():
     cmd = "ls . not-a-file"
     completed_process = process.run_subprocess_with_logging_and_output(cmd)
