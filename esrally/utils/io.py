@@ -749,7 +749,7 @@ class OtlpProtobufFile:
 
     A companion ``{pb_path}.offset`` file maps record numbers to byte offsets for efficient
     multi-client partitioning, using the same ``record_number;byte_offset`` text format as
-    FileOffsetTable. One entry is written every OFFSET_SAMPLING_INTERVAL records.
+    FileOffsetTable. It is written by ``count_records`` with one entry every OFFSET_SAMPLING_INTERVAL records.
     """
 
     OFFSET_SAMPLING_INTERVAL = 1000
@@ -785,8 +785,8 @@ class OtlpProtobufFile:
 
     def create(self, workers: int | None = None) -> int:
         """
-        Parse the source OTLP JSON file and write binary protobuf records to the .pb file,
-        also writing a companion .offset file for fast multi-client partitioning.
+        Parse the source OTLP JSON file and write binary protobuf records to the .pb file.
+        Any existing .offset file is removed; call ``count_records`` to rebuild it.
 
         JSON→protobuf conversion is parallelized across processes since each line is independent.
         Results are gathered in source order so the .pb byte offsets stay correct. Memory usage
@@ -838,7 +838,11 @@ class OtlpProtobufFile:
             max_in_flight,
         )
 
-        offset_path = self.pb_path + ".offset"
+        try:
+            os.remove(self.pb_path + ".offset")
+        except FileNotFoundError:
+            pass
+
         record_count = 0
         byte_offset = 0
         batch_index = 0
@@ -846,7 +850,6 @@ class OtlpProtobufFile:
         # overhead noticeably for multi-gigabyte writes.
         with (
             open(self.pb_path, "wb", buffering=8 * 1024 * 1024) as dst,
-            open(offset_path, "w", encoding="utf-8", buffering=64 * 1024) as off,
             concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as pool,
         ):
             batch_iter = self._iter_line_batches(self._CONVERSION_BATCH_SIZE)
@@ -861,8 +864,6 @@ class OtlpProtobufFile:
             # consume one result at a time (FIFO preserves source order) and submit a replacement
             while in_flight:
                 chunk_bytes, chunk_record_count = in_flight.popleft().result()
-                # one offset entry at the start of each batch (BATCH_SIZE == OFFSET_SAMPLING_INTERVAL)
-                off.write(f"{record_count};{byte_offset}\n")
                 dst.write(chunk_bytes)
                 record_count += chunk_record_count
                 byte_offset += len(chunk_bytes)
@@ -932,85 +933,33 @@ class OtlpProtobufFile:
 
     def count_records(self) -> int | None:
         """
-        Return the exact number of records in the .pb file. Uses the companion .pb.offset index
-        (entries every OFFSET_SAMPLING_INTERVAL records) to jump near the end, then scans only the
-        final partial chunk by reading length prefixes — so this is fast even for multi-GB files.
+        Scan the whole .pb file by its length prefixes and (re)build the companion .offset file.
 
-        Side effect: if no .pb.offset is present, generates one while scanning the file. The
-        offset file lets subsequent workers (and future runs) seek directly to their partition's
-        start record instead of walking from byte 0 — a big win for high-index partitions on
-        multi-GB corpora.
-
-        Returns ``None`` if the .pb file is missing.
+        :return: The number of records or ``None`` if the .pb file is missing.
         """
         if not os.path.exists(self.pb_path):
             return None
         offset_path = self.pb_path + ".offset"
-        # if an offset file exists, use it to skip to the last sampled position before scanning the tail
-        last_record = 0
-        last_byte = 0
-        if os.path.exists(offset_path):
-            try:
-                with open(offset_path, encoding="utf-8") as f:
-                    for line in f:
-                        parts = line.strip().split(";")
-                        if len(parts) != 2:
-                            continue
-                        try:
-                            rec_num, byte_off = int(parts[0]), int(parts[1])
-                        except ValueError:
-                            continue
-                        if rec_num >= last_record:
-                            last_record = rec_num
-                            last_byte = byte_off
-            except OSError:
-                pass
-
-        # If no offset file exists, generate one as we scan. Write to a temp file and atomically
-        # rename at the end so concurrent workers don't see a half-written file. If another worker
-        # beat us to the rename, that's fine — both versions of the file are byte-identical.
-        offset_tmp_path: str | None = None
-        offset_out: Optional[IO[str]] = None
-        if not os.path.exists(offset_path):
-            offset_tmp_path = f"{offset_path}.tmp.{os.getpid()}"
-            offset_out = open(offset_tmp_path, "w", encoding="utf-8", buffering=64 * 1024)
-            logging.getLogger(__name__).info("Generating %s while scanning .pb (one-time cost per machine).", offset_path)
-
-        count = last_record
+        # written atomically because an existing offset file marks the .pb as verified
+        tmp_path = offset_path + ".tmp"
+        count = 0
+        byte_offset = 0
         try:
-            with open(self.pb_path, "rb") as f:
-                f.seek(last_byte)
-                byte_offset = last_byte
+            with open(self.pb_path, "rb") as f, open(tmp_path, "w", encoding="utf-8", buffering=64 * 1024) as out:
                 while True:
-                    if offset_out is not None and count % self.OFFSET_SAMPLING_INTERVAL == 0:
-                        offset_out.write(f"{count};{byte_offset}\n")
+                    if count % self.OFFSET_SAMPLING_INTERVAL == 0:
+                        out.write(f"{count};{byte_offset}\n")
                     header = f.read(4)
                     if len(header) < 4:
                         break
                     (length,) = struct.unpack(">I", header)
-                    # skip the payload without reading it into memory
                     f.seek(length, 1)
                     byte_offset += 4 + length
                     count += 1
-        except OSError:
-            if offset_out is not None and offset_tmp_path is not None:
-                offset_out.close()
-                try:
-                    os.remove(offset_tmp_path)
-                except OSError:
-                    pass
-            return None
-
-        if offset_out is not None and offset_tmp_path is not None:
-            offset_out.close()
-            try:
-                os.replace(offset_tmp_path, offset_path)
-            except OSError:
-                # best-effort — if we can't rename (e.g. another worker beat us), clean up our temp
-                try:
-                    os.remove(offset_tmp_path)
-                except OSError:
-                    pass
+            os.replace(tmp_path, offset_path)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
         return count
 
     def _find_offset(self, target_record: int) -> tuple[int, int]:

@@ -3524,32 +3524,6 @@ class TestOtlpParamSource:
         )
         assert source.corpora == [corpus]
 
-    def test_partitions_use_actual_pb_count_not_document_count(self, tmp_path):
-        # Critical correctness test: if the track's document-count doesn't match the actual .pb,
-        # we MUST use the actual count or partitioning silently breaks (most workers seek past EOF
-        # or get empty partitions, and only one client ends up doing any work).
-        json_path = tmp_path / "metrics.otlp.json"
-        json_path.write_text("\n".join([self._SAMPLE_OTLP_JSON_LINE] * 100) + "\n")
-        io.OtlpProtobufFile.for_source_file(str(json_path)).create()
-        # track claims 10 documents but the .pb actually has 100
-        corpus = track.DocumentCorpus(
-            name="otlp-corpus",
-            documents=[
-                track.Documents(
-                    source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
-                    number_of_documents=10,
-                    document_file=str(json_path),
-                )
-            ],
-        )
-        source = params.OtlpParamSource(
-            track_obj=track.Track(name="unit-test", corpora=[corpus]),
-            params={},
-        )
-        # partition sizes must be derived from the ACTUAL 100 records, not the (wrong) 10
-        sizes = [self._count_records(source.partition(i, 4)) for i in range(4)]
-        assert sizes == [25, 25, 25, 25]
-
     @staticmethod
     def _count_records(param_source):
         count = 0

@@ -624,7 +624,7 @@ class DocumentSetFormat(abc.ABC):
         """
         return ()
 
-    def is_prepared(self, doc_path: str) -> bool:
+    def is_prepared(self, document_set: track.Documents, doc_path: str) -> bool:
         return False
 
     def try_fetch_prepared(self, preparator: "DocumentSetPreparator", document_set: track.Documents, doc_path: str) -> bool:
@@ -680,8 +680,20 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
     def _pb_file(self, doc_path):
         return io.OtlpProtobufFile.for_source_file(doc_path, gzip_records=self.gzip_records)
 
-    def is_prepared(self, doc_path):
-        return self._pb_file(doc_path).is_valid()
+    def is_prepared(self, document_set, doc_path):
+        pb_file = self._pb_file(doc_path)
+        return pb_file.is_valid() and self._has_expected_record_count(document_set, pb_file)
+
+    @staticmethod
+    def _has_expected_record_count(document_set, pb_file) -> bool:
+        # like bulk: trust an existing offset file and only verify when we have to build it
+        if os.path.exists(pb_file.pb_path + ".offset"):
+            return True
+        if pb_file.count_records() == document_set.number_of_documents:
+            return True
+        LOG.warning("[%s] does not contain [%d] records. Removing it.", pb_file.pb_path, document_set.number_of_documents)
+        pb_file.remove()
+        return False
 
     def try_fetch_prepared(self, preparator, document_set, doc_path):
         # Prefer a corpus file compressed like the JSON source: .pb files can be tens of GB and compress 2–4× with zstd.
@@ -704,7 +716,7 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
                         pass
                     if pb_file.is_valid():
                         self._try_download_offset(preparator, document_set, pb_path)
-                        return True
+                        return self._has_expected_record_count(document_set, pb_file)
 
         try:
             preparator.downloader.download(document_set.base_url, pb_path)
@@ -713,7 +725,7 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
         if not pb_file.is_valid():
             return False
         self._try_download_offset(preparator, document_set, pb_path)
-        return True
+        return self._has_expected_record_count(document_set, pb_file)
 
     @staticmethod
     def _try_download_offset(preparator, document_set, pb_path):
@@ -738,6 +750,7 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
                 f"Data in [{pb_file.source_json_path}] for track [{preparator.track_name}] are invalid. "
                 f"Expected [{document_set.number_of_documents}] records but got [{records_written}]."
             )
+        pb_file.count_records()
 
 
 DOCUMENT_SET_FORMATS: dict[str, type[DocumentSetFormat]] = {
@@ -930,7 +943,7 @@ class DocumentSetPreparator:
         """
         fmt = self._resolve_format(document_set, fmt)
         doc_path, archive_path = self._paths(document_set, data_root)
-        if fmt.is_prepared(doc_path):
+        if fmt.is_prepared(document_set, doc_path):
             return
         if document_set.base_url and fmt.try_fetch_prepared(self, document_set, doc_path):
             return
@@ -988,7 +1001,7 @@ class DocumentSetPreparator:
         """
         fmt = self._resolve_format(document_set, fmt)
         doc_path, archive_path = self._paths(document_set, data_root)
-        if fmt.is_prepared(doc_path):
+        if fmt.is_prepared(document_set, doc_path):
             return True
         if not self._prepare_bundled_source(document_set, doc_path, archive_path):
             return False

@@ -1087,6 +1087,11 @@ class TestOtlpDocumentPreparation:
     """Tests for the OTLP-specific path in DocumentSetPreparator — specifically the compressed
     .pb download support that mirrors the JSON corpus's archive compression."""
 
+    @pytest.fixture(autouse=True)
+    def count_records(self):
+        with mock.patch.object(io.OtlpProtobufFile, "count_records", return_value=10) as m:
+            yield m
+
     def _doc_set(self, *, archive=None, compressed_size=0):
         return track.Documents(
             source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
@@ -1110,6 +1115,44 @@ class TestOtlpDocumentPreparation:
         with mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=True):
             p.prepare_document_set(self._doc_set(), data_root="/tmp")
         p.downloader.download.assert_not_called()
+
+    def test_skips_record_count_when_offset_index_exists(self, tmp_path, count_records):
+        (tmp_path / "metrics.otlp.json.pb.offset").write_text("0;0\n")
+        p = self._preparator()
+        with mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=True):
+            p.prepare_document_set(self._doc_set(), data_root=str(tmp_path))
+        count_records.assert_not_called()
+        p.downloader.download.assert_not_called()
+
+    def test_refetches_when_local_pb_has_wrong_record_count(self, count_records):
+        count_records.side_effect = [9, 10]
+        p = self._preparator()
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=True),
+            mock.patch.object(io.OtlpProtobufFile, "remove") as remove,
+        ):
+            p.prepare_document_set(self._doc_set(), data_root="/tmp")
+
+        remove.assert_called_once_with()
+        assert p.downloader.download.call_args_list == [
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb"),
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb.offset"),
+        ]
+
+    def test_converts_json_when_fetched_pb_has_wrong_record_count(self, count_records):
+        count_records.return_value = 9
+        p = self._preparator()
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]),
+            mock.patch.object(io.OtlpProtobufFile, "remove") as remove,
+            mock.patch.object(io.OtlpProtobufFile, "create", return_value=10) as create,
+            mock.patch.object(p, "is_locally_available", return_value=True),
+            mock.patch.object(p, "has_expected_size", return_value=True),
+        ):
+            p.prepare_document_set(self._doc_set(), data_root="/tmp")
+
+        remove.assert_called_once_with()
+        create.assert_called_once_with()
 
     def test_tries_compressed_pb_first_when_corpus_is_compressed(self):
         p = self._preparator()
@@ -1195,7 +1238,7 @@ class TestOtlpDocumentPreparation:
         assert p.downloader.download.call_count == 2
         create.assert_not_called()
 
-    def test_converts_local_json_when_pb_unavailable(self):
+    def test_converts_local_json_when_pb_unavailable(self, count_records):
         p = self._preparator()
         p.downloader.download.side_effect = exceptions.DataError("not found")
         with (
@@ -1209,6 +1252,8 @@ class TestOtlpDocumentPreparation:
         # only the .pb was attempted — no offset index and no JSON download
         p.downloader.download.assert_called_once_with("http://example.com/otlp", "/tmp/metrics.otlp.json.pb")
         create.assert_called_once_with()
+        # builds the offset index
+        count_records.assert_called_once_with()
 
     def test_downloads_and_converts_json_when_pb_unavailable(self):
         p = self._preparator()

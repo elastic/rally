@@ -24,6 +24,8 @@ import subprocess
 import tempfile
 from unittest import mock
 
+import pytest
+
 from esrally.utils import io
 
 
@@ -350,8 +352,8 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
 
         assert record_count == 3
         assert pb.is_valid() is True
-        # offset index is created alongside
-        assert os.path.exists(pb.pb_path + ".offset")
+        # the offset index is built by count_records(), not by create()
+        assert not os.path.exists(pb.pb_path + ".offset")
         # no .count file (we rely on the track's document-count)
         assert not os.path.exists(pb.pb_path + ".count")
 
@@ -366,10 +368,21 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         assert pb.create() == 2
 
+    def test_create_removes_stale_offset_index(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        with open(pb.pb_path + ".offset", "w") as f:
+            f.write("0;0\n1000;12345\n")
+
+        pb.create()
+
+        assert not os.path.exists(pb.pb_path + ".offset")
+
     def test_remove_deletes_pb_and_offset(self, tmp_path):
         json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         pb.create()
+        pb.count_records()
 
         pb.remove()
 
@@ -460,59 +473,57 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         assert pb.count_records() is None
 
-    def test_count_records_uses_offset_index(self, tmp_path):
-        lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile._CONVERSION_BATCH_SIZE * 2 + 137)
+    def test_count_records_overwrites_stale_offset_index(self, tmp_path):
+        interval = io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * (interval + 17)
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         pb.create()
-        assert pb.count_records() == len(lines)
+        with open(pb.pb_path + ".offset", "w") as f:
+            f.write(f"0;0\n{interval};1\n")
 
-    def test_count_records_generates_offset_index_when_missing(self, tmp_path):
-        # If the .pb was downloaded without its offset, count_records should regenerate the offset
-        # on the fly so subsequent runs/partitions can seek efficiently.
+        assert pb.count_records() == len(lines)
+        with open(pb.pb_path + ".offset") as f:
+            entries = [tuple(int(v) for v in line.strip().split(";")) for line in f]
+        assert [r for r, _ in entries] == [0, interval]
+        assert entries[1][1] != 1
+
+    def test_count_records_generates_offset_index(self, tmp_path):
         lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL + 17)
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         pb.create()
-        # delete the offset file as if only the .pb was downloaded
-        os.remove(pb.pb_path + ".offset")
 
-        # call count_records — it should produce an offset file as a side effect
         assert pb.count_records() == len(lines)
         assert os.path.exists(pb.pb_path + ".offset")
+        assert not os.path.exists(pb.pb_path + ".offset.tmp")
 
         # confirm the generated offset file is valid: subsequent reads partition correctly
         records_via_offset = list(pb.read_records(io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL, None))
         assert len(records_via_offset) == 17
 
-    def test_count_records_works_without_offset_index(self, tmp_path):
-        lines = [self.SAMPLE_OTLP_JSON_LINE] * 50
+    def test_count_records_offset_index_has_trailing_entry_at_interval_multiple(self, tmp_path):
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         pb.create()
-        os.remove(pb.pb_path + ".offset")
-        assert pb.count_records() == 50
 
-    def test_create_offset_file_aligns_with_batches(self, tmp_path):
-        # 2.5 batches: 3 offset entries (one at the start of each batch)
-        lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile._CONVERSION_BATCH_SIZE * 2 + 50)
-        json_path = self._write_json_lines(tmp_path, lines)
-        pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create(workers=2)
-
+        assert pb.count_records() == len(lines)
         with open(pb.pb_path + ".offset") as f:
-            entries = [line.strip().split(";") for line in f if line.strip()]
-        assert len(entries) == 3
-        # first record numbers are 0, BATCH_SIZE, 2*BATCH_SIZE
-        assert [int(r) for r, _ in entries] == [
-            0,
-            io.OtlpProtobufFile._CONVERSION_BATCH_SIZE,
-            2 * io.OtlpProtobufFile._CONVERSION_BATCH_SIZE,
-        ]
-        # byte offsets are monotonically increasing
-        byte_offsets = [int(b) for _, b in entries]
-        assert byte_offsets[0] == 0
-        assert byte_offsets[0] < byte_offsets[1] < byte_offsets[2]
+            entries = [tuple(int(v) for v in line.strip().split(";")) for line in f]
+        assert entries == [(0, 0), (len(lines), os.path.getsize(pb.pb_path))]
+
+    def test_count_records_removes_temp_file_on_failure(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create()
+
+        with mock.patch("os.replace", side_effect=OSError("boom")):
+            with pytest.raises(OSError):
+                pb.count_records()
+
+        assert not os.path.exists(pb.pb_path + ".offset")
+        assert not os.path.exists(pb.pb_path + ".offset.tmp")
 
     def test_read_records_respects_partition_range(self, tmp_path):
         lines = [self.SAMPLE_OTLP_JSON_LINE] * 8
@@ -544,8 +555,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         pb.create()
 
-        # remove the offset index — read should still work by scanning from the start
-        os.remove(pb.pb_path + ".offset")
+        # no offset index — read should still work by scanning from the start
         records = list(pb.read_records(2, 4))
         assert len(records) == 2
 

@@ -833,19 +833,8 @@ class OtlpParamSource(ParamSource):
         return copy
 
     def _total_records(self):
-        """
-        Source of truth for partitioning: count records in the .pb file directly. The track's
-        document-count is only used as a fallback (e.g. when the .pb doesn't exist yet, such as
-        during initial track parsing — corpora preparation comes later). Trusting the track value
-        unconditionally is a footgun: if it doesn't match the actual .pb, most workers either get
-        empty partitions or seek past EOF and the benchmark silently finishes after only one
-        client does any work.
-        """
-        if not hasattr(self, "_cached_total_records"):
-            pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file, gzip_records=self.gzip)
-            actual = pb_file.count_records()
-            self._cached_total_records = actual if actual is not None else self._doc.number_of_documents
-        return self._cached_total_records
+        # verified against the .pb during prepare-track
+        return self._doc.number_of_documents
 
     @property
     def infinite(self):
