@@ -768,6 +768,7 @@ class OtlpParamSource(ParamSource):
 
     def __init__(self, track_obj, params, **kwargs):
         super().__init__(track_obj, params, **kwargs)
+        self._validate_retry_params(params)
         self._partition_index = 0
         self._total_partitions = 1
         # Streaming state — generators can't be pickled, so they're created lazily on the first
@@ -803,6 +804,17 @@ class OtlpParamSource(ParamSource):
                 self.corpora.append(corpus)
         # use the first matching document set
         _, self._doc = otlp_docs[0]
+
+    @staticmethod
+    def _validate_retry_params(params):
+        if "retries-on-error" in params:
+            retries = params["retries-on-error"]
+            if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
+                raise exceptions.InvalidSyntax(f"parameter 'retries-on-error' must be a non-negative integer but was {retries!r}")
+        if "retry-wait-period" in params:
+            wait = params["retry-wait-period"]
+            if isinstance(wait, bool) or not isinstance(wait, numbers.Real) or wait < 0:
+                raise exceptions.InvalidSyntax(f"parameter 'retry-wait-period' must be a non-negative number but was {wait!r}")
 
     def _find_otlp_docs(self):
         # honor the operation's "corpora" param so a track with multiple OTLP corpora can pick
@@ -901,10 +913,8 @@ class OtlpParamSource(ParamSource):
 
         self._cursor += 1
 
-        result = {"body": payload, "gzip": self.gzip}
-        if "request-timeout" in self._params:
-            result["request-timeout"] = self._params["request-timeout"]
-        return result
+        # a fresh dict per call: runners may pop keys from the params they receive
+        return {**self._params, "body": payload, "gzip": self.gzip}
 
 
 class PartitionBulkIndexParamSource:

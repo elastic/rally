@@ -3686,6 +3686,73 @@ class TestOtlpParamSource:
         assert result["request-timeout"] == 30
         assert "body" in result
 
+    @pytest.mark.parametrize(
+        "key, value",
+        [
+            ("retries-on-error", -1),
+            ("retries-on-error", 1.5),
+            ("retries-on-error", True),
+            ("retries-on-error", "3"),
+            ("retries-on-error", None),
+            ("retry-wait-period", -0.5),
+            ("retry-wait-period", True),
+            ("retry-wait-period", "0.5"),
+            ("retry-wait-period", None),
+        ],
+    )
+    def test_invalid_retry_params_raise(self, tmp_path, key, value):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.OtlpParamSource(
+                track_obj=track.Track(name="unit-test", corpora=[corpus]),
+                params={key: value},
+            )
+        assert f"parameter '{key}' must be a non-negative" in exc.value.message
+        assert repr(value) in exc.value.message
+
+    @pytest.mark.parametrize(
+        "key, value",
+        [
+            ("retries-on-error", 0),
+            ("retries-on-error", 5),
+            ("retry-wait-period", 0),
+            ("retry-wait-period", 0.0),
+            ("retry-wait-period", 2.5),
+        ],
+    )
+    def test_valid_retry_params_accepted(self, tmp_path, key, value):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={key: value},
+        )
+        assert source.partition(0, 1).params()[key] == value
+
+    def test_params_forwards_operation_params(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=2)
+        assertions = [{"property": "success", "condition": "==", "value": True}]
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={
+                "retries-on-error": 2,
+                "retry-wait-period": 1.5,
+                "assertions": assertions,
+                "body": b"must-not-leak",
+                "gzip": True,
+            },
+        )
+        source.gzip = False
+        p = source.partition(0, 1)
+        first = p.params()
+        second = p.params()
+
+        assert first["retries-on-error"] == 2
+        assert first["retry-wait-period"] == 1.5
+        assert first["assertions"] == assertions
+        assert first["body"] != b"must-not-leak"
+        assert first["gzip"] is False
+        assert first is not second
+
     def test_params_body_is_non_empty_bytes(self, tmp_path):
         corpus = self._build_corpus(tmp_path, num_records=1)
         source = params.OtlpParamSource(

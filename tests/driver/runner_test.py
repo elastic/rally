@@ -9094,6 +9094,18 @@ class TestOtlpIngestRunner:
             await runner.OtlpIngest()(es, {})
 
     @pytest.mark.asyncio
+    async def test_zero_retry_params_allowed(self):
+        es = self._make_es_mock()
+        with mock.patch(
+            "elasticsearch.AsyncElasticsearch.perform_request",
+            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
+        ) as pr:
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "retries-on-error": 0, "retry-wait-period": 0})
+
+        pr.assert_awaited_once()
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
     async def test_non_retryable_api_error_returns_failure_dict(self):
         # 4xx errors other than 429 are not retryable (e.g. malformed request) — we surface them
         # as a failed operation so the benchmark continues with a non-zero error rate.

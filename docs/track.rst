@@ -921,10 +921,12 @@ Properties
 * ``gzip`` (optional, defaults to ``false``): If ``true``, track preparation stores each record gzip-compressed in a ``.pbgz`` file and Rally sends the records verbatim with ``Content-Encoding: gzip``. Otherwise, records are stored in a ``.pb`` file and sent uncompressed.
 * ``looped`` (optional, defaults to ``false``): If set to ``true``, each client starts again from the beginning of its part of the corpus once it has sent all records. This option should be combined with ``time-period`` or ``iterations`` properties at the task level, otherwise Rally will never finish the task.
 * ``request-timeout`` (optional): Client-side timeout in seconds per request.
+* ``retries-on-error`` (optional, defaults to 5): A non-negative integer that defines how often a request is retried on a retryable error (see below).
+* ``retry-wait-period`` (optional, defaults to 0.5): A non-negative number that defines the base wait time in seconds for the exponential backoff between retries.
 
 With multiple ``clients``, Rally splits the corpus into as many non-overlapping parts as there are clients, so that each record is sent exactly once per pass.
 
-Requests that fail with HTTP status 429, 502, 503 or 504 or with a connection error are retried up to 5 times with exponential backoff and full jitter (base 0.5 seconds, capped at 30 seconds). Other errors are not retried.
+Requests that fail with HTTP status 429, 502, 503 or 504 or with a connection error are retried up to ``retries-on-error`` times with exponential backoff and full jitter (starting at ``retry-wait-period`` seconds, capped at 30 seconds). Other errors are not retried.
 
 Example::
 
