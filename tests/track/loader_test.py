@@ -2745,6 +2745,8 @@ class TestTrackSpecificationReader:
         assert docs.uncompressed_size_in_bytes == 2000
         assert docs.target_index is None
         assert docs.target_data_stream is None
+
+    def test_parse_with_mixed_warmup_iterations_and_measurement(self):
         track_specification = {
             "description": "description for unit test",
             "indices": [
