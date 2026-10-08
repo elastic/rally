@@ -1,7 +1,7 @@
 OTLP Metrics Ingest
 ===================
 
-Rally supports benchmarking `Elasticsearch's native OTLP ingest endpoint <https://www.elastic.co/docs/solutions/observability/apm/open-telemetry>`_ (``/_otlp/v1/metrics``).
+Rally supports benchmarking Elasticsearch's native `OTLP metrics ingest endpoint <https://www.elastic.co/docs/manage-data/ingest/otlp-endpoint>`_ (``/_otlp/v1/metrics``).
 This lets you measure how quickly Elasticsearch can accept a realistic stream of OpenTelemetry metrics delivered in binary protobuf format, with optional per-record gzip compression.
 
 Overview
@@ -30,14 +30,7 @@ It has two output modes:
 Installing metricsgenreceiver
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Download a pre-built binary from the `releases page <https://github.com/elastic/metricsgenreceiver/releases>`_, or build from source using ``ocb``::
-
-    curl --proto '=https' --tlsv1.2 -fL -o ocb \
-      https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/cmd%2Fbuilder%2Fv0.139.0/ocb_0.139.0_darwin_arm64
-    chmod +x ocb
-    ./ocb --config builder-config.yaml
-
-This produces ``./otelcol-dev/otelcol``.
+Download a pre-built binary from the `releases page <https://github.com/elastic/metricsgenreceiver/releases>`_ or `build it from source <https://github.com/elastic/metricsgenreceiver#building>`_. The examples below assume that the ``otelcol`` binary is on your ``PATH``. The following examples were tested with `v1.0.12 <https://github.com/elastic/metricsgenreceiver/releases/tag/v1.0.12>`_ release.
 
 .. _otlp_generate_corpus:
 
@@ -59,6 +52,7 @@ The following ``otelcol.yaml`` config generates one hour of host metrics at 10-s
 
     processors:
       batch:
+        send_batch_size: 1700
 
     exporters:
       file:
@@ -74,53 +68,80 @@ The following ``otelcol.yaml`` config generates one hour of host metrics at 10-s
 Run it::
 
     mkdir -p corpus
-    ./otelcol-dev/otelcol --config otelcol.yaml
+    otelcol --config otelcol.yaml
 
 When ``exit_after_end: true`` is set, the collector exits automatically once the configured time range is exhausted. The resulting ``metrics.otlp.json`` file is a newline-delimited sequence of OTLP JSON records, each representing one ``ExportMetricsServiceRequest`` batch.
+
+The ``receivers`` section determines the volume of data produced, see :ref:`otlp_tuning_corpus_size`. In the example, an hourly interval dictated by ``start_time`` and ``end_time`` is split into 360 ticks as per ``interval`` setting. In each tick, 10 hosts (``scale``) produce a number of datapoints. The number of datapoints depends on the data shape captured in a scenario. In case of ``builtin/hostmetrics`` scenario there are 170 datapoints per host per tick. Overall, there are 1700 datapoints in each 10s interval.
+
+.. note::
+  To determine the number of datapoints per host find ``datapoints`` in ``metricsgenreceiver`` output. In the example it reports 612000 datapoints. With 360 ticks and 10 hosts this gives us ``612000 / 360 / 10 = 170`` datapoints per host, per tick.
+
+In non-realtime mode (no ``real_time: true`` setting), ``metricsgenreceiver`` produces data as quickly as possible. In this mode, the number of batches on the output depends on the ``batch`` processor ``send_batch_size`` setting which defaults to 8192 datapoints. To align batches with time intervals, ``send_batch_size`` was reduced to 1700 datapoints because that is the total number of datapoints produced every 10s by each of 10 hosts. This results in 360 batches.
+
+::
+
+  % wc -l corpus/metrics.otlp.json
+    3600 corpus/metrics.otlp.json
 
 .. _otlp_direct_ingest:
 
 Sending directly to Elasticsearch
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To send metrics directly to Elasticsearch instead of (or in addition to) writing a file, add the ``otlphttp/elasticsearch`` exporter to the pipeline::
+To send metrics directly to Elasticsearch instead of writing to a file, add the ``otlphttp/elasticsearch`` exporter to the pipeline::
 
+  receivers:
+    metricsgen:
+      start_time: "2025-01-01T00:00:00Z"
+      end_time: "2025-01-01T01:00:00Z"
+      interval: 10s
+      exit_after_end: true
+      seed: 123
+      scenarios:
+        - path: builtin/hostmetrics
+          scale: 10
+
+  processors:
+    batch:
+      send_batch_size: 1700
+
+  extensions:
+    basicauth/client:
+      client_auth:
+        username: elastic
+        password: changeme
+
+  exporters:
+    otlphttp/elasticsearch:
+      compression: gzip # send gzip-compressed protobuf, matching Rally's gzip: true mode
+      encoding: proto
+      endpoint: "https://localhost:9200/_otlp"
+      auth:
+        authenticator: basicauth/client
+      sending_queue:
+        enabled: true
+        block_on_overflow: true
+        queue_size: 4
+        num_consumers: 4
+      tls:
+        insecure_skip_verify: true
+
+  service:
     extensions:
-      basicauth/client:
-        client_auth:
-          username: elastic
-          password: changeme
-
-    exporters:
-      otlphttp/elasticsearch:
-        compression: gzip
-        encoding: proto
-        endpoint: "https://localhost:9200/_otlp"
-        auth:
-          authenticator: basicauth/client
-        sending_queue:
-          enabled: true
-          block_on_overflow: true
-          queue_size: 5
-          num_consumers: 5
-        tls:
-          insecure_skip_verify: true
-
-    service:
-      extensions:
-        - basicauth/client
-      pipelines:
-        metrics:
-          receivers: [metricsgen]
-          processors: [batch]
-          exporters: [otlphttp/elasticsearch]   # or [file, otlphttp/elasticsearch] for both
+      - basicauth/client
+    pipelines:
+      metrics:
+        receivers: [metricsgen]
+        processors: [batch]
+        exporters: [otlphttp/elasticsearch]
 
 Key exporter settings:
 
-* **``encoding: proto``** — sends binary protobuf (``application/x-protobuf``) rather than OTLP JSON. This is the wire format Elasticsearch's ``/_otlp`` endpoint expects.
-* **``compression: gzip``** — gzip-compresses each request body, equivalent to what Rally sends when ``gzip: true`` is set on an ``otlp-ingest`` operation. This is the standard OTel Collector behaviour and generally improves throughput.
-* **``block_on_overflow: true``** — prevents the collector from dropping records if the send queue fills up. Useful when generating data faster than Elasticsearch can ingest it.
-* **``num_consumers``** — number of parallel senders from the queue to Elasticsearch. Increase this to saturate high-throughput clusters.
+* **encoding: proto** — sends binary protobuf (``application/x-protobuf``) rather than OTLP JSON. This is the wire format Elasticsearch's ``/_otlp`` endpoint expects.
+* **compression: gzip** — gzip-compresses each request body, equivalent to what Rally sends when ``gzip: true`` is set on an ``otlp-ingest`` operation. This is the standard OTel Collector behaviour and generally improves throughput.
+* **block_on_overflow: true** — prevents the collector from dropping records if the send queue fills up. Useful when generating data faster than Elasticsearch can ingest it.
+* **num_consumers** — number of parallel senders from the queue to Elasticsearch. Increase this to saturate high-throughput clusters.
 
 .. note::
 
@@ -128,74 +149,140 @@ Key exporter settings:
 
 This mode is useful for quick manual testing, but for reproducible benchmarking use the file exporter to capture the corpus first, then replay it through Rally.
 
+.. _otlp_tuning_corpus_size:
+
 Tuning corpus size
 ~~~~~~~~~~~~~~~~~~
 
 Adjust the following parameters to produce different corpus sizes:
 
-* **``scale``** — number of simulated instances (e.g., hosts, pods). Higher scale = more time series = larger file.
-* **``interval``** — scrape interval. Smaller interval = more data points per host per hour.
-* **``start_time`` / ``end_time``** — time range. Longer range = more records.
-* **``scenarios``** — swap in ``builtin/kubeletstats-pod``, ``builtin/tsbs-devops``, etc. for different metric shapes.
+* **scale** — number of simulated instances (e.g., hosts, pods). Higher scale = more time series = larger file.
+* **interval** — scrape interval. Smaller interval = more data points per host per hour.
+* **start_time / end_time** — time range. Longer range = more records.
+* **scenarios** — swap in ``builtin/kubeletstats-pod``, ``builtin/tsbs-devops``, etc. for different metric shapes.
 
 Typical corpus sizes for ``builtin/hostmetrics``:
 
-+--------+-----------+-------------------+------------------+
-| Scale  | Interval  | Duration          | Approx file size |
-+========+===========+===================+==================+
-| 10     | 10s       | 1 hour            | ~15 MB           |
-+--------+-----------+-------------------+------------------+
-| 100    | 10s       | 1 hour            | ~150 MB          |
-+--------+-----------+-------------------+------------------+
-| 1000   | 10s       | 24 hours          | ~3.6 GB          |
-+--------+-----------+-------------------+------------------+
++--------+-----------+-------------+------------+-----------+-----------+-----------+
+| Scale  | Interval  | Duration    | Datapoints | JSON size | PB size   | PBGZ size |
++========+===========+=============+============+===========+===========+===========+
+| 10     | 10s       | 1 hour      | 612k       | ~182 MiB  | ~72 MiB   | ~6.9 MiB  |
++--------+-----------+-------------+------------+-----------+-----------+-----------+
+| 100    | 10s       | 1 hour      | 6.12M      | ~1.8 GiB  | ~719 MiB  | ~69 MiB   |
++--------+-----------+-------------+------------+-----------+-----------+-----------+
+| 1000   | 10s       | 24 hours    | 1469M      | ~427 GiB  | ~168 GiB  | ~16 GiB   |
++--------+-----------+-------------+------------+-----------+-----------+-----------+
+
 
 Track Definition
 ----------------
 
-OTLP corpora use ``"source-format": "otlp-proto"`` in the track definition. A minimal track looks like this:
+OTLP corpora use ``"source-format": "otlp-proto"`` in the track definition. A minimal track has the following ``track.json`` file.
 
 .. code-block:: json
 
-    {
-      "version": 2,
-      "description": "OTLP metrics ingest benchmark",
-      "corpora": [
-        {
-          "name": "otlp-metrics",
-          "documents": [
-            {
-              "source-format": "otlp-proto",
-              "source-file": "metrics.otlp.json",
-              "document-count": 360
+  {
+    "version": 2,
+    "description": "OTLP metrics ingest benchmark",
+    "data-streams": [
+      {
+        "name": "metrics-hostmetricsreceiver.otel-default"
+      }
+    ],
+    "component-templates": [
+      {
+        "name": "metrics-otel@custom",
+        "template": "metrics-otel@custom.template.json",
+        "template-path": "component_template"
+      }
+    ],
+    "corpora": [
+      {
+        "name": "otlp-metrics",
+        "documents": [
+          {
+            "source-format": "otlp-proto",
+            "source-file": "metrics.otlp.json",
+            "uncompressed-bytes": 190950696,
+            "document-count": 360
+          }
+        ]
+      }
+    ],
+    "operations": [
+      {
+        "name": "ingest-otlp-metrics",
+        "operation-type": "otlp-ingest",
+        "corpora": "otlp-metrics",
+        "gzip": true
+      }
+    ],
+    "challenges": [
+      {
+        "name": "default",
+        "schedule": [
+          {
+            "name": "delete-data-streams",
+            "operation": {
+              "operation-type": "delete-data-stream"
             }
-          ]
-        }
-      ],
-      "operations": [
-        {
-          "name": "ingest-otlp-metrics",
-          "operation-type": "otlp-ingest",
-          "corpora": "otlp-metrics",
-          "gzip": true
-        }
-      ],
-      "challenges": [
-        {
-          "name": "default",
-          "schedule": [
-            {
-              "operation": "ingest-otlp-metrics",
-              "clients": 4,
-              "target-throughput": 100
+          },
+          {
+            "name": "delete-component-templates",
+            "operation": {
+              "operation-type": "delete-component-template"
             }
-          ]
+          },
+          {
+            "name": "create-all-templates",
+            "operation": {
+              "operation-type": "create-component-template",
+              "request-params": {
+                "create": "true"
+              }
+            }
+          },
+          {
+            "name": "create-data-stream",
+            "operation": {
+              "operation-type": "create-data-stream",
+              "include-in-reporting": false
+            }
+          },
+          {
+            "operation": "ingest-otlp-metrics",
+            "clients": 4
+          }
+        ]
+      }
+    ]
+  }
+
+The ``track.json`` file references ``metrics-otel@custom.template.json`` file with the following content. Note how ``index.time_series`` settings are used to accept timestamps from statically defined time range which matches ``metricsgenreceiver`` configuration.
+
+.. code-block:: json
+
+  {
+    "name": "metrics-otel@custom",
+    "component_template": {
+      "template": {
+        "lifecycle": {},
+        "settings": {
+          "index": {
+            "time_series": {
+              "start_time": "2025-01-01T00:00:00Z",
+              "end_time": "2025-01-07T01:00:00Z"
+            }
+          }
         }
-      ]
+      }
     }
+  }  
 
 Corpus document fields
 ~~~~~~~~~~~~~~~~~~~~~~
+
+The following fields are relevant for ``otlp-proto`` corpora. See :ref:`track_corpora` for the full corpus syntax.
 
 .. list-table::
    :widths: 20 10 70
@@ -206,22 +293,27 @@ Corpus document fields
      - Description
    * - ``source-format``
      - Yes
-     - Must be ``"otlp-proto"`` to enable OTLP handling.
+     - Must be ``otlp-proto`` to enable OTLP handling.
    * - ``source-file``
      - Yes
-     - Path to the OTLP JSON file produced by ``metricsgenreceiver``.
+     - Name of the OTLP JSON file produced by ``metricsgenreceiver`` (one ``ExportMetricsServiceRequest`` per line), relative to the corpus data directory. It may be an archive (e.g. ``metrics.otlp.json.zst``) containing exactly one file named like the archive without its extension; Rally decompresses it before conversion.
    * - ``document-count``
      - Yes
-     - Number of records (lines) in the source file. Used for progress reporting and partitioning.
+     - Number of records (lines) in the source file. Used to verify a local or downloaded file.
+   * - ``base-url``
+     - No
+     - Location to download corpus files from. Rally first tries to download pre-built protobuf files (``<source-file>.pb`` or ``<source-file>.pbgz``, compressed with the same archive extension as ``source-file`` if any, plus the ``.offset`` index) and downloads ``source-file`` only if they are not available. Can also be specified at ``corpus`` level.
    * - ``compressed-bytes``
      - No
-     - Size of the compressed source archive, if hosted remotely.
+     - Size in bytes of the archive given in ``source-file``. Used to verify a local or downloaded archive.
    * - ``uncompressed-bytes``
      - No
-     - Uncompressed size of the source file. Used for download progress reporting.
+     - Size in bytes of the uncompressed JSON file. Used to verify the file after download or decompression. A local file of a different size is downloaded again or, for data bundled with the track, rejected.
 
 The ``otlp-ingest`` operation
 ------------------------------
+
+See :ref:`operation_otlp_ingest` for the full operation syntax.
 
 .. list-table::
    :widths: 25 10 15 50
@@ -265,9 +357,9 @@ Retry behaviour
 
 The runner distinguishes three error types, which appear in the ``error-type`` field of failed operation results:
 
-* **``backpressure``** — HTTP 429 (Too Many Requests). Elasticsearch is overloaded; retried with exponential backoff.
-* **``transport``** — HTTP 502/503/504 or a connection-level error. Likely a transient network or gateway issue; retried with exponential backoff.
-* **``rejected``** — Any other HTTP 4xx error (e.g., 400, 401, 403). The request was rejected as invalid; not retried.
+* **backpressure** — HTTP 429 (Too Many Requests). Elasticsearch is overloaded; retried with exponential backoff.
+* **transport** — HTTP 502/503/504 or a connection-level error. Likely a transient network or gateway issue; retried with exponential backoff.
+* **rejected** — Any other HTTP 4xx error (e.g., 400, 401, 403). The request was rejected as invalid; not retried.
 
 .. note::
 
@@ -324,8 +416,6 @@ By default, conversion uses all available CPU cores. To cap this (e.g., in memor
 
     RALLY_OTLP_CONVERSION_WORKERS=4 esrally prepare-track ...
 
-Each worker uses approximately 200 MB of memory, with up to four in-flight batches at once (~500 MB additional). Total RAM budget: roughly ``(workers + 4) × 200 MB``.
-
 Multi-client Partitioning
 --------------------------
 
@@ -364,7 +454,7 @@ The following walks through generating a small corpus and running a benchmark ag
 
 The ``minimised.yaml`` config from the ``metricsgenreceiver`` repository generates a small corpus suitable for quick tests (10 hosts, 10s interval, 1 hour = 360 records)::
 
-    ./otelcol-dev/otelcol --config minimised.yaml
+    otelcol --config minimised.yaml
 
 ``minimised.yaml`` defines both a ``file`` exporter (for Rally corpus generation) and an ``otlphttp/elasticsearch`` exporter (for direct ingest). The active pipeline uses the file exporter by default — swap the ``exporters`` line in the ``service.pipelines.metrics`` section to send directly to Elasticsearch instead::
 
@@ -392,7 +482,7 @@ The ``minimised.yaml`` config from the ``metricsgenreceiver`` repository generat
       file:
         path: ./corpus/metrics.otlp.json
       otlphttp/elasticsearch:
-        compression: gzip      # send gzip-compressed protobuf, matching Rally's gzip: true mode
+        compression: gzip # send gzip-compressed protobuf, matching Rally's gzip: true mode
         encoding: proto
         endpoint: "https://localhost:9200/_otlp"
         auth:
@@ -412,7 +502,7 @@ The ``minimised.yaml`` config from the ``metricsgenreceiver`` repository generat
         metrics:
           receivers: [metricsgen]
           processors: [batch]
-          exporters: [file]                    # change to [otlphttp/elasticsearch] to ingest directly
+          exporters: [file] # change to [otlphttp/elasticsearch] to ingest directly
 
 This writes ``./corpus/metrics.otlp.json`` (360 lines).
 
@@ -454,8 +544,7 @@ The directory name must match the ``"name"`` of the corpus in ``track.json`` (``
           "schedule": [
             {
               "operation": "ingest-otlp-metrics",
-              "clients": 4,
-              "target-throughput": 100
+              "clients": 4
             }
           ]
         }
@@ -466,8 +555,7 @@ The directory name must match the ``"name"`` of the corpus in ``track.json`` (``
 
 ::
 
-    esrally prepare-track --track-path=~/rally-tracks/otlp-test \
-      --target-hosts=localhost:9200
+    esrally prepare-track --track-path=~/rally-tracks/otlp-test
 
 This converts ``metrics.otlp.json`` → ``metrics.otlp.pbgz`` (one-time cost).
 
@@ -476,8 +564,9 @@ This converts ``metrics.otlp.json`` → ``metrics.otlp.pbgz`` (one-time cost).
 ::
 
     esrally race --track-path=~/rally-tracks/otlp-test \
-      --target-hosts=localhost:9200 \
-      --client-options="basic_auth_user:'elastic',basic_auth_password:'changeme',use_ssl:true,verify_certs:false" \
-      --challenge=default
+      --distribution-version=9.5.4 \
+      --target-hosts=127.0.0.1:9200 \
+      --car="defaults,x-pack-security" \
+      --client-options="basic_auth_user:'rally',basic_auth_password:'rally-password',use_ssl:true,verify_certs:false"
 
 Rally streams the protobuf corpus from four parallel clients to ``/_otlp/v1/metrics``, reports throughput and latency, and retries automatically on backpressure.
