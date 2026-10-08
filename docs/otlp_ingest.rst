@@ -13,13 +13,13 @@ Instead of bulk-indexing newline-delimited JSON, Rally sends pre-serialized ``Ex
 The data flow at a glance:
 
 1. **Generate** — Use ``metricsgenreceiver`` to produce an OTLP JSON corpus file (``metrics.otlp.json``).
-2. **Prepare** — During ``prepare-track``, Rally converts the JSON corpus to a binary protobuf file (``metrics.otlp.pb`` or ``metrics.otlp.pbgz``). This is a one-time conversion per machine.
+2. **Prepare** — During ``prepare-track``, Rally converts the JSON corpus to a binary protobuf file (``metrics.otlp.json.pb`` or ``metrics.otlp.json.pbgz``). This is a one-time conversion per machine.
 3. **Race** — During ``race``, Rally streams records from the ``.pb`` file directly to Elasticsearch's ``/_otlp/v1/metrics`` endpoint.
 
-Generating Corpus Data with ``metricsgenreceiver``
---------------------------------------------------
+Generating Corpus Data
+----------------------
 
-`metricsgenreceiver <https://github.com/elastic/metricsgenreceiver>`_ is an OpenTelemetry Collector receiver that generates realistic metric streams from configurable scenarios (e.g., ``builtin/hostmetrics``, ``builtin/kubeletstats-pod``).
+The corpus data can be generated with `metricsgenreceiver <https://github.com/elastic/metricsgenreceiver>`_. It is an OpenTelemetry Collector receiver that generates realistic metric streams from configurable scenarios (e.g., ``builtin/hostmetrics``, ``builtin/kubeletstats-pod``).
 It has two output modes:
 
 * **File export** — writes OTLP JSON to disk for later use as a Rally corpus.
@@ -82,7 +82,7 @@ In non-realtime mode (no ``real_time: true`` setting), ``metricsgenreceiver`` pr
 ::
 
   % wc -l corpus/metrics.otlp.json
-    3600 corpus/metrics.otlp.json
+    360 corpus/metrics.otlp.json
 
 .. _otlp_direct_ingest:
 
@@ -173,6 +173,7 @@ Typical corpus sizes for ``builtin/hostmetrics``:
 | 1000   | 10s       | 24 hours    | 1469M      | ~427 GiB  | ~168 GiB  | ~16 GiB   |
 +--------+-----------+-------------+------------+-----------+-----------+-----------+
 
+.. _otlp_track_definition:
 
 Track Definition
 ----------------
@@ -361,10 +362,10 @@ The runner distinguishes three error types, which appear in the ``error-type`` f
 
    The runner disables the elastic-transport client's built-in retry logic (``max_retries=0`` on the transport) so that Rally's own backoff loop has full control. Without this, the transport would fire four rapid back-to-back retries on a 429 before Rally's backoff could react, which would hammer an already-overloaded cluster.
 
-Corpus Preparation (``prepare-track``)
----------------------------------------
+Corpus Preparation
+------------------
 
-When you run ``esrally prepare-track`` (or the first time ``esrally race`` is called with a new corpus), Rally converts the OTLP JSON file to a binary protobuf file. This is a one-time cost per machine.
+When you run ``esrally prepare-track`` (or the first time ``esrally race`` is called with a new corpus), Rally converts the OTLP JSON file to a binary protobuf file. To convert locally, first install the optional dependencies with ``python -m pip install 'esrally[otlp]'``. Conversion is a one-time cost per machine.
 
 The preparation strategy is:
 
@@ -415,7 +416,7 @@ By default, conversion uses all available CPU cores. To cap this (e.g., in memor
 Multi-client Partitioning
 --------------------------
 
-When a challenge runs ``otlp-ingest`` with multiple clients (``"clients": N``), Rally splits the corpus across clients so each client reads a distinct, non-overlapping slice of the records. Partitioning uses the ``.pb.offset`` index for O(1) seek to each client's starting record; if the index is absent it is generated on first use (one-time cost).
+When a challenge runs ``otlp-ingest`` with multiple clients (``"clients": N``), Rally splits the corpus across clients so each client reads a distinct, non-overlapping slice of the records. Partitioning uses the ``.pb.offset`` index for O(1) seek to each client's starting record.
 
 Each client's slice size is ``floor(total_records / N)``; the final client gets any remainder. This guarantees each record is sent exactly once per pass across all clients.
 
@@ -433,9 +434,9 @@ Each ``otlp-ingest`` operation records the following metrics in Rally's results:
    * - ``throughput``
      - Requests per second delivered to Elasticsearch.
    * - ``latency``
-     - End-to-end latency per request, including retries.
+     - Request latency, including retry waits.
    * - ``service_time``
-     - Time for a single attempt (excluding retry waits).
+     - Request service time, including retry waits.
    * - ``request-size-bytes``
      - Payload size of each request in bytes.
    * - ``error-type``
@@ -448,104 +449,18 @@ The following walks through generating a small corpus and running a benchmark ag
 
 **Step 1 — Generate corpus data**
 
-The ``minimised.yaml`` config from the ``metricsgenreceiver`` repository generates a small corpus suitable for quick tests (10 hosts, 10s interval, 1 hour = 360 records)::
-
-    otelcol --config minimised.yaml
-
-``minimised.yaml`` defines both a ``file`` exporter (for Rally corpus generation) and an ``otlphttp/elasticsearch`` exporter (for direct ingest). The active pipeline uses the file exporter by default — swap the ``exporters`` line in the ``service.pipelines.metrics`` section to send directly to Elasticsearch instead::
-
-    receivers:
-      metricsgen:
-        start_time: "2025-01-01T00:00:00Z"
-        end_time: "2025-01-01T01:00:00Z"
-        interval: 10s
-        exit_after_end: true
-        seed: 123
-        scenarios:
-          - path: builtin/hostmetrics
-            scale: 10
-
-    processors:
-      batch:
-
-    extensions:
-      basicauth/client:
-        client_auth:
-          username: elastic
-          password: changeme
-
-    exporters:
-      file:
-        path: ./corpus/metrics.otlp.json
-      otlphttp/elasticsearch:
-        compression: gzip # send gzip-compressed protobuf, matching Rally's gzip: true mode
-        encoding: proto
-        endpoint: "https://localhost:9200/_otlp"
-        auth:
-          authenticator: basicauth/client
-        sending_queue:
-          enabled: true
-          block_on_overflow: true
-          queue_size: 5
-          num_consumers: 5
-        tls:
-          insecure_skip_verify: true
-
-    service:
-      extensions:
-        - basicauth/client
-      pipelines:
-        metrics:
-          receivers: [metricsgen]
-          processors: [batch]
-          exporters: [file] # change to [otlphttp/elasticsearch] to ingest directly
-
-This writes ``./corpus/metrics.otlp.json`` (360 lines).
+Follow :ref:`otlp_install_metricsgen` and :ref:`otlp_generate_corpus` to produce ``metrics.otlp.json`` corpus file.
 
 **Step 2 — Create a track**
 
-Place ``metrics.otlp.json`` in Rally's data directory for the corpus::
+Place ``metrics.otlp.json`` in Rally's data directory for the corpus. The directory name must match the ``name`` of the corpus in ``track.json`` (``otlp-metrics`` here).
+
+::
 
     mkdir -p ~/.rally/benchmarks/data/otlp-metrics
     cp corpus/metrics.otlp.json ~/.rally/benchmarks/data/otlp-metrics/
 
-The directory name must match the ``"name"`` of the corpus in ``track.json`` (``"otlp-metrics"`` here). Then create ``~/rally-tracks/otlp-test/track.json``::
-
-    {
-      "version": 2,
-      "description": "OTLP metrics ingest benchmark",
-      "corpora": [
-        {
-          "name": "otlp-metrics",
-          "documents": [
-            {
-              "source-format": "otlp-proto",
-              "source-file": "metrics.otlp.json",
-              "document-count": 360
-            }
-          ]
-        }
-      ],
-      "operations": [
-        {
-          "name": "ingest-otlp-metrics",
-          "operation-type": "otlp-ingest",
-          "corpora": "otlp-metrics",
-          "gzip": true
-        }
-      ],
-      "challenges": [
-        {
-          "name": "default",
-          "schedule": [
-            {
-              "operation": "ingest-otlp-metrics",
-              "clients": 4
-            }
-          ]
-        }
-      ]
-    }
+Then create ``~/rally-tracks/otlp-test/track.json`` and ``~/rally-tracks/otlp-test/metrics-otel@custom.template.json`` from :ref:`otlp_track_definition`.
 
 **Step 3 — Prepare the track**
 
@@ -553,7 +468,7 @@ The directory name must match the ``"name"`` of the corpus in ``track.json`` (``
 
     esrally prepare-track --track-path=~/rally-tracks/otlp-test
 
-This converts ``metrics.otlp.json`` → ``metrics.otlp.pbgz`` (one-time cost).
+This converts ``metrics.otlp.json`` to ``metrics.otlp.json.pbgz`` (one-time cost).
 
 **Step 4 — Run the benchmark**
 
@@ -565,4 +480,4 @@ This converts ``metrics.otlp.json`` → ``metrics.otlp.pbgz`` (one-time cost).
       --car="defaults,x-pack-security" \
       --client-options="basic_auth_user:'rally',basic_auth_password:'rally-password',use_ssl:true,verify_certs:false"
 
-Rally streams the protobuf corpus from four parallel clients to ``/_otlp/v1/metrics``, reports throughput and latency, and retries automatically on backpressure.
+Rally creates Elasticsearch 9.5.4 installation, and streams the protobuf corpus from four parallel clients to ``/_otlp/v1/metrics``, reports throughput and latency, and retries automatically on backpressure.
