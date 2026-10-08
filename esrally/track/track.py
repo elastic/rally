@@ -268,10 +268,6 @@ class Documents:
     def is_bulk(self):
         return self.source_format == Documents.SOURCE_FORMAT_BULK
 
-    @property
-    def is_otlp(self):
-        return self.source_format == Documents.SOURCE_FORMAT_OTLP_PROTOBUF
-
     def __str__(self):
         return "%s documents from %s" % (self.source_format, self.document_file)
 
