@@ -69,7 +69,7 @@ dependencies = [
     # License: BSD
     # transitive dependency Markupsafe: BSD
     "Jinja2==3.1.6",
-    "markupsafe==2.0.1",
+    "markupsafe==2.1.5",
     # License: MIT
     "thespian==4.0.1",
     # recommended library for thespian to identify actors more easily with `ps`
@@ -124,6 +124,7 @@ develop = [
     "pytest-asyncio==1.2.0",
     "pytest-benchmark==5.2.2",
     "pytest-httpserver==1.1.3",
+    "werkzeug==3.1.6",
     "sphinx==5.1.1",
     "furo==2022.06.21",
     "github3.py==3.2.0",
