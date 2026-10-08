@@ -1384,9 +1384,9 @@ class TestDocumentSetFormats:
         assert [(type(f), f.gzip_records) for f in otlp_formats] == [(loader.OtlpProtobufDocumentSetFormat, True)]
 
     @mock.patch("esrally.track.loader.data_dir", return_value=["/track", "/corpus"])
-    def test_prepare_document_falls_back_to_corpus_dir_per_format(self, data_dir):
+    def test_prepare_document_falls_back_to_corpus_dir_for_all_formats(self, data_dir):
         preparator = mock.create_autospec(loader.DocumentSetPreparator, instance=True)
-        preparator.prepare_bundled_document_set.side_effect = [True, False]
+        preparator.prepare_bundled_document_set.return_value = False
         docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF, document_file="metrics.otlp.json")
         pb = loader.OtlpProtobufDocumentSetFormat(gzip_records=False)
         pbgz = loader.OtlpProtobufDocumentSetFormat(gzip_records=True)
@@ -1397,7 +1397,27 @@ class TestDocumentSetFormats:
             mock.call(docs, "/track", pb),
             mock.call(docs, "/track", pbgz),
         ]
-        preparator.prepare_document_set.assert_called_once_with(docs, "/corpus", pbgz)
+        assert preparator.prepare_document_set.call_args_list == [
+            mock.call(docs, "/corpus", pb),
+            mock.call(docs, "/corpus", pbgz),
+        ]
+
+    @mock.patch("esrally.track.loader.data_dir", return_value=["/track", "/corpus"])
+    def test_prepare_document_rejects_formats_split_across_dirs(self, data_dir):
+        preparator = mock.create_autospec(loader.DocumentSetPreparator, instance=True)
+        preparator.prepare_bundled_document_set.side_effect = [True, False]
+        docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF, document_file="metrics.otlp.json")
+        pb = loader.OtlpProtobufDocumentSetFormat(gzip_records=False)
+        pbgz = loader.OtlpProtobufDocumentSetFormat(gzip_records=True)
+
+        with pytest.raises(exceptions.DataError) as exc:
+            loader.prepare_document(mock.Mock(), track.Track(name="t"), track.DocumentCorpus("c"), preparator, docs, [pb, pbgz])
+
+        assert exc.value.message == (
+            "Document set [metrics.otlp.json] in track [t] is only partially prepared in [/track]. "
+            "Add the source file to [/track] or remove the prepared files from it."
+        )
+        preparator.prepare_document_set.assert_not_called()
 
 
 class TestTemplateSource:

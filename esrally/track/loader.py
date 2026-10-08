@@ -787,13 +787,24 @@ class DefaultTrackPreparator(TrackProcessor):
 def prepare_document(cfg: types.Config, track, corpus, preparator, document_set, formats=None):
     data_root = data_dir(cfg, track.name, corpus.name)
     LOG.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root)
+    formats = formats or [DOCUMENT_SET_FORMATS[document_set.source_format]()]
     # variants share the source file, so they are prepared sequentially
-    for fmt in formats or [DOCUMENT_SET_FORMATS[document_set.source_format]()]:
-        if len(data_root) == 1:
+    if len(data_root) == 1:
+        for fmt in formats:
             preparator.prepare_document_set(document_set, data_root[0], fmt)
-        # attempt to prepare everything in the current directory and fallback to the corpus directory
-        elif not preparator.prepare_bundled_document_set(document_set, data_root[0], fmt):
-            preparator.prepare_document_set(document_set, data_root[1], fmt)
+        return
+    # attempt to prepare everything in the current directory and fallback to the corpus directory
+    bundled = [preparator.prepare_bundled_document_set(document_set, data_root[0], fmt) for fmt in formats]
+    if all(bundled):
+        return
+    if any(bundled):
+        # runtime resolves a single base directory for all variants
+        raise exceptions.DataError(
+            f"Document set [{document_set.document_file}] in track [{track.name}] is only partially prepared in "
+            f"[{data_root[0]}]. Add the source file to [{data_root[0]}] or remove the prepared files from it."
+        )
+    for fmt in formats:
+        preparator.prepare_document_set(document_set, data_root[1], fmt)
 
 
 class Decompressor:
