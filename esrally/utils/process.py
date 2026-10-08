@@ -205,13 +205,20 @@ def redact_cmdline(cmdline: list) -> list[str]:
     """
 
     sensitive_flags = ("--client-options", "--admin-client-options")
-
-    def redact(value):
-        if any(flag in value for flag in sensitive_flags):
-            return "=".join((value.split("=")[0], '"*****"'))
-        return value
-
-    return [redact(value) for value in cmdline]
+    redacted = []
+    redact_next = False
+    for value in cmdline:
+        if redact_next:
+            redacted.append('"*****"')
+            redact_next = False
+        elif value in sensitive_flags:
+            redacted.append(value)
+            redact_next = True
+        elif any(value.startswith(f"{flag}=") for flag in sensitive_flags):
+            redacted.append("=".join((value.split("=", 1)[0], '"*****"')))
+        else:
+            redacted.append(value)
+    return redacted
 
 
 def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:
