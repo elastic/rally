@@ -331,10 +331,6 @@ See :ref:`operation_otlp_ingest` for the full operation syntax.
      - No
      - ``false``
      - When ``true``, Rally pre-compresses each record during ``prepare-track`` and stores them in a ``.pbgz`` file. At race time the compressed bytes are sent verbatim with ``Content-Encoding: gzip``, so no runtime compression overhead occurs on the hot path. This matches what a real OTel Collector sends when ``compression: gzip`` is set (see :ref:`otlp_direct_ingest`). Recommended for realistic benchmarks and for clusters that support gzip ingest.
-   * - ``endpoint``
-     - No
-     - ``/_otlp/v1/metrics``
-     - OTLP endpoint path on Elasticsearch.
    * - ``retries-on-error``
      - No
      - ``5``

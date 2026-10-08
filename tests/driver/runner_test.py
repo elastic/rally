@@ -9031,19 +9031,6 @@ class TestOtlpIngestRunner:
         }
 
     @pytest.mark.asyncio
-    async def test_custom_endpoint(self):
-        es = self._make_es_mock()
-        body = b"\x0a\x05world"
-
-        with mock.patch(
-            "elasticsearch.AsyncElasticsearch.perform_request",
-            new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
-        ) as pr:
-            await runner.OtlpIngest()(es, {"body": body, "endpoint": "/custom/otlp"})
-
-        assert pr.await_args.kwargs["path"] == "/custom/otlp"
-
-    @pytest.mark.asyncio
     async def test_request_timeout_applied_via_options(self):
         es = self._make_es_mock()
         body = b"\x0a\x01"

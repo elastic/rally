@@ -867,7 +867,7 @@ class OtlpIngest(Runner):
     Sends a pre-serialized OTLP ExportMetricsServiceRequest (binary protobuf) to Elasticsearch.
     """
 
-    DEFAULT_ENDPOINT = "/_otlp/v1/metrics"
+    ENDPOINT = "/_otlp/v1/metrics"
     _PROTOBUF_MIMETYPE = "application/x-protobuf"
     # statuses we treat as transient and retry with backoff. Matches elastic-transport's
     # default retry_on_status, but we add proper exponential backoff between attempts.
@@ -883,7 +883,6 @@ class OtlpIngest(Runner):
         * ``body``: Raw binary protobuf payload (bytes).
 
         Optional parameters:
-        * ``endpoint``: OTLP endpoint path. Defaults to ``/_otlp/v1/metrics``.
         * ``request-timeout``: Client-side timeout in seconds.
         * ``retries-on-error``: Number of retries on retryable errors (429, 502, 503, 504, connection
           errors). Defaults to 5.
@@ -894,7 +893,6 @@ class OtlpIngest(Runner):
           time so the hot path does no compression). Defaults to False.
         """
         body = mandatory(params, "body", self)
-        path = params.get("endpoint", self.DEFAULT_ENDPOINT)
         max_retries = int(params.get("retries-on-error", 5))
         retry_wait_base = float(params.get("retry-wait-period", 0.5))
         gzip_body = bool(params.get("gzip", False))
@@ -935,7 +933,7 @@ class OtlpIngest(Runner):
                 await AsyncElasticsearch.perform_request(
                     es,
                     method="POST",
-                    path=path,
+                    path=self.ENDPOINT,
                     headers=headers,
                     body=body,
                 )
