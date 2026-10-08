@@ -319,6 +319,54 @@ def create_arg_parser():
         action="store_true",
     )
 
+    prepare_track_parser = subparsers.add_parser(
+        "prepare-track",
+        help="Load a track and prepare its corpora (download and decompress) without running a benchmark",
+    )
+    add_track_source(prepare_track_parser)
+    prepare_track_parser.add_argument(
+        "--track",
+        help=f"Define the track to use. List possible tracks with `{PROGRAM_NAME} list tracks`.",
+    )
+    prepare_track_parser.add_argument(
+        "--track-params",
+        help="Define a comma-separated list of key:value pairs that are injected verbatim to the track as variables.",
+        default="",
+    )
+    prepare_track_parser.add_argument(
+        "--ignore-unused-track-params",
+        help="Only warn (instead of failing) when track parameters are given that are not used by the track.",
+        action="store_true",
+        default=False,
+    )
+    prepare_track_parser.add_argument(
+        "--challenge",
+        help=f"Define the challenge to prepare. List possible challenges for tracks with `{PROGRAM_NAME} list tracks`.",
+    )
+    prepare_track_parser.add_argument(
+        "--build-flavor",
+        help="Define the build flavor to load/prepare the track for (affects Jinja rendering).",
+        choices=["default", "serverless"],
+    )
+    prepare_track_parser.add_argument(
+        "--serverless-operator",
+        help="Whether to load/prepare the track for a serverless operator (affects Jinja rendering).",
+        default=False,
+        action="store_true",
+    )
+    prepare_track_parser.add_argument(
+        "--test-mode",
+        help="Prepares the given track in 'test mode', i.e. only a small subset of the corpora (default: false).",
+        default=False,
+        action="store_true",
+    )
+    prepare_track_parser.add_argument(
+        "--kill-running-processes",
+        action="store_true",
+        default=False,
+        help="If any other Rally processes are running, kill them and allow Rally to continue.",
+    )
+
     create_track_parser = subparsers.add_parser("create-track", help="Create a Rally track from existing data")
     create_track_parser.add_argument(
         "--track",
@@ -886,7 +934,7 @@ def create_arg_parser():
         "--kill-running-processes",
         action="store_true",
         default=False,
-        help="If any processes is running, it is going to kill them and allow Rally to continue to run.",
+        help="If any other Rally processes are running, kill them and allow Rally to continue.",
     )
     race_parser.add_argument(
         "--source-build-method",
@@ -964,6 +1012,7 @@ def create_arg_parser():
         info_parser,
         render_track_parser,
         validate_track_parser,
+        prepare_track_parser,
         create_track_parser,
     ]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
@@ -1039,7 +1088,7 @@ def print_help_on_errors():
     )
 
 
-def race(cfg: types.Config, kill_running_processes=False):
+def run_with_actor_system(runnable, cfg: types.Config, kill_running_processes=False):
     logger = logging.getLogger(__name__)
 
     if kill_running_processes:
@@ -1066,7 +1115,7 @@ def race(cfg: types.Config, kill_running_processes=False):
             )
             raise exceptions.RallyError(msg)
 
-    with_actor_system(racecontrol.run, cfg)
+    with_actor_system(runnable, cfg)
 
 
 def with_actor_system(runnable, cfg: types.Config):
@@ -1342,7 +1391,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "mechanic", "cluster.name", args.cluster_name)
 
             configure_reporting_params(args, cfg)
-            race(cfg, args.kill_running_processes)
+            run_with_actor_system(racecontrol.run, cfg, args.kill_running_processes)
         elif sub_command == "create-track":
             if args.data_streams is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
@@ -1381,6 +1430,18 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
                 cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.flavor", args.build_flavor)
             cfg.add(config.Scope.applicationOverride, "driver", "serverless.operator", args.serverless_operator)
             track.validate_track(cfg)
+        elif sub_command == "prepare-track":
+            # Same track-source wiring as ``validate-track``; corpora are prepared via the actor system.
+            configure_track_params(arg_parser, args, cfg, command_requires_track_details=False)
+            cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
+            cfg.add(config.Scope.applicationOverride, "track", "params.ignore_unused", args.ignore_unused_track_params)
+            cfg.add(config.Scope.applicationOverride, "track", "challenge.name", args.challenge)
+            cfg.add(config.Scope.applicationOverride, "track", "test.mode.enabled", args.test_mode)
+            # TrackFileReader renders Jinja from these cfg keys (race sets them from the cluster probe).
+            if args.build_flavor:
+                cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.flavor", args.build_flavor)
+            cfg.add(config.Scope.applicationOverride, "driver", "serverless.operator", args.serverless_operator)
+            run_with_actor_system(racecontrol.prepare_track, cfg, args.kill_running_processes)
         else:
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
         return ExitStatus.SUCCESSFUL
