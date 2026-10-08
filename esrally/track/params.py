@@ -775,7 +775,6 @@ class OtlpParamSource(ParamSource):
         # The cursor and end_record bounds let us track progress without materializing records.
         self._record_iter = None
         self._cursor = 0
-        self._partition_size: int | None = None
         self.looped = params.get("looped", False)
         # When True, the corpus file is a ``.pbgz`` where each record is independently gzipped.
         # The runner ships those bytes verbatim with ``Content-Encoding: gzip``; no hot-path
@@ -829,7 +828,6 @@ class OtlpParamSource(ParamSource):
         copy._total_partitions = total_partitions
         copy._record_iter = None  # streaming iterator created lazily on first params() call
         copy._cursor = 0
-        copy._partition_size = None
         return copy
 
     def _total_records(self):
@@ -840,23 +838,22 @@ class OtlpParamSource(ParamSource):
     def infinite(self):
         return False
 
-    def _partition_record_count(self):
-        total_records = self._total_records()
-        if total_records <= 0:
-            return 0
-        if self._total_partitions > 1:
-            records_per_partition = total_records / self._total_partitions
-            start_record = round(records_per_partition * self._partition_index)
-            end_record = round(records_per_partition * (self._partition_index + 1))
-            return end_record - start_record
-        return total_records
+    def _partition_bounds(self) -> tuple[int, int]:
+        start, count, _ = bounds(
+            self._total_records(),
+            self._partition_index,
+            self._partition_index,
+            self._total_partitions,
+            includes_action_and_meta_data=False,
+        )
+        return start, start + count
 
     @property
     def percent_completed(self):
-        partition_size = self._partition_record_count()
-        if partition_size == 0:
+        start, end = self._partition_bounds()
+        if end == start:
             return 1.0
-        return min(self._cursor / partition_size, 1.0)
+        return min(self._cursor / (end - start), 1.0)
 
     def _open_iter(self):
         """
@@ -874,26 +871,14 @@ class OtlpParamSource(ParamSource):
                 "data directory is the same as Rally is reading from."
             )
         pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file, gzip_records=self.gzip)
-        total_records = self._total_records()
-
-        if total_records > 0 and self._total_partitions > 1:
-            records_per_partition = total_records / self._total_partitions
-            start_record = round(records_per_partition * self._partition_index)
-            end_record = round(records_per_partition * (self._partition_index + 1))
-        else:
-            start_record = 0
-            end_record = None
-
-        # cache the partition size so percent_completed/size don't have to recompute
-        if self._partition_size is None:
-            self._partition_size = (end_record - start_record) if end_record is not None else total_records
+        start_record, end_record = self._partition_bounds()
 
         logger = logging.getLogger(__name__)
         logger.info(
-            "OtlpParamSource partition %d/%d: total_records=%s start=%d end=%s (streaming, not preloading)",
+            "OtlpParamSource partition %d/%d: total_records=%s start=%d end=%d (streaming, not preloading)",
             self._partition_index,
             self._total_partitions,
-            total_records,
+            self._total_records(),
             start_record,
             end_record,
         )
