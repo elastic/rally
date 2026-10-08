@@ -26,6 +26,7 @@ from unittest import mock
 
 import pytest
 
+from esrally import exceptions
 from esrally.utils import io
 
 
@@ -524,6 +525,46 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
 
         assert not os.path.exists(pb.pb_path + ".offset")
         assert not os.path.exists(pb.pb_path + ".offset.tmp")
+
+    def _create_truncated(self, tmp_path, truncation):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create()
+        if truncation == "header":
+            with open(pb.pb_path, "ab") as f:
+                f.write(b"\x00\x00")
+        else:
+            os.truncate(pb.pb_path, os.path.getsize(pb.pb_path) - 1)
+        return pb
+
+    @pytest.mark.parametrize("truncation", ["header", "payload"])
+    def test_count_records_raises_on_truncated_file(self, tmp_path, truncation):
+        pb = self._create_truncated(tmp_path, truncation)
+
+        with pytest.raises(exceptions.DataError, match=f"Truncated record {truncation}"):
+            pb.count_records()
+
+        assert not os.path.exists(pb.pb_path + ".offset")
+        assert not os.path.exists(pb.pb_path + ".offset.tmp")
+
+    @pytest.mark.parametrize("truncation", ["header", "payload"])
+    def test_read_records_raises_on_truncated_file(self, tmp_path, truncation):
+        pb = self._create_truncated(tmp_path, truncation)
+
+        with pytest.raises(exceptions.DataError, match=f"Truncated record {truncation}"):
+            list(pb.read_records(0, None))
+
+    @pytest.mark.parametrize("truncation", ["header", "payload"])
+    def test_read_records_raises_on_truncated_file_while_skipping(self, tmp_path, truncation):
+        pb = self._create_truncated(tmp_path, truncation)
+
+        with pytest.raises(exceptions.DataError, match=f"Truncated record {truncation}"):
+            list(pb.read_records(4, None))
+
+    def test_read_records_reads_up_to_truncated_record(self, tmp_path):
+        pb = self._create_truncated(tmp_path, "payload")
+
+        assert len(list(pb.read_records(0, 2))) == 2
 
     def test_read_records_respects_partition_range(self, tmp_path):
         lines = [self.SAMPLE_OTLP_JSON_LINE] * 8

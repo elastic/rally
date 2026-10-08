@@ -689,8 +689,11 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
         # like bulk: trust an existing offset file and only verify when we have to build it
         if os.path.exists(pb_file.pb_path + ".offset"):
             return True
-        if pb_file.count_records() == document_set.number_of_documents:
-            return True
+        try:
+            if pb_file.count_records() == document_set.number_of_documents:
+                return True
+        except exceptions.DataError as e:
+            LOG.warning("%s", e)
         LOG.warning("[%s] does not contain [%d] records. Removing it.", pb_file.pb_path, document_set.number_of_documents)
         pb_file.remove()
         return False

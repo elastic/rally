@@ -1139,6 +1139,21 @@ class TestOtlpDocumentPreparation:
             mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb.offset"),
         ]
 
+    def test_refetches_when_local_pb_is_truncated(self, count_records):
+        count_records.side_effect = [exceptions.DataError("Truncated record payload"), 10]
+        p = self._preparator()
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=True),
+            mock.patch.object(io.OtlpProtobufFile, "remove") as remove,
+        ):
+            p.prepare_document_set(self._doc_set(), data_root="/tmp")
+
+        remove.assert_called_once_with()
+        assert p.downloader.download.call_args_list == [
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb"),
+            mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb.offset"),
+        ]
+
     def test_converts_json_when_fetched_pb_has_wrong_record_count(self, count_records):
         count_records.return_value = 9
         p = self._preparator()

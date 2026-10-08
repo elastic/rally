@@ -909,33 +909,55 @@ class OtlpProtobufFile:
         Generator yielding raw binary payloads from start_record up to (but not including) end_record.
         Uses the companion .offset file to seek efficiently.
         """
-        seek_byte, records_to_skip = self._find_offset(start_record)
+        byte_offset, records_to_skip = self._find_offset(start_record)
         with open(self.pb_path, "rb") as f:
-            f.seek(seek_byte)
+            file_size = os.fstat(f.fileno()).st_size
+            f.seek(byte_offset, os.SEEK_SET)
             for _ in range(records_to_skip):
-                length_data = f.read(4)
-                if len(length_data) < 4:
+                length = self._read_record_length(f, byte_offset, file_size)
+                if length is None:
                     return
-                (length,) = struct.unpack(">I", length_data)
-                f.seek(length, 1)
+                f.seek(length, os.SEEK_CUR)
+                byte_offset += 4 + length
             count = 0
             target = None if end_record is None else (end_record - start_record)
             while target is None or count < target:
-                length_data = f.read(4)
-                if len(length_data) < 4:
+                length = self._read_record_length(f, byte_offset, file_size)
+                if length is None:
                     return
-                (length,) = struct.unpack(">I", length_data)
-                payload = f.read(length)
-                if len(payload) < length:
-                    return
+                byte_offset += 4 + length
                 count += 1
-                yield payload
+                yield f.read(length)
+
+    def _read_record_length(self, f: IO[bytes], byte_offset: int, file_size: int) -> int | None:
+        """
+        Read the length prefix of the record starting at ``byte_offset`` (the current position of ``f``).
+
+        :return: The payload length or ``None`` at end of file.
+        :raises exceptions.DataError: if the header or the payload is truncated.
+        """
+        header = f.read(4)
+        if not header:
+            return None
+        if len(header) < 4:
+            raise exceptions.DataError(
+                f"Truncated record header at byte offset [{byte_offset}] in [{self.pb_path}]: "
+                f"expected [4] bytes but got [{len(header)}]."
+            )
+        (length,) = struct.unpack(">I", header)
+        if byte_offset + 4 + length > file_size:
+            raise exceptions.DataError(
+                f"Truncated record payload at byte offset [{byte_offset}] in [{self.pb_path}]: "
+                f"expected [{length}] bytes but only [{file_size - byte_offset - 4}] remain."
+            )
+        return length
 
     def count_records(self) -> int | None:
         """
         Scan the whole .pb file by its length prefixes and (re)build the companion .offset file.
 
         :return: The number of records or ``None`` if the .pb file is missing.
+        :raises exceptions.DataError: if the .pb file is truncated.
         """
         if not os.path.exists(self.pb_path):
             return None
@@ -946,14 +968,14 @@ class OtlpProtobufFile:
         byte_offset = 0
         try:
             with open(self.pb_path, "rb") as f, open(tmp_path, "w", encoding="utf-8", buffering=64 * 1024) as out:
+                file_size = os.fstat(f.fileno()).st_size
                 while True:
                     if count % self.OFFSET_SAMPLING_INTERVAL == 0:
                         out.write(f"{count};{byte_offset}\n")
-                    header = f.read(4)
-                    if len(header) < 4:
+                    length = self._read_record_length(f, byte_offset, file_size)
+                    if length is None:
                         break
-                    (length,) = struct.unpack(">I", header)
-                    f.seek(length, 1)
+                    f.seek(length, os.SEEK_CUR)
                     byte_offset += 4 + length
                     count += 1
             os.replace(tmp_path, offset_path)
