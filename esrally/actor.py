@@ -27,7 +27,6 @@ See ``docs/architecture/actor_system.md`` for an overview of the actors and how 
 """
 
 import asyncio
-import concurrent.futures
 import functools
 import logging
 import os
@@ -201,18 +200,6 @@ def report_failures(actor_name: str) -> Callable[[F], F]:
         return guard  # type: ignore[return-value]
 
     return decorator
-
-
-def call_outside_event_loop(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
-    """
-    Calls a function in another thread and waits for its result.
-
-    Ray runs all code of async actors, including their constructors, in the actor's event loop. Track code (e.g. track
-    processors) may call ``asyncio.run()``, which fails in a running event loop. Use this function for such code where an
-    actor cannot await; otherwise prefer ``asyncio.to_thread()``, which keeps the event loop responsive.
-    """
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(fn, *args, **kwargs).result()
 
 
 def detach_stdin() -> None:

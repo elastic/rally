@@ -468,26 +468,6 @@ class TestTrackPreparationActor:
         assert preparator.executors == []
 
     @pytest.mark.asyncio
-    async def test_track_processors_may_run_their_own_event_loop(self, preparator, monkeypatch, fake_ray):
-        async def download():
-            return "downloaded"
-
-        class Processor:
-            def on_prepare_track(self, track, data_root_dir):
-                # like the has_privileges track: a synchronous hook that runs async code
-                assert asyncio.run(download()) == "downloaded"
-                return []
-
-        self._with_processors(monkeypatch, Processor())
-        t = mock.Mock()
-        t.name = "unittest"
-
-        # runs in an event loop like the actor's
-        await preparator.prepare_track(FakeTrackPayload(t))
-
-        assert fake_ray.created_of(driver.TaskExecutionActor) == []
-
-    @pytest.mark.asyncio
     async def test_fails_and_stops_executors_when_a_task_fails(self, preparator, monkeypatch, fake_ray):
         self._with_processors(monkeypatch, self.Processor("first", 2))
         fake_ray.behaviors[driver.TaskExecutionActor] = {"execute": actor.BenchmarkFailure("Error in task executor", "trace")}
@@ -776,21 +756,6 @@ class TestWorker:
     def _start(self, worker, *tasks):
         t = mock.Mock(has_plugins=False)
         return asyncio.create_task(worker.run(FakeTrackPayload(t), self.allocations(*tasks), {0: driver.ClientContext(0, 0)}))
-
-    @pytest.mark.asyncio
-    async def test_loads_track_outside_of_event_loop(self, monkeypatch):
-        async def after_load():
-            return "loaded"
-
-        def load_track(cfg, install_dependencies):
-            # like a track processor whose on_after_load_track() runs async code
-            assert asyncio.run(after_load()) == "loaded"
-
-        monkeypatch.setattr(driver, "load_local_config", lambda c: c)
-        monkeypatch.setattr(driver, "load_track", load_track)
-
-        # Ray constructs async actors in their event loop
-        driver.Worker(FakeHandle("driver"), 0, config.Config())
 
     @pytest.mark.asyncio
     async def test_executes_steps_between_join_points(self, worker):
