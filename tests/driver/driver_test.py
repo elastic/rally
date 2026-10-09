@@ -15,9 +15,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import collections
 import copy
 import io
+import sys
 import threading
 import time
 from datetime import datetime
@@ -27,11 +29,12 @@ import elastic_transport
 import elasticsearch
 import pytest
 
-from esrally import config, exceptions, metrics, track
+from esrally import actor, config, exceptions, metrics, track
 from esrally.driver import driver, runner, scheduler
 from esrally.driver.driver import ApiKey, ClientContext
 from esrally.track import params
 from esrally.utils.error_behavior import OnErrorBehavior
+from tests.conftest import FakeHandle, FakeObjectRef, FakeTrackPayload, set_self_handle
 
 
 class DriverTestParamSource:
@@ -395,75 +398,458 @@ class TestDriver:
         delete.assert_called_once_with(d.default_sync_es_client, d.generated_api_key_ids)
 
 
+@pytest.mark.usefixtures("actor_environment")
 class TestTrackPreparationActor:
-    @mock.patch("esrally.actor.log.post_configure_actor_logging")
-    @mock.patch("esrally.driver.driver.load_track")
-    @mock.patch("esrally.driver.driver.load_local_config")
-    def test_bootstrap_installs_track_dependencies(self, load_local_config, load_track, post_configure_actor_logging):
-        local_cfg = mock.sentinel.local_cfg
-        load_local_config.return_value = local_cfg
-        driver_actor = mock.sentinel.driver_actor
-        coordinator_cfg = mock.sentinel.coordinator_cfg
-        actor_under_test = driver.TrackPreparationActor()
-        actor_under_test.send = mock.Mock()
+    class Processor:
+        def __init__(self, name, task_count):
+            self.name = name
+            self.task_count = task_count
 
-        actor_under_test.receiveMsg_Bootstrap(driver.Bootstrap(coordinator_cfg), driver_actor)
+        def on_prepare_track(self, track, data_root_dir):
+            for i in range(self.task_count):
+                yield (len, {"obj": f"{self.name}-{i}"})
 
-        post_configure_actor_logging.assert_called_once_with()
-        load_local_config.assert_called_once_with(coordinator_cfg)
-        load_track.assert_called_once_with(local_cfg, install_dependencies=True)
-        actor_under_test.send.assert_called_once()
-        sent_driver_actor, ready_msg = actor_under_test.send.call_args.args
-        assert sent_driver_actor is driver_actor
-        assert isinstance(ready_msg, driver.ReadyForWork)
-        assert actor_under_test.driver_actor is driver_actor
-        assert actor_under_test.cfg is local_cfg
+    @pytest.fixture
+    def cfg(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "benchmarks", "local.dataset.cache", "/data")
+        cfg.add(config.Scope.application, "system", "available.cores", 2)
+        return cfg
 
-    @mock.patch("esrally.actor.log.post_configure_actor_logging")
-    @mock.patch.object(driver.TrackPreparationActor, "_prepare_track")
-    @mock.patch("esrally.driver.driver.load_track")
-    @mock.patch("esrally.driver.driver.load_local_config")
-    def test_prepare_track_standalone_delegates_without_reloading(
-        self, load_local_config, load_track, prepare_track, post_configure_actor_logging
-    ):
-        local_cfg = mock.sentinel.local_cfg
-        load_local_config.return_value = local_cfg
-        start_sender = mock.sentinel.start_sender
-        coordinator_cfg = mock.sentinel.coordinator_cfg
-        t = mock.sentinel.track
-        actor_under_test = driver.TrackPreparationActor()
-        actor_under_test.send = mock.Mock()
+    @pytest.fixture
+    def preparator(self, cfg, monkeypatch, fake_ray):
+        monkeypatch.setattr(driver, "load_local_config", lambda c: c)
+        monkeypatch.setattr(driver, "load_track", mock.Mock())
+        monkeypatch.setattr(driver, "load_track_plugins", mock.Mock())
+        monkeypatch.setattr(driver.TrackPreparationActor, "this_node_strategy", lambda self: "same-node")
+        return driver.TrackPreparationActor(cfg)
 
-        actor_under_test.receiveMsg_PrepareTrackStandalone(driver.PrepareTrackStandalone(coordinator_cfg, t), start_sender)
+    def _with_processors(self, monkeypatch, *processors):
+        registry = mock.Mock(processors=list(processors))
+        monkeypatch.setattr(driver, "TrackProcessorRegistry", lambda cfg: registry)
 
-        load_local_config.assert_called_once_with(coordinator_cfg)
-        # the handler must not reload the track; _prepare_track handles (re)loading
-        load_track.assert_not_called()
-        prepare_track.assert_called_once_with(t)
-        assert actor_under_test.standalone is True
-        assert actor_under_test.start_sender is start_sender
-        assert actor_under_test.cfg is local_cfg
+    @pytest.mark.asyncio
+    async def test_installs_track_dependencies_when_asked(self, preparator, monkeypatch):
+        self._with_processors(monkeypatch)
+        t = mock.Mock()
+        t.name = "unittest"
 
-    @mock.patch("esrally.actor.log.post_configure_actor_logging")
-    def test_resume_standalone_replies_to_start_sender(self, post_configure_actor_logging):
-        start_sender = mock.sentinel.start_sender
-        actor_under_test = driver.TrackPreparationActor()
-        actor_under_test.send = mock.Mock()
-        actor_under_test.cfg = mock.sentinel.local_cfg
-        actor_under_test.standalone = True
-        actor_under_test.start_sender = start_sender
-        child = mock.sentinel.task_executor
-        actor_under_test.children = [child]
+        await preparator.prepare_track(FakeTrackPayload(t), install_dependencies=True)
 
-        actor_under_test.resume()
+        assert mock.call(preparator.cfg, install_dependencies=True) in driver.load_track.call_args_list
 
-        exit_target, exit_msg = actor_under_test.send.call_args_list[0].args
-        assert exit_target is child
-        assert isinstance(exit_msg, driver.thespian.actors.ActorExitRequest)
-        reply_target, reply_msg = actor_under_test.send.call_args_list[1].args
-        assert reply_target is start_sender
-        assert isinstance(reply_msg, driver.TrackPrepared)
-        assert actor_under_test.children == []
+    @pytest.mark.asyncio
+    async def test_does_not_install_track_dependencies_otherwise(self, preparator, monkeypatch):
+        self._with_processors(monkeypatch)
+        t = mock.Mock()
+        t.name = "unittest"
+
+        await preparator.prepare_track(FakeTrackPayload(t), install_dependencies=False)
+
+        assert driver.load_track.call_args_list == [mock.call(preparator.cfg)]
+
+    @pytest.mark.asyncio
+    async def test_runs_tasks_of_all_processors_on_executors_on_the_same_node(self, preparator, monkeypatch, fake_ray):
+        self._with_processors(monkeypatch, self.Processor("first", 3), self.Processor("second", 1))
+        t = mock.Mock()
+        t.name = "unittest"
+
+        await preparator.prepare_track(FakeTrackPayload(t))
+
+        executors = fake_ray.created_of(driver.TaskExecutionActor)
+        # one executor per core but not more than tasks of the processor with most tasks
+        assert len(executors) == 2
+        assert all(e.kwargs == {"strategy": "same-node"} for e in executors)
+        assert all(e.handle.calls_to("bootstrap") == [(("unittest",), {})] for e in executors)
+        executed = sorted(args[0].params["obj"] for e in executors for args, _ in e.handle.calls_to("execute"))
+        assert executed == ["first-0", "first-1", "first-2", "second-0"]
+        # executors are stopped when the track is prepared
+        assert sorted(h.name for h in fake_ray.killed) == sorted(e.handle.name for e in executors)
+        assert preparator.executors == []
+
+    @pytest.mark.asyncio
+    async def test_fails_and_stops_executors_when_a_task_fails(self, preparator, monkeypatch, fake_ray):
+        self._with_processors(monkeypatch, self.Processor("first", 2))
+        fake_ray.behaviors[driver.TaskExecutionActor] = {"execute": actor.BenchmarkFailure("Error in task executor", "trace")}
+        t = mock.Mock()
+        t.name = "unittest"
+
+        with pytest.raises(actor.BenchmarkFailure, match="Error in task executor"):
+            await preparator.prepare_track(FakeTrackPayload(t))
+
+        assert len(fake_ray.killed) == len(fake_ray.created_of(driver.TaskExecutionActor)) > 0
+
+
+class TestTrackPayload:
+    def test_loads_track_plugins_before_deserializing_the_track(self, tmp_path, monkeypatch):
+        # a track that references code of a track plugin (e.g. the "shared" package of rally-tracks)
+        plugin_root = tmp_path / "tracks"
+        (plugin_root / "rally_test_shared_plugin").mkdir(parents=True)
+        (plugin_root / "rally_test_shared_plugin" / "__init__.py").write_text("class Processor:\n    pass\n")
+        monkeypatch.syspath_prepend(str(plugin_root))
+        import rally_test_shared_plugin  # pylint: disable=import-outside-toplevel,import-error
+
+        t = track.Track(name="unittest")
+        t.processor = rally_test_shared_plugin.Processor()
+        payload = driver.TrackPayload(t)
+
+        # in another process, the plugin is not importable until the track's plugins are loaded
+        monkeypatch.delitem(sys.modules, "rally_test_shared_plugin")
+        monkeypatch.setattr(sys, "path", [p for p in sys.path if p != str(plugin_root)])
+        loaded_plugins = []
+
+        def load_track_plugins(cfg, track_name):
+            loaded_plugins.append((cfg, track_name))
+            sys.path.insert(0, str(plugin_root))
+
+        monkeypatch.setattr(driver, "load_track_plugins", load_track_plugins)
+        cfg = config.Config()
+
+        loaded = payload.load(cfg)
+
+        assert payload.track_name == "unittest"
+        assert loaded_plugins == [(cfg, "unittest")]
+        assert loaded.name == "unittest"
+        assert type(loaded.processor).__name__ == "Processor"
+
+
+@pytest.mark.usefixtures("actor_environment")
+class TestTaskExecutionActor:
+    @pytest.fixture
+    def executor(self, monkeypatch):
+        monkeypatch.setattr(driver, "load_local_config", lambda c: c)
+        return driver.TaskExecutionActor(config.Config())
+
+    def test_executes_task(self, executor):
+        func = mock.Mock()
+        executor.execute(driver.WorkerTask(func, {"a": 1}))
+        func.assert_called_once_with(a=1)
+
+    def test_converts_task_failures(self, executor):
+        def fail():
+            raise OSError("disk full")
+
+        with pytest.raises(actor.BenchmarkFailure, match="Error in task executor") as exc_info:
+            executor.execute(driver.WorkerTask(fail, {}))
+        assert "OSError: disk full" in exc_info.value.cause
+
+    def test_bootstrap_loads_track_plugins(self, executor, monkeypatch):
+        load_track_plugins = mock.Mock()
+        monkeypatch.setattr(driver.track, "load_track_plugins", load_track_plugins)
+        executor.bootstrap("unittest")
+        load_track_plugins.assert_called_once_with(executor.cfg, "unittest")
+
+
+class TestRecordingProgressReporter:
+    def test_records_latest_progress_and_finish(self):
+        reporter = driver.RecordingProgressReporter()
+        reporter.print("Running a", "[ 10% done]")
+        reporter.print("Running a", "[ 90% done]")
+        reporter.finish()
+        reporter.finish()
+        reporter.print("Running b", "[  0% done]")
+
+        assert reporter.drain() == [("Running a", "[ 90% done]"), None, ("Running b", "[  0% done]")]
+        assert reporter.drain() == []
+
+    def test_does_not_record_finish_without_progress(self):
+        reporter = driver.RecordingProgressReporter()
+        reporter.finish()
+        assert reporter.drain() == [None]
+
+
+@pytest.mark.usefixtures("actor_environment")
+class TestDriverActor:
+    @pytest.fixture
+    def driver_actor(self, fake_ray, monkeypatch):
+        monkeypatch.setattr(driver, "_share", lambda obj: obj)
+        monkeypatch.setattr(driver.DriverActor, "TICK_INTERVAL_SECONDS", 0.01)
+        node_mechanic = FakeHandle("node-mechanic")
+        driver_actor = driver.DriverActor(config.Config(), [node_mechanic])
+        set_self_handle(driver_actor)
+        driver_actor.driver = mock.create_autospec(driver.Driver, instance=True)
+        driver_actor.driver.track = mock.sentinel.track
+        driver_actor._track_payload = FakeTrackPayload(mock.sentinel.track)  # pylint: disable=protected-access
+        driver_actor.driver.finished.return_value = False
+        return driver_actor
+
+    def _start_workers(self, driver_actor, *run_results):
+        def start_benchmark():
+            for worker_id, run_result in enumerate(run_results):
+                worker = driver_actor.create_client("localhost", driver_actor.cfg, worker_id)
+                worker.behaviors["run"] = run_result
+                driver_actor.start_worker(worker, worker_id, driver_actor.cfg, mock.sentinel.track, mock.sentinel.allocations)
+
+        driver_actor.driver.start_benchmark.side_effect = start_benchmark
+
+    @pytest.mark.asyncio
+    async def test_prepares_track_on_all_load_driver_hosts(self, driver_actor, fake_ray):
+        def prepare_benchmark(t):
+            driver_actor.cluster_details = {"version": {"build_flavor": "default", "number": "9.2.7", "build_hash": "abc"}}
+            driver_actor.target_platform = "on-prem"
+            driver_actor.prepare_track(["localhost", "10.5.5.6"], driver_actor.cfg, t)
+
+        driver_actor.driver.prepare_benchmark.side_effect = prepare_benchmark
+
+        track_payload = FakeTrackPayload(mock.sentinel.track)
+        result = await driver_actor.prepare_benchmark(track_payload)
+
+        assert result == driver.PreparationComplete("default", "9.2.7", "abc", target_id=None, target_platform="on-prem")
+        assert fake_ray.required_hosts == ["localhost", "10.5.5.6"]
+        preparators = fake_ray.created_of(driver.TrackPreparationActor)
+        assert [p.kwargs["host"] for p in preparators] == ["localhost", "10.5.5.6"]
+        for p in preparators:
+            assert p.handle.calls_to("prepare_track") == [((track_payload,), {"install_dependencies": True})]
+        assert sorted(h.name for h in fake_ray.killed) == sorted(p.handle.name for p in preparators)
+
+    @pytest.mark.asyncio
+    async def test_prepare_benchmark_fails_if_track_preparation_fails(self, driver_actor, fake_ray):
+        fake_ray.behaviors[driver.TrackPreparationActor] = {"prepare_track": actor.BenchmarkFailure("Error in track preparator")}
+        driver_actor.driver.prepare_benchmark.side_effect = lambda t: driver_actor.prepare_track(["localhost"], driver_actor.cfg, t)
+
+        with pytest.raises(actor.BenchmarkFailure, match="Error in track preparator"):
+            await driver_actor.prepare_benchmark(FakeTrackPayload(mock.sentinel.track))
+
+    @pytest.mark.asyncio
+    async def test_creates_workers_on_hosts(self, driver_actor, fake_ray):
+        worker = driver_actor.create_client("10.5.5.6", driver_actor.cfg, 3)
+
+        created = fake_ray.created_of(driver.Worker)
+        assert len(created) == 1
+        assert created[0].args == (driver_actor.self_handle, 3, driver_actor.cfg)
+        assert created[0].kwargs == {"host": "10.5.5.6", "name": "worker-3"}
+        assert created[0].handle is worker
+
+    @pytest.mark.asyncio
+    async def test_run_benchmark_returns_metrics_when_complete(self, driver_actor):
+        self._start_workers(driver_actor, FakeObjectRef(pending=True))
+        benchmark = asyncio.create_task(driver_actor.run_benchmark())
+        await asyncio.sleep(0.05)
+        driver_actor.on_benchmark_complete(b"metrics")
+
+        assert await benchmark == b"metrics"
+        worker = driver_actor.workers[0]
+        track_payload = driver_actor._track_payload  # pylint: disable=protected-access
+        assert worker.calls_to("run") == [((track_payload, mock.sentinel.allocations, None), {})]
+        # the driver reports progress regularly
+        assert driver_actor.driver.update_progress_message.called
+
+    @pytest.mark.asyncio
+    async def test_run_benchmark_fails_when_a_worker_fails(self, driver_actor):
+        self._start_workers(driver_actor, FakeObjectRef(pending=True), actor.BenchmarkFailure("Error in load generator [1]", "boom"))
+
+        with pytest.raises(actor.BenchmarkFailure, match=r"Error in load generator \[1\]"):
+            await driver_actor.run_benchmark()
+
+    @pytest.mark.asyncio
+    async def test_run_benchmark_fails_when_a_worker_dies(self, driver_actor):
+        self._start_workers(driver_actor, RuntimeError("The actor died unexpectedly before finishing this task."))
+
+        with pytest.raises(actor.BenchmarkFailure, match=r"Worker \[0\] has exited prematurely.") as exc_info:
+            await driver_actor.run_benchmark()
+        assert "The actor died unexpectedly" in exc_info.value.cause
+
+    @pytest.mark.asyncio
+    async def test_cancel_stops_workers(self, driver_actor, fake_ray):
+        self._start_workers(driver_actor, FakeObjectRef(pending=True), FakeObjectRef(pending=True))
+        benchmark = asyncio.create_task(driver_actor.run_benchmark())
+        await asyncio.sleep(0.05)
+        workers = list(driver_actor.workers.values())
+
+        await driver_actor.cancel()
+
+        with pytest.raises(actor.BenchmarkCancelled):
+            await benchmark
+        for worker in workers:
+            assert worker.calls_to("stop") == [((), {})]
+        assert sorted(h.name for h in fake_ray.killed) == ["worker-0", "worker-1"]
+
+    @pytest.mark.asyncio
+    async def test_forwards_samples_and_join_points_to_driver(self, driver_actor):
+        driver_actor.update_samples(0, ["sample"])
+        driver_actor.joinpoint_reached(0, 12.5, ["allocation"])
+
+        driver_actor.driver.update_samples.assert_called_once_with(["sample"])
+        driver_actor.driver.joinpoint_reached.assert_called_once_with(0, 12.5, ["allocation"])
+
+    @pytest.mark.asyncio
+    async def test_failure_at_join_point_fails_benchmark(self, driver_actor):
+        driver_actor.driver.joinpoint_reached.side_effect = exceptions.RallyError("cannot store metrics")
+        driver_actor.joinpoint_reached(0, 12.5, [])
+
+        with pytest.raises(actor.BenchmarkFailure, match="Error in driver: cannot store metrics"):
+            await driver_actor.run_benchmark()
+
+    @pytest.mark.asyncio
+    async def test_finished_tasks_are_polled_and_relative_time_is_reset(self, driver_actor):
+        node_mechanic = driver_actor.node_mechanics[0]
+        driver_actor.progress.print("Running a", "[100% done]")
+        driver_actor.progress.finish()
+
+        driver_actor.on_task_finished(b"metrics-a", 0)
+        # immediately
+        driver_actor.driver.reset_relative_time.assert_called_once_with()
+        assert node_mechanic.calls_to("reset_relative_time") == [((), {})]
+
+        driver_actor.on_task_finished(b"metrics-b", 0.05)
+        # later
+        driver_actor.driver.reset_relative_time.assert_called_once_with()
+        await asyncio.sleep(0.1)
+        assert driver_actor.driver.reset_relative_time.call_count == 2
+        assert len(node_mechanic.calls_to("reset_relative_time")) == 2
+
+        status = driver_actor.poll()
+        assert status.progress == [("Running a", "[100% done]"), None]
+        assert status.finished_tasks == [driver.TaskFinished(b"metrics-a", 0), driver.TaskFinished(b"metrics-b", 0.05)]
+        assert driver_actor.poll() == driver.DriverStatus(progress=[], finished_tasks=[])
+
+    @pytest.mark.asyncio
+    async def test_stop_closes_driver(self, driver_actor):
+        await driver_actor.stop()
+        driver_actor.driver.close.assert_called_once_with()
+
+
+@pytest.mark.usefixtures("actor_environment")
+class TestWorker:
+    class FakeAsyncIoAdapter:
+        instances: list = []
+
+        def __init__(self, cfg, t, task_allocations, sampler, cancel, complete, on_error, client_contexts, worker_id):
+            self.task_allocations = task_allocations
+            self.sampler = sampler
+            self.complete = complete
+            self.release = asyncio.Event()
+            self.errors: list[Exception] = []
+            TestWorker.FakeAsyncIoAdapter.instances.append(self)
+
+        async def run(self):
+            await self.release.wait()
+            if self.errors:
+                raise self.errors[0]
+
+    @pytest.fixture
+    def worker(self, monkeypatch):
+        monkeypatch.setattr(driver, "load_local_config", lambda c: c)
+        monkeypatch.setattr(driver, "load_track", mock.Mock())
+        monkeypatch.setattr(driver.runner, "register_default_runners", mock.Mock())
+        monkeypatch.setattr(driver.track, "set_absolute_data_path", mock.Mock())
+        TestWorker.FakeAsyncIoAdapter.instances = []
+        monkeypatch.setattr(driver, "AsyncIoAdapter", TestWorker.FakeAsyncIoAdapter)
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "driver", "on.error", OnErrorBehavior.CONTINUE)
+        cfg.add(config.Scope.application, "track", "test.mode.enabled", True)
+        return driver.Worker(FakeHandle("driver"), 0, cfg)
+
+    @staticmethod
+    def allocations(*tasks):
+        client_allocations = driver.ClientAllocations()
+        client_allocations.add(0, list(tasks))
+        return client_allocations
+
+    @staticmethod
+    async def wait_until(predicate, timeout=1.0):
+        deadline = time.monotonic() + timeout
+        while not predicate():
+            assert time.monotonic() < deadline, "condition not met in time"
+            await asyncio.sleep(0.005)
+
+    def _start(self, worker, *tasks):
+        t = mock.Mock(has_plugins=False)
+        return asyncio.create_task(worker.run(FakeTrackPayload(t), self.allocations(*tasks), {0: driver.ClientContext(0, 0)}))
+
+    @pytest.mark.asyncio
+    async def test_executes_steps_between_join_points(self, worker):
+        run = self._start(worker, driver.JoinPoint(0), "task-a", driver.JoinPoint(1))
+        driver_handle = worker.driver_actor
+        await self.wait_until(lambda: len(driver_handle.calls_to("joinpoint_reached")) == 1)
+        assert TestWorker.FakeAsyncIoAdapter.instances == []
+
+        worker.drive_at(time.perf_counter())
+        await self.wait_until(lambda: len(TestWorker.FakeAsyncIoAdapter.instances) == 1)
+        adapter = TestWorker.FakeAsyncIoAdapter.instances[0]
+        assert [a.task for a in adapter.task_allocations] == ["task-a"]
+        adapter.release.set()
+
+        await self.wait_until(lambda: len(driver_handle.calls_to("joinpoint_reached")) == 2)
+        (worker_id, _, task_allocations), _ = driver_handle.calls_to("joinpoint_reached")[1]
+        assert worker_id == 0
+        assert [a.task.id for a in task_allocations] == [1]
+
+        await worker.stop()
+        assert await run is None
+
+    @pytest.mark.asyncio
+    async def test_sends_samples_of_finished_step(self, worker):
+        run = self._start(worker, "task-a", driver.JoinPoint(0))
+        await self.wait_until(lambda: len(TestWorker.FakeAsyncIoAdapter.instances) == 1)
+        adapter = TestWorker.FakeAsyncIoAdapter.instances[0]
+        adapter.sampler.q.put_nowait("sample")
+        adapter.release.set()
+
+        driver_handle = worker.driver_actor
+        await self.wait_until(lambda: len(driver_handle.calls_to("joinpoint_reached")) == 1)
+        assert driver_handle.calls_to("update_samples") == [((0, ["sample"]), {})]
+        # samples are sent before the join point is reported
+        assert [name for name, _, _ in driver_handle.calls] == ["update_samples", "joinpoint_reached"]
+        await worker.stop()
+        await run
+
+    @pytest.mark.asyncio
+    async def test_run_fails_when_a_step_fails(self, worker):
+        run = self._start(worker, "task-a", driver.JoinPoint(0))
+        await self.wait_until(lambda: len(TestWorker.FakeAsyncIoAdapter.instances) == 1)
+        adapter = TestWorker.FakeAsyncIoAdapter.instances[0]
+        adapter.errors.append(exceptions.RallyError("Cannot run task [a]: boom"))
+        adapter.release.set()
+
+        with pytest.raises(actor.BenchmarkFailure, match=r"Error in load generator \[0\]") as exc_info:
+            await run
+        assert exc_info.value.cause == "Cannot run task [a]: boom"
+
+    @pytest.mark.asyncio
+    async def test_completing_current_task_skips_remaining_tasks_until_join_point(self, worker):
+        run = self._start(worker, "task-a", "task-b", driver.JoinPoint(0))
+        await self.wait_until(lambda: len(TestWorker.FakeAsyncIoAdapter.instances) == 1)
+
+        worker.complete_current_task()
+        assert worker.complete.is_set()
+        TestWorker.FakeAsyncIoAdapter.instances[0].release.set()
+
+        driver_handle = worker.driver_actor
+        await self.wait_until(lambda: len(driver_handle.calls_to("joinpoint_reached")) == 1)
+        # task-b has been skipped
+        assert len(TestWorker.FakeAsyncIoAdapter.instances) == 1
+        assert not worker.complete.is_set()
+        await worker.stop()
+        await run
+
+    @pytest.mark.asyncio
+    async def test_ignores_completion_at_join_point(self, worker):
+        run = self._start(worker, driver.JoinPoint(0), "task-a", driver.JoinPoint(1))
+        await self.wait_until(lambda: len(worker.driver_actor.calls_to("joinpoint_reached")) == 1)
+
+        worker.complete_current_task()
+
+        assert not worker.complete.is_set()
+        await worker.stop()
+        await run
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_running_step(self, worker):
+        run = self._start(worker, "task-a", driver.JoinPoint(0))
+        await self.wait_until(lambda: len(TestWorker.FakeAsyncIoAdapter.instances) == 1)
+        adapter = TestWorker.FakeAsyncIoAdapter.instances[0]
+
+        async def release_when_cancelled():
+            await self.wait_until(worker.cancel.is_set)
+            adapter.release.set()
+
+        asyncio.create_task(release_when_cancelled())
+        await worker.stop()
+
+        assert await run is None
+        # the worker does not continue with the next step after it has been stopped
+        assert worker.driver_actor.calls_to("joinpoint_reached") == []
 
 
 def op(name, operation_type):

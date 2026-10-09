@@ -17,13 +17,10 @@
 
 # expose only the minimum API
 from .driver import (
-    BenchmarkComplete,
     DriverActor,
+    DriverStatus,
     PreparationComplete,
-    PrepareBenchmark,
-    PrepareTrackStandalone,
-    StartBenchmark,
     TaskFinished,
+    TrackPayload,
     TrackPreparationActor,
-    TrackPrepared,
 )

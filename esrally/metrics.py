@@ -44,8 +44,9 @@ class EsClient:
     Provides a stripped-down client interface that is easier to exchange for testing
     """
 
-    # Per-request timeout for the flush/close path. Bounds worst-case blocking in the actor
-    # event loop (see guarded()) well under Thespian's 5-minute message delivery timeout.
+    # Per-request timeout for the flush/close path. Bounds worst-case blocking of the actor's
+    # event loop (see guarded()): while flushing, an actor cannot handle other calls (e.g. stop()).
+    # Keep it well under actor.DEFAULT_STOP_TIMEOUT.
     FLUSH_REQUEST_TIMEOUT = 60
 
     def __init__(self, client, cluster_version=None):
@@ -134,8 +135,8 @@ class EsClient:
         import elasticsearch.helpers
         from elastic_transport import ApiError, TransportError
 
-        # 3 retries × 60s request_timeout + sleep keeps worst-case blocking under
-        # Thespian's 5-minute actor event-loop delivery timeout.
+        # 3 retries × 60s request_timeout + sleep bound the worst-case blocking of an actor's
+        # event loop, during which the actor cannot handle other calls.
         max_execution_count = _max_retries
         execution_count = 0
 

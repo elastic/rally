@@ -138,6 +138,17 @@ Specifics about the image
 
 Rally runs as user ``1000`` and its files are installed with uid:gid ``1000:0`` (to support `OpenShift arbitrary user IDs <https://docs.openshift.com/container-platform/4.8/openshift_images/create-images.html#use-uid_create-images>`_).
 
+.. _docker_shared_memory:
+
+Shared memory
+~~~~~~~~~~~~~
+
+Rally runs its components as actors on `Ray <https://docs.ray.io/>`_, which keeps data in shared memory (``/dev/shm``). Docker limits shared memory to 64MB by default. With this limit, Ray falls back to a slower storage and logs a warning. Increase the limit with ``--shm-size``::
+
+    docker run --shm-size=1g elastic/rally race --track=geonames --pipeline=benchmark-only --target-hosts=es01:9200
+
+With Docker Compose, use the ``shm_size`` setting of the service.
+
 Extending the Docker image
 --------------------------
 

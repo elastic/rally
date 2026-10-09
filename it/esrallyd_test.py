@@ -14,17 +14,48 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import os
+import subprocess
+
 import pytest
 
 import it
+from esrally import actor
 
 
 @pytest.fixture(autouse=True)
 def setup_esrallyd():
-    it.wait_until_port_is_free(1900)
-    it.shell_cmd("esrallyd start --node-ip 127.0.0.1 --coordinator-ip 127.0.0.1")
+    it.wait_until_port_is_free(actor.RAY_GCS_PORT)
+    assert it.shell_cmd("esrallyd start --node-ip 127.0.0.1 --coordinator-ip 127.0.0.1") == 0
     yield
-    it.shell_cmd("esrallyd stop")
+    assert it.shell_cmd("esrallyd stop") == 0
+    assert not actor.is_daemon_running_locally()
+
+
+def test_esrallyd_status():
+    def status():
+        return subprocess.run("esrallyd status", shell=True, check=True, capture_output=True, text=True).stdout.strip()
+
+    assert status() == "Running"
+
+
+@it.rally_in_mem
+def test_race_on_load_driver_host(cfg):
+    """
+    Races with load driver hosts given by IP address: Rally places its workers on the Ray node with that IP.
+    """
+    responses = os.path.join(os.path.dirname(__file__), "resources", "static-responses.json")
+    assert (
+        it.race(
+            cfg,
+            f'--pipeline=benchmark-only --distribution-version="{it.DISTRIBUTIONS[-1]}" '
+            f"--client-options=\"static_responses:'{responses}'\" "
+            "--track=geonames --challenge=append-no-conflicts-index-only --test-mode --load-driver-hosts=127.0.0.1",
+        )
+        == 0
+    )
+    # --kill-running-processes must not kill the daemon
+    assert actor.is_daemon_running_locally()
 
 
 @it.rally_in_mem
@@ -33,8 +64,8 @@ def test_elastic_transport_module_does_not_log_at_info_level(cfg, fresh_log_file
     The 'elastic_transport' module logs at 'INFO' by default and is _very_ noisy, so we explicitly set the threshold to
     'WARNING' to avoid perturbing benchmarking results due to the high volume of logging calls by the client itself.
 
-    Unfortunately, due to the underlying double-fork behaviour of the ActorSystem, it's possible for this module's logger
-    threshold to be overridden and reset to the default 'INFO' level via eager top level imports (i.e at the top of a module).
+    Actors run in processes started by the Rally daemon, which configure logging themselves. Eager top level imports
+    (i.e at the top of a module) of this module can reset its logger threshold to the default 'INFO' level.
 
     Therefore, we try to tightly control the imports of `elastic_transport` and `elasticsearch` throughout the codebase, but
     it is very easy to reintroduce this 'bug' by simply putting the import statement in the 'wrong' spot, thus this IT

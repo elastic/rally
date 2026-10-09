@@ -452,7 +452,7 @@ class TestEsClient:
         max_retry = 3
 
         # Sleep slots for 3 retries: [1, 2, 4] ~> 7s total.
-        # Reduced from 10 to prevent blocking the Thespian actor event loop for ~39 minutes.
+        # Reduced from 10 to prevent blocking the actor's event loop for ~39 minutes.
         sleep_slots = [float(2**i) for i in range(0, max_retry)]
 
         # we want deterministic timings to assess logging statements
