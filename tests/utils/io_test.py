@@ -320,6 +320,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         assert pb.source_json_path == json_path
         assert pb.pb_path == json_path + ".pb"
+        assert pb.offset_path == json_path + ".pb.offset"
 
     def test_exists_false_when_pb_missing(self, tmp_path):
         json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])

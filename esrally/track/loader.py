@@ -687,7 +687,7 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
     @staticmethod
     def _has_expected_record_count(document_set, pb_file) -> bool:
         # like bulk: trust an existing offset file and only verify when we have to build it
-        if os.path.exists(pb_file.pb_path + ".offset"):
+        if os.path.exists(pb_file.offset_path):
             return True
         try:
             if pb_file.count_records() == document_set.number_of_documents:
@@ -718,7 +718,7 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
                     except OSError:
                         pass
                     if pb_file.is_valid():
-                        self._try_download_offset(preparator, document_set, pb_path)
+                        self._try_download_offset(preparator, document_set, pb_file)
                         return self._has_expected_record_count(document_set, pb_file)
 
         try:
@@ -727,13 +727,13 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
             return False
         if not pb_file.is_valid():
             return False
-        self._try_download_offset(preparator, document_set, pb_path)
+        self._try_download_offset(preparator, document_set, pb_file)
         return self._has_expected_record_count(document_set, pb_file)
 
     @staticmethod
-    def _try_download_offset(preparator, document_set, pb_path):
+    def _try_download_offset(preparator, document_set, pb_file):
         # Best effort: a stale index may not match the new corpus file; OtlpProtobufFile regenerates it on demand.
-        offset_path = pb_path + ".offset"
+        offset_path = pb_file.offset_path
         try:
             preparator.downloader.download(document_set.base_url, offset_path)
         except (exceptions.DataError, exceptions.SystemSetupError) as e:

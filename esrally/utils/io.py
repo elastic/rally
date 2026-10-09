@@ -751,7 +751,7 @@ class OtlpProtobufFile:
     On-disk format: sequence of length-prefixed records —
         4-byte big-endian uint32 (payload length) + binary ExportMetricsServiceRequest bytes.
 
-    A companion ``{pb_path}.offset`` file maps record numbers to byte offsets for efficient
+    A companion ``offset_path`` file maps record numbers to byte offsets for efficient
     multi-client partitioning, using the same ``record_number;byte_offset`` text format as
     FileOffsetTable. It is written by ``count_records`` with one entry every OFFSET_SAMPLING_INTERVAL records.
     """
@@ -761,6 +761,7 @@ class OtlpProtobufFile:
     def __init__(self, source_json_path: str, pb_path: str, gzip_records: bool = False):
         self.source_json_path = source_json_path
         self.pb_path = pb_path
+        self.offset_path = f"{pb_path}.offset"
         # When True, individual records in the file are stored gzip-compressed. The length prefix
         # is the compressed size. ``read_records`` yields the raw (still-compressed) payload bytes
         # — Rally ships them verbatim to ES with ``Content-Encoding: gzip``, avoiding any
@@ -830,7 +831,7 @@ class OtlpProtobufFile:
         )
 
         try:
-            os.remove(self.pb_path + ".offset")
+            os.remove(self.offset_path)
         except FileNotFoundError:
             pass
 
@@ -886,7 +887,7 @@ class OtlpProtobufFile:
         return record_count
 
     def remove(self) -> None:
-        for path in (self.pb_path, self.pb_path + ".offset"):
+        for path in (self.pb_path, self.offset_path):
             try:
                 os.remove(path)
             except FileNotFoundError:
@@ -968,9 +969,8 @@ class OtlpProtobufFile:
         """
         if not os.path.exists(self.pb_path):
             return None
-        offset_path = self.pb_path + ".offset"
         # written atomically because an existing offset file marks the .pb as verified
-        tmp_path = offset_path + ".tmp"
+        tmp_path = self.offset_path + ".tmp"
         count = 0
         byte_offset = 0
         try:
@@ -985,7 +985,7 @@ class OtlpProtobufFile:
                     f.seek(length, os.SEEK_CUR)
                     byte_offset += 4 + length
                     count += 1
-            os.replace(tmp_path, offset_path)
+            os.replace(tmp_path, self.offset_path)
         finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
@@ -993,13 +993,12 @@ class OtlpProtobufFile:
 
     def _find_offset(self, target_record: int) -> tuple[int, int]:
         """Return (byte_offset, records_still_to_skip) for the sampled position closest to target_record."""
-        offset_path = self.pb_path + ".offset"
-        if not os.path.exists(offset_path):
+        if not os.path.exists(self.offset_path):
             return 0, target_record
         prior_byte = 0
         prior_remaining = target_record
         try:
-            with open(offset_path, encoding="utf-8") as f:
+            with open(self.offset_path, encoding="utf-8") as f:
                 for line in f:
                     parts = line.strip().split(";")
                     if len(parts) != 2:
