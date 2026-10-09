@@ -836,6 +836,12 @@ def create_arg_parser():
         default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS,
     )
     race_parser.add_argument(
+        "--admin-client-options",
+        default=None,
+        help="Client options for telemetry requests, in the same format as --client-options. "
+        "When omitted, telemetry uses --client-options. Challenge operations always use --client-options.",
+    )
+    race_parser.add_argument(
         "--on-error",
         type=OnErrorBehavior,
         choices=list(OnErrorBehavior),
@@ -1259,6 +1265,15 @@ def configure_connection_params(arg_parser, args, cfg: types.Config):
     cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
     client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
     cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
+    admin_client_options = getattr(args, "admin_client_options", None)
+    if admin_client_options:
+        # Do not inject the default timeout. Only keys the user supplied should overlay --client-options.
+        cfg.add(
+            config.Scope.applicationOverride,
+            "client",
+            "admin.options",
+            opts.ClientOptions(admin_client_options, apply_defaults=False),
+        )
     if set(target_hosts.all_hosts) != set(client_options.all_client_options):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
     if hasattr(args, "multi_cluster") and args.multi_cluster:
