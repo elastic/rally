@@ -864,10 +864,11 @@ def _decode_error_body(body) -> str:
 
 class OtlpIngest(Runner):
     """
-    Sends a pre-serialized OTLP ExportMetricsServiceRequest (binary protobuf) to Elasticsearch.
+    Sends a pre-serialized OTLP Export*ServiceRequest (binary protobuf) to Elasticsearch.
     """
 
-    ENDPOINT = "/_otlp/v1/metrics"
+    # OTLP logs/traces: add "logs": "/_otlp/v1/logs" and "traces": "/_otlp/v1/traces".
+    _ENDPOINTS = {"metrics": "/_otlp/v1/metrics"}
     _PROTOBUF_MIMETYPE = "application/x-protobuf"
     # statuses we treat as transient and retry with backoff. Matches elastic-transport's
     # default retry_on_status, but we add proper exponential backoff between attempts.
@@ -881,6 +882,8 @@ class OtlpIngest(Runner):
 
         Mandatory parameters:
         * ``body``: Raw binary protobuf payload (bytes).
+        * ``signal``: OTLP signal of the payload (e.g. ``metrics``), set by the parameter source from the corpus
+          ``source-format``. Selects the endpoint.
 
         Optional parameters:
         * ``request-timeout``: Client-side timeout in seconds.
@@ -893,6 +896,13 @@ class OtlpIngest(Runner):
           time so the hot path does no compression). Defaults to False.
         """
         body = mandatory(params, "body", self)
+        signal = mandatory(params, "signal", self)
+        path = self._ENDPOINTS.get(signal)
+        if path is None:
+            raise exceptions.DataError(
+                f"Parameter source for operation '{str(self)}' provided unsupported OTLP signal [{signal}]. "
+                f"Supported signals: {sorted(self._ENDPOINTS)}."
+            )
         max_retries = int(params.get("retries-on-error", 5))
         retry_wait_base = float(params.get("retry-wait-period", 0.5))
         gzip_body = bool(params.get("gzip", False))
@@ -933,7 +943,7 @@ class OtlpIngest(Runner):
                 await AsyncElasticsearch.perform_request(
                     es,
                     method="POST",
-                    path=self.ENDPOINT,
+                    path=path,
                     headers=headers,
                     body=body,
                 )

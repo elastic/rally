@@ -17,6 +17,7 @@
 
 import copy
 import dataclasses
+import json
 import os
 import pickle
 import random
@@ -27,6 +28,7 @@ import textwrap
 import urllib.error
 from unittest import mock
 
+import jsonschema
 import pytest
 
 from esrally import config, exceptions, paths
@@ -1094,7 +1096,7 @@ class TestOtlpDocumentPreparation:
 
     def _doc_set(self, *, archive=None, compressed_size=0):
         return track.Documents(
-            source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+            source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
             document_file="metrics.otlp.json",
             document_archive=archive,
             number_of_documents=10,
@@ -1167,7 +1169,7 @@ class TestOtlpDocumentPreparation:
             p.prepare_document_set(self._doc_set(), data_root="/tmp")
 
         remove.assert_called_once_with()
-        create.assert_called_once_with()
+        create.assert_called_once_with(signal="metrics")
 
     def test_tries_compressed_pb_first_when_corpus_is_compressed(self):
         p = self._preparator()
@@ -1220,7 +1222,7 @@ class TestOtlpDocumentPreparation:
     def test_downloads_pbgz_offset_when_gzip_records(self):
         p = self._preparator()
         with mock.patch.object(io.OtlpProtobufFile, "is_valid", side_effect=[False, True]):
-            p.prepare_document_set(self._doc_set(), data_root="/tmp", fmt=loader.OtlpProtobufDocumentSetFormat(gzip_records=True))
+            p.prepare_document_set(self._doc_set(), data_root="/tmp", fmt=loader.OtlpMetricsDocumentSetFormat(gzip_records=True))
 
         assert p.downloader.download.call_args_list == [
             mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pbgz"),
@@ -1266,7 +1268,7 @@ class TestOtlpDocumentPreparation:
 
         # only the .pb was attempted — no offset index and no JSON download
         p.downloader.download.assert_called_once_with("http://example.com/otlp", "/tmp/metrics.otlp.json.pb")
-        create.assert_called_once_with()
+        create.assert_called_once_with(signal="metrics")
         # builds the offset index
         count_records.assert_called_once_with()
 
@@ -1285,7 +1287,7 @@ class TestOtlpDocumentPreparation:
             mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json.pb"),
             mock.call("http://example.com/otlp", "/tmp/metrics.otlp.json", 2000),
         ]
-        create.assert_called_once_with()
+        create.assert_called_once_with(signal="metrics")
 
     def test_raises_and_removes_pb_when_record_count_mismatches(self):
         p = self._preparator()
@@ -1315,7 +1317,7 @@ class TestOtlpDocumentPreparation:
         ):
             assert p.prepare_bundled_document_set(self._doc_set(), data_root="/tmp")
 
-        create.assert_called_once_with()
+        create.assert_called_once_with(signal="metrics")
 
     def test_bundled_raises_and_removes_pb_when_record_count_mismatches(self):
         p = self._preparator()
@@ -1344,18 +1346,25 @@ class TestDocumentSetFormats:
     def test_registry_covers_all_source_formats(self):
         assert loader.DOCUMENT_SET_FORMATS == {
             track.Documents.SOURCE_FORMAT_BULK: loader.BulkDocumentSetFormat,
-            track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF: loader.OtlpProtobufDocumentSetFormat,
+            track.Documents.SOURCE_FORMAT_OTLP_METRICS: loader.OtlpMetricsDocumentSetFormat,
         }
+
+    def test_otlp_formats_map_to_signals(self):
+        otlp_formats = {f for f in loader.DOCUMENT_SET_FORMATS.values() if issubclass(f, loader.OtlpDocumentSetFormat)}
+        assert {f.source_format for f in otlp_formats} == set(track.Documents.OTLP_SIGNALS)
 
     @mock.patch("esrally.track.loader._otlp_gzip_preferences_for_corpus")
     def test_otlp_variants_per_gzip_preference(self, gzip_prefs):
         corpus = track.DocumentCorpus("otlp")
         gzip_prefs.return_value = {True, False}
-        variants = loader.OtlpProtobufDocumentSetFormat.variants(mock.Mock(), corpus)
-        assert [v.gzip_records for v in variants] == [False, True]
+        variants = loader.OtlpMetricsDocumentSetFormat.variants(mock.Mock(), corpus)
+        assert [(type(v), v.gzip_records) for v in variants] == [
+            (loader.OtlpMetricsDocumentSetFormat, False),
+            (loader.OtlpMetricsDocumentSetFormat, True),
+        ]
 
         gzip_prefs.return_value = set()
-        variants = loader.OtlpProtobufDocumentSetFormat.variants(mock.Mock(), corpus)
+        variants = loader.OtlpMetricsDocumentSetFormat.variants(mock.Mock(), corpus)
         assert [v.gzip_records for v in variants] == [False]
 
     def test_bulk_has_single_variant(self):
@@ -1364,7 +1373,8 @@ class TestDocumentSetFormats:
         assert isinstance(variants[0], loader.BulkDocumentSetFormat)
 
     def test_formats_are_picklable(self):
-        restored = pickle.loads(pickle.dumps(loader.OtlpProtobufDocumentSetFormat(gzip_records=True)))
+        restored = pickle.loads(pickle.dumps(loader.OtlpMetricsDocumentSetFormat(gzip_records=True)))
+        assert isinstance(restored, loader.OtlpMetricsDocumentSetFormat)
         assert restored.gzip_records is True
         assert isinstance(pickle.loads(pickle.dumps(loader.BulkDocumentSetFormat())), loader.BulkDocumentSetFormat)
 
@@ -1372,7 +1382,7 @@ class TestDocumentSetFormats:
     @mock.patch("esrally.track.loader.used_corpora")
     def test_default_preparator_yields_one_task_per_document_set(self, used_corpora, gzip_prefs):
         bulk_docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, document_file="docs.json")
-        otlp_docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF, document_file="metrics.otlp.json")
+        otlp_docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS, document_file="metrics.otlp.json")
         used_corpora.return_value = [track.DocumentCorpus("c", documents=[bulk_docs, otlp_docs])]
 
         tasks = list(loader.DefaultTrackPreparator().on_prepare_track(track.Track(name="t"), "/data"))
@@ -1381,15 +1391,15 @@ class TestDocumentSetFormats:
         assert [params["document_set"] for _, params in tasks] == [bulk_docs, otlp_docs]
         bulk_formats, otlp_formats = (params["formats"] for _, params in tasks)
         assert [type(f) for f in bulk_formats] == [loader.BulkDocumentSetFormat]
-        assert [(type(f), f.gzip_records) for f in otlp_formats] == [(loader.OtlpProtobufDocumentSetFormat, True)]
+        assert [(type(f), f.gzip_records) for f in otlp_formats] == [(loader.OtlpMetricsDocumentSetFormat, True)]
 
     @mock.patch("esrally.track.loader.data_dir", return_value=["/track", "/corpus"])
     def test_prepare_document_falls_back_to_corpus_dir_for_all_formats(self, data_dir):
         preparator = mock.create_autospec(loader.DocumentSetPreparator, instance=True)
         preparator.prepare_bundled_document_set.return_value = False
-        docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF, document_file="metrics.otlp.json")
-        pb = loader.OtlpProtobufDocumentSetFormat(gzip_records=False)
-        pbgz = loader.OtlpProtobufDocumentSetFormat(gzip_records=True)
+        docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS, document_file="metrics.otlp.json")
+        pb = loader.OtlpMetricsDocumentSetFormat(gzip_records=False)
+        pbgz = loader.OtlpMetricsDocumentSetFormat(gzip_records=True)
 
         loader.prepare_document(mock.Mock(), track.Track(name="t"), track.DocumentCorpus("c"), preparator, docs, [pb, pbgz])
 
@@ -1406,9 +1416,9 @@ class TestDocumentSetFormats:
     def test_prepare_document_rejects_formats_split_across_dirs(self, data_dir):
         preparator = mock.create_autospec(loader.DocumentSetPreparator, instance=True)
         preparator.prepare_bundled_document_set.side_effect = [True, False]
-        docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF, document_file="metrics.otlp.json")
-        pb = loader.OtlpProtobufDocumentSetFormat(gzip_records=False)
-        pbgz = loader.OtlpProtobufDocumentSetFormat(gzip_records=True)
+        docs = track.Documents(source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS, document_file="metrics.otlp.json")
+        pb = loader.OtlpMetricsDocumentSetFormat(gzip_records=False)
+        pbgz = loader.OtlpMetricsDocumentSetFormat(gzip_records=True)
 
         with pytest.raises(exceptions.DataError) as exc:
             loader.prepare_document(mock.Mock(), track.Track(name="t"), track.DocumentCorpus("c"), preparator, docs, [pb, pbgz])
@@ -1418,6 +1428,41 @@ class TestDocumentSetFormats:
             "Add the source file to [/track] or remove the prepared files from it."
         )
         preparator.prepare_document_set.assert_not_called()
+
+
+class TestTrackSchemaSourceFormat:
+    @pytest.fixture(scope="class")
+    def schema(self):
+        with open(os.path.join(paths.rally_root(), "resources", "track-schema.json"), encoding="utf-8") as f:
+            return json.load(f)
+
+    @staticmethod
+    def _track_spec(corpus_source_format=None, document_source_format=None):
+        corpus = {"name": "c", "documents": [{"source-file": "docs.json", "document-count": 1}]}
+        if corpus_source_format:
+            corpus["source-format"] = corpus_source_format
+        if document_source_format:
+            corpus["documents"][0]["source-format"] = document_source_format
+        return {"corpora": [corpus]}
+
+    def test_enum_matches_registered_formats(self, schema):
+        corpus_props = schema["properties"]["corpora"]["items"]["properties"]
+        document_props = corpus_props["documents"]["items"]["properties"]
+        assert set(corpus_props["source-format"]["enum"]) == set(loader.DOCUMENT_SET_FORMATS)
+        assert set(document_props["source-format"]["enum"]) == set(loader.DOCUMENT_SET_FORMATS)
+
+    @pytest.mark.parametrize("source_format", [track.Documents.SOURCE_FORMAT_BULK, track.Documents.SOURCE_FORMAT_OTLP_METRICS])
+    def test_accepts_supported_source_format(self, schema, source_format):
+        jsonschema.validate(self._track_spec(corpus_source_format=source_format), schema)
+        jsonschema.validate(self._track_spec(document_source_format=source_format), schema)
+
+    @pytest.mark.parametrize("on_corpus", [True, False])
+    def test_rejects_unsupported_source_format(self, schema, on_corpus):
+        spec = (
+            self._track_spec(corpus_source_format="otlp-unknown") if on_corpus else self._track_spec(document_source_format="otlp-unknown")
+        )
+        with pytest.raises(jsonschema.exceptions.ValidationError, match="'otlp-unknown' is not one of"):
+            jsonschema.validate(spec, schema)
 
 
 class TestTemplateSource:
@@ -2063,7 +2108,7 @@ class TestTrackPath:
                     "otlp",
                     documents=[
                         track.Documents(
-                            source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                            source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
                             document_file="metrics.otlp.json",
                         )
                     ],
@@ -2089,7 +2134,7 @@ class TestTrackPath:
                     "otlp",
                     documents=[
                         track.Documents(
-                            source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                            source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
                             document_file="metrics.otlp.json",
                         )
                     ],
@@ -2723,7 +2768,7 @@ class TestTrackSpecificationReader:
                     "base-url": "https://localhost/data",
                     "documents": [
                         {
-                            "source-format": track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                            "source-format": track.Documents.SOURCE_FORMAT_OTLP_METRICS,
                             "source-file": "metrics.otlp.json.zst",
                             "document-count": 10,
                             "compressed-bytes": 100,
@@ -2736,7 +2781,7 @@ class TestTrackSpecificationReader:
         }
         reader = loader.TrackSpecificationReader()
         docs = reader("unittest", track_specification, "/mappings").corpora[0].documents[0]
-        assert docs.source_format == track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF
+        assert docs.source_format == track.Documents.SOURCE_FORMAT_OTLP_METRICS
         assert docs.document_archive == "metrics.otlp.json.zst"
         assert docs.document_file == "metrics.otlp.json"
         assert docs.base_url == "https://localhost/data"

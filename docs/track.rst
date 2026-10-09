@@ -343,7 +343,7 @@ Each entry in the ``documents`` list consists of the following properties:
 * ``source-format`` (optional, default: ``bulk``): Defines in which format Rally should interpret the data file specified by ``source-file``. Supported values:
 
   * ``bulk``: Newline-delimited JSON documents for bulk indexing.
-  * ``otlp-proto``: Newline-delimited OTLP JSON records produced by ``metricsgenreceiver``, where each line is one ``ExportMetricsServiceRequest``. Rally converts the file to binary protobuf which is consumed by the ``otlp-ingest`` operation. The ``includes-action-and-meta-data``, ``target-index`` and ``target-data-stream`` are not applicable. See :doc:`otlp_ingest` for details.
+  * ``otlp-metrics``: Newline-delimited OTLP JSON records produced by ``metricsgenreceiver``, where each line is one ``ExportMetricsServiceRequest``. Rally converts the file to binary protobuf which is consumed by the ``otlp-ingest`` operation. The ``includes-action-and-meta-data``, ``target-index`` and ``target-data-stream`` are not applicable. See :doc:`otlp_ingest` for details.
 * ``source-file`` (mandatory): File name of the corresponding documents. For local use, this file can be a ``.json`` file. If you provide a ``base-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz``, ``.tar.bz2`` or ``zst``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
 * ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an `action and meta-data <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-desc>`_ line (``true``) or only documents (``false``).
 
@@ -912,12 +912,12 @@ An example error response may look like this::
 otlp-ingest
 ~~~~~~~~~~~
 
-With the operation type ``otlp-ingest`` you can send OpenTelemetry metrics to the Elasticsearch `OTLP metrics endpoint <https://www.elastic.co/docs/manage-data/ingest/otlp-endpoint>`_ (``/_otlp/v1/metrics``). Each request is one ``ExportMetricsServiceRequest`` record from a corpus with ``source-format`` ``otlp-proto`` (see :ref:`track_corpora`), sent as binary protobuf with ``Content-Type: application/x-protobuf``. See :doc:`otlp_ingest` for details.
+With the operation type ``otlp-ingest`` you can send OpenTelemetry metrics to the Elasticsearch `OTLP metrics endpoint <https://www.elastic.co/docs/manage-data/ingest/otlp-endpoint>`_ (``/_otlp/v1/metrics``). Each request is one ``ExportMetricsServiceRequest`` record from a corpus with ``source-format`` ``otlp-metrics`` (see :ref:`track_corpora`), sent as binary protobuf with ``Content-Type: application/x-protobuf``. See :doc:`otlp_ingest` for details.
 
 Properties
 """"""""""
 
-* ``corpora`` (optional, defaults to all corpora): A corpus name or a list of corpus names to read from. The selected corpora must contain exactly one ``otlp-proto`` document set, otherwise Rally reports an error.
+* ``corpora`` (optional, defaults to all corpora): A corpus name or a list of corpus names to read from. The selected corpora must contain exactly one ``otlp-metrics`` document set, otherwise Rally reports an error.
 * ``gzip`` (optional, defaults to ``false``): If ``true``, track preparation stores each record gzip-compressed in a ``.pbgz`` file and Rally sends the records verbatim with ``Content-Encoding: gzip``. Otherwise, records are stored in a ``.pb`` file and sent uncompressed.
 * ``looped`` (optional, defaults to ``false``): If set to ``true``, each client starts again from the beginning of its part of the corpus once it has sent all records. This option should be combined with ``time-period`` or ``iterations`` properties at the task level, otherwise Rally will never finish the task.
 * ``request-timeout`` (optional): Client-side timeout in seconds per request.

@@ -350,7 +350,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
 
-        record_count = pb.create()
+        record_count = pb.create(signal="metrics")
 
         assert record_count == 3
         assert pb.is_valid() is True
@@ -368,7 +368,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
     def test_create_blank_lines_are_skipped(self, tmp_path):
         json_path = self._write_json_lines(tmp_path, ["", self.SAMPLE_OTLP_JSON_LINE, "", self.SAMPLE_OTLP_JSON_LINE, ""])
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        assert pb.create() == 2
+        assert pb.create(signal="metrics") == 2
 
     def test_create_removes_stale_offset_index(self, tmp_path):
         json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
@@ -376,14 +376,14 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         with open(pb.pb_path + ".offset", "w") as f:
             f.write("0;0\n1000;12345\n")
 
-        pb.create()
+        pb.create(signal="metrics")
 
         assert not os.path.exists(pb.pb_path + ".offset")
 
     def test_remove_deletes_pb_and_offset(self, tmp_path):
         json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create()
+        pb.create(signal="metrics")
         pb.count_records()
 
         pb.remove()
@@ -417,8 +417,8 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         pb_par = io.OtlpProtobufFile.for_source_file(json_path_par)
 
         with mock.patch.object(io.OtlpProtobufFile, "_BATCH_BYTES", len(self.SAMPLE_OTLP_JSON_LINE) * 50):
-            assert pb_seq.create(workers=1) == len(lines)
-            assert pb_par.create(workers=4) == len(lines)
+            assert pb_seq.create(signal="metrics", workers=1) == len(lines)
+            assert pb_par.create(signal="metrics", workers=4) == len(lines)
 
         # byte-for-byte identical output regardless of worker count → ordering is preserved
         with open(pb_seq.pb_path, "rb") as f1, open(pb_par.pb_path, "rb") as f2:
@@ -436,7 +436,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
     def test_create_with_gzip_records_writes_gzipped_payloads(self, tmp_path):
         json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
         pb = io.OtlpProtobufFile.for_source_file(json_path, gzip_records=True)
-        assert pb.create() == 3
+        assert pb.create(signal="metrics") == 3
 
         # the file is at .pbgz (not .pb)
         assert os.path.exists(pb.pb_path)
@@ -461,8 +461,8 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
 
         pb_raw = io.OtlpProtobufFile.for_source_file(json_raw, gzip_records=False)
         pb_gz = io.OtlpProtobufFile.for_source_file(json_gz, gzip_records=True)
-        pb_raw.create()
-        pb_gz.create()
+        pb_raw.create(signal="metrics")
+        pb_gz.create(signal="metrics")
 
         # the two files diverge — different extensions, different on-disk content
         assert pb_raw.pb_path != pb_gz.pb_path
@@ -481,7 +481,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         lines = [self.SAMPLE_OTLP_JSON_LINE] * (interval + 17)
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create()
+        pb.create(signal="metrics")
         with open(pb.pb_path + ".offset", "w") as f:
             f.write(f"0;0\n{interval};1\n")
 
@@ -495,7 +495,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL + 17)
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create()
+        pb.create(signal="metrics")
 
         assert pb.count_records() == len(lines)
         assert os.path.exists(pb.pb_path + ".offset")
@@ -509,7 +509,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         lines = [self.SAMPLE_OTLP_JSON_LINE] * io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create()
+        pb.create(signal="metrics")
 
         assert pb.count_records() == len(lines)
         with open(pb.pb_path + ".offset") as f:
@@ -519,7 +519,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
     def test_count_records_removes_temp_file_on_failure(self, tmp_path):
         json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create()
+        pb.create(signal="metrics")
 
         with mock.patch("os.replace", side_effect=OSError("boom")):
             with pytest.raises(OSError):
@@ -531,7 +531,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
     def _create_truncated(self, tmp_path, truncation):
         json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create()
+        pb.create(signal="metrics")
         if truncation == "header":
             with open(pb.pb_path, "ab") as f:
                 f.write(b"\x00\x00")
@@ -572,7 +572,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         lines = [self.SAMPLE_OTLP_JSON_LINE] * 8
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create()
+        pb.create(signal="metrics")
 
         # 4 partitions across 8 records
         slice0 = list(pb.read_records(0, 2))
@@ -588,7 +588,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         lines = [self.SAMPLE_OTLP_JSON_LINE] * 3
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create()
+        pb.create(signal="metrics")
         # seeking past the end returns no records (does not error)
         assert list(pb.read_records(100, 200)) == []
 
@@ -596,7 +596,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         lines = [self.SAMPLE_OTLP_JSON_LINE] * 5
         json_path = self._write_json_lines(tmp_path, lines)
         pb = io.OtlpProtobufFile.for_source_file(json_path)
-        pb.create()
+        pb.create(signal="metrics")
 
         # no offset index — read should still work by scanning from the start
         records = list(pb.read_records(2, 4))
@@ -609,7 +609,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
             "concurrent.futures.ProcessPoolExecutor",
             side_effect=lambda max_workers, **_: concurrent.futures.ThreadPoolExecutor(max_workers=max_workers),
         ) as pool_mock:
-            assert pb.create(workers=workers) == 2
+            assert pb.create(signal="metrics", workers=workers) == 2
         pool_mock.assert_called_once()
         return pool_mock.call_args.kwargs["max_workers"]
 

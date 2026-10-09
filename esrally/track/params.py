@@ -745,9 +745,9 @@ class BulkIndexParamSource(ParamSource):
 
 class OtlpParamSource(ParamSource):
     """
-    Parameter source for OTLP binary protobuf corpus files (source_format: otlp-proto).
+    Parameter source for OTLP binary protobuf corpus files (source_format: one of ``Documents.OTLP_SIGNALS``).
 
-    Reads pre-generated ExportMetricsServiceRequest records from a .pb file.
+    Reads pre-generated OTLP Export*ServiceRequest records from a .pb file.
     Supports multi-client partitioning via the companion .pb.offset index.
     """
 
@@ -768,7 +768,8 @@ class OtlpParamSource(ParamSource):
         # file format based on this flag.
         self.gzip = bool(params.get("gzip", False))
 
-        corpora = used_corpora(track_obj, params, source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF)
+        otlp_formats = sorted(track.Documents.OTLP_SIGNALS)
+        corpora = [c for source_format in otlp_formats for c in used_corpora(track_obj, params, source_format=source_format)]
         otlp_docs = [(corpus, doc) for corpus in corpora for doc in corpus.documents]
         if not otlp_docs:
             requested = self._params.get("corpora")
@@ -778,8 +779,7 @@ class OtlpParamSource(ParamSource):
                     f"Available corpora: {[c.name for c in self.track.corpora]}."
                 )
             raise exceptions.InvalidSyntax(
-                f"No OTLP corpus found in track [{track_obj}]. "
-                f"Add at least one document corpus with source_format={track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF!r}."
+                f"No OTLP corpus found in track [{track_obj}]. Add at least one document corpus with source_format in {otlp_formats!r}."
             )
         if len(otlp_docs) > 1:
             matches = ", ".join(f"[{corpus}] {doc}" for corpus, doc in otlp_docs)
@@ -790,6 +790,7 @@ class OtlpParamSource(ParamSource):
         # read by used_corpora() in loader.py so that prepare-track only prepares this document set
         self.corpora = corpora
         _, self._doc = otlp_docs[0]
+        self.signal = track.Documents.OTLP_SIGNALS[self._doc.source_format]
 
     @staticmethod
     def _validate_retry_params(params):
@@ -885,7 +886,7 @@ class OtlpParamSource(ParamSource):
         self._cursor += 1
 
         # a fresh dict per call: runners may pop keys from the params they receive
-        return {**self._params, "body": payload, "gzip": self.gzip}
+        return {**self._params, "body": payload, "gzip": self.gzip, "signal": self.signal}
 
 
 class PartitionBulkIndexParamSource:

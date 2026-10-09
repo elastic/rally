@@ -656,13 +656,11 @@ class BulkDocumentSetFormat(DocumentSetFormat):
             )
 
 
-class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
+class OtlpDocumentSetFormat(DocumentSetFormat):
     """
     Converts the OTLP JSON source into ``.pb`` (raw protobuf records) or, with ``gzip_records``, ``.pbgz`` (each record
-    gzip-compressed independently).
+    gzip-compressed independently). Subclasses set ``source_format``, one per OTLP signal.
     """
-
-    source_format = track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF
 
     def __init__(self, gzip_records: bool = False):
         self.gzip_records = gzip_records
@@ -745,7 +743,7 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
 
     def finalize(self, preparator, document_set, doc_path):
         pb_file = self._pb_file(doc_path)
-        records_written = pb_file.create()
+        records_written = pb_file.create(signal=track.Documents.OTLP_SIGNALS[self.source_format])
         if records_written != document_set.number_of_documents:
             # remove it, otherwise is_valid() would accept the corrupt file on the next run
             pb_file.remove()
@@ -756,8 +754,13 @@ class OtlpProtobufDocumentSetFormat(DocumentSetFormat):
         pb_file.count_records()
 
 
+# OTLP logs/traces: add sibling subclasses (e.g. OtlpLogsDocumentSetFormat) and register them below.
+class OtlpMetricsDocumentSetFormat(OtlpDocumentSetFormat):
+    source_format = track.Documents.SOURCE_FORMAT_OTLP_METRICS
+
+
 DOCUMENT_SET_FORMATS: dict[str, type[DocumentSetFormat]] = {
-    f.source_format: f for f in (BulkDocumentSetFormat, OtlpProtobufDocumentSetFormat)
+    f.source_format: f for f in (BulkDocumentSetFormat, OtlpMetricsDocumentSetFormat)
 }
 
 

@@ -3415,12 +3415,12 @@ class TestOtlpParamSource:
         json_path = tmp_path / "metrics.otlp.json"
         json_path.write_text("\n".join([self._SAMPLE_OTLP_JSON_LINE] * num_records) + "\n")
         pb = io.OtlpProtobufFile.for_source_file(str(json_path))
-        pb.create()
+        pb.create(signal="metrics")
         corpus = track.DocumentCorpus(
             name=corpus_name,
             documents=[
                 track.Documents(
-                    source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
                     number_of_documents=num_records,
                     document_file=str(json_path),
                 )
@@ -3500,17 +3500,17 @@ class TestOtlpParamSource:
     def test_raises_when_corpus_has_multiple_otlp_document_sets(self, tmp_path):
         json_path = tmp_path / "metrics.otlp.json"
         json_path.write_text(self._SAMPLE_OTLP_JSON_LINE + "\n")
-        io.OtlpProtobufFile.for_source_file(str(json_path)).create()
+        io.OtlpProtobufFile.for_source_file(str(json_path)).create(signal="metrics")
         corpus = track.DocumentCorpus(
             name="otlp-corpus",
             documents=[
                 track.Documents(
-                    source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
                     number_of_documents=1,
                     document_file=str(json_path),
                 ),
                 track.Documents(
-                    source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
                     number_of_documents=1,
                     document_file=str(json_path),
                 ),
@@ -3678,12 +3678,12 @@ class TestOtlpParamSource:
         # build a .pbgz alongside the default .pb so partition can read it
         json_path = tmp_path / "metrics.otlp.json"
         json_path.write_text("\n".join([self._SAMPLE_OTLP_JSON_LINE] * 3) + "\n")
-        io.OtlpProtobufFile.for_source_file(str(json_path), gzip_records=True).create()
+        io.OtlpProtobufFile.for_source_file(str(json_path), gzip_records=True).create(signal="metrics")
         corpus = track.DocumentCorpus(
             name="otlp-corpus",
             documents=[
                 track.Documents(
-                    source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF,
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
                     number_of_documents=3,
                     document_file=str(json_path),
                 )
@@ -3710,6 +3710,15 @@ class TestOtlpParamSource:
         result = p.params()
         assert result["request-timeout"] == 30
         assert "body" in result
+
+    def test_params_signal_derived_from_source_format(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={"signal": "logs"},
+        )
+        assert source.signal == "metrics"
+        assert source.partition(0, 1).params()["signal"] == "metrics"
 
     @pytest.mark.parametrize(
         "key, value",

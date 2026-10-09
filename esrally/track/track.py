@@ -177,7 +177,10 @@ class ComponentTemplate:
 
 class Documents:
     SOURCE_FORMAT_BULK = "bulk"
-    SOURCE_FORMAT_OTLP_PROTOBUF = "otlp-proto"
+    SOURCE_FORMAT_OTLP_METRICS = "otlp-metrics"
+    # OTLP logs/traces: add "otlp-logs"/"otlp-traces" here and in io._OTLP_REQUEST_TYPES, runner.OtlpIngest._ENDPOINTS,
+    # loader.DOCUMENT_SET_FORMATS (an OtlpDocumentSetFormat subclass) and the source-format enum in track-schema.json.
+    OTLP_SIGNALS = {SOURCE_FORMAT_OTLP_METRICS: "metrics"}
 
     def __init__(
         self,

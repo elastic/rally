@@ -21,6 +21,7 @@ import bz2
 import collections
 import concurrent.futures
 import gzip
+import importlib
 import logging
 import mmap
 import multiprocessing
@@ -711,7 +712,14 @@ def remove_file_offset_table(data_file_path: str) -> None:
     FileOffsetTable.remove(data_file_path)
 
 
-def _convert_lines_batch(args: tuple[list[str], bool]) -> tuple[bytes, int]:
+# OTLP signal -> (module, class) of the request message. Logs: ("opentelemetry.proto.collector.logs.v1.logs_service_pb2",
+# "ExportLogsServiceRequest"), traces: ("opentelemetry.proto.collector.trace.v1.trace_service_pb2", "ExportTraceServiceRequest").
+_OTLP_REQUEST_TYPES = {
+    "metrics": ("opentelemetry.proto.collector.metrics.v1.metrics_service_pb2", "ExportMetricsServiceRequest"),
+}
+
+
+def _convert_lines_batch(args: tuple[list[str], bool, str]) -> tuple[bytes, int]:
     """
     Worker function for parallel OTLP JSON → binary protobuf conversion.
 
@@ -725,16 +733,16 @@ def _convert_lines_batch(args: tuple[list[str], bool]) -> tuple[bytes, int]:
     (so the length prefix is the compressed size). This is exactly the on-disk format the main
     process appends to the corpus file.
     """
-    lines, gzip_records = args
-    # pylint: disable=import-outside-toplevel,no-name-in-module
+    lines, gzip_records, signal = args
+    # pylint: disable=import-outside-toplevel
     from google.protobuf.json_format import Parse
-    from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import (
-        ExportMetricsServiceRequest,
-    )
+
+    module_name, class_name = _OTLP_REQUEST_TYPES[signal]
+    request_type = getattr(importlib.import_module(module_name), class_name)
 
     parts: list[bytes] = []
     for line in lines:
-        msg = Parse(line, ExportMetricsServiceRequest())
+        msg = Parse(line, request_type())
         payload = msg.SerializeToString()
         if gzip_records:
             # mtime=0 keeps the output byte-deterministic across runs (no timestamp in the gzip header).
@@ -749,7 +757,7 @@ class OtlpProtobufFile:
     Manages the binary protobuf corpus file derived from an OTLP JSON source.
 
     On-disk format: sequence of length-prefixed records —
-        4-byte big-endian uint32 (payload length) + binary ExportMetricsServiceRequest bytes.
+        4-byte big-endian uint32 (payload length) + binary OTLP Export*ServiceRequest bytes.
 
     A companion ``offset_path`` file maps record numbers to byte offsets for efficient
     multi-client partitioning, using the same ``record_number;byte_offset`` text format as
@@ -786,7 +794,7 @@ class OtlpProtobufFile:
     # completed batch to disk — adding more buffers grows memory without much throughput benefit.
     _QUEUE_BUFFER = 4
 
-    def create(self, workers: int | None = None) -> int:
+    def create(self, signal: str, workers: int | None = None) -> int:
         """
         Parse the source OTLP JSON file and write binary protobuf records to the .pb file.
         Any existing .offset file is removed; call ``count_records`` to rebuild it.
@@ -797,6 +805,7 @@ class OtlpProtobufFile:
         file (which is what ``ProcessPoolExecutor.map`` would do, since it eagerly consumes its
         iterable up front).
 
+        :param signal: OTLP signal of the source records (a key of ``_OTLP_REQUEST_TYPES``, e.g. ``metrics``).
         :param workers: Number of worker processes for conversion. Defaults to ``RALLY_OTLP_CONVERSION_WORKERS``
                         if set to a positive integer, otherwise ``os.cpu_count()``.
         :return: Total number of records written.
@@ -804,9 +813,9 @@ class OtlpProtobufFile:
         """
         # opentelemetry-proto is an optional dependency, only needed when preparing an OTLP corpus.
         # we probe the import here so we fail fast with a clear message rather than inside the worker.
-        # pylint: disable=import-outside-toplevel,unused-import
+        module_name, _ = _OTLP_REQUEST_TYPES[signal]
         try:
-            import opentelemetry.proto.collector.metrics.v1.metrics_service_pb2  # noqa: F401
+            importlib.import_module(module_name)
         except ImportError:
             raise exceptions.SystemSetupError(
                 "The 'opentelemetry-proto' package is required to pre-process OTLP corpus files. "
@@ -850,7 +859,7 @@ class OtlpProtobufFile:
 
             # prime the pipeline with up to max_in_flight batches
             for batch in batch_iter:
-                in_flight.append(pool.submit(_convert_lines_batch, (batch, self.gzip_records)))
+                in_flight.append(pool.submit(_convert_lines_batch, (batch, self.gzip_records, signal)))
                 if len(in_flight) >= max_in_flight:
                     break
 
@@ -869,7 +878,7 @@ class OtlpProtobufFile:
                     )
                 # keep the pipeline full by submitting the next batch (if any)
                 try:
-                    in_flight.append(pool.submit(_convert_lines_batch, (next(batch_iter), self.gzip_records)))
+                    in_flight.append(pool.submit(_convert_lines_batch, (next(batch_iter), self.gzip_records, signal)))
                 except StopIteration:
                     pass
 

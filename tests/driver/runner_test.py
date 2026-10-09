@@ -9006,7 +9006,7 @@ class TestOtlpIngestRunner:
         return es
 
     @pytest.mark.asyncio
-    async def test_posts_to_default_endpoint_with_protobuf_body(self):
+    async def test_posts_to_metrics_endpoint_with_protobuf_body(self):
         es = self._make_es_mock()
         body = b"\x0a\x05hello"
 
@@ -9014,7 +9014,7 @@ class TestOtlpIngestRunner:
             "elasticsearch.AsyncElasticsearch.perform_request",
             new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
         ) as pr:
-            result = await runner.OtlpIngest()(es, {"body": body})
+            result = await runner.OtlpIngest()(es, {"body": body, "signal": "metrics"})
 
         pr.assert_awaited_once()
         kwargs = pr.await_args.kwargs
@@ -9039,7 +9039,7 @@ class TestOtlpIngestRunner:
             "elasticsearch.AsyncElasticsearch.perform_request",
             new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
         ):
-            await runner.OtlpIngest()(es, {"body": body, "request-timeout": 42})
+            await runner.OtlpIngest()(es, {"body": body, "signal": "metrics", "request-timeout": 42})
 
         # both transport retry disable AND custom timeout flow through es.options
         es.options.assert_called_once_with(max_retries=0, request_timeout=42)
@@ -9054,7 +9054,7 @@ class TestOtlpIngestRunner:
             "elasticsearch.AsyncElasticsearch.perform_request",
             new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
         ):
-            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+            await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics"})
 
         es.options.assert_called_once_with(max_retries=0)
 
@@ -9067,7 +9067,7 @@ class TestOtlpIngestRunner:
             "elasticsearch.AsyncElasticsearch.perform_request",
             new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
         ):
-            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+            await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics"})
 
         registered = es.transport.serializers.serializers["application/x-protobuf"]
         assert isinstance(registered, runner._ProtobufSerializer)
@@ -9082,7 +9082,7 @@ class TestOtlpIngestRunner:
             "elasticsearch.AsyncElasticsearch.perform_request",
             new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
         ):
-            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+            await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics"})
 
         # the existing serializer instance is preserved
         assert es.transport.serializers.serializers["application/x-protobuf"] is existing
@@ -9091,7 +9091,23 @@ class TestOtlpIngestRunner:
     async def test_missing_body_raises(self):
         es = self._make_es_mock()
         with pytest.raises(exceptions.DataError):
-            await runner.OtlpIngest()(es, {})
+            await runner.OtlpIngest()(es, {"signal": "metrics"})
+
+    @pytest.mark.asyncio
+    async def test_missing_signal_raises(self):
+        es = self._make_es_mock()
+        with pytest.raises(exceptions.DataError, match="mandatory parameter 'signal'"):
+            await runner.OtlpIngest()(es, {"body": b"\x0a"})
+
+    @pytest.mark.asyncio
+    async def test_unsupported_signal_raises(self):
+        es = self._make_es_mock()
+        with (
+            mock.patch("elasticsearch.AsyncElasticsearch.perform_request", new=mock.AsyncMock()) as pr,
+            pytest.raises(exceptions.DataError, match=r"unsupported OTLP signal \[profiles\]"),
+        ):
+            await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "profiles"})
+        pr.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_zero_retry_params_allowed(self):
@@ -9100,7 +9116,7 @@ class TestOtlpIngestRunner:
             "elasticsearch.AsyncElasticsearch.perform_request",
             new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
         ) as pr:
-            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "retries-on-error": 0, "retry-wait-period": 0})
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics", "retries-on-error": 0, "retry-wait-period": 0})
 
         pr.assert_awaited_once()
         assert result["success"] is True
@@ -9117,7 +9133,7 @@ class TestOtlpIngestRunner:
             "elasticsearch.AsyncElasticsearch.perform_request",
             new=mock.AsyncMock(side_effect=api_error),
         ) as pr:
-            result = await runner.OtlpIngest()(es, {"body": b"\x0a"})
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics"})
 
         # only one attempt — no retry for non-retryable status
         assert pr.await_count == 1
@@ -9146,7 +9162,7 @@ class TestOtlpIngestRunner:
             mock.patch("elasticsearch.AsyncElasticsearch.perform_request", new=perform),
             mock.patch("esrally.driver.runner.asyncio.sleep", new=fake_sleep),
         ):
-            result = await runner.OtlpIngest()(es, {"body": b"\x0a"})
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics"})
 
         assert perform.await_count == 3
         # two sleeps for the two retries
@@ -9170,7 +9186,7 @@ class TestOtlpIngestRunner:
             ) as pr,
             mock.patch("esrally.driver.runner.asyncio.sleep", new=mock.AsyncMock()),
         ):
-            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "retries-on-error": 2})
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics", "retries-on-error": 2})
 
         # 2 retries + 1 initial attempt = 3 attempts
         assert pr.await_count == 3
@@ -9196,7 +9212,7 @@ class TestOtlpIngestRunner:
             ) as pr,
             mock.patch("esrally.driver.runner.asyncio.sleep", new=mock.AsyncMock()),
         ):
-            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "retries-on-error": 1})
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics", "retries-on-error": 1})
 
         assert pr.await_count == 2  # 1 retry + 1 initial
         assert result["error-type"] == "transport"
@@ -9212,7 +9228,7 @@ class TestOtlpIngestRunner:
             ) as pr,
             mock.patch("esrally.driver.runner.asyncio.sleep", new=mock.AsyncMock()),
         ):
-            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "retries-on-error": 2})
+            result = await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics", "retries-on-error": 2})
 
         assert pr.await_count == 3
         assert result["success"] is False
@@ -9237,7 +9253,7 @@ class TestOtlpIngestRunner:
             mock.patch("elasticsearch.AsyncElasticsearch.perform_request", new=perform),
             mock.patch("esrally.driver.runner.asyncio.sleep", new=fake_sleep),
         ):
-            await runner.OtlpIngest()(es, {"body": b"\x0a", "retry-wait-period": 10})
+            await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics", "retry-wait-period": 10})
 
         assert len(captured) == 1
         # full-jitter: random.uniform(0, base*2^0) = uniform(0, 10)
@@ -9251,7 +9267,7 @@ class TestOtlpIngestRunner:
             "elasticsearch.AsyncElasticsearch.perform_request",
             new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
         ) as pr:
-            await runner.OtlpIngest()(es, {"body": b"\x1f\x8b...gzipped...", "gzip": True})
+            await runner.OtlpIngest()(es, {"body": b"\x1f\x8b...gzipped...", "signal": "metrics", "gzip": True})
 
         assert pr.await_args.kwargs["headers"] == {
             "Content-Type": "application/x-protobuf",
@@ -9266,7 +9282,7 @@ class TestOtlpIngestRunner:
             "elasticsearch.AsyncElasticsearch.perform_request",
             new=mock.AsyncMock(return_value=ApiResponse(body=io.BytesIO(b""), meta=self._OK_META)),
         ) as pr:
-            await runner.OtlpIngest()(es, {"body": b"\x0a", "gzip": False})
+            await runner.OtlpIngest()(es, {"body": b"\x0a", "signal": "metrics", "gzip": False})
 
         assert pr.await_args.kwargs["headers"] == {"Content-Type": "application/x-protobuf"}
 

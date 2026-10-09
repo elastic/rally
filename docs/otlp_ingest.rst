@@ -7,7 +7,7 @@ This lets you measure how quickly Elasticsearch can accept a realistic stream of
 Overview
 --------
 
-The OTLP ingest feature introduces a new corpus format (``otlp-proto``) and a new operation type (``otlp-ingest``).
+The OTLP ingest feature introduces a new corpus format (``otlp-metrics``) and a new operation type (``otlp-ingest``).
 Instead of bulk-indexing newline-delimited JSON, Rally sends pre-serialized ``ExportMetricsServiceRequest`` protobuf messages directly to the OTLP endpoint — matching exactly what a real OpenTelemetry Collector would send.
 
 The data flow at a glance:
@@ -178,7 +178,7 @@ Typical corpus sizes for ``builtin/hostmetrics``:
 Track Definition
 ----------------
 
-OTLP corpora use ``"source-format": "otlp-proto"`` in the track definition. A minimal track has the following ``track.json`` file.
+OTLP corpora use ``"source-format": "otlp-metrics"`` in the track definition. A minimal track has the following ``track.json`` file.
 
 .. code-block:: json
 
@@ -202,7 +202,7 @@ OTLP corpora use ``"source-format": "otlp-proto"`` in the track definition. A mi
         "name": "otlp-metrics",
         "documents": [
           {
-            "source-format": "otlp-proto",
+            "source-format": "otlp-metrics",
             "source-file": "metrics.otlp.json",
             "uncompressed-bytes": 190950696,
             "document-count": 360
@@ -283,7 +283,7 @@ The ``track.json`` file references ``metrics-otel@custom.template.json`` file wi
 Corpus document fields
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The following fields are relevant for ``otlp-proto`` corpora. See :ref:`track_corpora` for the full corpus syntax.
+The following fields are relevant for ``otlp-metrics`` corpora. See :ref:`track_corpora` for the full corpus syntax.
 
 .. list-table::
    :widths: 20 10 70
@@ -294,7 +294,7 @@ The following fields are relevant for ``otlp-proto`` corpora. See :ref:`track_co
      - Description
    * - ``source-format``
      - Yes
-     - Must be ``otlp-proto`` to enable OTLP handling.
+     - Must be ``otlp-metrics`` to enable OTLP metrics handling.
    * - ``source-file``
      - Yes
      - Name of the OTLP JSON file produced by ``metricsgenreceiver`` (one ``ExportMetricsServiceRequest`` per line), relative to the corpus data directory. It may be an archive (e.g. ``metrics.otlp.json.zst``) containing exactly one file named like the archive without its extension; Rally decompresses it before conversion.
@@ -327,7 +327,7 @@ See :ref:`operation_otlp_ingest` for the full operation syntax.
    * - ``corpora``
      - No
      - all corpora
-     - Name of the corpus to read from. Must match a corpus name in the track definition. The selected corpora must contain exactly one ``otlp-proto`` document set, otherwise Rally reports an error.
+     - Name of the corpus to read from. Must match a corpus name in the track definition. The selected corpora must contain exactly one ``otlp-metrics`` document set, otherwise Rally reports an error.
    * - ``gzip``
      - No
      - ``false``
