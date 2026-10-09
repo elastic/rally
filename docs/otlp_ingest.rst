@@ -327,7 +327,7 @@ See :ref:`operation_otlp_ingest` for the full operation syntax.
    * - ``corpora``
      - No
      - all corpora
-     - Name of the corpus to read from. Must match a corpus name in the track definition.
+     - Name of the corpus to read from. Must match a corpus name in the track definition. The selected corpora must contain exactly one ``otlp-proto`` document set, otherwise Rally reports an error.
    * - ``gzip``
      - No
      - ``false``

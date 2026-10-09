@@ -3445,22 +3445,21 @@ class TestOtlpParamSource:
         # corpora exposed to prepare-track only contains the selected corpus
         assert [c.name for c in source.corpora] == ["corpus-270m"]
 
-    def test_selects_first_corpus_when_no_param(self, tmp_path):
-        # legacy behaviour — without an explicit `corpora` param we fall back to all matching corpora
+    def test_raises_when_multiple_otlp_corpora_match(self, tmp_path):
         d_a = tmp_path / "a"
         d_b = tmp_path / "b"
         d_a.mkdir()
         d_b.mkdir()
         corpus_a = self._build_corpus(d_a, num_records=3, corpus_name="corpus-60m")
         corpus_b = self._build_corpus(d_b, num_records=5, corpus_name="corpus-270m")
-        source = params.OtlpParamSource(
-            track_obj=track.Track(name="unit-test", corpora=[corpus_a, corpus_b]),
-            params={},
-        )
-        # both corpora are visible to prepare-track…
-        assert [c.name for c in source.corpora] == ["corpus-60m", "corpus-270m"]
-        # …and we pick the first one as the active document set
-        assert source._doc.number_of_documents == 3
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.OtlpParamSource(
+                track_obj=track.Track(name="unit-test", corpora=[corpus_a, corpus_b]),
+                params={},
+            )
+        assert "exactly one" in exc.value.args[0]
+        assert "[corpus-60m]" in exc.value.args[0]
+        assert "[corpus-270m]" in exc.value.args[0]
 
     def test_raises_when_corpora_param_doesnt_match(self, tmp_path):
         corpus = self._build_corpus(tmp_path, num_records=3, corpus_name="corpus-60m")
@@ -3498,8 +3497,7 @@ class TestOtlpParamSource:
         # used_corpora() in loader.py checks for this attribute
         assert source.corpora == [corpus]
 
-    def test_deduplicates_corpora_by_name(self, tmp_path):
-        # one corpus with two OTLP document sets — should appear only once
+    def test_raises_when_corpus_has_multiple_otlp_document_sets(self, tmp_path):
         json_path = tmp_path / "metrics.otlp.json"
         json_path.write_text(self._SAMPLE_OTLP_JSON_LINE + "\n")
         io.OtlpProtobufFile.for_source_file(str(json_path)).create()
@@ -3518,11 +3516,39 @@ class TestOtlpParamSource:
                 ),
             ],
         )
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.OtlpParamSource(
+                track_obj=track.Track(name="unit-test", corpora=[corpus]),
+                params={"corpora": "otlp-corpus"},
+            )
+        assert "Found 2 OTLP document sets" in exc.value.args[0]
+
+    def test_exposes_only_otlp_document_set_of_mixed_corpus(self, tmp_path):
+        otlp_corpus = self._build_corpus(tmp_path, num_records=3, corpus_name="mixed")
+        otlp_doc = otlp_corpus.documents[0]
+        bulk_doc = track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=10, target_index="test-idx")
+        corpus = track.DocumentCorpus(name="mixed", documents=[bulk_doc, otlp_doc], meta_data={"m": 1})
         source = params.OtlpParamSource(
             track_obj=track.Track(name="unit-test", corpora=[corpus]),
             params={},
         )
-        assert source.corpora == [corpus]
+        assert [c.name for c in source.corpora] == ["mixed"]
+        assert source.corpora[0].documents == [otlp_doc]
+        assert source.corpora[0].meta_data == {"m": 1}
+        assert source._doc is otlp_doc
+
+    def test_accepts_corpora_list_resolving_to_one_document_set(self, tmp_path):
+        otlp_corpus = self._build_corpus(tmp_path, num_records=3)
+        bulk_corpus = track.DocumentCorpus(
+            name="bulk-only",
+            documents=[track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=10)],
+        )
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[bulk_corpus, otlp_corpus]),
+            params={"corpora": ["bulk-only", "otlp-corpus"]},
+        )
+        assert source.corpora == [otlp_corpus]
+        assert source._doc is otlp_corpus.documents[0]
 
     @staticmethod
     def _count_records(param_source):
@@ -3567,7 +3593,6 @@ class TestOtlpParamSource:
         assert p0 is not p1
         assert p0._partition_index == 0
         assert p1._partition_index == 1
-        # but shared (deduplicated) reference to the underlying document set
         assert p0._doc is p1._doc
 
     def test_params_yields_full_corpus_across_partitions(self, tmp_path):

@@ -917,7 +917,7 @@ With the operation type ``otlp-ingest`` you can send OpenTelemetry metrics to th
 Properties
 """"""""""
 
-* ``corpora`` (optional, defaults to all corpora): A corpus name or a list of corpus names to read from. Rally uses the first ``otlp-proto`` document set among the matching corpora.
+* ``corpora`` (optional, defaults to all corpora): A corpus name or a list of corpus names to read from. The selected corpora must contain exactly one ``otlp-proto`` document set, otherwise Rally reports an error.
 * ``gzip`` (optional, defaults to ``false``): If ``true``, track preparation stores each record gzip-compressed in a ``.pbgz`` file and Rally sends the records verbatim with ``Content-Encoding: gzip``. Otherwise, records are stored in a ``.pb`` file and sent uncompressed.
 * ``looped`` (optional, defaults to ``false``): If set to ``true``, each client starts again from the beginning of its part of the corpus once it has sent all records. This option should be combined with ``time-period`` or ``iterations`` properties at the task level, otherwise Rally will never finish the task.
 * ``request-timeout`` (optional): Client-side timeout in seconds per request.

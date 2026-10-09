@@ -633,7 +633,17 @@ class BulkIndexParamSource(ParamSource):
             self.on_conflict = None
             self.recency = None
 
-        self.corpora = self.used_corpora(track, params)
+        self.corpora = used_corpora(track, params, target_indices=params.get("indices"), target_data_streams=params.get("data-streams"))
+
+        # the track has corpora but none of them match
+        if track.corpora and not self.corpora:
+            track_corpora_names = [corpus.name for corpus in track.corpora]
+            corpora_names = params.get("corpora", track_corpora_names)
+            if isinstance(corpora_names, str):
+                corpora_names = [corpora_names]
+            raise exceptions.RallyAssertionError(
+                "The provided corpus %s does not match any of the corpora %s." % (corpora_names, track_corpora_names)
+            )
 
         if len(self.corpora) == 0:
             raise exceptions.InvalidSyntax(
@@ -724,31 +734,6 @@ class BulkIndexParamSource(ParamSource):
         except ValueError:
             raise exceptions.InvalidSyntax(f"'{name}' must be numeric")
 
-    def used_corpora(self, t, params):
-        corpora = []
-        track_corpora_names = [corpus.name for corpus in t.corpora]
-        corpora_names = params.get("corpora", track_corpora_names)
-        if isinstance(corpora_names, str):
-            corpora_names = [corpora_names]
-
-        for corpus in t.corpora:
-            if corpus.name in corpora_names:
-                filtered_corpus = corpus.filter(
-                    source_format=track.Documents.SOURCE_FORMAT_BULK,
-                    target_indices=params.get("indices"),
-                    target_data_streams=params.get("data-streams"),
-                )
-                if filtered_corpus.number_of_documents(source_format=track.Documents.SOURCE_FORMAT_BULK) > 0:
-                    corpora.append(filtered_corpus)
-
-        # the track has corpora but none of them match
-        if t.corpora and not corpora:
-            raise exceptions.RallyAssertionError(
-                "The provided corpus %s does not match any of the corpora %s." % (corpora_names, track_corpora_names)
-            )
-
-        return corpora
-
     def partition(self, partition_index, total_partitions):
         # register the new partition internally
         self.param_source.partition(partition_index, total_partitions)
@@ -783,7 +768,8 @@ class OtlpParamSource(ParamSource):
         # file format based on this flag.
         self.gzip = bool(params.get("gzip", False))
 
-        otlp_docs = self._find_otlp_docs()
+        corpora = used_corpora(track_obj, params, source_format=track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF)
+        otlp_docs = [(corpus, doc) for corpus in corpora for doc in corpus.documents]
         if not otlp_docs:
             requested = self._params.get("corpora")
             if requested:
@@ -795,14 +781,14 @@ class OtlpParamSource(ParamSource):
                 f"No OTLP corpus found in track [{track_obj}]. "
                 f"Add at least one document corpus with source_format={track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF!r}."
             )
-        # expose corpora so used_corpora() in loader.py includes OTLP corpora in the prepare-track phase
-        seen_names: set[str] = set()
-        self.corpora = []
-        for corpus, _ in otlp_docs:
-            if corpus.name not in seen_names:
-                seen_names.add(corpus.name)
-                self.corpora.append(corpus)
-        # use the first matching document set
+        if len(otlp_docs) > 1:
+            matches = ", ".join(f"[{corpus}] {doc}" for corpus, doc in otlp_docs)
+            raise exceptions.InvalidSyntax(
+                f"Found {len(otlp_docs)} OTLP document sets in track [{track_obj}] but an otlp-ingest operation requires "
+                f"exactly one: {matches}. Set 'corpora' to a single corpus or define each document set in its own corpus."
+            )
+        # read by used_corpora() in loader.py so that prepare-track only prepares this document set
+        self.corpora = corpora
         _, self._doc = otlp_docs[0]
 
     @staticmethod
@@ -815,21 +801,6 @@ class OtlpParamSource(ParamSource):
             wait = params["retry-wait-period"]
             if isinstance(wait, bool) or not isinstance(wait, numbers.Real) or wait < 0:
                 raise exceptions.InvalidSyntax(f"parameter 'retry-wait-period' must be a non-negative number but was {wait!r}")
-
-    def _find_otlp_docs(self):
-        # honor the operation's "corpora" param so a track with multiple OTLP corpora can pick
-        # between them — without this we'd silently use whichever corpus comes first in track.corpora.
-        track_corpora_names = [corpus.name for corpus in self.track.corpora]
-        corpora_names = self._params.get("corpora", track_corpora_names)
-        if isinstance(corpora_names, str):
-            corpora_names = [corpora_names]
-        return [
-            (corpus, doc)
-            for corpus in self.track.corpora
-            if corpus.name in corpora_names
-            for doc in corpus.documents
-            if doc.source_format == track.Documents.SOURCE_FORMAT_OTLP_PROTOBUF
-        ]
 
     def partition(self, partition_index, total_partitions):
         # pylint: disable=protected-access
@@ -1130,6 +1101,27 @@ def get_target(track, params):
     if not target_name:
         target_name = params.get("data-stream", default_target)
     return target_name
+
+
+def used_corpora(t, params, source_format=track.Documents.SOURCE_FORMAT_BULK, target_indices=None, target_data_streams=None):
+    """
+    :return: The corpora selected by the operation's ``corpora`` parameter (default: all), each reduced to the document
+             sets matching ``source_format`` and the given targets. Corpora without matching documents are omitted.
+    """
+    track_corpora_names = [corpus.name for corpus in t.corpora]
+    corpora_names = params.get("corpora", track_corpora_names)
+    if isinstance(corpora_names, str):
+        corpora_names = [corpora_names]
+
+    corpora = []
+    for corpus in t.corpora:
+        if corpus.name in corpora_names:
+            filtered_corpus = corpus.filter(
+                source_format=source_format, target_indices=target_indices, target_data_streams=target_data_streams
+            )
+            if filtered_corpus.number_of_documents(source_format=source_format) > 0:
+                corpora.append(filtered_corpus)
+    return corpora
 
 
 def number_of_bulks(corpora, start_partition_index, end_partition_index, total_partitions, bulk_size):
