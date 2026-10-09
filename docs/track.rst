@@ -340,7 +340,10 @@ Each entry in the ``documents`` list consists of the following properties:
 
   * S3 according to `docs <https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html#configuration>`_.
   * Google Storage: Either using `client library authentication <https://cloud.google.com/storage/docs/reference/libraries#setting_up_authentication>`_ or by presenting an `oauth2 token <https://cloud.google.com/storage/docs/authentication>`_ via the ``GOOGLE_AUTH_TOKEN`` environment variable, typically done using: ``export GOOGLE_AUTH_TOKEN=$(gcloud auth print-access-token)``.
-* ``source-format`` (optional, default: ``bulk``): Defines in which format Rally should interpret the data file specified by ``source-file``. Currently, only ``bulk`` is supported.
+* ``source-format`` (optional, default: ``bulk``): Defines in which format Rally should interpret the data file specified by ``source-file``. Supported values:
+
+  * ``bulk``: Newline-delimited JSON documents for bulk indexing.
+  * ``otlp-metrics``: Newline-delimited OTLP JSON records produced by ``metricsgenreceiver``, where each line is one ``ExportMetricsServiceRequest``. Rally converts the file to binary protobuf which is consumed by the ``otlp-ingest`` operation. The ``includes-action-and-meta-data``, ``target-index`` and ``target-data-stream`` are not applicable. See :doc:`otlp_ingest` for details.
 * ``source-file`` (mandatory): File name of the corresponding documents. For local use, this file can be a ``.json`` file. If you provide a ``base-url`` we recommend that you provide a compressed file here. The following extensions are supported: ``.zip``, ``.bz2``, ``.gz``, ``.tar``, ``.tar.gz``, ``.tgz``, ``.tar.bz2`` or ``zst``. It must contain exactly one JSON file with the same name. The preferred file extension for our official tracks is ``.bz2``.
 * ``includes-action-and-meta-data`` (optional, defaults to ``false``): Defines whether the documents file contains already an `action and meta-data <https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-desc>`_ line (``true``) or only documents (``false``).
 
@@ -904,6 +907,47 @@ An example error response may look like this::
         ]
     }
 
+.. _operation_otlp_ingest:
+
+otlp-ingest
+~~~~~~~~~~~
+
+With the operation type ``otlp-ingest`` you can send OpenTelemetry metrics to the Elasticsearch `OTLP metrics endpoint <https://www.elastic.co/docs/manage-data/ingest/otlp-endpoint>`_ (``/_otlp/v1/metrics``). Each request is one ``ExportMetricsServiceRequest`` record from a corpus with ``source-format`` ``otlp-metrics`` (see :ref:`track_corpora`), sent as binary protobuf with ``Content-Type: application/x-protobuf``. See :doc:`otlp_ingest` for details.
+
+Properties
+""""""""""
+
+* ``corpora`` (optional, defaults to all corpora): A corpus name or a list of corpus names to read from. The selected corpora must contain exactly one ``otlp-metrics`` document set, otherwise Rally reports an error.
+* ``gzip`` (optional, defaults to ``false``): If ``true``, track preparation stores each record gzip-compressed in a ``.pbgz`` file and Rally sends the records verbatim with ``Content-Encoding: gzip``. Otherwise, records are stored in a ``.pb`` file and sent uncompressed.
+* ``looped`` (optional, defaults to ``false``): If set to ``true``, each client starts again from the beginning of its part of the corpus once it has sent all records. This option should be combined with ``time-period`` or ``iterations`` properties at the task level, otherwise Rally will never finish the task.
+* ``request-timeout`` (optional): Client-side timeout in seconds per request.
+* ``retries-on-error`` (optional, defaults to 5): A non-negative integer that defines how often a request is retried on a retryable error (see below).
+* ``retry-wait-period`` (optional, defaults to 0.5): A non-negative number that defines the base wait time in seconds for the exponential backoff between retries.
+
+With multiple ``clients``, Rally splits the corpus into as many non-overlapping parts as there are clients, so that each record is sent exactly once per pass.
+
+Requests that fail with HTTP status 429, 502, 503 or 504 or with a connection error are retried up to ``retries-on-error`` times with exponential backoff and full jitter (starting at ``retry-wait-period`` seconds, capped at 30 seconds). Other errors are not retried.
+
+Example::
+
+    {
+      "name": "ingest-otlp-metrics",
+      "operation-type": "otlp-ingest",
+      "corpora": "otlp-metrics",
+      "gzip": true
+    }
+
+Throughput will be reported as number of requests per second.
+
+Meta-data
+"""""""""
+
+* ``weight``: Always 1.
+* ``unit``: Always ``ops``.
+* ``success``: A boolean indicating whether the request has succeeded.
+* ``request-status``: HTTP status code of the last response. Omitted if the request failed with a connection error.
+* ``request-size-bytes``: Size of the request body in bytes.
+* ``error-type``: Only present on failure. ``backpressure`` for HTTP 429, ``transport`` for HTTP 502, 503, 504 or connection errors and ``rejected`` for any other error.
 
 force-merge
 ~~~~~~~~~~~

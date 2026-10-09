@@ -542,29 +542,32 @@ Consider the DefaultTrackPreparator below, which is invoked by default unless ov
         def on_after_load_track(self, track):
             pass
 
-        @staticmethod
-        def prepare_docs(cfg, track, corpus, preparator):
-            for document_set in corpus.documents:
-                if document_set.is_bulk:
-                    data_root = data_dir(cfg, track.name, corpus.name)
-                    logging.getLogger(__name__).info(
-                        "Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root
-                    )
-                    if len(data_root) == 1:
-                        preparator.prepare_document_set(document_set, data_root[0])
-                    # attempt to prepare everything in the current directory and fallback to the corpus directory
-                    elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
-                        preparator.prepare_document_set(document_set, data_root[1])
-
         def on_prepare_track(self, track, data_root_dir):
             prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
             for corpus in used_corpora(track):
-                params = {"cfg": self.cfg, "track": track, "corpus": corpus, "preparator": prep}
-                yield DefaultTrackPreparator.prepare_docs, params
+                for document_set in corpus.documents:
+                    yield prepare_document, {
+                        "cfg": self.cfg,
+                        "track": track,
+                        "corpus": corpus,
+                        "preparator": prep,
+                        "document_set": document_set,
+                        "formats": DOCUMENT_SET_FORMATS[document_set.source_format].variants(track, corpus),
+                    }
 
-In this case, you can see by default we do nothing here for ``on_after_load_track`` to mutate the track, but yield a tuple of the ``prepare_docs``
-function and a dict of its args for each corpus in the track ``corpora``. The ``DocumentSetPreparator`` class referenced has code which checks to see if data
-is already available locally, otherwise it resolves, downloads, and decompresses specified corpora files. After this is called, these tuples are given to each
+    def prepare_document(cfg, track, corpus, preparator, document_set, formats=None):
+        data_root = data_dir(cfg, track.name, corpus.name)
+        for fmt in formats or [DOCUMENT_SET_FORMATS[document_set.source_format]()]:
+            if len(data_root) == 1:
+                preparator.prepare_document_set(document_set, data_root[0], fmt)
+            # attempt to prepare everything in the current directory and fallback to the corpus directory
+            elif not preparator.prepare_bundled_document_set(document_set, data_root[0], fmt):
+                preparator.prepare_document_set(document_set, data_root[1], fmt)
+
+In this case, you can see by default we do nothing here for ``on_after_load_track`` to mutate the track, but yield a tuple of the ``prepare_document``
+function and a dict of its args for each document set in the track's used corpora. The ``DocumentSetPreparator`` class referenced has code which checks to see if data
+is already available locally, otherwise it resolves, downloads, and decompresses specified corpora files. Format-specific steps (e.g. creating a file offset table
+for bulk documents) are delegated to the ``DocumentSetFormat`` registered for the document set's ``source-format``. After this is called, these tuples are given to each
 TrackProcessor worker actor to be executed in parallel. In a custom track processor, the callable and its parameters are arbitrary, and should be defined to
 your specific needs.
 

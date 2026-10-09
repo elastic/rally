@@ -394,7 +394,8 @@
           },
           "source-format": {
             "type": "string",
-            "description": "Defines in which format Rally should interpret the data file specified by 'source-file'. Currently, only 'bulk' is supported."
+            "enum": ["bulk", "otlp-metrics"],
+            "description": "Defines in which format Rally should interpret the data file specified by 'source-file': 'bulk' (default) for documents indexed with the bulk API or 'otlp-metrics' for OTLP ExportMetricsServiceRequest records sent to the OTLP endpoint."
           },
           "includes-action-and-meta-data": {
             "type": "boolean",
@@ -430,7 +431,8 @@
                 },
                 "source-format": {
                   "type": "string",
-                  "description": "Defines in which format Rally should interpret the data file specified by 'source-file'. Currently, only 'bulk' is supported."
+                  "enum": ["bulk", "otlp-metrics"],
+                  "description": "Defines in which format Rally should interpret the data file specified by 'source-file': 'bulk' (default) for documents indexed with the bulk API or 'otlp-metrics' for OTLP ExportMetricsServiceRequest records sent to the OTLP endpoint."
                 },
                 "document-count": {
                   "type": "integer",

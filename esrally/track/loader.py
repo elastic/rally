@@ -416,6 +416,20 @@ def set_absolute_data_path(cfg: types.Config, t):
                 return p
         return None
 
+    def first_existing_with_suffix(root_dirs, f, suffix):
+        for root_dir in root_dirs:
+            candidate = os.path.join(root_dir, f)
+            if os.path.exists(candidate + suffix):
+                return candidate
+        return None
+
+    def first_existing_with_any_suffix(root_dirs, f, suffixes):
+        for suffix in suffixes:
+            resolved = first_existing_with_suffix(root_dirs, f, suffix)
+            if resolved is not None:
+                return resolved
+        return None
+
     for corpus in t.corpora:
         data_root = data_dir(cfg, t.name, corpus.name)
         for document_set in corpus.documents:
@@ -423,7 +437,12 @@ def set_absolute_data_path(cfg: types.Config, t):
             if document_set.document_archive:
                 document_set.document_archive = first_existing(data_root, document_set.document_archive)
             if document_set.document_file:
-                document_set.document_file = first_existing(data_root, document_set.document_file)
+                resolved = first_existing(data_root, document_set.document_file)
+                # Only a derived file (e.g. OTLP .pb) may exist locally; resolve to where the source file would be.
+                if resolved is None:
+                    suffixes = DOCUMENT_SET_FORMATS[document_set.source_format].prepared_file_suffixes()
+                    resolved = first_existing_with_any_suffix(data_root, document_set.document_file, suffixes)
+                document_set.document_file = resolved
 
 
 def is_simple_track_mode(cfg: types.Config):
@@ -562,6 +581,189 @@ def used_corpora(t):
     return corpora.values()
 
 
+def _otlp_gzip_preferences_for_corpus(t, corpus_name: str) -> set[bool]:
+    """
+    Returns the set of gzip preferences (True/False) requested by any OTLP operation in the
+    selected challenge that uses the given corpus. Used during prepare-track to decide whether
+    to produce ``.pb``, ``.pbgz``, or both for a given corpus.
+    """
+    prefs: set[bool] = set()
+    if not t.corpora:
+        return prefs
+    challenge = t.selected_challenge_or_default
+    for task in challenge.schedule:
+        for sub_task in task:
+            param_source = operation_parameters(t, sub_task)
+            if not hasattr(param_source, "corpora") or not hasattr(param_source, "gzip"):
+                continue
+            for c in param_source.corpora:
+                if c.name == corpus_name:
+                    prefs.add(bool(param_source.gzip))
+    return prefs
+
+
+class DocumentSetFormat(abc.ABC):
+    """
+    Format-specific hooks used by ``DocumentSetPreparator`` to prepare a document set locally. Subclasses must be
+    picklable as they are sent to the track preparation worker actors.
+    """
+
+    source_format: str
+
+    @classmethod
+    def variants(cls, t: track.Track, corpus: track.DocumentCorpus) -> list["DocumentSetFormat"]:
+        """
+        :return: All format instances that need to be prepared for ``corpus`` in the selected challenge of ``t``.
+        """
+        return [cls()]
+
+    @classmethod
+    def prepared_file_suffixes(cls) -> tuple[str, ...]:
+        """
+        :return: Suffixes that derived files append to the source document file name.
+        """
+        return ()
+
+    def is_prepared(self, document_set: track.Documents, doc_path: str) -> bool:
+        return False
+
+    def try_fetch_prepared(self, preparator: "DocumentSetPreparator", document_set: track.Documents, doc_path: str) -> bool:
+        """
+        Tries to download already prepared files instead of the source document file.
+
+        :return: True iff the document set is ready to use afterwards.
+        """
+        return False
+
+    @abc.abstractmethod
+    def finalize(self, preparator: "DocumentSetPreparator", document_set: track.Documents, doc_path: str) -> None:
+        """
+        Creates derived files once the source document file is available at ``doc_path``.
+        """
+
+
+class BulkDocumentSetFormat(DocumentSetFormat):
+    source_format = track.Documents.SOURCE_FORMAT_BULK
+
+    def finalize(self, preparator, document_set, doc_path):
+        # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
+        lines_read = io.prepare_file_offset_table(doc_path, document_set.base_url)
+        if lines_read and lines_read != document_set.number_of_lines:
+            io.remove_file_offset_table(doc_path)
+            raise exceptions.DataError(
+                f"Data in [{doc_path}] for track [{preparator.track_name}] are invalid. "
+                f"Expected [{document_set.number_of_lines}] lines but got [{lines_read}]."
+            )
+
+
+class OtlpDocumentSetFormat(DocumentSetFormat):
+    """
+    Converts the OTLP JSON source into ``.pb`` (raw protobuf records) or, with ``gzip_records``, ``.pbgz`` (each record
+    gzip-compressed independently). Subclasses set ``source_format``, one per OTLP signal.
+    """
+
+    def __init__(self, gzip_records: bool = False):
+        self.gzip_records = gzip_records
+
+    @classmethod
+    def variants(cls, t, corpus):
+        # operations sharing a corpus may differ in ``gzip``; default to .pb if no operation expresses a preference
+        gzip_prefs = _otlp_gzip_preferences_for_corpus(t, corpus.name) or {False}
+        return [cls(gzip_records=gzip_records) for gzip_records in sorted(gzip_prefs)]
+
+    @classmethod
+    def prepared_file_suffixes(cls):
+        return ".pb", ".pbgz"
+
+    def _pb_file(self, doc_path):
+        return io.OtlpProtobufFile.for_source_file(doc_path, gzip_records=self.gzip_records)
+
+    def is_prepared(self, document_set, doc_path):
+        pb_file = self._pb_file(doc_path)
+        return pb_file.is_valid() and self._has_expected_record_count(document_set, pb_file)
+
+    @staticmethod
+    def _has_expected_record_count(document_set, pb_file) -> bool:
+        # like bulk: trust an existing offset file and only verify when we have to build it
+        if os.path.exists(pb_file.offset_path):
+            return True
+        try:
+            if pb_file.count_records() == document_set.number_of_documents:
+                return True
+        except exceptions.DataError as e:
+            LOG.warning("%s", e)
+        LOG.warning("[%s] does not contain [%d] records. Removing it.", pb_file.pb_path, document_set.number_of_documents)
+        pb_file.remove()
+        return False
+
+    def try_fetch_prepared(self, preparator, document_set, doc_path):
+        # Prefer a corpus file compressed like the JSON source: .pb files can be tens of GB and compress 2–4× with zstd.
+        pb_file = self._pb_file(doc_path)
+        pb_path = pb_file.pb_path
+
+        if document_set.has_compressed_corpus():
+            _, archive_ext = io.splitext(document_set.document_archive)
+            if archive_ext and archive_ext in io.SUPPORTED_ARCHIVE_FORMATS:
+                pb_archive_path = pb_path + archive_ext
+                try:
+                    preparator.downloader.download(document_set.base_url, pb_archive_path)
+                except exceptions.DataError:
+                    LOG.debug("Compressed .pb%s not available remotely, will try uncompressed .pb.", archive_ext)
+                else:
+                    preparator.decompressor.decompress(pb_archive_path, pb_path, uncompressed_size=None)
+                    try:
+                        os.remove(pb_archive_path)
+                    except OSError:
+                        pass
+                    if pb_file.is_valid():
+                        self._try_download_offset(preparator, document_set, pb_file)
+                        return self._has_expected_record_count(document_set, pb_file)
+
+        try:
+            preparator.downloader.download(document_set.base_url, pb_path)
+        except exceptions.DataError:
+            return False
+        if not pb_file.is_valid():
+            return False
+        self._try_download_offset(preparator, document_set, pb_file)
+        return self._has_expected_record_count(document_set, pb_file)
+
+    @staticmethod
+    def _try_download_offset(preparator, document_set, pb_file):
+        # Best effort: a stale index may not match the new corpus file; OtlpProtobufFile regenerates it on demand.
+        offset_path = pb_file.offset_path
+        try:
+            preparator.downloader.download(document_set.base_url, offset_path)
+        except (exceptions.DataError, exceptions.SystemSetupError) as e:
+            LOG.debug("Offset index [%s] not available remotely, it will be generated locally: %s", offset_path, e)
+            try:
+                os.remove(offset_path)
+            except FileNotFoundError:
+                pass
+
+    def finalize(self, preparator, document_set, doc_path):
+        pb_file = self._pb_file(doc_path)
+        records_written = pb_file.create(signal=track.Documents.OTLP_SIGNALS[self.source_format])
+        if records_written != document_set.number_of_documents:
+            # remove it, otherwise is_valid() would accept the corrupt file on the next run
+            pb_file.remove()
+            raise exceptions.DataError(
+                f"Data in [{pb_file.source_json_path}] for track [{preparator.track_name}] are invalid. "
+                f"Expected [{document_set.number_of_documents}] records but got [{records_written}]."
+            )
+        pb_file.count_records()
+
+
+# OTLP logs/traces: add sibling subclasses (e.g. OtlpLogsDocumentSetFormat) and register them below.
+class OtlpMetricsDocumentSetFormat(OtlpDocumentSetFormat):
+    source_format = track.Documents.SOURCE_FORMAT_OTLP_METRICS
+
+
+DOCUMENT_SET_FORMATS: dict[str, type[DocumentSetFormat]] = {
+    f.source_format: f for f in (BulkDocumentSetFormat, OtlpMetricsDocumentSetFormat)
+}
+
+
 class DefaultTrackPreparator(TrackProcessor):
     def __init__(self):
         super().__init__()
@@ -575,24 +777,37 @@ class DefaultTrackPreparator(TrackProcessor):
         prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
         for corpus in used_corpora(track):
             for document_set in corpus.documents:
-                if document_set.is_bulk:
-                    yield prepare_document, {
-                        "cfg": self.cfg,
-                        "track": track,
-                        "corpus": corpus,
-                        "preparator": prep,
-                        "document_set": document_set,
-                    }
+                yield prepare_document, {
+                    "cfg": self.cfg,
+                    "track": track,
+                    "corpus": corpus,
+                    "preparator": prep,
+                    "document_set": document_set,
+                    "formats": DOCUMENT_SET_FORMATS[document_set.source_format].variants(track, corpus),
+                }
 
 
-def prepare_document(cfg: types.Config, track, corpus, preparator, document_set):
+def prepare_document(cfg: types.Config, track, corpus, preparator, document_set, formats=None):
     data_root = data_dir(cfg, track.name, corpus.name)
     LOG.info("Resolved data root directory for document corpus [%s] in track [%s] to [%s].", corpus.name, track.name, data_root)
+    formats = formats or [DOCUMENT_SET_FORMATS[document_set.source_format]()]
+    # variants share the source file, so they are prepared sequentially
     if len(data_root) == 1:
-        preparator.prepare_document_set(document_set, data_root[0])
+        for fmt in formats:
+            preparator.prepare_document_set(document_set, data_root[0], fmt)
+        return
     # attempt to prepare everything in the current directory and fallback to the corpus directory
-    elif not preparator.prepare_bundled_document_set(document_set, data_root[0]):
-        preparator.prepare_document_set(document_set, data_root[1])
+    bundled = [preparator.prepare_bundled_document_set(document_set, data_root[0], fmt) for fmt in formats]
+    if all(bundled):
+        return
+    if any(bundled):
+        # runtime resolves a single base directory for all variants
+        raise exceptions.DataError(
+            f"Document set [{document_set.document_file}] in track [{track.name}] is only partially prepared in "
+            f"[{data_root[0]}]. Add the source file to [{data_root[0]}] or remove the prepared files from it."
+        )
+    for fmt in formats:
+        preparator.prepare_document_set(document_set, data_root[1], fmt)
 
 
 class Decompressor:
@@ -721,34 +936,38 @@ class DocumentSetPreparator:
     def has_expected_size(self, file_name, expected_size):
         return expected_size is None or os.path.getsize(file_name) == expected_size
 
-    def create_file_offset_table(self, document_file_path, expected_number_of_lines, corpus_base_url=None):
-        # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
-        lines_read = io.prepare_file_offset_table(document_file_path, corpus_base_url)
-        if lines_read and lines_read != expected_number_of_lines:
-            io.remove_file_offset_table(document_file_path)
-            raise exceptions.DataError(
-                f"Data in [{document_file_path}] for track [{self.track_name}] are invalid. "
-                f"Expected [{expected_number_of_lines}] lines but got [{lines_read}]."
-            )
+    @staticmethod
+    def _resolve_format(document_set, fmt: DocumentSetFormat | None) -> DocumentSetFormat:
+        return fmt if fmt is not None else DOCUMENT_SET_FORMATS[document_set.source_format]()
 
-    def prepare_document_set(self, document_set, data_root):
+    @staticmethod
+    def _paths(document_set, data_root) -> tuple[str, str | None]:
+        doc_path = os.path.join(data_root, document_set.document_file)
+        archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
+        return doc_path, archive_path
+
+    def prepare_document_set(self, document_set, data_root, fmt: DocumentSetFormat | None = None):
         """
         Prepares a document set locally.
 
         Precondition: The document set contains either a compressed or an uncompressed document file reference.
-        Postcondition: Either following files will be present locally:
-
-            * The compressed document file (if specified originally in the corpus)
-            * The uncompressed document file
-            * A file offset table based on the document file
-
-            Or this method will raise an appropriate Exception (download error, inappropriate specification of files, ...).
+        Postcondition: Either the files required by ``fmt`` (e.g. a file offset table for bulk documents) are present
+        locally or this method raises an appropriate Exception (download error, inappropriate specification of files, ...).
 
         :param document_set: A document set.
         :param data_root: The data root directory for this document set.
+        :param fmt: The format to prepare. Defaults to the default variant of the document set's source format.
         """
-        doc_path = os.path.join(data_root, document_set.document_file)
-        archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
+        fmt = self._resolve_format(document_set, fmt)
+        doc_path, archive_path = self._paths(document_set, data_root)
+        if fmt.is_prepared(document_set, doc_path):
+            return
+        if document_set.base_url and fmt.try_fetch_prepared(self, document_set, doc_path):
+            return
+        self._ensure_source_available(document_set, doc_path, archive_path)
+        fmt.finalize(self, document_set, doc_path)
+
+    def _ensure_source_available(self, document_set, doc_path, archive_path):
         while True:
             if self.is_locally_available(doc_path) and self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
                 break
@@ -780,34 +999,36 @@ class DocumentSetPreparator:
                         ) from None
                     raise
 
-        self.create_file_offset_table(doc_path, document_set.number_of_lines, document_set.base_url)
-
-    def prepare_bundled_document_set(self, document_set, data_root):
+    def prepare_bundled_document_set(self, document_set, data_root, fmt: DocumentSetFormat | None = None):
         """
         Prepares a document set that comes "bundled" with the track, i.e. the data files are in the same directory as the track.
         This is a "lightweight" version of #prepare_document_set() which assumes that at least one file is already present in the
-        current directory. It will attempt to find the appropriate files, decompress if necessary and create a file offset table.
+        current directory. It will attempt to find the appropriate files, decompress if necessary and create the files
+        required by ``fmt``.
 
         Precondition: The document set contains either a compressed or an uncompressed document file reference.
-        Postcondition: If this method returns ``True``, the following files will be present locally:
-
-            * The compressed document file (if specified originally in the corpus)
-            * The uncompressed document file
-            * A file offset table based on the document file
+        Postcondition: If this method returns ``True``, the files required by ``fmt`` are present locally.
 
         If this method returns ``False`` either the document size is wrong or any files have not been found.
 
         :param document_set: A document set.
         :param data_root: The data root directory for this document set (should be the same as the track file).
+        :param fmt: The format to prepare. Defaults to the default variant of the document set's source format.
         :return: See postcondition.
         """
-        doc_path = os.path.join(data_root, document_set.document_file)
-        archive_path = os.path.join(data_root, document_set.document_archive) if document_set.has_compressed_corpus() else None
+        fmt = self._resolve_format(document_set, fmt)
+        doc_path, archive_path = self._paths(document_set, data_root)
+        if fmt.is_prepared(document_set, doc_path):
+            return True
+        if not self._prepare_bundled_source(document_set, doc_path, archive_path):
+            return False
+        fmt.finalize(self, document_set, doc_path)
+        return True
 
+    def _prepare_bundled_source(self, document_set, doc_path, archive_path) -> bool:
         while True:
             if self.is_locally_available(doc_path):
                 if self.has_expected_size(doc_path, document_set.uncompressed_size_in_bytes):
-                    self.create_file_offset_table(doc_path, document_set.number_of_lines, document_set.base_url)
                     return True
                 else:
                     raise exceptions.DataError(
@@ -1603,81 +1824,98 @@ class TrackSpecificationReader:
             for doc_spec in self._r(corpus_spec, "documents"):
                 base_url = self._r(doc_spec, "base-url", mandatory=False, default_value=default_base_url)
                 source_format = self._r(doc_spec, "source-format", mandatory=False, default_value=default_source_format)
+                if source_format not in DOCUMENT_SET_FORMATS:
+                    self._error("Unknown source-format [%s] in document corpus [%s]." % (source_format, name))
 
+                source_file = self._r(doc_spec, "source-file")
+                if io.is_archive(source_file):
+                    document_archive = source_file
+                    document_file = io.splitext(source_file)[0]
+                else:
+                    document_archive = None
+                    document_file = source_file
+                num_docs = self._r(doc_spec, "document-count")
+                compressed_bytes = self._r(doc_spec, "compressed-bytes", mandatory=False)
+                uncompressed_bytes = self._r(doc_spec, "uncompressed-bytes", mandatory=False)
+                doc_meta_data = self._r(doc_spec, "meta", error_ctx=name, mandatory=False)
                 if source_format == track.Documents.SOURCE_FORMAT_BULK:
-                    docs = self._r(doc_spec, "source-file")
-                    if io.is_archive(docs):
-                        document_archive = docs
-                        document_file = io.splitext(docs)[0]
-                    else:
-                        document_archive = None
-                        document_file = docs
-                    num_docs = self._r(doc_spec, "document-count")
-                    compressed_bytes = self._r(doc_spec, "compressed-bytes", mandatory=False)
-                    uncompressed_bytes = self._r(doc_spec, "uncompressed-bytes", mandatory=False)
-                    doc_meta_data = self._r(doc_spec, "meta", error_ctx=name, mandatory=False)
-
-                    includes_action_and_meta_data = self._r(
-                        doc_spec, "includes-action-and-meta-data", mandatory=False, default_value=default_action_and_meta_data
+                    bulk_params = self._bulk_document_params(
+                        doc_spec,
+                        name,
+                        source_file,
+                        default_action_and_meta_data,
+                        indices,
+                        data_streams,
+                        corpus_target_idx,
+                        corpus_target_ds,
                     )
-                    if "target-type" in doc_spec:
-                        raise TrackSyntaxError(
-                            f"Track document set '{docs}' in corpus '{name}' specifies 'target-type', which is no longer "
-                            "supported by Rally (document types were removed in Elasticsearch 7.0). Remove the 'target-type' key."
-                        )
-                    if includes_action_and_meta_data:
-                        target_idx = None
-                        target_ds = None
-                    else:
-                        # require to be specified if we're using data streams and we have no default
-                        target_ds = self._r(
-                            doc_spec,
-                            "target-data-stream",
-                            mandatory=len(data_streams) > 0 and corpus_target_ds is None,
-                            default_value=corpus_target_ds,
-                            error_ctx=docs,
-                        )
-                        if target_ds and len(indices) > 0:
-                            # if indices are in use we error
-                            raise TrackSyntaxError("target-data-stream cannot be used when using indices")
+                else:
+                    bulk_params = {}
 
-                        # need an index if we're using indices and no meta-data are present and we don't have a default
-                        target_idx = self._r(
-                            doc_spec,
-                            "target-index",
-                            mandatory=len(indices) > 0 and corpus_target_idx is None,
-                            default_value=corpus_target_idx,
-                            error_ctx=docs,
-                        )
-                        # either target_idx or target_ds
-                        if target_idx and len(data_streams) > 0:
-                            # if data streams are in use we error
-                            raise TrackSyntaxError("target-index cannot be used when using data-streams")
-
-                        # we need one or the other
-                        if target_idx is None and target_ds is None:
-                            raise TrackSyntaxError(
-                                f"a {'target-index' if len(indices) > 0 else 'target-data-stream'} is required for {docs}"
-                            )
-
-                    docs = track.Documents(
+                corpus.documents.append(
+                    track.Documents(
                         source_format=source_format,
                         document_file=document_file,
                         document_archive=document_archive,
                         base_url=base_url,
-                        includes_action_and_meta_data=includes_action_and_meta_data,
                         number_of_documents=num_docs,
                         compressed_size_in_bytes=compressed_bytes,
                         uncompressed_size_in_bytes=uncompressed_bytes,
-                        target_index=target_idx,
-                        target_data_stream=target_ds,
                         meta_data=doc_meta_data,
+                        **bulk_params,
                     )
-                    corpus.documents.append(docs)
-                else:
-                    self._error("Unknown source-format [%s] in document corpus [%s]." % (source_format, name))
+                )
             document_corpora.append(corpus)
         return document_corpora
+
+    def _bulk_document_params(
+        self, doc_spec, corpus_name, docs, default_action_and_meta_data, indices, data_streams, corpus_target_idx, corpus_target_ds
+    ):
+        includes_action_and_meta_data = self._r(
+            doc_spec, "includes-action-and-meta-data", mandatory=False, default_value=default_action_and_meta_data
+        )
+        if "target-type" in doc_spec:
+            raise TrackSyntaxError(
+                f"Track document set '{docs}' in corpus '{corpus_name}' specifies 'target-type', which is no longer "
+                "supported by Rally (document types were removed in Elasticsearch 7.0). Remove the 'target-type' key."
+            )
+        if includes_action_and_meta_data:
+            target_idx = None
+            target_ds = None
+        else:
+            # require to be specified if we're using data streams and we have no default
+            target_ds = self._r(
+                doc_spec,
+                "target-data-stream",
+                mandatory=len(data_streams) > 0 and corpus_target_ds is None,
+                default_value=corpus_target_ds,
+                error_ctx=docs,
+            )
+            if target_ds and len(indices) > 0:
+                # if indices are in use we error
+                raise TrackSyntaxError("target-data-stream cannot be used when using indices")
+
+            # need an index if we're using indices and no meta-data are present and we don't have a default
+            target_idx = self._r(
+                doc_spec,
+                "target-index",
+                mandatory=len(indices) > 0 and corpus_target_idx is None,
+                default_value=corpus_target_idx,
+                error_ctx=docs,
+            )
+            # either target_idx or target_ds
+            if target_idx and len(data_streams) > 0:
+                # if data streams are in use we error
+                raise TrackSyntaxError("target-index cannot be used when using data-streams")
+
+            # we need one or the other
+            if target_idx is None and target_ds is None:
+                raise TrackSyntaxError(f"a {'target-index' if len(indices) > 0 else 'target-data-stream'} is required for {docs}")
+        return {
+            "includes_action_and_meta_data": includes_action_and_meta_data,
+            "target_index": target_idx,
+            "target_data_stream": target_ds,
+        }
 
     def _create_challenges(self, track_spec):
         ops = self.parse_operations(self._r(track_spec, "operations", mandatory=False, default_value=[]))

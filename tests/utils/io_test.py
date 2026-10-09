@@ -16,12 +16,17 @@
 # under the License.
 # pylint: disable=protected-access
 
+import concurrent.futures
+import gzip
 import logging
 import os
 import subprocess
 import tempfile
 from unittest import mock
 
+import pytest
+
+from esrally import exceptions
 from esrally.utils import io
 
 
@@ -292,3 +297,343 @@ class TestPrepareFileOffsetTable:
 
         mock_dl.assert_not_called()
         assert result is None
+
+
+class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
+    """Tests for OTLP JSON → length-prefixed binary protobuf conversion + read-back."""
+
+    SAMPLE_OTLP_JSON_LINE = (
+        '{"resourceMetrics":[{"resource":{"attributes":[{"key":"host.name","value":{"stringValue":"host-0"}}]},'
+        '"scopeMetrics":[{"scope":{"name":"hostmetrics"},"metrics":['
+        '{"name":"system.cpu.utilization","gauge":{"dataPoints":['
+        '{"timeUnixNano":"1700000000000000000","asDouble":0.42,'
+        '"attributes":[{"key":"cpu","value":{"stringValue":"0"}}]}]}}]}]}]}'
+    )
+
+    def _write_json_lines(self, tmp_path, lines):
+        json_path = tmp_path / "metrics.otlp.json"
+        json_path.write_text("\n".join(lines) + "\n")
+        return str(json_path)
+
+    def test_for_source_file_derives_pb_path(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        assert pb.source_json_path == json_path
+        assert pb.pb_path == json_path + ".pb"
+        assert pb.offset_path == json_path + ".pb.offset"
+
+    def test_exists_false_when_pb_missing(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        assert pb.exists() is False
+
+    def test_exists_false_when_pb_empty(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        with open(pb.pb_path, "wb"):
+            pass
+        assert pb.exists() is False
+
+    def test_is_valid_rejects_pb_older_than_source(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        # write a non-empty .pb but with an older mtime than the source
+        with open(pb.pb_path, "wb") as f:
+            f.write(b"\x00\x00\x00\x01x")
+        json_mtime = os.path.getmtime(json_path)
+        os.utime(pb.pb_path, (json_mtime - 10, json_mtime - 10))
+        assert pb.is_valid() is False
+
+    def test_create_then_read_round_trip(self, tmp_path):
+        # write 3 identical lines so we get 3 distinct records back
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * 3
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+
+        record_count = pb.create(signal="metrics")
+
+        assert record_count == 3
+        assert pb.is_valid() is True
+        # the offset index is built by count_records(), not by create()
+        assert not os.path.exists(pb.pb_path + ".offset")
+        # no .count file (we rely on the track's document-count)
+        assert not os.path.exists(pb.pb_path + ".count")
+
+        records = list(pb.read_records(0, None))
+        assert len(records) == 3
+        # every record should round-trip identically
+        assert all(len(r) > 0 for r in records)
+        assert records[0] == records[1] == records[2]
+
+    def test_create_blank_lines_are_skipped(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, ["", self.SAMPLE_OTLP_JSON_LINE, "", self.SAMPLE_OTLP_JSON_LINE, ""])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        assert pb.create(signal="metrics") == 2
+
+    def test_create_removes_stale_offset_index(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        with open(pb.pb_path + ".offset", "w") as f:
+            f.write("0;0\n1000;12345\n")
+
+        pb.create(signal="metrics")
+
+        assert not os.path.exists(pb.pb_path + ".offset")
+
+    def test_remove_deletes_pb_and_offset(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(signal="metrics")
+        pb.count_records()
+
+        pb.remove()
+
+        assert not os.path.exists(pb.pb_path)
+        assert not os.path.exists(pb.pb_path + ".offset")
+        assert os.path.exists(json_path)
+
+    def test_remove_tolerates_missing_files(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        with open(pb.pb_path, "wb") as f:
+            f.write(b"\x00\x00\x00\x01x")
+
+        pb.remove()
+        pb.remove()
+
+        assert not os.path.exists(pb.pb_path)
+
+    def test_create_with_single_worker_matches_multi_worker(self, tmp_path):
+        # source must span multiple batches to exercise parallel collection ordering
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * (50 * 2 + 17)
+        seq_dir = tmp_path / "seq"
+        par_dir = tmp_path / "par"
+        seq_dir.mkdir()
+        par_dir.mkdir()
+        json_path_seq = self._write_json_lines(seq_dir, lines)
+        json_path_par = self._write_json_lines(par_dir, lines)
+
+        pb_seq = io.OtlpProtobufFile.for_source_file(json_path_seq)
+        pb_par = io.OtlpProtobufFile.for_source_file(json_path_par)
+
+        with mock.patch.object(io.OtlpProtobufFile, "_BATCH_BYTES", len(self.SAMPLE_OTLP_JSON_LINE) * 50):
+            assert pb_seq.create(signal="metrics", workers=1) == len(lines)
+            assert pb_par.create(signal="metrics", workers=4) == len(lines)
+
+        # byte-for-byte identical output regardless of worker count → ordering is preserved
+        with open(pb_seq.pb_path, "rb") as f1, open(pb_par.pb_path, "rb") as f2:
+            assert f1.read() == f2.read()
+
+    def test_for_source_file_picks_pbgz_extension_when_gzip(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb_raw = io.OtlpProtobufFile.for_source_file(json_path, gzip_records=False)
+        pb_gz = io.OtlpProtobufFile.for_source_file(json_path, gzip_records=True)
+        assert pb_raw.pb_path == json_path + ".pb"
+        assert pb_gz.pb_path == json_path + ".pbgz"
+        assert pb_raw.gzip_records is False
+        assert pb_gz.gzip_records is True
+
+    def test_create_with_gzip_records_writes_gzipped_payloads(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
+        pb = io.OtlpProtobufFile.for_source_file(json_path, gzip_records=True)
+        assert pb.create(signal="metrics") == 3
+
+        # the file is at .pbgz (not .pb)
+        assert os.path.exists(pb.pb_path)
+        assert pb.pb_path.endswith(".pbgz")
+
+        # each record yielded by read_records is a valid gzip stream (gzip magic 0x1f8b)
+        records = list(pb.read_records(0, None))
+        assert len(records) == 3
+        for rec in records:
+            assert rec[:2] == b"\x1f\x8b", "expected gzip magic bytes"
+            # round-trip: gunzip recovers the original protobuf payload
+            decompressed = gzip.decompress(rec)
+            assert len(decompressed) > 0
+
+    def test_create_gzip_and_raw_produce_different_files(self, tmp_path):
+        seq_dir = tmp_path / "raw"
+        gz_dir = tmp_path / "gz"
+        seq_dir.mkdir()
+        gz_dir.mkdir()
+        json_raw = self._write_json_lines(seq_dir, [self.SAMPLE_OTLP_JSON_LINE] * 5)
+        json_gz = self._write_json_lines(gz_dir, [self.SAMPLE_OTLP_JSON_LINE] * 5)
+
+        pb_raw = io.OtlpProtobufFile.for_source_file(json_raw, gzip_records=False)
+        pb_gz = io.OtlpProtobufFile.for_source_file(json_gz, gzip_records=True)
+        pb_raw.create(signal="metrics")
+        pb_gz.create(signal="metrics")
+
+        # the two files diverge — different extensions, different on-disk content
+        assert pb_raw.pb_path != pb_gz.pb_path
+        with open(pb_raw.pb_path, "rb") as f1, open(pb_gz.pb_path, "rb") as f2:
+            assert f1.read() != f2.read()
+        # (Size comparison: for a realistic 1 MB OTLP record, .pbgz is ~3× smaller than .pb. For
+        # the tiny test record gzip overhead dominates, so we don't assert size here.)
+
+    def test_count_records_returns_none_when_pb_missing(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        assert pb.count_records() is None
+
+    def test_count_records_overwrites_stale_offset_index(self, tmp_path):
+        interval = io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * (interval + 17)
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(signal="metrics")
+        with open(pb.pb_path + ".offset", "w") as f:
+            f.write(f"0;0\n{interval};1\n")
+
+        assert pb.count_records() == len(lines)
+        with open(pb.pb_path + ".offset") as f:
+            entries = [tuple(int(v) for v in line.strip().split(";")) for line in f]
+        assert [r for r, _ in entries] == [0, interval]
+        assert entries[1][1] != 1
+
+    def test_count_records_generates_offset_index(self, tmp_path):
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL + 17)
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(signal="metrics")
+
+        assert pb.count_records() == len(lines)
+        assert os.path.exists(pb.pb_path + ".offset")
+        assert not os.path.exists(pb.pb_path + ".offset.tmp")
+
+        # confirm the generated offset file is valid: subsequent reads partition correctly
+        records_via_offset = list(pb.read_records(io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL, None))
+        assert len(records_via_offset) == 17
+
+    def test_count_records_offset_index_has_trailing_entry_at_interval_multiple(self, tmp_path):
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * io.OtlpProtobufFile.OFFSET_SAMPLING_INTERVAL
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(signal="metrics")
+
+        assert pb.count_records() == len(lines)
+        with open(pb.pb_path + ".offset") as f:
+            entries = [tuple(int(v) for v in line.strip().split(";")) for line in f]
+        assert entries == [(0, 0), (len(lines), os.path.getsize(pb.pb_path))]
+
+    def test_count_records_removes_temp_file_on_failure(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(signal="metrics")
+
+        with mock.patch("os.replace", side_effect=OSError("boom")):
+            with pytest.raises(OSError):
+                pb.count_records()
+
+        assert not os.path.exists(pb.pb_path + ".offset")
+        assert not os.path.exists(pb.pb_path + ".offset.tmp")
+
+    def _create_truncated(self, tmp_path, truncation):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 3)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(signal="metrics")
+        if truncation == "header":
+            with open(pb.pb_path, "ab") as f:
+                f.write(b"\x00\x00")
+        else:
+            os.truncate(pb.pb_path, os.path.getsize(pb.pb_path) - 1)
+        return pb
+
+    @pytest.mark.parametrize("truncation", ["header", "payload"])
+    def test_count_records_raises_on_truncated_file(self, tmp_path, truncation):
+        pb = self._create_truncated(tmp_path, truncation)
+
+        with pytest.raises(exceptions.DataError, match=f"Truncated record {truncation}"):
+            pb.count_records()
+
+        assert not os.path.exists(pb.pb_path + ".offset")
+        assert not os.path.exists(pb.pb_path + ".offset.tmp")
+
+    @pytest.mark.parametrize("truncation", ["header", "payload"])
+    def test_read_records_raises_on_truncated_file(self, tmp_path, truncation):
+        pb = self._create_truncated(tmp_path, truncation)
+
+        with pytest.raises(exceptions.DataError, match=f"Truncated record {truncation}"):
+            list(pb.read_records(0, None))
+
+    @pytest.mark.parametrize("truncation", ["header", "payload"])
+    def test_read_records_raises_on_truncated_file_while_skipping(self, tmp_path, truncation):
+        pb = self._create_truncated(tmp_path, truncation)
+
+        with pytest.raises(exceptions.DataError, match=f"Truncated record {truncation}"):
+            list(pb.read_records(4, None))
+
+    def test_read_records_reads_up_to_truncated_record(self, tmp_path):
+        pb = self._create_truncated(tmp_path, "payload")
+
+        assert len(list(pb.read_records(0, 2))) == 2
+
+    def test_read_records_respects_partition_range(self, tmp_path):
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * 8
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(signal="metrics")
+
+        # 4 partitions across 8 records
+        slice0 = list(pb.read_records(0, 2))
+        slice1 = list(pb.read_records(2, 4))
+        slice2 = list(pb.read_records(4, 6))
+        slice3 = list(pb.read_records(6, 8))
+        assert [len(s) for s in (slice0, slice1, slice2, slice3)] == [2, 2, 2, 2]
+        # rejoined slices should equal the full read
+        full = list(pb.read_records(0, None))
+        assert slice0 + slice1 + slice2 + slice3 == full
+
+    def test_read_records_handles_start_past_end(self, tmp_path):
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * 3
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(signal="metrics")
+        # seeking past the end returns no records (does not error)
+        assert list(pb.read_records(100, 200)) == []
+
+    def test_read_records_falls_back_without_offset_index(self, tmp_path):
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * 5
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        pb.create(signal="metrics")
+
+        # no offset index — read should still work by scanning from the start
+        records = list(pb.read_records(2, 4))
+        assert len(records) == 2
+
+    def _create_and_capture_worker_count(self, tmp_path, workers=None):
+        json_path = self._write_json_lines(tmp_path, [self.SAMPLE_OTLP_JSON_LINE] * 2)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        with mock.patch(
+            "concurrent.futures.ProcessPoolExecutor",
+            side_effect=lambda max_workers, **_: concurrent.futures.ThreadPoolExecutor(max_workers=max_workers),
+        ) as pool_mock:
+            assert pb.create(signal="metrics", workers=workers) == 2
+        pool_mock.assert_called_once()
+        return pool_mock.call_args.kwargs["max_workers"]
+
+    def test_create_uses_workers_from_env(self, tmp_path):
+        with mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "12"}):
+            assert self._create_and_capture_worker_count(tmp_path) == 12
+
+    def test_create_ignores_invalid_workers_env(self, tmp_path):
+        with mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "not-a-number"}):
+            assert self._create_and_capture_worker_count(tmp_path) == (os.cpu_count() or 1)
+
+    def test_create_ignores_zero_workers_env(self, tmp_path):
+        with mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "0"}):
+            assert self._create_and_capture_worker_count(tmp_path) == (os.cpu_count() or 1)
+
+    def test_create_explicit_workers_override_env(self, tmp_path):
+        with mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "12"}):
+            assert self._create_and_capture_worker_count(tmp_path, workers=2) == 2
+
+    def test_iter_line_batches_groups_by_bytes(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, ["a" * 4, "", "b" * 4, "c" * 25, "d" * 3, "  ", "e" * 3, "f" * 3])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+
+        batches = list(pb._iter_line_batches(8))
+
+        # blank lines are skipped; an oversized line forms its own batch; the remainder is flushed
+        assert batches == [["a" * 4, "b" * 4], ["c" * 25], ["d" * 3, "e" * 3, "f" * 3]]

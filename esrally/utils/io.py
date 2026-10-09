@@ -18,16 +18,22 @@
 # pylint: disable=consider-using-with
 
 import bz2
+import collections
+import concurrent.futures
 import gzip
+import importlib
 import logging
 import mmap
+import multiprocessing
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
+import time
 import zipfile
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from types import TracebackType
 from typing import IO, Any, AnyStr, Callable, Generic, Literal, Optional, overload
 
@@ -37,6 +43,7 @@ import zstandard
 # but they are treated the same by mypy, so I'm not going to use conditional imports here
 from typing_extensions import Self
 
+from esrally import exceptions
 from esrally.utils import console, net
 
 SUPPORTED_ARCHIVE_FORMATS = [".zip", ".bz2", ".gz", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".zst"]
@@ -703,6 +710,329 @@ def remove_file_offset_table(data_file_path: str) -> None:
     :param data_file_path: The path to a text file that is readable by this process.
     """
     FileOffsetTable.remove(data_file_path)
+
+
+# OTLP signal -> (module, class) of the request message. Logs: ("opentelemetry.proto.collector.logs.v1.logs_service_pb2",
+# "ExportLogsServiceRequest"), traces: ("opentelemetry.proto.collector.trace.v1.trace_service_pb2", "ExportTraceServiceRequest").
+_OTLP_REQUEST_TYPES = {
+    "metrics": ("opentelemetry.proto.collector.metrics.v1.metrics_service_pb2", "ExportMetricsServiceRequest"),
+}
+
+
+def _convert_lines_batch(args: tuple[list[str], bool, str]) -> tuple[bytes, int]:
+    """
+    Worker function for parallel OTLP JSON → binary protobuf conversion.
+
+    Each worker process imports the protobuf bindings lazily on first call (this happens once
+    per worker process, since the function is a module-level callable that ``ProcessPoolExecutor``
+    pickles by reference). Returns ``(concatenated_records_bytes, record_count)`` for the batch
+    in source order.
+
+    Format of returned bytes: a concatenation of length-prefixed records, each ``4 bytes big-endian
+    length || payload``. When ``gzip_records`` is True, each payload is gzip-compressed independently
+    (so the length prefix is the compressed size). This is exactly the on-disk format the main
+    process appends to the corpus file.
+    """
+    lines, gzip_records, signal = args
+    # pylint: disable=import-outside-toplevel
+    from google.protobuf.json_format import Parse
+
+    module_name, class_name = _OTLP_REQUEST_TYPES[signal]
+    request_type = getattr(importlib.import_module(module_name), class_name)
+
+    parts: list[bytes] = []
+    for line in lines:
+        msg = Parse(line, request_type())
+        payload = msg.SerializeToString()
+        if gzip_records:
+            # mtime=0 keeps the output byte-deterministic across runs (no timestamp in the gzip header).
+            payload = gzip.compress(payload, compresslevel=6, mtime=0)
+        parts.append(struct.pack(">I", len(payload)))
+        parts.append(payload)
+    return b"".join(parts), len(lines)
+
+
+class OtlpProtobufFile:
+    """
+    Manages the binary protobuf corpus file derived from an OTLP JSON source.
+
+    On-disk format: sequence of length-prefixed records —
+        4-byte big-endian uint32 (payload length) + binary OTLP Export*ServiceRequest bytes.
+
+    A companion ``offset_path`` file maps record numbers to byte offsets for efficient
+    multi-client partitioning, using the same ``record_number;byte_offset`` text format as
+    FileOffsetTable. It is written by ``count_records`` with one entry every OFFSET_SAMPLING_INTERVAL records.
+    """
+
+    OFFSET_SAMPLING_INTERVAL = 1000
+
+    def __init__(self, source_json_path: str, pb_path: str, gzip_records: bool = False):
+        self.source_json_path = source_json_path
+        self.pb_path = pb_path
+        self.offset_path = f"{pb_path}.offset"
+        # When True, individual records in the file are stored gzip-compressed. The length prefix
+        # is the compressed size. ``read_records`` yields the raw (still-compressed) payload bytes
+        # — Rally ships them verbatim to ES with ``Content-Encoding: gzip``, avoiding any
+        # decompress/recompress on the hot path.
+        self.gzip_records = gzip_records
+
+    def exists(self) -> bool:
+        return os.path.exists(self.pb_path) and os.path.getsize(self.pb_path) > 0
+
+    def is_valid(self) -> bool:
+        if not self.exists():
+            return False
+        # if the source JSON is present, the .pb must be newer than it
+        if os.path.exists(self.source_json_path):
+            if os.path.getmtime(self.pb_path) < os.path.getmtime(self.source_json_path):
+                return False
+        return True
+
+    # Raw JSON per batch (at least one line).
+    _BATCH_BYTES = 1 * 1024 * 1024
+    # In-flight queue depth. Just enough to keep workers fed while the main thread writes the next
+    # completed batch to disk — adding more buffers grows memory without much throughput benefit.
+    _QUEUE_BUFFER = 4
+
+    def create(self, signal: str, workers: int | None = None) -> int:
+        """
+        Parse the source OTLP JSON file and write binary protobuf records to the .pb file.
+        Any existing .offset file is removed; call ``count_records`` to rebuild it.
+
+        JSON→protobuf conversion is parallelized across processes since each line is independent.
+        Results are gathered in source order so the .pb byte offsets stay correct. Memory usage
+        is bounded by limiting the number of in-flight batches — we do NOT buffer the whole input
+        file (which is what ``ProcessPoolExecutor.map`` would do, since it eagerly consumes its
+        iterable up front).
+
+        :param signal: OTLP signal of the source records (a key of ``_OTLP_REQUEST_TYPES``, e.g. ``metrics``).
+        :param workers: Number of worker processes for conversion. Defaults to ``RALLY_OTLP_CONVERSION_WORKERS``
+                        if set to a positive integer, otherwise ``os.cpu_count()``.
+        :return: Total number of records written.
+        :raises exceptions.SystemSetupError: if opentelemetry-proto is not installed.
+        """
+        # opentelemetry-proto is an optional dependency, only needed when preparing an OTLP corpus.
+        # we probe the import here so we fail fast with a clear message rather than inside the worker.
+        module_name, _ = _OTLP_REQUEST_TYPES[signal]
+        try:
+            importlib.import_module(module_name)
+        except ImportError:
+            raise exceptions.SystemSetupError(
+                "The 'opentelemetry-proto' package is required to pre-process OTLP corpus files. "
+                "Install it with: pip install opentelemetry-proto"
+            )
+
+        workers_env = os.environ.get("RALLY_OTLP_CONVERSION_WORKERS", "")
+        if workers and workers > 0:
+            worker_count = workers
+        elif workers_env.isdigit() and int(workers_env) > 0:
+            worker_count = int(workers_env)
+        else:
+            worker_count = os.cpu_count() or 1
+        max_in_flight = worker_count + self._QUEUE_BUFFER
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Converting OTLP JSON to binary protobuf using %d worker(s) (max in-flight batches: %d, batch size: %.1f MiB).",
+            worker_count,
+            max_in_flight,
+            self._BATCH_BYTES / (1024 * 1024),
+        )
+
+        try:
+            os.remove(self.offset_path)
+        except FileNotFoundError:
+            pass
+
+        start = time.perf_counter()
+        record_count = 0
+        byte_offset = 0
+        batch_index = 0
+        # 8 MB output buffer for .pb — much larger than Python's default 8 KB, reduces syscall
+        # overhead noticeably for multi-gigabyte writes.
+        with (
+            open(self.pb_path, "wb", buffering=8 * 1024 * 1024) as dst,
+            concurrent.futures.ProcessPoolExecutor(max_workers=worker_count, mp_context=multiprocessing.get_context("spawn")) as pool,
+        ):
+            batch_iter = self._iter_line_batches(self._BATCH_BYTES)
+            in_flight: collections.deque = collections.deque()
+
+            # prime the pipeline with up to max_in_flight batches
+            for batch in batch_iter:
+                in_flight.append(pool.submit(_convert_lines_batch, (batch, self.gzip_records, signal)))
+                if len(in_flight) >= max_in_flight:
+                    break
+
+            # consume one result at a time (FIFO preserves source order) and submit a replacement
+            while in_flight:
+                chunk_bytes, chunk_record_count = in_flight.popleft().result()
+                dst.write(chunk_bytes)
+                record_count += chunk_record_count
+                byte_offset += len(chunk_bytes)
+                batch_index += 1
+                if batch_index % 100 == 0:
+                    logger.info(
+                        "OTLP conversion progress: %d records, %d MB written.",
+                        record_count,
+                        byte_offset // (1024 * 1024),
+                    )
+                # keep the pipeline full by submitting the next batch (if any)
+                try:
+                    in_flight.append(pool.submit(_convert_lines_batch, (next(batch_iter), self.gzip_records, signal)))
+                except StopIteration:
+                    pass
+
+        # 1e-9 avoids division by zero later
+        elapsed = max(time.perf_counter() - start, 1e-9)
+        logger.info(
+            "OTLP conversion finished with %d worker(s): %d records, %d MB written in %.1f s (%.1f records/s, %.1f MiB/s of JSON).",
+            worker_count,
+            record_count,
+            byte_offset // (1024 * 1024),
+            elapsed,
+            record_count / elapsed,
+            os.path.getsize(self.source_json_path) / (1024 * 1024) / elapsed,
+        )
+        return record_count
+
+    def remove(self) -> None:
+        for path in (self.pb_path, self.offset_path):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
+    def _iter_line_batches(self, batch_bytes: int) -> Iterator[list[str]]:
+        """Stream the source JSON file as batches of non-blank stripped lines, each closed once it reaches ``batch_bytes``."""
+        batch: list[str] = []
+        size = 0
+        with open(self.source_json_path, encoding="utf-8", buffering=8 * 1024 * 1024) as src:
+            for line in src:
+                line = line.strip()
+                if not line:
+                    continue
+                batch.append(line)
+                # character count approximates bytes: OTLP JSON is (almost) pure ASCII
+                size += len(line)
+                if size >= batch_bytes:
+                    yield batch
+                    batch = []
+                    size = 0
+        if batch:
+            yield batch
+
+    def read_records(self, start_record: int, end_record: int | None = None) -> Iterator[bytes]:
+        """
+        Generator yielding raw binary payloads from start_record up to (but not including) end_record.
+        Uses the companion .offset file to seek efficiently.
+        """
+        byte_offset, records_to_skip = self._find_offset(start_record)
+        with open(self.pb_path, "rb") as f:
+            file_size = os.fstat(f.fileno()).st_size
+            f.seek(byte_offset, os.SEEK_SET)
+            for _ in range(records_to_skip):
+                length = self._read_record_length(f, byte_offset, file_size)
+                if length is None:
+                    return
+                f.seek(length, os.SEEK_CUR)
+                byte_offset += 4 + length
+            count = 0
+            target = None if end_record is None else (end_record - start_record)
+            while target is None or count < target:
+                length = self._read_record_length(f, byte_offset, file_size)
+                if length is None:
+                    return
+                byte_offset += 4 + length
+                count += 1
+                yield f.read(length)
+
+    def _read_record_length(self, f: IO[bytes], byte_offset: int, file_size: int) -> int | None:
+        """
+        Read the length prefix of the record starting at ``byte_offset`` (the current position of ``f``).
+
+        :return: The payload length or ``None`` at end of file.
+        :raises exceptions.DataError: if the header or the payload is truncated.
+        """
+        header = f.read(4)
+        if not header:
+            return None
+        if len(header) < 4:
+            raise exceptions.DataError(
+                f"Truncated record header at byte offset [{byte_offset}] in [{self.pb_path}]: "
+                f"expected [4] bytes but got [{len(header)}]."
+            )
+        (length,) = struct.unpack(">I", header)
+        if byte_offset + 4 + length > file_size:
+            raise exceptions.DataError(
+                f"Truncated record payload at byte offset [{byte_offset}] in [{self.pb_path}]: "
+                f"expected [{length}] bytes but only [{file_size - byte_offset - 4}] remain."
+            )
+        return length
+
+    def count_records(self) -> int | None:
+        """
+        Scan the whole .pb file by its length prefixes and (re)build the companion .offset file.
+
+        :return: The number of records or ``None`` if the .pb file is missing.
+        :raises exceptions.DataError: if the .pb file is truncated.
+        """
+        if not os.path.exists(self.pb_path):
+            return None
+        # written atomically because an existing offset file marks the .pb as verified
+        tmp_path = self.offset_path + ".tmp"
+        count = 0
+        byte_offset = 0
+        try:
+            with open(self.pb_path, "rb") as f, open(tmp_path, "w", encoding="utf-8", buffering=64 * 1024) as out:
+                file_size = os.fstat(f.fileno()).st_size
+                while True:
+                    if count % self.OFFSET_SAMPLING_INTERVAL == 0:
+                        out.write(f"{count};{byte_offset}\n")
+                    length = self._read_record_length(f, byte_offset, file_size)
+                    if length is None:
+                        break
+                    f.seek(length, os.SEEK_CUR)
+                    byte_offset += 4 + length
+                    count += 1
+            os.replace(tmp_path, self.offset_path)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        return count
+
+    def _find_offset(self, target_record: int) -> tuple[int, int]:
+        """Return (byte_offset, records_still_to_skip) for the sampled position closest to target_record."""
+        if not os.path.exists(self.offset_path):
+            return 0, target_record
+        prior_byte = 0
+        prior_remaining = target_record
+        try:
+            with open(self.offset_path, encoding="utf-8") as f:
+                for line in f:
+                    parts = line.strip().split(";")
+                    if len(parts) != 2:
+                        continue
+                    rec_num, byte_off = int(parts[0]), int(parts[1])
+                    if rec_num <= target_record:
+                        prior_byte = byte_off
+                        prior_remaining = target_record - rec_num
+                    else:
+                        break
+        except OSError:
+            pass
+        return prior_byte, prior_remaining
+
+    @classmethod
+    def for_source_file(cls, source_json_path: str, gzip_records: bool = False) -> "OtlpProtobufFile":
+        if not source_json_path:
+            raise ValueError(
+                "OtlpProtobufFile.for_source_file got an empty/None source path. "
+                "This usually means set_absolute_data_path could not resolve the corpus path: "
+                "neither the source .json nor the pre-built .pb was found in any data root. "
+                "Check that prepare-track ran successfully and the .pb is on disk where Rally expects it."
+            )
+        ext = ".pbgz" if gzip_records else ".pb"
+        return cls(source_json_path, f"{source_json_path}{ext}", gzip_records=gzip_records)
 
 
 def skip_lines(data_file_path: str, data_file: IO[AnyStr], number_of_lines_to_skip: int) -> None:
