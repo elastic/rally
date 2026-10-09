@@ -69,6 +69,10 @@ class EchoActor(actor.RallyActorBase):
         logging.getLogger(__name__).info("Echoing [%s]", value)
         return value, os.getpid()
 
+    def stdin(self):
+        stat = os.fstat(0)
+        return stat.st_dev, stat.st_ino
+
     @actor.convert_failures("echo")
     def fail(self):
         raise ValueError("boom")
@@ -152,3 +156,12 @@ def test_actors_log_with_their_address(ray_instance):
                     return
         time.sleep(0.1)
     pytest.fail(f"[{expected}] not found in [{log_file}]")
+
+
+def test_actors_do_not_read_from_the_terminal(ray_instance):
+    # If Rally runs in a terminal, child processes of actors that read from it would stop the actor (SIGTTIN).
+    echo = actor.create_actor(EchoActor, host="localhost")
+    devnull = os.stat(os.devnull)
+
+    assert ray_instance.get(echo.stdin.remote()) == (devnull.st_dev, devnull.st_ino)
+    actor.kill_actor(echo)

@@ -27,6 +27,7 @@ See ``docs/architecture/actor_system.md`` for an overview of the actors and how 
 """
 
 import asyncio
+import concurrent.futures
 import functools
 import logging
 import os
@@ -114,6 +115,7 @@ def unwrap(e: BaseException) -> BaseException:
 
 
 F = TypeVar("F", bound=Callable[..., Any])
+T = TypeVar("T")
 
 
 def _as_failure(e: BaseException, actor_name: str) -> BaseException:
@@ -201,6 +203,33 @@ def report_failures(actor_name: str) -> Callable[[F], F]:
     return decorator
 
 
+def call_outside_event_loop(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    """
+    Calls a function in another thread and waits for its result.
+
+    Ray runs all code of async actors, including their constructors, in the actor's event loop. Track code (e.g. track
+    processors) may call ``asyncio.run()``, which fails in a running event loop. Use this function for such code where an
+    actor cannot await; otherwise prefer ``asyncio.to_thread()``, which keeps the event loop responsive.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(fn, *args, **kwargs).result()
+
+
+def detach_stdin() -> None:
+    """
+    Connects the standard input of this process to ``/dev/null``.
+
+    Ray starts actors in their own process group, which is a background process group if Rally runs in a terminal. If an
+    actor or one of its child processes (e.g. Gradle) reads from that terminal, the operating system stops the whole
+    process group (``SIGTTIN``) and the actor becomes unresponsive. Actors never need input.
+    """
+    devnull = os.open(os.devnull, os.O_RDONLY)
+    try:
+        os.dup2(devnull, 0)
+    finally:
+        os.close(devnull)
+
+
 class RallyActorBase:
     """
     Base class for all Rally actors. Subclasses are plain Python classes; use ``create_actor()`` to start them as Ray actors.
@@ -208,6 +237,7 @@ class RallyActorBase:
 
     def __init__(self, name: str | None = None, cfg: Any = None):
         self.name = name or type(self).__name__
+        detach_stdin()
         log.configure_actor_logging(self.name)
         # Ray forwards console output of actors line by line to the process that started the benchmark, which prints it
         # on the user's terminal. Hence, actors print even though their stdout is not a terminal.
@@ -520,9 +550,6 @@ def kill_actor(handle: Any) -> None:
     except Exception:  # pylint: disable=broad-exception-caught
         # the actor is already gone
         pass
-
-
-T = TypeVar("T")
 
 
 def run_async(main: Callable[[], Coroutine[Any, Any, T]]) -> T:

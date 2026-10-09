@@ -117,7 +117,7 @@ class TrackPayload:
         self.track_name = t.name
         self._serialized = pickle.dumps(t)
 
-    def load(self, cfg: types.Config):
+    def load(self, cfg: types.Config) -> track.Track:
         """
         :param cfg: Configuration of the receiving process, which determines where the track's plugins are.
         :return: The track.
@@ -213,7 +213,8 @@ class DriverActor(actor.RallyActorBase):
     @actor.convert_failures("driver")
     async def prepare_benchmark(self, track_payload: TrackPayload) -> PreparationComplete:
         self._track_payload = track_payload
-        self.driver.prepare_benchmark(track_payload.load(self.cfg))
+        t = await asyncio.to_thread(track_payload.load, self.cfg)
+        self.driver.prepare_benchmark(t)
         await self._track_preparation
         return self._preparation_complete()
 
@@ -451,24 +452,31 @@ class TrackPreparationActor(actor.RallyActorBase):
                                      not necessary if the process that loaded the track runs on the same host.
         """
         try:
-            if install_dependencies:
-                load_track(self.cfg, install_dependencies=True)
-            t = track_payload.load(self.cfg)
+            # Track code runs outside the event loop: it is synchronous and may call asyncio.run().
+            t, tpr = await asyncio.to_thread(self._load_track, track_payload, install_dependencies)
             data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
-            tpr = TrackProcessorRegistry(self.cfg)
-            self.logger.info("Preparing track [%s]", t.name)
-            self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", t.name)
-            # the track might have been loaded on a different machine (the coordinator machine) so we force a track
-            # update to ensure we use the latest version of plugins.
-            load_track(self.cfg)
-            load_track_plugins(self.cfg, t.name, register_track_processor=tpr.register_track_processor, force_update=True)
             # processors run one after the other, tasks of a processor run in parallel
             for processor in tpr.processors:
-                tasks = [WorkerTask(func, params) for func, params in processor.on_prepare_track(t, data_root_dir)]
+                tasks = await asyncio.to_thread(
+                    lambda p: [WorkerTask(func, params) for func, params in p.on_prepare_track(t, data_root_dir)], processor
+                )
                 await self._run_tasks(t.name, tasks)
             self.logger.info("Track [%s] is prepared.", t.name)
         finally:
             self._kill_executors()
+
+    def _load_track(self, track_payload: TrackPayload, install_dependencies: bool):
+        if install_dependencies:
+            load_track(self.cfg, install_dependencies=True)
+        t = track_payload.load(self.cfg)
+        tpr = TrackProcessorRegistry(self.cfg)
+        self.logger.info("Preparing track [%s]", t.name)
+        self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", t.name)
+        # the track might have been loaded on a different machine (the coordinator machine) so we force a track
+        # update to ensure we use the latest version of plugins.
+        load_track(self.cfg)
+        load_track_plugins(self.cfg, t.name, register_track_processor=tpr.register_track_processor, force_update=True)
+        return t, tpr
 
     async def stop(self):
         self._kill_executors()
@@ -1208,9 +1216,10 @@ class Worker(actor.RallyActorBase):
         self.worker_id = worker_id
         # load node-specific config to have correct paths available
         self.config: types.Config = load_local_config(cfg)
-        load_track(self.config, install_dependencies=False)
+        # Track code runs outside the event loop: it is synchronous and may call asyncio.run().
+        actor.call_outside_event_loop(load_track, self.config, install_dependencies=False)
         self.logger.debug("Worker[%d] has Python load path %s after bootstrap.", self.worker_id, sys.path)
-        self.track = None
+        self.track: Optional[track.Track] = None
         self.client_allocations = None
         self.client_contexts = None
         self.current_task_index = 0
@@ -1245,7 +1254,7 @@ class Worker(actor.RallyActorBase):
         self.logger.info("Worker[%d] is about to start.", self.worker_id)
         self.on_error = self.config.opts("driver", "on.error")
         self.sample_queue_size = int(self.config.opts("reporting", "sample.queue.size", mandatory=False, default_value=1 << 20))
-        self.track = track_payload.load(self.config)
+        self.track = await asyncio.to_thread(track_payload.load, self.config)
         track.set_absolute_data_path(self.config, self.track)
         self.client_allocations = client_allocations
         self.client_contexts = client_contexts
@@ -1258,7 +1267,9 @@ class Worker(actor.RallyActorBase):
         loop.set_exception_handler(self._logging_exception_handler)
         runner.register_default_runners(self.config)
         if self.track.has_plugins:
-            track.load_track_plugins(self.config, self.track.name, runner.register_runner, scheduler.register_scheduler)
+            await asyncio.to_thread(
+                track.load_track_plugins, self.config, self.track.name, runner.register_runner, scheduler.register_scheduler
+            )
         sample_pusher = asyncio.create_task(self._push_samples_periodically())
         try:
             self._drive()

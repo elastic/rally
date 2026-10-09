@@ -148,8 +148,10 @@ def fake_ray(monkeypatch: pytest.MonkeyPatch) -> FakeRay:
 @pytest.fixture
 def actor_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """
-    Allows to instantiate actor classes in tests: they would otherwise configure logging and the console of this process.
+    Allows to instantiate actor classes in tests: they would otherwise configure stdin, logging and the console of this
+    process.
     """
+    monkeypatch.setattr(actor, "detach_stdin", lambda: None)
     monkeypatch.setattr(actor.log, "configure_actor_logging", lambda name: None)
     monkeypatch.setattr(actor.console, "init", lambda **kwargs: None)
 
