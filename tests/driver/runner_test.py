@@ -7880,6 +7880,19 @@ class TestComposite:
         # Therefore we can use the the request context holder as a substitute and get proper timing info.
         es = client.RequestContextHolder()
 
+        timestamps = {
+            "initial-call": (10.0, 10.1),
+            "stream-a": (10.1, 10.3),
+            "stream-b": (10.1, 10.2),
+        }
+
+        async def sleep_with_timestamps(self, es, params):
+            start, end = timestamps[params["name"]]
+            es.update_request_start(start)
+            # Let concurrent streams overlap without depending on elapsed wall-clock time.
+            await asyncio.sleep(0)
+            es.update_request_end(end)
+
         params = {
             "requests": [
                 {
@@ -7909,27 +7922,29 @@ class TestComposite:
         }
 
         r = runner.Composite()
-        response = await r(es, params)
+        with mock.patch.object(runner.Sleep, "__call__", new=sleep_with_timestamps):
+            response = await r(es, params)
 
         assert response["weight"] == 1
         assert response["unit"] == "ops"
         timings = response["dependent_timing"]
         assert len(timings) == 3
         assert timings[0]["dependent_timing"]["operation"] == "initial-call"
-        assert timings[0]["dependent_timing"]["service_time"] == pytest.approx(0.1, abs=0.1)
+        assert timings[0]["dependent_timing"]["service_time"] == pytest.approx(0.1)
 
         assert timings[1]["dependent_timing"]["operation"] == "stream-a"
-        assert timings[1]["dependent_timing"]["service_time"] == pytest.approx(0.2, abs=0.1)
+        assert timings[1]["dependent_timing"]["service_time"] == pytest.approx(0.2)
 
         assert timings[2]["dependent_timing"]["operation"] == "stream-b"
-        assert timings[2]["dependent_timing"]["service_time"] == pytest.approx(0.1, abs=0.1)
+        assert timings[2]["dependent_timing"]["service_time"] == pytest.approx(0.1)
 
         # common properties
         for timing in timings:
             assert timing["dependent_timing"]["operation-type"] == "sleep"
             assert "absolute_time" in timing["dependent_timing"]
-            assert "request_start" in timing["dependent_timing"]
-            assert "request_end" in timing["dependent_timing"]
+            start, end = timestamps[timing["dependent_timing"]["operation"]]
+            assert timing["dependent_timing"]["request_start"] == start
+            assert timing["dependent_timing"]["request_end"] == end
             assert timing["dependent_timing"]["request_end"] > timing["dependent_timing"]["request_start"]
 
     @pytest.mark.asyncio
