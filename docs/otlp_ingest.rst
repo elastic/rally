@@ -369,8 +369,8 @@ When you run ``esrally prepare-track`` (or the first time ``esrally race`` is ca
 
 The preparation strategy is:
 
-1. **Already valid** — If ``metrics.otlp.pb`` exists and is newer than the source JSON, skip conversion entirely.
-2. **Download pre-built** — If the track specifies a remote corpus URL, Rally tries to download ``metrics.otlp.pb`` (or ``metrics.otlp.pb.zst``) directly, avoiding the need to download the larger JSON source.
+1. **Already valid** — If ``metrics.otlp.json.pb`` exists and is newer than the source JSON, skip conversion entirely.
+2. **Download pre-built** — If the track specifies a remote corpus URL, Rally tries to download ``metrics.otlp.json.pb`` (or ``metrics.otlp.json.pb.zst``) directly, avoiding the need to download the larger JSON source.
 3. **Convert locally** — If the JSON is present locally, Rally converts it to ``.pb`` using parallel worker processes.
 
 Binary protobuf format (``.pb``)
