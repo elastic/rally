@@ -18,6 +18,7 @@
 import logging
 import os
 import signal
+import socket
 import subprocess
 import time
 from unittest import mock
@@ -250,3 +251,67 @@ def test_run_subprocess_with_logging_timeout_handles_already_exited_process(pope
     assert returncode == -signal.SIGKILL
     killpg.assert_called_once_with(4242, signal.SIGKILL)
     assert proc.communicate.call_count == 2
+
+
+def _if_addrs(*addresses):
+    return {
+        "en0": [
+            mock.Mock(family=socket.AF_INET6 if ":" in address else socket.AF_INET, address=address)
+            for address in ("192.168.1.10", "::1", "fe80::1%en0", *addresses)
+        ]
+    }
+
+
+@mock.patch("esrally.utils.process.os.execv")
+@mock.patch("esrally.utils.process.psutil.net_if_addrs", return_value=_if_addrs())
+class TestDisableOsLogOnMacos:
+    @mock.patch("esrally.utils.process.sys.platform", "darwin")
+    @mock.patch.dict("esrally.utils.process.os.environ", {}, clear=True)
+    def test_reexecs_on_macos(self, net_if_addrs, execv, caplog):
+        with caplog.at_level(logging.INFO, logger="esrally.utils.process"):
+            process.disable_os_log_on_macos()
+
+        assert os.environ["OS_ACTIVITY_MODE"] == "disable"
+        execv.assert_called_once_with(process.sys.executable, process.sys.orig_argv)
+        assert "Disabling os_log" in caplog.text
+
+    @mock.patch("esrally.utils.process.sys.platform", "darwin")
+    @mock.patch.dict("esrally.utils.process.os.environ", {}, clear=True)
+    def test_reexecs_with_only_unique_local_ipv6(self, net_if_addrs, execv, caplog):
+        net_if_addrs.return_value = _if_addrs("fd00::1")
+
+        with caplog.at_level(logging.INFO, logger="esrally.utils.process"):
+            process.disable_os_log_on_macos()
+
+        assert os.environ["OS_ACTIVITY_MODE"] == "disable"
+        execv.assert_called_once_with(process.sys.executable, process.sys.orig_argv)
+        assert "Disabling os_log" in caplog.text
+
+    @mock.patch("esrally.utils.process.sys.platform", "darwin")
+    @mock.patch.dict("esrally.utils.process.os.environ", {}, clear=True)
+    def test_noop_with_global_ipv6(self, net_if_addrs, execv, caplog):
+        net_if_addrs.return_value = _if_addrs("2a00:1450:4001:81c::200e")
+
+        with caplog.at_level(logging.INFO, logger="esrally.utils.process"):
+            process.disable_os_log_on_macos()
+
+        assert "OS_ACTIVITY_MODE" not in os.environ
+        execv.assert_not_called()
+        assert "Disabling os_log" not in caplog.text
+
+    @mock.patch("esrally.utils.process.sys.platform", "darwin")
+    @mock.patch.dict("esrally.utils.process.os.environ", {"OS_ACTIVITY_MODE": "debug"}, clear=True)
+    def test_respects_existing_value(self, net_if_addrs, execv):
+        process.disable_os_log_on_macos()
+
+        assert os.environ["OS_ACTIVITY_MODE"] == "debug"
+        execv.assert_not_called()
+
+    @mock.patch("esrally.utils.process.sys.platform", "linux")
+    @mock.patch.dict("esrally.utils.process.os.environ", {}, clear=True)
+    def test_noop_on_other_platforms(self, net_if_addrs, execv):
+        process.disable_os_log_on_macos()
+
+        assert "OS_ACTIVITY_MODE" not in os.environ
+        execv.assert_not_called()
+        net_if_addrs.assert_not_called()

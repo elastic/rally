@@ -93,6 +93,7 @@ def main():
     check_python_version()
     log.install_default_log_config()
     log.configure_logging()
+    process.disable_os_log_on_macos()
     console.init(assume_tty=False)
 
     parser = argparse.ArgumentParser(
