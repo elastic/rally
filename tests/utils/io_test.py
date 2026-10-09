@@ -404,7 +404,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
 
     def test_create_with_single_worker_matches_multi_worker(self, tmp_path):
         # source must span multiple batches to exercise parallel collection ordering
-        lines = [self.SAMPLE_OTLP_JSON_LINE] * (io.OtlpProtobufFile._CONVERSION_BATCH_SIZE * 2 + 17)
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * (50 * 2 + 17)
         seq_dir = tmp_path / "seq"
         par_dir = tmp_path / "par"
         seq_dir.mkdir()
@@ -415,8 +415,9 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         pb_seq = io.OtlpProtobufFile.for_source_file(json_path_seq)
         pb_par = io.OtlpProtobufFile.for_source_file(json_path_par)
 
-        assert pb_seq.create(workers=1) == len(lines)
-        assert pb_par.create(workers=4) == len(lines)
+        with mock.patch.object(io.OtlpProtobufFile, "_BATCH_BYTES", len(self.SAMPLE_OTLP_JSON_LINE) * 50):
+            assert pb_seq.create(workers=1) == len(lines)
+            assert pb_par.create(workers=4) == len(lines)
 
         # byte-for-byte identical output regardless of worker count → ordering is preserved
         with open(pb_seq.pb_path, "rb") as f1, open(pb_par.pb_path, "rb") as f2:
@@ -605,7 +606,7 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         pb = io.OtlpProtobufFile.for_source_file(json_path)
         with mock.patch(
             "concurrent.futures.ProcessPoolExecutor",
-            side_effect=lambda max_workers: concurrent.futures.ThreadPoolExecutor(max_workers=max_workers),
+            side_effect=lambda max_workers, **_: concurrent.futures.ThreadPoolExecutor(max_workers=max_workers),
         ) as pool_mock:
             assert pb.create(workers=workers) == 2
         pool_mock.assert_called_once()
@@ -626,3 +627,12 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
     def test_create_explicit_workers_override_env(self, tmp_path):
         with mock.patch.dict(os.environ, {"RALLY_OTLP_CONVERSION_WORKERS": "12"}):
             assert self._create_and_capture_worker_count(tmp_path, workers=2) == 2
+
+    def test_iter_line_batches_groups_by_bytes(self, tmp_path):
+        json_path = self._write_json_lines(tmp_path, ["a" * 4, "", "b" * 4, "c" * 25, "d" * 3, "  ", "e" * 3, "f" * 3])
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+
+        batches = list(pb._iter_line_batches(8))
+
+        # blank lines are skipped; an oversized line forms its own batch; the remainder is flushed
+        assert batches == [["a" * 4, "b" * 4], ["c" * 25], ["d" * 3, "e" * 3, "f" * 3]]

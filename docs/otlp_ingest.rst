@@ -409,7 +409,7 @@ If the same corpus is used by two operations — one with ``gzip: true`` and one
 Tuning parallel conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-By default, conversion uses all available CPU cores. To cap this (e.g., in memory-constrained environments), set the ``RALLY_OTLP_CONVERSION_WORKERS`` environment variable::
+By default, conversion uses all available CPU cores. Memory usage grows with the number of workers and the size of the largest records in the corpus. To cap it (e.g., in memory-constrained environments), set the ``RALLY_OTLP_CONVERSION_WORKERS`` environment variable::
 
     RALLY_OTLP_CONVERSION_WORKERS=4 esrally prepare-track ...
 
