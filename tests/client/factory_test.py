@@ -792,6 +792,19 @@ def test_serverless_operator_status_is_false_when_authenticate_is_rejected():
     assert factory.serverless_operator_status(es) is False
 
 
+def test_client_factory_masks_basic_auth_in_logs(caplog):
+    caplog.set_level(logging.INFO, logger="esrally.client.factory")
+    client_options = {"basic_auth": ["elastic", "secret"], "api_key": "hidden-key"}
+
+    es_factory = factory.EsClientFactory([{"host": "127.0.0.1", "port": 9200}], client_options)
+
+    assert es_factory.client_options["basic_auth"] == ["elastic", "secret"]
+    assert es_factory.client_options["api_key"] == "hidden-key"
+    assert "secret" not in caplog.text
+    assert "hidden-key" not in caplog.text
+    assert "*****" in caplog.text
+
+
 def test_admin_client_factory_accepts_merged_options_without_per_client_api_keys():
     merged = opts.merge_admin_client_options(
         {
