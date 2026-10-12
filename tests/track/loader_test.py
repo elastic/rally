@@ -1272,6 +1272,22 @@ class TestOtlpDocumentPreparation:
         # builds the offset index
         count_records.assert_called_once_with()
 
+    def test_converts_local_json_when_offline(self):
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test",
+            downloader=loader.Downloader(offline=True, test_mode=False),
+            decompressor=mock.MagicMock(spec=loader.Decompressor),
+        )
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "is_valid", return_value=False),
+            mock.patch.object(io.OtlpProtobufFile, "create", return_value=10) as create,
+            mock.patch.object(p, "is_locally_available", return_value=True),
+            mock.patch.object(p, "has_expected_size", return_value=True),
+        ):
+            p.prepare_document_set(self._doc_set(archive="metrics.otlp.json.zst", compressed_size=500), data_root="/tmp")
+
+        create.assert_called_once_with(signal="metrics")
+
     def test_downloads_and_converts_json_when_pb_unavailable(self):
         p = self._preparator()
         p.downloader.download.side_effect = [exceptions.DataError("not found"), None]

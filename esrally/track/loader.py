@@ -699,7 +699,7 @@ class OtlpDocumentSetFormat(DocumentSetFormat):
                 pb_archive_path = pb_path + archive_ext
                 try:
                     preparator.downloader.download(document_set.base_url, pb_archive_path)
-                except exceptions.DataError:
+                except (exceptions.DataError, exceptions.SystemSetupError):
                     LOG.debug("Compressed .pb%s not available remotely, will try uncompressed .pb.", archive_ext)
                 else:
                     preparator.decompressor.decompress(pb_archive_path, pb_path, uncompressed_size=None)
@@ -713,7 +713,8 @@ class OtlpDocumentSetFormat(DocumentSetFormat):
 
         try:
             preparator.downloader.download(document_set.base_url, pb_path)
-        except exceptions.DataError:
+        except (exceptions.DataError, exceptions.SystemSetupError):
+            # SystemSetupError: offline mode; the source path will report it if the JSON is also missing
             return False
         if not pb_file.is_valid():
             return False
