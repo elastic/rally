@@ -270,16 +270,24 @@ class TestDriver:
         build_flavor = "default"
         admin_operator = True
         configure_nodes_info = False
+        wrap_info_response = False
 
         def __init__(self, hosts, client_options, distribution_version=None, distribution_flavor=None):
             self.client_options = dict(client_options)
             self.client = mock.MagicMock()
             flavor = type(self).build_flavor
-            self.client.info.return_value = {
+            info_body = {
                 "name": flavor,
                 "cluster_name": flavor,
                 "version": {"number": "8.15.0", "build_flavor": flavor, "build_hash": "00000000"},
             }
+            if type(self).wrap_info_response:
+                # pylint: disable=import-outside-toplevel
+                from elastic_transport import ObjectApiResponse
+
+                self.client.info.return_value = ObjectApiResponse(body=info_body, meta=None)
+            else:
+                self.client.info.return_value = info_body
             operator = type(self).admin_operator if client_options.get("api_key") == "admin-key" else False
             self.client.perform_request.return_value = mock.Mock(body={"operator": operator})
             if type(self).configure_nodes_info and client_options.get("api_key") == "admin-key":
@@ -290,17 +298,21 @@ class TestDriver:
             return self.client
 
         @classmethod
-        def reset(cls, build_flavor="default", admin_operator=True, configure_nodes_info=False):
+        def reset(cls, build_flavor="default", admin_operator=True, configure_nodes_info=False, wrap_info_response=False):
             cls.instances = []
             cls.build_flavor = build_flavor
             cls.admin_operator = admin_operator
             cls.configure_nodes_info = configure_nodes_info
+            cls.wrap_info_response = wrap_info_response
 
-    def _use_recording_factory(self, build_flavor="default", admin_operator=True, configure_nodes_info=False):
+    def _use_recording_factory(self, build_flavor="default", admin_operator=True, configure_nodes_info=False, wrap_info_response=False):
         # Avoid StaticClientFactory teardown stopping a patcher this test never started.
         self.StaticClientFactory.PATCHER = mock.Mock()
         self.RecordingClientFactory.reset(
-            build_flavor=build_flavor, admin_operator=admin_operator, configure_nodes_info=configure_nodes_info
+            build_flavor=build_flavor,
+            admin_operator=admin_operator,
+            configure_nodes_info=configure_nodes_info,
+            wrap_info_response=wrap_info_response,
         )
         return self.RecordingClientFactory
 
@@ -453,7 +465,9 @@ class TestDriver:
             "admin.options",
             opts.ClientOptions("api_key:'admin-key'", apply_defaults=False),
         )
-        factory = self._use_recording_factory(build_flavor="serverless", admin_operator=True, configure_nodes_info=True)
+        factory = self._use_recording_factory(
+            build_flavor="serverless", admin_operator=True, configure_nodes_info=True, wrap_info_response=True
+        )
         driver_actor = self.create_test_driver_actor()
         d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=factory)
         d.prepare_benchmark(t=self.track)

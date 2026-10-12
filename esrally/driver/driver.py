@@ -754,6 +754,18 @@ class Driver:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
+    def _apply_admin_build_hash(self, build_hash):
+        # info() returns an ObjectApiResponse, which supports item access but is not a dict.
+        cluster_details = getattr(self.driver_actor, "cluster_details", None)
+        version = None
+        if cluster_details is not None:
+            try:
+                version = cluster_details["version"]
+            except (KeyError, TypeError):
+                version = None
+        if isinstance(version, dict):
+            version["build_hash"] = build_hash
+
     def retrieve_build_hash_from_nodes_info(self, es):
         try:
             es_default = es.default
@@ -858,9 +870,7 @@ class Driver:
                     if admin_build_hash:
                         build_hash = admin_build_hash
                         self.logger.info("Retrieved actual build hash [%s] from serverless cluster with admin credentials.", build_hash)
-                        cluster_details = getattr(self.driver_actor, "cluster_details", None)
-                        if isinstance(cluster_details, dict) and "version" in cluster_details:
-                            cluster_details["version"]["build_hash"] = build_hash
+                        self._apply_admin_build_hash(build_hash)
         self.prepare_telemetry(
             telemetry_clients,
             enable=enable_telemetry,
