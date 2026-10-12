@@ -416,18 +416,11 @@ def set_absolute_data_path(cfg: types.Config, t):
                 return p
         return None
 
-    def first_existing_with_suffix(root_dirs, f, suffix):
+    def first_with_all_suffixes(root_dirs, f, suffixes):
         for root_dir in root_dirs:
             candidate = os.path.join(root_dir, f)
-            if os.path.exists(candidate + suffix):
+            if all(os.path.exists(candidate + suffix) for suffix in suffixes):
                 return candidate
-        return None
-
-    def first_existing_with_any_suffix(root_dirs, f, suffixes):
-        for suffix in suffixes:
-            resolved = first_existing_with_suffix(root_dirs, f, suffix)
-            if resolved is not None:
-                return resolved
         return None
 
     for corpus in t.corpora:
@@ -437,12 +430,13 @@ def set_absolute_data_path(cfg: types.Config, t):
             if document_set.document_archive:
                 document_set.document_archive = first_existing(data_root, document_set.document_archive)
             if document_set.document_file:
-                resolved = first_existing(data_root, document_set.document_file)
-                # Only a derived file (e.g. OTLP .pb) may exist locally; resolve to where the source file would be.
-                if resolved is None:
-                    suffixes = DOCUMENT_SET_FORMATS[document_set.source_format].prepared_file_suffixes()
-                    resolved = first_existing_with_any_suffix(data_root, document_set.document_file, suffixes)
-                document_set.document_file = resolved
+                formats = DOCUMENT_SET_FORMATS[document_set.source_format].variants(t, corpus)
+                suffixes = {suffix for fmt in formats for suffix in fmt.prepared_file_suffixes()}
+                if suffixes:
+                    # must pick the same root as prepare_document(), which keeps all variants in one directory
+                    document_set.document_file = first_with_all_suffixes(data_root, document_set.document_file, suffixes)
+                else:
+                    document_set.document_file = first_existing(data_root, document_set.document_file)
 
 
 def is_simple_track_mode(cfg: types.Config):
@@ -617,10 +611,9 @@ class DocumentSetFormat(abc.ABC):
         """
         return [cls()]
 
-    @classmethod
-    def prepared_file_suffixes(cls) -> tuple[str, ...]:
+    def prepared_file_suffixes(self) -> tuple[str, ...]:
         """
-        :return: Suffixes that derived files append to the source document file name.
+        :return: Suffixes that the derived files required by this variant append to the source document file name.
         """
         return ()
 
@@ -671,9 +664,8 @@ class OtlpDocumentSetFormat(DocumentSetFormat):
         gzip_prefs = _otlp_gzip_preferences_for_corpus(t, corpus.name) or {False}
         return [cls(gzip_records=gzip_records) for gzip_records in sorted(gzip_prefs)]
 
-    @classmethod
-    def prepared_file_suffixes(cls):
-        return ".pb", ".pbgz"
+    def prepared_file_suffixes(self):
+        return (".pbgz",) if self.gzip_records else (".pb",)
 
     def _pb_file(self, doc_path):
         return io.OtlpProtobufFile.for_source_file(doc_path, gzip_records=self.gzip_records)

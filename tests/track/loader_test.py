@@ -2087,8 +2087,9 @@ class TestTrackPath:
         assert t.corpora[0].documents[0].document_file == "/data/unittest/docs/documents.json"
         assert t.corpora[0].documents[0].document_archive == "/data/unittest/docs/documents.json.bz2"
 
+    @mock.patch("esrally.track.loader._otlp_gzip_preferences_for_corpus", return_value={False})
     @mock.patch("os.path.exists")
-    def test_otlp_resolves_via_pb_when_json_missing(self, path_exists):
+    def test_otlp_resolves_via_pb_when_json_missing(self, path_exists, gzip_prefs):
         # OTLP corpora are special: the hot path only needs the .pb (and .pb.offset). If we
         # downloaded just the .pb (no source JSON), document_file would otherwise stay None and
         # the param source would later try to open "None.pb".
@@ -2121,8 +2122,9 @@ class TestTrackPath:
         # document_file points to where the JSON would be — so the derived .pb path is correct
         assert t.corpora[0].documents[0].document_file == "/data/otlp/metrics.otlp.json"
 
+    @mock.patch("esrally.track.loader._otlp_gzip_preferences_for_corpus", return_value={True})
     @mock.patch("os.path.exists")
-    def test_otlp_resolves_via_pbgz_when_json_missing(self, path_exists):
+    def test_otlp_resolves_via_pbgz_when_json_missing(self, path_exists, gzip_prefs):
         path_exists.side_effect = lambda path: path.endswith(".pbgz")
 
         cfg = config.Config()
@@ -2165,6 +2167,81 @@ class TestTrackPath:
         loader.set_absolute_data_path(cfg, t)
 
         assert t.corpora[0].documents[0].document_file is None
+
+    @staticmethod
+    def _otlp_track(challenges=None):
+        return track.Track(
+            name="u",
+            challenges=challenges,
+            corpora=[
+                track.DocumentCorpus(
+                    "otlp",
+                    documents=[
+                        track.Documents(
+                            source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
+                            document_file="m.json",
+                            number_of_documents=10,
+                        )
+                    ],
+                )
+            ],
+        )
+
+    @staticmethod
+    def _resolve_otlp(t, existing_files):
+        with (
+            mock.patch("esrally.track.loader.data_dir", return_value=["/track", "/corpus"]),
+            mock.patch("os.path.exists", side_effect=lambda path: path in existing_files),
+        ):
+            loader.set_absolute_data_path(config.Config(), t)
+        return t.corpora[0].documents[0].document_file
+
+    @mock.patch("esrally.track.loader._otlp_gzip_preferences_for_corpus", return_value={True})
+    def test_otlp_ignores_variant_not_required_by_challenge(self, gzip_prefs):
+        resolved = self._resolve_otlp(self._otlp_track(), {"/track/m.json.pb", "/corpus/m.json.pbgz"})
+
+        assert resolved == "/corpus/m.json"
+
+    @mock.patch("esrally.track.loader._otlp_gzip_preferences_for_corpus", return_value={True, False})
+    def test_otlp_requires_all_variants_in_same_root(self, gzip_prefs):
+        resolved = self._resolve_otlp(self._otlp_track(), {"/track/m.json.pb", "/corpus/m.json.pb", "/corpus/m.json.pbgz"})
+
+        assert resolved == "/corpus/m.json"
+
+    @mock.patch("esrally.track.loader._otlp_gzip_preferences_for_corpus", return_value={True})
+    def test_otlp_prefers_prepared_files_over_source_file(self, gzip_prefs):
+        resolved = self._resolve_otlp(self._otlp_track(), {"/corpus/m.json", "/track/m.json.pbgz"})
+
+        assert resolved == "/track/m.json"
+
+    @mock.patch("esrally.track.loader._otlp_gzip_preferences_for_corpus", return_value={True})
+    def test_otlp_does_not_resolve_without_prepared_files(self, gzip_prefs):
+        resolved = self._resolve_otlp(self._otlp_track(), {"/track/m.json", "/corpus/m.json", "/corpus/m.json.pb"})
+
+        assert resolved is None
+
+    @pytest.mark.parametrize(
+        "selected_challenge, expected",
+        [
+            ("gzipped", "/corpus/m.json"),
+            ("plain", "/track/m.json"),
+        ],
+    )
+    def test_otlp_resolves_variant_of_selected_challenge(self, selected_challenge, expected):
+        def challenge(name, gzip):
+            op = track.Operation(f"ingest-{name}", operation_type="otlp-ingest", params={"gzip": gzip})
+            return track.Challenge(
+                name,
+                default=name == "gzipped",
+                selected=name == selected_challenge,
+                schedule=[track.Task(name=f"ingest-{name}", operation=op)],
+            )
+
+        t = self._otlp_track(challenges=[challenge("gzipped", True), challenge("plain", False)])
+
+        resolved = self._resolve_otlp(t, {"/track/m.json.pb", "/corpus/m.json.pbgz"})
+
+        assert resolved == expected
 
 
 class TestTrackFilter:
