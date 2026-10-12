@@ -530,7 +530,7 @@ To "duck type" this class, you must implement the following methods:
 
 Consider the DefaultTrackPreparator below, which is invoked by default unless overridden by custom registered track processors::
 
-    class DefaultTrackPreparator:
+    class DefaultTrackPreparator(TrackProcessor):
         def __init__(self):
             super().__init__()
             # just declare here, will be injected later
@@ -538,9 +538,6 @@ Consider the DefaultTrackPreparator below, which is invoked by default unless ov
             self.downloader = None
             self.decompressor = None
             self.track = None
-
-        def on_after_load_track(self, track):
-            pass
 
         def on_prepare_track(self, track, data_root_dir):
             prep = DocumentSetPreparator(track.name, self.downloader, self.decompressor)
@@ -557,19 +554,31 @@ Consider the DefaultTrackPreparator below, which is invoked by default unless ov
 
     def prepare_document(cfg, track, corpus, preparator, document_set, formats=None):
         data_root = data_dir(cfg, track.name, corpus.name)
-        for fmt in formats or [DOCUMENT_SET_FORMATS[document_set.source_format]()]:
-            if len(data_root) == 1:
+        formats = formats or [DOCUMENT_SET_FORMATS[document_set.source_format]()]
+        # variants share the source file, so they are prepared sequentially
+        if len(data_root) == 1:
+            for fmt in formats:
                 preparator.prepare_document_set(document_set, data_root[0], fmt)
-            # attempt to prepare everything in the current directory and fallback to the corpus directory
-            elif not preparator.prepare_bundled_document_set(document_set, data_root[0], fmt):
-                preparator.prepare_document_set(document_set, data_root[1], fmt)
+            return
+        # attempt to prepare everything in the current directory and fallback to the corpus directory
+        bundled = [preparator.prepare_bundled_document_set(document_set, data_root[0], fmt) for fmt in formats]
+        if all(bundled):
+            return
+        if any(bundled):
+            raise exceptions.DataError(...)
+        for fmt in formats:
+            preparator.prepare_document_set(document_set, data_root[1], fmt)
 
-In this case, you can see by default we do nothing here for ``on_after_load_track`` to mutate the track, but yield a tuple of the ``prepare_document``
-function and a dict of its args for each document set in the track's used corpora. The ``DocumentSetPreparator`` class referenced has code which checks to see if data
-is already available locally, otherwise it resolves, downloads, and decompresses specified corpora files. Format-specific steps (e.g. creating a file offset table
-for bulk documents) are delegated to the ``DocumentSetFormat`` registered for the document set's ``source-format``. After this is called, these tuples are given to each
-TrackProcessor worker actor to be executed in parallel. In a custom track processor, the callable and its parameters are arbitrary, and should be defined to
-your specific needs.
+In this case, ``DefaultTrackPreparator`` does not override ``on_after_load_track``, so it inherits the no-op implementation from ``TrackProcessor`` and
+does not mutate the track. ``on_prepare_track`` yields a tuple of the ``prepare_document`` function and a dict of its args for each document set in the
+track's used corpora. The ``DocumentSetPreparator`` class referenced has code which checks to see if data is already available locally, otherwise it resolves,
+downloads, and decompresses specified corpora files. Format-specific steps (e.g. creating a file offset table for bulk documents) are delegated to the
+``DocumentSetFormat`` registered for the document set's ``source-format``. A format may define several variants (for example, an OTLP document set
+converted into both ``.pb`` and ``.pbgz`` files when operations using the corpus differ in their ``gzip`` setting), which share the same source file and are
+therefore prepared sequentially within one ``prepare_document`` call. If the track
+bundles its data next to the track files, all variants must be prepared from that directory; a partially prepared bundled document set is reported as an
+error. After ``on_prepare_track`` is called, the yielded tuples are given to each TrackProcessor worker actor to be executed in parallel. In a custom track
+processor, the callable and its parameters are arbitrary, and should be defined to your specific needs.
 
 .. note::
     By default, Rally creates 1 TrackProcessor worker process for each CPU on the machine where Rally is invoked. To override this behavior, you can use the

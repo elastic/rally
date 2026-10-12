@@ -416,9 +416,9 @@ By default, conversion uses all available CPU cores. Memory usage grows with the
 Multi-client Partitioning
 --------------------------
 
-When a challenge runs ``otlp-ingest`` with multiple clients (``"clients": N``), Rally splits the corpus across clients so each client reads a distinct, non-overlapping slice of the records. Partitioning uses the ``.pb.offset`` index for O(1) seek to each client's starting record.
+When a challenge runs ``otlp-ingest`` with multiple clients (``"clients": N``), Rally splits the corpus across clients so each client reads a distinct, non-overlapping slice of the records. The ``.pb.offset`` sparse index reduces how many records must be scanned to reach each client's starting record.
 
-Each client's slice size is ``floor(total_records / N)``; the final client gets any remainder. This guarantees each record is sent exactly once per pass across all clients.
+Each client's slice boundaries are computed by rounding evenly spaced offsets, so slice sizes differ by at most one record. This guarantees each record is sent exactly once per pass across all clients.
 
 Metrics
 -------
