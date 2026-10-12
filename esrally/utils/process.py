@@ -205,17 +205,23 @@ def redact_cmdline(cmdline: list) -> list[str]:
     """
 
     sensitive_flags = ("--client-options", "--admin-client-options")
+
+    def is_sensitive_flag(value):
+        option = value.split("=", 1)[0]
+        return len(option) > 2 and any(flag.startswith(option) for flag in sensitive_flags)
+
     redacted = []
     redact_next = False
     for value in cmdline:
         if redact_next:
             redacted.append('"*****"')
             redact_next = False
-        elif value in sensitive_flags:
-            redacted.append(value)
-            redact_next = True
-        elif any(value.startswith(f"{flag}=") for flag in sensitive_flags):
-            redacted.append("=".join((value.split("=", 1)[0], '"*****"')))
+        elif is_sensitive_flag(value):
+            if "=" in value:
+                redacted.append("=".join((value.split("=", 1)[0], '"*****"')))
+            else:
+                redacted.append(value)
+                redact_next = True
         else:
             redacted.append(value)
     return redacted
