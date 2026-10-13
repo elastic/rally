@@ -297,7 +297,7 @@ The following fields are relevant for ``otlp-metrics`` corpora. See :ref:`track_
      - Must be ``otlp-metrics`` to enable OTLP metrics handling.
    * - ``source-file``
      - Yes
-     - Name of the OTLP JSON file produced by ``metricsgenreceiver`` (one ``ExportMetricsServiceRequest`` per line), relative to the corpus data directory. It may be an archive (e.g. ``metrics.otlp.json.zst``) containing exactly one file named like the archive without its extension; Rally decompresses it before conversion.
+     - Name of the OTLP JSON file (one ``ExportMetricsServiceRequest`` per line, for example as produced by ``metricsgenreceiver`` or the OpenTelemetry Collector file exporter), relative to the corpus data directory. It may be an archive (e.g. ``metrics.otlp.json.zst``) containing exactly one file named like the archive without its extension; Rally decompresses it before conversion. Lines containing other signals (logs, traces) are rejected.
    * - ``document-count``
      - Yes
      - Number of records (lines) in the source file. Used to verify a local or downloaded file.
