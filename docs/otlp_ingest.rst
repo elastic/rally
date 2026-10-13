@@ -2,7 +2,7 @@ OTLP Metrics Ingest
 ===================
 
 Rally supports benchmarking Elasticsearch's native `OTLP metrics ingest endpoint <https://www.elastic.co/docs/manage-data/ingest/otlp-endpoint>`_ (``/_otlp/v1/metrics``).
-This lets you measure how quickly Elasticsearch can accept a realistic stream of OpenTelemetry metrics delivered in binary protobuf format, with optional per-record gzip compression.
+This lets you measure Elasticsearch ingest performance using a realistic stream of OpenTelemetry metrics delivered in binary protobuf format, with optional per-record gzip compression.
 
 Overview
 --------
