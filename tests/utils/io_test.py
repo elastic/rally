@@ -404,7 +404,8 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
 
         assert not os.path.exists(pb.pb_path)
 
-    def test_create_with_single_worker_matches_multi_worker(self, tmp_path):
+    @pytest.mark.parametrize("gzip_records", [False, True])
+    def test_create_with_single_worker_matches_multi_worker(self, tmp_path, gzip_records):
         # source must span multiple batches to exercise parallel collection ordering
         lines = [self.SAMPLE_OTLP_JSON_LINE] * (50 * 2 + 17)
         seq_dir = tmp_path / "seq"
@@ -414,8 +415,8 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         json_path_seq = self._write_json_lines(seq_dir, lines)
         json_path_par = self._write_json_lines(par_dir, lines)
 
-        pb_seq = io.OtlpProtobufFile.for_source_file(json_path_seq)
-        pb_par = io.OtlpProtobufFile.for_source_file(json_path_par)
+        pb_seq = io.OtlpProtobufFile.for_source_file(json_path_seq, gzip_records=gzip_records)
+        pb_par = io.OtlpProtobufFile.for_source_file(json_path_par, gzip_records=gzip_records)
 
         with mock.patch.object(io.OtlpProtobufFile, "_BATCH_BYTES", len(self.SAMPLE_OTLP_JSON_LINE) * 50):
             assert pb_seq.create(signal="metrics", workers=1) == len(lines)
@@ -660,6 +661,17 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
         _, record_count = io._convert_lines_batch(("/data/metrics.otlp.json", 1, ["", self.SAMPLE_OTLP_JSON_LINE, ""], False, "metrics"))
 
         assert record_count == 1
+
+    def test_convert_lines_batch_gzip_is_deterministic(self):
+        args = ("/data/metrics.otlp.json", 1, [self.SAMPLE_OTLP_JSON_LINE] * 3, True, "metrics")
+
+        # a different wall clock per run would leak into the gzip header if mtime were not pinned
+        with mock.patch("time.time", return_value=1_000_000_000):
+            first, _ = io._convert_lines_batch(args)
+        with mock.patch("time.time", return_value=2_000_000_000):
+            second, _ = io._convert_lines_batch(args)
+
+        assert first == second
 
     def test_create_raises_data_error_with_source_line_number(self, tmp_path):
         lines = [self.SAMPLE_OTLP_JSON_LINE] * 5 + ["", '{"unknownField": 1}'] + [self.SAMPLE_OTLP_JSON_LINE] * 5
