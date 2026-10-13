@@ -22,11 +22,8 @@ import platform
 import shutil
 import sys
 import time
-import typing
 import uuid
 from enum import Enum
-
-import thespian.actors
 
 from esrally import (
     BANNER,
@@ -48,6 +45,7 @@ from esrally import (
     types,
     version,
 )
+from esrally.driver import driver
 from esrally.driver.driver import OnErrorBehavior
 from esrally.mechanic import mechanic, team
 from esrally.tracker import tracker
@@ -1088,13 +1086,13 @@ def print_help_on_errors():
     )
 
 
-def run_with_actor_system(runnable, cfg: types.Config, kill_running_processes=False):
+def run_with_ray(runnable, cfg: types.Config, kill_running_processes=False):
     logger = logging.getLogger(__name__)
 
     if kill_running_processes:
         logger.info("Killing running Rally processes")
 
-        # Kill any lingering Rally processes before attempting to continue - the actor system needs to be a singleton on this machine
+        # Kill any lingering Rally processes before attempting to continue - only one benchmark may run on this machine
         # noinspection PyBroadException
         try:
             process.kill_running_rally_instances()
@@ -1115,89 +1113,40 @@ def run_with_actor_system(runnable, cfg: types.Config, kill_running_processes=Fa
             )
             raise exceptions.RallyError(msg)
 
-    with_actor_system(runnable, cfg)
+    with_ray(runnable, cfg)
 
 
-def with_actor_system(runnable, cfg: types.Config):
-    process_startup_method: actor.ProcessStartupMethod | None = cfg.opts("actor", "actor.process.startup.method", None, mandatory=False)
-    if process_startup_method is not None:
-        if process_startup_method not in typing.get_args(actor.ProcessStartupMethod):
-            valid_options = ", ".join(str(v) for v in typing.get_args(actor.ProcessStartupMethod))
-            raise ValueError(
-                f"Invalid value '{process_startup_method}' for 'actor.process.startup.method' option. Valid values are: {valid_options}"
-            )
-        actor.set_startup_method(process_startup_method)
-
-    already_running = actor.actor_system_already_running()
-    LOG.info("Actor system already running locally? [%s]", already_running)
+def with_ray(runnable, cfg: types.Config):
+    """
+    Runs ``runnable`` with a connection to Ray: to the Rally daemon if it runs on this machine, otherwise to a local Ray
+    instance that is stopped afterwards.
+    """
+    namespace = f"rally-{cfg.opts('system', 'race.id', mandatory=False) or uuid.uuid4()}"
     try:
-        actors = actor.bootstrap_actor_system(try_join=bool(already_running), prefer_local_only=not already_running)
-        # We can only support remote benchmarks if we have a dedicated daemon that is not only bound to 127.0.0.1
-        cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", already_running)
-    # This happens when the admin process could not be started, e.g. because it could not open a socket.
-    except thespian.actors.InvalidActorAddress:
-        LOG.info("Falling back to offline actor system.")
-        actor.use_offline_actor_system()
-        actors = actor.bootstrap_actor_system(try_join=True)
+        console.info("Starting Rally's actors ...", flush=True)
+        connected_to_daemon = actor.init_ray(namespace=namespace, num_cpus=driver.num_cores(cfg))
     except KeyboardInterrupt:
-        raise exceptions.UserInterrupted("User has cancelled the benchmark (detected whilst bootstrapping actor system).") from None
-    except Exception as e:
-        LOG.exception("Could not bootstrap actor system.")
-        if str(e) == "Unable to determine valid external socket address.":
-            console.warn(
-                "Could not determine a socket address. Are you running without any network? Switching to degraded mode.", logger=LOG
-            )
-            LOG.info("Falling back to offline actor system.")
-            actor.use_offline_actor_system()
-            actors = actor.bootstrap_actor_system(try_join=True)
-        else:
-            raise
+        actor.shutdown_ray()
+        raise exceptions.UserInterrupted("User has cancelled the benchmark (detected whilst starting Ray).") from None
+    LOG.info("Connected to Rally daemon? [%s]", connected_to_daemon)
+    # We can only support remote benchmarks if we have a dedicated daemon
+    cfg.add(config.Scope.application, "system", "remote.benchmarking.supported", connected_to_daemon)
     try:
         runnable(cfg)
     finally:
-        # We only shut down the actor system if it was not already running before
-        if not already_running:
-            shutdown_complete = False
-            times_interrupted = 0
-            while not shutdown_complete and times_interrupted < 2:
-                try:
-                    # give some time for any outstanding messages to be delivered to the actor system
-                    time.sleep(3)
-                    LOG.info("Attempting to shutdown internal actor system.")
-                    actors.shutdown()
-                    # note that this check will only evaluate to True for a TCP-based actor system.
-                    timeout = 15
-                    while actor.actor_system_already_running() and timeout > 0:
-                        LOG.info("Actor system is still running. Waiting...")
-                        time.sleep(1)
-                        timeout -= 1
-                    if timeout > 0:
-                        shutdown_complete = True
-                        LOG.info("Shutdown completed.")
-                    else:
-                        LOG.warning("Shutdown timed out. Actor system is still running.")
-                        break
-                except KeyboardInterrupt:
-                    times_interrupted += 1
-                    LOG.warning("User interrupted shutdown of internal actor system.")
-                    console.info("Please wait a moment for Rally's internal components to shutdown.")
-            if not shutdown_complete and times_interrupted > 0:
-                LOG.warning("Terminating after user has interrupted actor system shutdown explicitly for [%d] times.", times_interrupted)
-                console.println("")
-                console.warn("Terminating now at the risk of leaving child processes behind.")
-                console.println("")
-                console.warn("The next race may fail due to an unclean shutdown.")
-                console.println("")
-                console.println(SKULL)
-                console.println("")
-                raise exceptions.UserInterrupted(
-                    f"User has cancelled the benchmark (shutdown not complete as user interrupted " f"{times_interrupted} times)."
-                ) from None
-
-            if not shutdown_complete:
-                console.warn(
-                    "Could not terminate all internal processes within timeout. Please check and force-terminate all Rally processes."
-                )
+        try:
+            LOG.info("Disconnecting from Ray.")
+            actor.shutdown_ray()
+        except KeyboardInterrupt:
+            LOG.warning("User interrupted shutdown of Ray.")
+            console.println("")
+            console.warn("Terminating now at the risk of leaving child processes behind.")
+            console.println("")
+            console.warn("The next race may fail due to an unclean shutdown.")
+            console.println("")
+            console.println(SKULL)
+            console.println("")
+            raise exceptions.UserInterrupted("User has cancelled the benchmark (shutdown not complete as user interrupted).") from None
 
 
 def configure_telemetry_params(args, cfg: types.Config):
@@ -1391,7 +1340,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "mechanic", "cluster.name", args.cluster_name)
 
             configure_reporting_params(args, cfg)
-            run_with_actor_system(racecontrol.run, cfg, args.kill_running_processes)
+            run_with_ray(racecontrol.run, cfg, args.kill_running_processes)
         elif sub_command == "create-track":
             if args.data_streams is not None:
                 cfg.add(config.Scope.applicationOverride, "generator", "indices", "*")
@@ -1431,7 +1380,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "driver", "serverless.operator", args.serverless_operator)
             track.validate_track(cfg)
         elif sub_command == "prepare-track":
-            # Same track-source wiring as ``validate-track``; corpora are prepared via the actor system.
+            # Same track-source wiring as ``validate-track``; corpora are prepared by Rally's actors.
             configure_track_params(arg_parser, args, cfg, command_requires_track_details=False)
             cfg.add(config.Scope.applicationOverride, "track", "params", opts.to_dict(args.track_params))
             cfg.add(config.Scope.applicationOverride, "track", "params.ignore_unused", args.ignore_unused_track_params)
@@ -1441,7 +1390,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             if args.build_flavor:
                 cfg.add(config.Scope.applicationOverride, "mechanic", "distribution.flavor", args.build_flavor)
             cfg.add(config.Scope.applicationOverride, "driver", "serverless.operator", args.serverless_operator)
-            run_with_actor_system(racecontrol.prepare_track, cfg, args.kill_running_processes)
+            run_with_ray(racecontrol.prepare_track, cfg, args.kill_running_processes)
         else:
             raise exceptions.SystemSetupError(f"Unknown subcommand [{sub_command}]")
         return ExitStatus.SUCCESSFUL

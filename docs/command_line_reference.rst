@@ -114,7 +114,7 @@ On success the process exits zero. Confirmation text is suppressed by default (`
 
 The ``prepare-track`` subcommand loads a track and prepares its corpora (downloading and decompressing the configured document sets) without starting a benchmark or contacting a cluster. Use it to pre-populate the local data cache (``~/.rally/benchmarks/data``) ahead of a race, for example to separate a slow one-time download from the measured run.
 
-It accepts the same arguments as ``validate-track`` and additionally ``--test-mode`` (prepare only the small test-mode subset of each corpus) and ``--kill-running-processes``. Like ``validate-track`` it resolves the challenge the same way ``race`` does and validates track parameters before preparing; an unknown challenge or invalid parameters fail with a non-zero exit code. Unlike ``validate-track`` it boots the Rally actor system to run preparation across multiple cores, so only one Rally instance may run at a time on the machine (pass ``--kill-running-processes`` to terminate others).
+It accepts the same arguments as ``validate-track`` and additionally ``--test-mode`` (prepare only the small test-mode subset of each corpus) and ``--kill-running-processes``. Like ``validate-track`` it resolves the challenge the same way ``race`` does and validates track parameters before preparing; an unknown challenge or invalid parameters fail with a non-zero exit code. Unlike ``validate-track`` it starts Rally's actors to run preparation across multiple cores, so only one Rally instance may run at a time on the machine (pass ``--kill-running-processes`` to terminate others).
 
 Preparation runs locally only; it does not provision nodes or contact Elasticsearch. Example::
 
@@ -919,7 +919,7 @@ By default, Rally will run its load driver on the same machine where you start t
 
    esrally race --track=geonames --load-driver-hosts=10.17.20.5,10.17.20.6
 
-In the example, above Rally will generate load from the hosts ``10.17.20.5`` and ``10.17.20.6``. For this to work, you need to start a Rally daemon on these machines, see :ref:`distributing the load test driver <recipe_distributed_load_driver>` for a complete example.
+In the example, above Rally will generate load from the hosts ``10.17.20.5`` and ``10.17.20.6``. For this to work, you need to start a Rally daemon on these machines, see :ref:`distributing the load test driver <recipe_distributed_load_driver>` for a complete example. Rally places load generators on the machines by IP address, so the hosts must resolve to the IP addresses that you have passed as ``--node-ip`` to ``esrallyd start``.
 
 ``target-hosts``
 ~~~~~~~~~~~~~~~~

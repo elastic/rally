@@ -15,17 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import contextlib
 import json
 import logging
 import os
 import pickle
-import sys
-import traceback
-from collections import defaultdict
+from dataclasses import dataclass
 from typing import Optional
-
-import thespian.actors
 
 from esrally import PROGRAM_NAME, actor, config, exceptions, metrics, paths, types
 from esrally.mechanic import launcher, provisioner, supplier, team
@@ -180,110 +177,27 @@ def _delete_node_file(root_path):
 
 
 ##############################
-# Public Messages
+# Data exchanged with node mechanics
 ##############################
 
 
-class StartEngine:
-    def __init__(self, cfg: types.Config, open_metrics_context, sources, distribution, external, docker, ip=None, port=None, node_id=None):
-        self.cfg = cfg
-        self.open_metrics_context = open_metrics_context
-        self.sources = sources
-        self.distribution = distribution
-        self.external = external
-        self.docker = docker
-        self.ip = ip
-        self.port = port
-        self.node_id = node_id
-
-    def for_nodes(self, all_node_ips=None, all_node_ids=None, ip=None, port=None, node_ids=None):
-        """
-
-        Creates a StartNodes instance for a concrete IP, port and their associated node_ids.
-
-        :param all_node_ips: The IPs of all nodes in the cluster (including the current one).
-        :param all_node_ids: The numeric id of all nodes in the cluster (including the current one).
-        :param ip: The IP to set.
-        :param port: The port number to set.
-        :param node_ids: A list of node id to set.
-        :return: A corresponding ``StartNodes`` message with the specified IP, port number and node ids.
-        """
-        return StartNodes(
-            self.cfg,
-            self.open_metrics_context,
-            self.sources,
-            self.distribution,
-            self.external,
-            self.docker,
-            all_node_ips,
-            all_node_ids,
-            ip,
-            port,
-            node_ids,
-        )
-
-
-class EngineStarted:
-    def __init__(self, team_revision):
-        self.team_revision = team_revision
-
-
-class StopEngine:
-    pass
-
-
-class EngineStopped:
-    pass
-
-
-class ResetRelativeTime:
-    def __init__(self, reset_in_seconds):
-        self.reset_in_seconds = reset_in_seconds
-
-
-##############################
-# Mechanic internal messages
-##############################
-
-
+@dataclass(frozen=True)
 class StartNodes:
-    def __init__(
-        self,
-        cfg: types.Config,
-        open_metrics_context,
-        sources,
-        distribution,
-        external,
-        docker,
-        all_node_ips,
-        all_node_ids,
-        ip,
-        port,
-        node_ids,
-    ):
-        self.cfg = cfg
-        self.open_metrics_context = open_metrics_context
-        self.sources = sources
-        self.distribution = distribution
-        self.external = external
-        self.docker = docker
-        self.all_node_ips = all_node_ips
-        self.all_node_ids = all_node_ids
-        self.ip = ip
-        self.port = port
-        self.node_ids = node_ids
+    """
+    Parameters for starting the nodes of the benchmark candidate on one host.
+    """
 
-
-class NodesStarted:
-    pass
-
-
-class StopNodes:
-    pass
-
-
-class NodesStopped:
-    pass
+    cfg: types.Config
+    open_metrics_context: dict
+    sources: bool
+    distribution: bool
+    external: bool
+    docker: bool
+    all_node_ips: set
+    all_node_ids: set
+    ip: str
+    port: int
+    node_ids: list
 
 
 def to_ip_port(hosts):
@@ -328,309 +242,182 @@ def nodes_by_host(ip_port_pairs):
     return nodes
 
 
-class MechanicActor(actor.RallyActor):
-    WAKEUP_RESET_RELATIVE_TIME = "relative_time"
-
+class MechanicCoordinator:
     """
-    This actor coordinates all associated mechanics on remote hosts (which do the actual work).
+    Coordinates the mechanics on all target hosts (which do the actual work). Runs in the process of race control.
     """
 
-    def __init__(self):
-        super().__init__()
-        self.cfg: Optional[types.Config] = None
-        self.race_control = None
-        self.cluster_launcher = None
-        self.cluster = None
-        self.car = None
-        self.team_revision = None
+    def __init__(self, cfg: types.Config):
+        self.cfg = cfg
+        self.logger = logging.getLogger(__name__)
         self.externally_provisioned = False
+        # handles of NodeMechanicActor instances
+        self.node_mechanics: list = []
 
-    def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.debug("MechanicActor#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
+    async def start_engine(self, open_metrics_context, sources=False, distribution=False, external=False, docker=False):
+        """
+        Starts the benchmark candidate, unless it is provisioned externally.
 
-    def receiveMsg_ChildActorExited(self, msg, sender):
-        if self.is_current_status_expected(["cluster_stopping", "cluster_stopped"]):
-            self.logger.info("Child actor exited while engine is stopping or stopped: [%s]", msg)
-            return
-        failmsg = "Child actor exited with [%s] while in status [%s]." % (msg, self.status)
-        self.logger.error(failmsg)
-        self.send(self.race_control, actor.BenchmarkFailure(failmsg))
-
-    def receiveMsg_PoisonMessage(self, msg, sender):
-        self.logger.info("MechanicActor#receiveMessage poison(msg = [%s] sender = [%s])", str(msg.poisonMessage), str(sender))
-        # something went wrong with a child actor (or another actor with which we have communicated)
-        if isinstance(msg.poisonMessage, StartEngine):
-            failmsg = "Could not start benchmark candidate. Are Rally daemons on all targeted machines running?"
-        else:
-            failmsg = msg.details
-        self.logger.error(failmsg)
-        self.send(self.race_control, actor.BenchmarkFailure(failmsg))
-
-    @actor.no_retry("mechanic")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_StartEngine(self, msg, sender):
-        self.logger.info("Received signal from race control to start engine.")
-        self.race_control = sender
-        self.cfg = msg.cfg
-        assert self.cfg is not None
-        self.car, _ = load_team(self.cfg, msg.external)
+        :return: The revision of the team repository.
+        """
+        self.logger.info("Starting engine.")
+        load_team(self.cfg, external)
         # TODO: This is implicitly set by #load_team() - can we gather this elsewhere?
-        self.team_revision = self.cfg.opts("mechanic", "repository.revision")
+        team_revision = self.cfg.opts("mechanic", "repository.revision")
 
-        # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
         hosts = self.cfg.opts("client", "hosts").default_or_first
         if len(hosts) == 0:
             raise exceptions.LaunchError("No target hosts are configured.")
 
-        self.externally_provisioned = msg.external
+        self.externally_provisioned = external
         if self.externally_provisioned:
             self.logger.info("Cluster will not be provisioned by Rally.")
-            self.status = "nodes_started"
-            self.received_responses = []
-            self.on_all_nodes_started()
-            self.status = "cluster_started"
-        else:
-            console.info("Preparing for race ...", flush=True)
-            self.logger.info("Cluster consisting of %s will be provisioned by Rally.", hosts)
-            msg.hosts = hosts
-            # Initialize the children array to have the right size to
-            # ensure waiting for all responses
-            self.children = [None] * len(nodes_by_host(to_ip_port(hosts)))
-            self.send(self.createActor(Dispatcher), msg)
-            self.status = "starting"
-            self.received_responses = []
+            return team_revision
 
-    @actor.no_retry("mechanic")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_NodesStarted(self, msg, sender):
-        # Initially the addresses of the children are not
-        # known and there is just a None placeholder in the
-        # array.  As addresses become known, fill them in.
-        if sender not in self.children:
-            # Length-limited FIFO characteristics:
-            self.children.insert(0, sender)
-            self.children.pop()
-
-        self.transition_when_all_children_responded(sender, msg, "starting", "cluster_started", self.on_all_nodes_started)
-
-    @actor.no_retry("mechanic")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_ResetRelativeTime(self, msg, sender):
-        if msg.reset_in_seconds > 0:
-            self.wakeupAfter(msg.reset_in_seconds, payload=MechanicActor.WAKEUP_RESET_RELATIVE_TIME)
-        else:
-            self.reset_relative_time()
-
-    def receiveMsg_WakeupMessage(self, msg, sender):
-        if msg.payload == MechanicActor.WAKEUP_RESET_RELATIVE_TIME:
-            self.reset_relative_time()
-        else:
-            raise exceptions.RallyAssertionError(f"Unknown wakeup reason [{msg.payload}]")
-
-    def receiveMsg_BenchmarkFailure(self, msg, sender):
-        self.send(self.race_control, msg)
-
-    @actor.no_retry("mechanic")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_StopEngine(self, msg, sender):
-        # we might have experienced a launch error or the user has cancelled the benchmark. Hence we need to allow to stop the
-        # cluster from various states and we don't check here for a specific one.
-        if self.externally_provisioned:
-            self.on_all_nodes_stopped()
-        else:
-            self.send_to_children_and_transition(sender, StopNodes(), [], "cluster_stopping")
-
-    @actor.no_retry("mechanic")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_NodesStopped(self, msg, sender):
-        self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
-
-    def on_all_nodes_started(self):
-        self.send(self.race_control, EngineStarted(self.team_revision))
-
-    def reset_relative_time(self):
-        for m in self.children:
-            self.send(m, ResetRelativeTime(0))
-
-    def on_all_nodes_stopped(self):
-        self.send(self.race_control, EngineStopped())
-        # clear all state as the mechanic might get reused later
-        for m in self.children:
-            self.send(m, thespian.actors.ActorExitRequest())
-        self.children = []
-        # do not self-terminate, let the parent actor handle this
-
-
-@thespian.actors.requireCapability("coordinator")
-class Dispatcher(actor.RallyActor):
-    """This Actor receives a copy of the startmsg (with the computed hosts
-    attached) and creates a NodeMechanicActor on each targeted
-    remote host.  It uses Thespian SystemRegistration to get
-    notification of when remote nodes are available.  As a special
-    case, if an IP address is localhost, the NodeMechanicActor is
-    immediately created locally.  Once All NodeMechanicActors are
-    started, it will send them all their startup message, with a
-    reply-to back to the actor that made the request of the
-    Dispatcher.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.start_sender = None
-        self.pending = None
-        self.remotes = None
-
-    @actor.no_retry("mechanic dispatcher")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_StartEngine(self, startmsg, sender):
-        self.start_sender = sender
-        self.pending = []
-        self.remotes = defaultdict(list)
-        all_ips_and_ports = to_ip_port(startmsg.hosts)
+        console.info("Preparing for race ...", flush=True)
+        self.logger.info("Cluster consisting of %s will be provisioned by Rally.", hosts)
+        all_ips_and_ports = to_ip_port(hosts)
         all_node_ips = extract_all_node_ips(all_ips_and_ports)
         all_nodes_by_host = nodes_by_host(all_ips_and_ports)
         all_node_ids = extract_all_node_ids(all_nodes_by_host)
 
-        for (ip, port), node in all_nodes_by_host.items():
-            submsg = startmsg.for_nodes(all_node_ips, all_node_ids, ip, port, node)
-            submsg.reply_to = sender
-            if ip == "127.0.0.1":
-                m = self.createActor(NodeMechanicActor, targetActorRequirements={"coordinator": True})
-                self.pending.append((m, submsg))
-            else:
-                self.remotes[ip].append(submsg)
+        # In our startup procedure we first create all mechanics. Only if this succeeds we'll continue.
+        starting = []
+        for (ip, port), node_ids in all_nodes_by_host.items():
+            await actor.require_node_async(ip)
+            node_mechanic = actor.create_actor(NodeMechanicActor, self.cfg, host=ip, name=f"node-mechanic-{ip}-{port}")
+            self.node_mechanics.append(node_mechanic)
+            start_nodes = StartNodes(
+                self.cfg,
+                open_metrics_context,
+                sources,
+                distribution,
+                external,
+                docker,
+                all_node_ips,
+                all_node_ids,
+                ip,
+                port,
+                node_ids,
+            )
+            starting.append(node_mechanic.start_nodes.remote(start_nodes))
+        await asyncio.gather(*starting)
+        return team_revision
 
-        if self.remotes:
-            # Now register with the ActorSystem to be told about all
-            # remote nodes (via the ActorSystemConventionUpdate below).
-            self.notifyOnSystemRegistrationChanges(True)
-        else:
-            self.send_all_pending()
+    async def check_health(self):
+        """
+        Raises ``BenchmarkFailure`` if a node mechanic has failed in the background.
+        """
+        for failure in await asyncio.gather(*[m.health.remote() for m in self.node_mechanics]):
+            if failure is not None:
+                raise failure
 
-        # Could also initiate a wakeup message to fail this if not all
-        # remotes come online within the expected amount of time... TBD
-
-    def receiveMsg_ActorSystemConventionUpdate(self, convmsg, sender):
-        if not convmsg.remoteAdded:
-            self.logger.warning("Remote Rally node [%s] exited during NodeMechanicActor startup process.", convmsg.remoteAdminAddress)
-            self.start_sender(actor.BenchmarkFailure("Remote Rally node [%s] has been shutdown prematurely." % convmsg.remoteAdminAddress))
-        else:
-            remote_ip = convmsg.remoteCapabilities.get("ip", None)
-            self.logger.info("Remote Rally node [%s] has started.", remote_ip)
-
-            for eachmsg in self.remotes[remote_ip]:
-                self.pending.append((self.createActor(NodeMechanicActor, targetActorRequirements={"ip": remote_ip}), eachmsg))
-            if remote_ip in self.remotes:
-                del self.remotes[remote_ip]
-            if not self.remotes:
-                # Notifications are no longer needed
-                self.notifyOnSystemRegistrationChanges(False)
-                self.send_all_pending()
-
-    def send_all_pending(self):
-        # Invoked when all remotes have checked in and self.pending is
-        # the list of remote NodeMechanic actors and messages to send.
-        for each in self.pending:
-            self.send(*each)
-        self.pending = []
-
-    def receiveMsg_BenchmarkFailure(self, msg, sender):
-        self.send(self.start_sender, msg)
-
-    def receiveMsg_PoisonMessage(self, msg, sender):
-        self.send(self.start_sender, actor.BenchmarkFailure(msg.details))
-
-    def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.info("mechanic.Dispatcher#receiveMessage unrecognized(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
+    async def stop_engine(self):
+        """
+        Stops the benchmark candidate. Stopping is allowed from any state because the benchmark might have been cancelled
+        or failed.
+        """
+        node_mechanics = self.node_mechanics
+        self.node_mechanics = []
+        if self.externally_provisioned or not node_mechanics:
+            return
+        try:
+            results = await asyncio.gather(*[m.stop_nodes.remote() for m in node_mechanics], return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException):
+                    self.logger.error("Could not stop nodes: %s", result)
+        finally:
+            for m in node_mechanics:
+                actor.kill_actor(m)
 
 
-class NodeMechanicActor(actor.RallyActor):
+class NodeMechanicActor(actor.RallyActorBase):
     """
     One instance of this actor is run on each target host and coordinates the actual work of starting / stopping all nodes that should run
     on this host.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, cfg: types.Config):
+        super().__init__(name="node-mechanic", cfg=cfg)
         self.mechanic = None
         self.host = None
+        self._flush_task: Optional[asyncio.Task] = None
 
-    def receiveMsg_StartNodes(self, msg, sender):
-        try:
-            self.host = msg.ip
-            if msg.external:
-                self.logger.info("Connecting to externally provisioned nodes on [%s].", msg.ip)
-            else:
-                self.logger.info("Starting node(s) %s on [%s].", msg.node_ids, msg.ip)
+    @actor.convert_failures("mechanic")
+    async def start_nodes(self, msg: StartNodes):
+        self.host = msg.ip
+        if msg.external:
+            self.logger.info("Connecting to externally provisioned nodes on [%s].", msg.ip)
+        else:
+            self.logger.info("Starting node(s) %s on [%s].", msg.node_ids, msg.ip)
 
-            # Load node-specific configuration
-            cfg = config.auto_load_local_config(
-                msg.cfg,
-                additional_sections=[
-                    # only copy the relevant bits
-                    "track",
-                    "mechanic",
-                    "client",
-                    "telemetry",
-                    # allow metrics store to extract race meta-data
-                    "race",
-                    "source",
-                ],
-            )
-            # set root path (normally done by the main entry point)
-            cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
-            if not msg.external:
-                cfg.add(config.Scope.benchmark, "provisioning", "node.ids", msg.node_ids)
+        # Load node-specific configuration
+        cfg = config.auto_load_local_config(
+            msg.cfg,
+            additional_sections=[
+                # only copy the relevant bits
+                "track",
+                "mechanic",
+                "client",
+                "telemetry",
+                # allow metrics store to extract race meta-data
+                "race",
+                "source",
+            ],
+        )
+        # set root path (normally done by the main entry point)
+        cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
+        if not msg.external:
+            cfg.add(config.Scope.benchmark, "provisioning", "node.ids", msg.node_ids)
 
-            cls = metrics.metrics_store_class(cfg)
-            metrics_store = cls(cfg)
-            metrics_store.open(ctx=msg.open_metrics_context)
-            # avoid follow-up errors in case we receive an unexpected ActorExitRequest due to an early failure in a parent actor.
+        cls = metrics.metrics_store_class(cfg)
+        metrics_store = cls(cfg)
+        metrics_store.open(ctx=msg.open_metrics_context)
 
-            self.mechanic = create(
-                cfg,
-                metrics_store,
-                msg.ip,
-                msg.port,
-                msg.all_node_ips,
-                msg.all_node_ids,
-                msg.sources,
-                msg.distribution,
-                msg.external,
-                msg.docker,
-            )
-            self.mechanic.start_engine()
-            self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
-            self.send(getattr(msg, "reply_to", sender), NodesStarted())
-        except Exception:
-            self.logger.exception("Cannot process message [%s]", msg)
-            # avoid "can't pickle traceback objects"
-            _, ex_value, _ = sys.exc_info()
-            self.send(getattr(msg, "reply_to", sender), actor.BenchmarkFailure(ex_value, traceback.format_exc()))
+        self.mechanic = create(
+            cfg,
+            metrics_store,
+            msg.ip,
+            msg.port,
+            msg.all_node_ips,
+            msg.all_node_ids,
+            msg.sources,
+            msg.distribution,
+            msg.external,
+            msg.docker,
+        )
+        self.mechanic.start_engine()
+        self._flush_task = asyncio.create_task(self._flush_metrics_periodically())
 
-    def receiveMsg_PoisonMessage(self, msg, sender):
-        if sender != self.myAddress:
-            self.send(sender, actor.BenchmarkFailure(msg.details))
+    def reset_relative_time(self):
+        if self.mechanic:
+            self.mechanic.reset_relative_time()
 
-    def receiveMsg_BenchmarkFailure(self, msg, sender):
-        self.send(getattr(msg, "reply_to", sender), msg)
+    def health(self):
+        """
+        :return: A failure that happened in the background, if any.
+        """
+        return self._failure
 
-    def receiveUnrecognizedMessage(self, msg, sender):
-        # at the moment, we implement all message handling blocking. This is not ideal but simple to get started with. Besides, the caller
-        # needs to block anyway. The only reason we implement mechanic as an actor is to distribute them.
-        # noinspection PyBroadException
-        try:
-            self.logger.debug("NodeMechanicActor#receiveMessage(msg = [%s] sender = [%s])", str(type(msg)), str(sender))
-            if isinstance(msg, ResetRelativeTime) and self.mechanic:
-                self.mechanic.reset_relative_time()
-            elif isinstance(msg, thespian.actors.WakeupMessage) and self.mechanic:
+    @actor.convert_failures("mechanic")
+    async def stop_nodes(self):
+        if self._flush_task is not None:
+            self._flush_task.cancel()
+            self._flush_task = None
+        if self.mechanic:
+            mechanic = self.mechanic
+            self.mechanic = None
+            mechanic.stop_engine()
+
+    async def stop(self):
+        await self.stop_nodes()
+
+    @actor.report_failures("mechanic")
+    async def _flush_metrics_periodically(self):
+        while True:
+            await asyncio.sleep(METRIC_FLUSH_INTERVAL_SECONDS)
+            if self.mechanic:
                 self.mechanic.flush_metrics()
-                self.wakeupAfter(METRIC_FLUSH_INTERVAL_SECONDS)
-            elif isinstance(msg, StopNodes):
-                self.mechanic.stop_engine()
-                self.send(sender, NodesStopped())
-                self.mechanic = None
-            elif isinstance(msg, thespian.actors.ActorExitRequest):
-                if self.mechanic:
-                    self.mechanic.stop_engine()
-                    self.mechanic = None
-        except BaseException as e:
-            self.logger.exception("Cannot process message [%s]", msg)
-            self.send(getattr(msg, "reply_to", sender), actor.BenchmarkFailure("Error on host %s" % str(self.host), e))
 
 
 #####################################################

@@ -14,16 +14,19 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+"""
+The Rally daemon: a thin wrapper around ``ray start`` and ``ray stop``.
+
+The daemon on the coordinator node is the head of a Ray cluster that listens on ``actor.RAY_GCS_PORT``. Daemons on other
+nodes join that cluster. Rally actors are then placed on nodes by IP address.
+"""
 
 import argparse
 import logging
 import os
+import subprocess
 import sys
-import time
 
-# the following import is needed for log.post_configure_actor_logging() to recover
-# all loggers from the old log manager
-from esrally import racecontrol  # pylint: disable=unused-import
 from esrally import (
     BANNER,
     PROGRAM_NAME,
@@ -34,59 +37,99 @@ from esrally import (
     log,
     version,
 )
-from esrally.utils import console, process
+from esrally.utils import console, net, process
+
+LOG = logging.getLogger(__name__)
+
+
+def ray_command(*args: str) -> list[str]:
+    """
+    Command line to run Ray's command line tool with the same Python interpreter (and thus virtual environment) as Rally.
+    """
+    return [sys.executable, "-m", "ray.scripts.scripts", *args]
+
+
+def run_ray(*args: str, capture_output: bool = True) -> int:
+    """
+    Runs Ray's command line tool. Its output is written to Rally's log and shown on the console only if it fails.
+    """
+    actor.configure_ray_environment()
+    command = ray_command(*args)
+    LOG.info("Running %s", command)
+    if not capture_output:
+        return subprocess.run(command, check=False, env=os.environ.copy()).returncode
+    completed = subprocess.run(command, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=os.environ.copy())
+    for line in completed.stdout.splitlines():
+        LOG.info("ray: %s", line)
+    if completed.returncode != 0:
+        console.println(completed.stdout, force=True)
+    return completed.returncode
+
+
+def auth_token_path() -> str:
+    return os.environ.get("RAY_AUTH_TOKEN_PATH") or os.path.join(os.path.expanduser("~"), ".ray", "auth_token")
+
+
+def has_auth_token() -> bool:
+    return bool(os.environ.get("RAY_AUTH_TOKEN")) or os.path.isfile(auth_token_path())
+
+
+def auth_disabled() -> bool:
+    return os.environ.get("RAY_AUTH_MODE", "").lower() == "disabled"
 
 
 def start(args):
-    if actor.actor_system_already_running():
-        raise exceptions.RallyError("An actor system appears to be already running.")
-    actor.bootstrap_actor_system(local_ip=args.node_ip, coordinator_ip=args.coordinator_ip)
-    console.info(f"Successfully started actor system on node [{args.node_ip}] with coordinator node IP [{args.coordinator_ip}].")
+    if actor.is_daemon_running_locally():
+        raise exceptions.RallyError("A Rally daemon appears to be already running on this machine. Stop it with `esrallyd stop`.")
+    node_ip = net.resolve(args.node_ip) or args.node_ip
+    coordinator_ip = net.resolve(args.coordinator_ip) or args.coordinator_ip
+    is_coordinator = node_ip == coordinator_ip
 
-    if console.RALLY_RUNNING_IN_DOCKER:
-        console.info(f"Running with PID: {os.getpid()}")
-        while process.wait_for_child_processes(
-            callback=lambda process: console.info(f"Actor with PID [{process.pid}] terminated with status [{process.returncode}]."),
-            list_callback=lambda children: console.info(f"Waiting for child processes ({[p.pid for p in children]}) to terminate..."),
-        ):
-            pass
-        console.info("All actors terminated, exiting.")
+    if not auth_disabled():
+        if is_coordinator:
+            # All nodes and clients of the cluster authenticate with the same token. Generate it unless it exists.
+            if run_ray("get-auth-token", "--generate") != 0:
+                raise exceptions.RallyError("Could not generate an authentication token for the Rally daemon.")
+        elif not has_auth_token():
+            raise exceptions.RallyError(
+                f"No authentication token found at [{auth_token_path()}]. Copy the file [~/.ray/auth_token] from the coordinator "
+                f"node [{coordinator_ip}] to this machine and try again."
+            )
+
+    common = ["--node-ip-address", node_ip, "--disable-usage-stats"]
+    # In Docker, keep the container running for as long as the daemon runs and show its output.
+    block = console.RALLY_RUNNING_IN_DOCKER
+    if block:
+        common.append("--block")
+        console.info(f"Starting Rally daemon on node [{node_ip}] with coordinator node IP [{coordinator_ip}].", force=True)
+    if is_coordinator:
+        args = ["start", "--head", "--port", str(actor.RAY_GCS_PORT), "--include-dashboard", "false", *common]
+    else:
+        args = ["start", "--address", f"{coordinator_ip}:{actor.RAY_GCS_PORT}", *common]
+    returncode = run_ray(*args, capture_output=not block)
+    if returncode != 0:
+        raise exceptions.RallyError(f"Could not start the Rally daemon (`ray start` exited with code [{returncode}]).")
+    console.info(f"Successfully started Rally daemon on node [{node_ip}] with coordinator node IP [{coordinator_ip}].", force=True)
 
 
 def stop(raise_errors=True):
-    if actor.actor_system_already_running():
-        # noinspection PyBroadException
-        try:
-            # TheSpian writes the following warning upon start (at least) on Mac OS X:
-            #
-            # WARNING:root:Unable to get address info for address 103.1.168.192.in-addr.arpa (AddressFamily.AF_INET,\
-            # SocketKind.SOCK_DGRAM, 17, 0): <class 'socket.gaierror'> [Errno 8] nodename nor servname provided, or not known
-            #
-            # Therefore, we will not show warnings but only errors.
-            logging.basicConfig(level=logging.ERROR)
-            running_system = actor.bootstrap_actor_system(try_join=True)
-            running_system.shutdown()
-            # await termination...
-            console.info("Shutting down actor system.", end="", flush=True)
-            while actor.actor_system_already_running():
-                console.println(".", end="", flush=True)
-                time.sleep(1)
-            console.println(" [OK]")
-        except BaseException:
-            console.error("Could not shut down actor system.")
-            if raise_errors:
-                # raise again so user can see the error
-                raise
-    elif raise_errors:
-        console.error("Could not shut down actor system: Actor system is not running.")
-        sys.exit(1)
+    if not actor.is_daemon_running_locally():
+        if raise_errors:
+            console.error("Could not shut down Rally daemon: Rally daemon is not running.")
+            sys.exit(1)
+        return
+    console.info("Shutting down Rally daemon.", force=True)
+    returncode = run_ray("stop")
+    if returncode != 0 and raise_errors:
+        raise exceptions.RallyError(f"Could not shut down Rally daemon (`ray stop` exited with code [{returncode}]).")
+    console.info("Rally daemon has been shut down.", force=True)
 
 
 def status():
-    if actor.actor_system_already_running():
-        console.println("Running")
+    if actor.is_daemon_running_locally():
+        console.println("Running", force=True)
     else:
-        console.println("Stopped")
+        console.println("Stopped", force=True)
 
 
 def main():
@@ -117,17 +160,22 @@ def main():
 
     args = parser.parse_args()
 
-    if args.subcommand == "start":
-        start(args)
-    elif args.subcommand == "stop":
-        stop()
-    elif args.subcommand == "status":
-        status()
-    elif args.subcommand == "restart":
-        stop(raise_errors=False)
-        start(args)
-    else:
-        raise exceptions.RallyError("Unknown subcommand [%s]" % args.subcommand)
+    try:
+        if args.subcommand == "start":
+            start(args)
+        elif args.subcommand == "stop":
+            stop()
+        elif args.subcommand == "status":
+            status()
+        elif args.subcommand == "restart":
+            stop(raise_errors=False)
+            start(args)
+        else:
+            raise exceptions.RallyError("Unknown subcommand [%s]" % args.subcommand)
+    except exceptions.RallyError as e:
+        LOG.exception("esrallyd %s failed.", args.subcommand)
+        console.error(e.full_message)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

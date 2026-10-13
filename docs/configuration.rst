@@ -13,16 +13,6 @@ Rally stores its configuration in the file ``~/.rally/rally.ini`` which is autom
   In addition to `${RALLY_CONFIG_DIR}`, the configuration file can also use environment variables.
 
 
-actor
-~~~~~
-
-This section allows to configure how thespian actor library is being used from rally.
-
-* ``actor.process.startup.method``: It allows to configure how `thespian` actors library should specify how
-  `subprocessing` library should create processes for new actors. This can be used to prevent from using `fork` method
-  on Linux or OSX with the purpose, for instance, to use threads in some rally component.
-
-
 meta
 ~~~~
 
@@ -405,7 +395,9 @@ The ``rally.json`` file is formatted to the ECS format for ease of ingestion wit
 
 There are a number of default options for the ``json`` logger that can be overridden in ``~/.rally/logging.json``. 
 First, ``exclude_fields`` will exclude ``log.original`` from the ECS defaults, since it can be quite noisy and superfluous. 
-And ``mutators`` is by default set to ``["esrally.log.rename_actor_fields", "esrally.log.rename_async_fields"]`` which will rename ``actorAddress`` and ``taskName`` to ``rally.thespian.actorAddress`` and ``python.asyncio.task`` respectively.
+And ``mutators`` is by default set to ``["esrally.log.rename_actor_fields", "esrally.log.rename_async_fields"]`` which will rename ``actorAddress`` and ``taskName`` to ``rally.actor.address`` and ``python.asyncio.task`` respectively.
+
+``actorAddress`` is the name of the Rally actor that has written a log line (for example ``driver`` or ``worker-3``), or ``-not-actor-`` for the ``esrally`` process itself.
 
 The log file will not be rotated automatically as this is problematic due to Rally's multi-process architecture. Setup an external tool like `logrotate <https://linux.die.net/man/8/logrotate>`_ to achieve that. See the following example as a starting point for your own ``logrotate`` configuration and ensure to replace the path ``/home/user/.rally/logs/rally.log`` with the proper one::
 
@@ -443,7 +435,7 @@ With the following configuration Rally will log all output to standard error, an
       },
       "filters": {
         "isActorLog": {
-          "()": "thespian.director.ActorAddressLogFilter"
+          "()": "esrally.log.ActorAddressLogFilter"
         }
       },
       "handlers": {

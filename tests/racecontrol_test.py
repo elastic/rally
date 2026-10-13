@@ -16,15 +16,18 @@
 # under the License.
 # pylint: disable=protected-access
 
+import asyncio
 import contextlib
 import os
+import signal
 from unittest import mock
 
 import pytest
 
-from esrally import config, exceptions, racecontrol
+from esrally import actor, config, driver, exceptions, racecontrol
 from esrally.track import params, track
 from esrally.utils import opts
+from tests.conftest import FakeHandle, FakeObjectRef
 
 
 @pytest.fixture(autouse=True)
@@ -151,28 +154,164 @@ def test_setup_invokes_track_param_validators_for_selected_challenge():
     assert received == [{"scheduling": [1, 2, 3]}]
 
 
-def test_benchmark_actor_reports_rally_error_from_setup_without_traceback():
+def test_race_reports_rally_error_from_setup_without_starting_actors(fake_ray):
     cfg = _coordinator_cfg("validate-challenge", {"scheduling": [1, 2, 3]})
-    sender = mock.Mock()
 
-    with mock.patch("esrally.actor.log.post_configure_actor_logging"):
-        benchmark_actor = racecontrol.BenchmarkActor()
+    with mock.patch(
+        "esrally.racecontrol.BenchmarkCoordinator.setup",
+        side_effect=exceptions.TrackConfigError("invalid track parameters"),
+    ):
+        with pytest.raises(exceptions.TrackConfigError) as exc_info:
+            racecontrol.race(cfg)
+
+    assert exc_info.value.message == "invalid track parameters"
+    assert "Traceback" not in exc_info.value.full_message
+    assert fake_ray.created == []
+
+
+def test_race_converts_ctrl_c_to_user_interrupted(fake_ray):
+    async def interrupted_race(self):
+        os.kill(os.getpid(), signal.SIGINT)
+        await asyncio.sleep(10)
 
     with (
-        mock.patch.object(benchmark_actor, "send") as send,
-        mock.patch(
-            "esrally.racecontrol.BenchmarkCoordinator.setup",
-            side_effect=exceptions.TrackConfigError("invalid track parameters"),
-        ),
+        mock.patch("esrally.racecontrol.RaceCoordinator.setup"),
+        mock.patch("esrally.racecontrol.RaceCoordinator.run", interrupted_race),
     ):
-        benchmark_actor.receiveMsg_Setup(racecontrol.Setup(cfg), sender)
+        with pytest.raises(exceptions.UserInterrupted):
+            racecontrol.race(config.Config())
 
-    send.assert_called_once()
-    assert send.call_args.args[0] is sender
-    failure = send.call_args.args[1]
-    assert isinstance(failure, racecontrol.actor.BenchmarkFailure)
-    assert failure.message == "invalid track parameters"
-    assert "Traceback" not in failure.message
+
+class FakeMechanic:
+    def __init__(self, health_failure=None):
+        self.node_mechanics = [FakeHandle("node-mechanic")]
+        self.health_failure = health_failure
+        self.events: list[str] = []
+
+    async def start_engine(self, open_metrics_context, sources=False, distribution=False, external=False, docker=False):
+        self.events.append("start_engine")
+        return "team-revision"
+
+    async def check_health(self):
+        if self.health_failure:
+            raise self.health_failure
+
+    async def stop_engine(self):
+        self.events.append("stop_engine")
+
+
+class TestRaceCoordinator:
+    @pytest.fixture
+    def race_coordinator(self, fake_ray):
+        race_coordinator = racecontrol.RaceCoordinator(config.Config(), external=True)
+        race_coordinator.coordinator = mock.create_autospec(racecontrol.BenchmarkCoordinator, instance=True)
+        race_coordinator.coordinator.race = mock.Mock()
+        race_coordinator.coordinator.metrics_store = mock.Mock(open_context={"race-id": "1"})
+        race_coordinator.coordinator.current_track = mock.sentinel.track
+        race_coordinator.coordinator.cancelled = False
+        race_coordinator.coordinator.error = False
+        race_coordinator.mechanic = FakeMechanic()
+        race_coordinator.progress = mock.Mock()
+        return race_coordinator
+
+    @staticmethod
+    def driver_behaviors(run_benchmark=b"final-metrics", poll=None):
+        return {
+            "prepare_benchmark": driver.PreparationComplete("default", "9.2.7", "abc", target_id="cluster", target_platform="on-prem"),
+            "run_benchmark": run_benchmark,
+            "poll": poll or driver.DriverStatus(progress=[], finished_tasks=[]),
+        }
+
+    @pytest.mark.asyncio
+    async def test_runs_benchmark_and_reports_results(self, race_coordinator, fake_ray):
+        polls = [
+            driver.DriverStatus(progress=[("Running a", "[100% done]"), None], finished_tasks=[driver.TaskFinished(b"metrics-a", 1.0)]),
+            driver.DriverStatus(progress=[], finished_tasks=[]),
+        ]
+        fake_ray.behaviors[driver.DriverActor] = self.driver_behaviors(
+            poll=lambda: polls.pop(0) if polls else driver.DriverStatus(progress=[], finished_tasks=[])
+        )
+
+        await race_coordinator.run()
+
+        (created,) = fake_ray.created_of(driver.DriverActor)
+        assert created.args == (race_coordinator.cfg, race_coordinator.mechanic.node_mechanics)
+        assert created.kwargs == {"host": "localhost", "name": "driver"}
+        coordinator = race_coordinator.coordinator
+        assert coordinator.race.team_revision == "team-revision"
+        coordinator.on_preparation_complete.assert_called_once_with(
+            "default", "9.2.7", "abc", target_id="cluster", target_platform="on-prem", target_auth_type=None
+        )
+        # results of finished tasks are added before results are reported
+        assert coordinator.mock_calls[-2:] == [
+            mock.call.on_task_finished(b"metrics-a"),
+            mock.call.on_benchmark_complete(b"final-metrics"),
+        ]
+        race_coordinator.progress.print.assert_called_once_with("Running a", "[100% done]")
+        race_coordinator.progress.finish.assert_called_once_with()
+        # everything is stopped
+        assert created.handle.calls_to("stop") == [((), {})]
+        assert created.handle in fake_ray.killed
+        assert race_coordinator.mechanic.events == ["start_engine", "stop_engine"]
+
+    @pytest.mark.asyncio
+    async def test_reports_benchmark_failure(self, race_coordinator, fake_ray):
+        fake_ray.behaviors[driver.DriverActor] = self.driver_behaviors(
+            run_benchmark=actor.BenchmarkFailure("Error in load generator [0]", "boom")
+        )
+
+        with pytest.raises(exceptions.RallyError) as exc_info:
+            await race_coordinator.run()
+
+        assert exc_info.value.message == "Error in load generator [0]"
+        assert exc_info.value.cause == "boom"
+        assert race_coordinator.coordinator.error
+        race_coordinator.coordinator.on_benchmark_complete.assert_not_called()
+        assert race_coordinator.mechanic.events == ["start_engine", "stop_engine"]
+
+    @pytest.mark.asyncio
+    async def test_reports_failure_of_node_mechanic(self, race_coordinator, fake_ray):
+        fake_ray.behaviors[driver.DriverActor] = self.driver_behaviors(run_benchmark=FakeObjectRef(pending=True))
+        race_coordinator.mechanic.health_failure = actor.BenchmarkFailure("Error in mechanic", "flush failed")
+
+        with pytest.raises(exceptions.RallyError, match="Error in mechanic"):
+            await race_coordinator.run()
+
+    @pytest.mark.asyncio
+    async def test_benchmark_cancelled_by_actor(self, race_coordinator, fake_ray):
+        fake_ray.behaviors[driver.DriverActor] = self.driver_behaviors(run_benchmark=actor.BenchmarkCancelled())
+
+        await race_coordinator.run()
+
+        assert race_coordinator.coordinator.cancelled
+        race_coordinator.coordinator.on_benchmark_complete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reports_dead_actors(self, race_coordinator, fake_ray):
+        class ActorDiedError(Exception):
+            pass
+
+        ActorDiedError.__module__ = "ray.exceptions"
+        fake_ray.behaviors[driver.DriverActor] = self.driver_behaviors(run_benchmark=ActorDiedError("The actor died unexpectedly"))
+
+        with pytest.raises(exceptions.RallyError, match="A Rally actor has died unexpectedly."):
+            await race_coordinator.run()
+
+    @pytest.mark.asyncio
+    async def test_cancellation_cancels_driver(self, race_coordinator, fake_ray):
+        fake_ray.behaviors[driver.DriverActor] = self.driver_behaviors(run_benchmark=FakeObjectRef(pending=True))
+        run = asyncio.create_task(race_coordinator.run())
+        await asyncio.sleep(0.05)
+
+        run.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await run
+
+        (created,) = fake_ray.created_of(driver.DriverActor)
+        assert created.handle.calls_to("cancel") == [((), {})]
+        assert created.handle.calls_to("stop") == [((), {})]
+        assert race_coordinator.coordinator.cancelled
+        assert race_coordinator.mechanic.events == ["start_engine", "stop_engine"]
 
 
 @mock.patch("esrally.racecontrol.metrics.race_store")
@@ -251,60 +390,57 @@ def _prepare_track_cfg():
 
 
 @contextlib.contextmanager
-def _patched_prepare_track(ask_result):
-    actor_system = mock.Mock()
-    prep_actor = mock.sentinel.track_preparation_actor
-    actor_system.createActor.return_value = prep_actor
-    actor_system.ask.return_value = ask_result
+def _patched_prepare_track():
     with (
-        mock.patch("esrally.racecontrol.actor.bootstrap_actor_system", return_value=actor_system),
-        mock.patch("esrally.racecontrol.track.load_track", return_value=_track_with_challenge("unittest")),
+        mock.patch("esrally.racecontrol.track.load_track", return_value=_track_with_challenge("unittest")) as load_track,
         mock.patch("esrally.racecontrol.track.resolve_challenge_and_invoke_validators"),
     ):
-        yield actor_system, prep_actor
+        yield load_track
 
 
-def _assert_preparation_actor_stopped(actor_system, prep_actor):
-    actor_system.tell.assert_called_once()
-    stopped_actor, exit_msg = actor_system.tell.call_args.args
-    assert stopped_actor is prep_actor
-    assert isinstance(exit_msg, racecontrol.thespian.actors.ActorExitRequest)
+def _assert_preparation_actor_stopped(fake_ray):
+    (created,) = fake_ray.created_of(racecontrol.driver.TrackPreparationActor)
+    assert created.kwargs == {"host": "localhost", "name": "track-preparator"}
+    assert created.handle.calls_to("stop") == [((), {})]
+    assert fake_ray.killed == [created.handle]
+    return created.handle
 
 
-def test_prepare_track_succeeds_on_track_prepared():
-    with _patched_prepare_track(racecontrol.driver.TrackPrepared()) as (actor_system, prep_actor):
+def test_prepare_track_succeeds(fake_ray):
+    with _patched_prepare_track() as load_track:
         racecontrol.prepare_track(_prepare_track_cfg())
 
-    actor_system.ask.assert_called_once()
-    ask_actor, ask_msg = actor_system.ask.call_args.args
-    assert ask_actor is prep_actor
-    assert isinstance(ask_msg, racecontrol.driver.PrepareTrackStandalone)
-    _assert_preparation_actor_stopped(actor_system, prep_actor)
+    t = load_track.return_value
+    preparator = _assert_preparation_actor_stopped(fake_ray)
+    # dependencies have already been installed by the coordinating process
+    (track_payload,), kwargs = preparator.calls_to("prepare_track")[0]
+    assert isinstance(track_payload, driver.TrackPayload)
+    assert track_payload.track_name == t.name
+    assert kwargs == {"install_dependencies": False}
 
 
-def test_prepare_track_raises_on_benchmark_failure():
-    failure = racecontrol.actor.BenchmarkFailure("boom", "root cause")
-    with _patched_prepare_track(failure) as (actor_system, prep_actor):
+def test_prepare_track_raises_on_benchmark_failure(fake_ray):
+    fake_ray.behaviors[racecontrol.driver.TrackPreparationActor] = {
+        "prepare_track": racecontrol.actor.BenchmarkFailure("boom", "root cause")
+    }
+    with _patched_prepare_track():
         with pytest.raises(exceptions.RallyError) as exc_info:
             racecontrol.prepare_track(_prepare_track_cfg())
 
     assert exc_info.value.message == "boom"
     # the preparation actor must still be stopped even though result handling raised
-    _assert_preparation_actor_stopped(actor_system, prep_actor)
+    _assert_preparation_actor_stopped(fake_ray)
 
 
-def test_prepare_track_raises_on_unexpected_reply():
-    with _patched_prepare_track(mock.sentinel.unexpected) as (actor_system, prep_actor):
-        with pytest.raises(exceptions.RallyError, match="Got an unexpected result while preparing track"):
-            racecontrol.prepare_track(_prepare_track_cfg())
+def test_prepare_track_stops_actor_on_keyboard_interrupt(fake_ray):
+    def interrupt_while_preparing(*args, **kwargs):
+        # simulate Ctrl-C while the track is being prepared
+        asyncio.get_running_loop().call_soon(os.kill, os.getpid(), signal.SIGINT)
+        return FakeObjectRef(pending=True)
 
-    _assert_preparation_actor_stopped(actor_system, prep_actor)
-
-
-def test_prepare_track_stops_actor_on_keyboard_interrupt():
-    with _patched_prepare_track(None) as (actor_system, prep_actor):
-        actor_system.ask.side_effect = KeyboardInterrupt
+    fake_ray.behaviors[racecontrol.driver.TrackPreparationActor] = {"prepare_track": interrupt_while_preparing}
+    with _patched_prepare_track():
         with pytest.raises(exceptions.UserInterrupted):
             racecontrol.prepare_track(_prepare_track_cfg())
 
-    _assert_preparation_actor_stopped(actor_system, prep_actor)
+    _assert_preparation_actor_stopped(fake_ray)

@@ -70,8 +70,8 @@ the inner loop). Optionally `make install-pre-commit` to run lint automatically 
 
 ## Actor system
 
-Rally is a distributed system built on [Thespian](https://github.com/kquick/Thespian); even a
-single-machine race runs as actors. Three *logical* roles (`docs/rally_daemon.rst`) that, by
+Rally is a distributed system built on [Ray Core](https://docs.ray.io/en/latest/ray-core/walkthrough.html);
+even a single-machine race runs as actors, on a local Ray instance that `esrally` starts and stops. Three *logical* roles (`docs/rally_daemon.rst`) that, by
 default, all run on the one machine where you invoke `esrally`:
 
 - **benchmark coordinator** — drives the whole race and shows results.
@@ -79,21 +79,23 @@ default, all run on the one machine where you invoke `esrally`:
 - **provisioner** — configures and starts Elasticsearch.
 
 `--load-driver-hosts` and `--target-hosts` split the load driver and provisioner onto other
-machines; multi-machine runs use the `esrallyd` daemon. `esrally/actor.py` holds the shared
-`RallyActor` base and the bootstrap logic; `docs/architecture/actor_system.md` walks through the actors
-and their message flow with sequence diagrams. If actor-system startup fails (common on a VPN),
-set `THESPIAN_BASE_IPADDR` to a routable address.
+machines; multi-machine runs use the `esrallyd` daemon, a wrapper around `ray start` / `ray stop`.
+`esrally/actor.py` holds the `RallyActorBase` base class and helpers to create, place and stop actors and
+to start Ray; `docs/architecture/actor_system.md` walks through the actors and their calls with
+sequence diagrams. Actor classes are plain Python classes, so unit tests instantiate them directly and
+use the fakes in `tests/conftest.py` (`fake_ray`, `FakeHandle`) instead of Ray. `tests/ray_test.py` runs
+a few tests against a real local Ray instance (set `RALLY_SKIP_RAY_TESTS=1` to skip them).
 
 ## Debugging
 
 - Rally logs to `~/.rally/logs/rally.log` (human-readable) and `rally.json` (structured);
   profiling output goes to `profile.log`. Console output is only a summary — the full stack
   trace of a failure is usually in the log file, not on stdout.
-- Each log line carries the emitting actor's address (`%(actorAddress)s`), so you can trace a
-  failure across the actor system. The actor framework's own internal log is separate:
-  `~/.rally/logs/actor-system-internal.log` (path via `THESPLOG_FILE`) — check it when actors
-  fail to start or communicate, and set `THESPLOG_THRESHOLD` (default `INFO`) to `DEBUG` for
-  more detail on the actor system itself.
+- Each log line carries the name of the emitting actor (`%(actorAddress)s`, e.g. `driver` or
+  `worker-3`; `-not-actor-` for the `esrally` process), so you can trace a failure across actors.
+  Ray's own logs are separate: `/tmp/ray/session_latest/logs/` (`raylet.out`, `gcs_server.out`,
+  `worker-*.out|err`, `python-core-worker-*.log`) — check them when actors fail to start or
+  communicate.
 - Raise the log level to see more: edit `~/.rally/logging.json` (created on first run from
   `esrally/resources/logging.json`) and set `"level": "DEBUG"` on the `root` logger for
   everything, or add a per-module entry under `loggers` to scope it (matching the existing
@@ -121,8 +123,9 @@ To debug any IT failure:
   esrally race --distribution-version=9.4.0 --track=geonames --test-mode --on-error=abort
   ```
 
-- If the failure is in the actor system, add `THESPLOG_THRESHOLD=DEBUG` and inspect a running
-  system with the Thespian shell: `python3 -m thespian.shell` (see `docs/rally_daemon.rst`).
+- If the failure is in the actor system, read Ray's logs in `/tmp/ray/session_latest/logs/` and,
+  with a Rally daemon running, inspect the cluster with `RAY_AUTH_MODE=token ray status --address=127.0.0.1:1900` (without `RAY_AUTH_MODE=token`, Ray does not send the cluster's token)
+  (see `docs/rally_daemon.rst`). Set `RAY_BACKEND_LOG_LEVEL=debug` for more detail from Ray.
 
 ## References
 
@@ -130,6 +133,6 @@ To debug any IT failure:
 - Contribution workflow (PRs, license headers, CLA): `CONTRIBUTING.md`
 - Distributed setup & the actor-system roles: `docs/rally_daemon.rst`
 - Actor message flow (sequence diagrams): `docs/architecture/actor_system.md`
-- Thespian actor framework: https://github.com/kquick/Thespian
+- Ray Core actors: https://docs.ray.io/en/latest/ray-core/actors.html
 - All flags (do not invent flags; verify here or via `esrally <subcommand> --help`): `docs/command_line_reference.rst`
 - Running benchmarks against a cluster: the `running-benchmarks` skill

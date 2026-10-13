@@ -12,6 +12,8 @@ services:
       dockerfile: ${RALLY_DOCKER_FILE:-docker/Dockerfiles/dev/Dockerfile}
     container_name: rally
     command: ${TEST_COMMAND:---help}
+    # Ray, which runs Rally's actors, keeps its object store in shared memory (Docker's default is 64MB)
+    shm_size: "1gb"
     volumes:
       - rally:/rally/.rally
     networks:

@@ -10,6 +10,10 @@ function upload_logs {
     buildkite-agent artifact upload "${RALLY_HOME}/rally-logs.tar.gz"
     tar zcf "${RALLY_HOME}/rally-es-logs.tar.gz" "${RALLY_HOME}/.rally/benchmarks/races"/*/*/logs
     buildkite-agent artifact upload "${RALLY_HOME}/rally-es-logs.tar.gz"
+    # internal logs of Ray, which runs Rally's actors
+    if tar zcf "${RALLY_HOME}/ray-logs.tar.gz" --dereference /tmp/ray/session_*/logs 2>/dev/null; then
+        buildkite-agent artifact upload "${RALLY_HOME}/ray-logs.tar.gz"
+    fi
 }
 
 export TERM=dumb
@@ -54,11 +58,8 @@ make venv
 echo "--- Run IT test :pytest:"
 
 export RALLY_HOME=$HOME
-export THESPLOG_FILE="${THESPLOG_FILE:-${RALLY_HOME}/.rally/logs/actor-system-internal.log}"
-# this value is in bytes, the default is 50kB. We increase it to 10MiB.
-export THESPLOG_FILE_MAXSIZE=${THESPLOG_FILE_MAXSIZE:-10485760}
-# adjust the default log level from WARNING
-export THESPLOG_THRESHOLD="INFO"
+# do not send usage statistics of Ray
+export RAY_USAGE_STATS_ENABLED=0
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
 

@@ -63,6 +63,15 @@ jobs:
           version: "0.11.19"
       - name: Run tests
         run: make test-${{matrix.python-version}}
+      # Logs of Rally and of Ray, which runs Rally's actors in tests/ray_test.py
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: unit-test-logs-${{ matrix.os }}-${{ matrix.python-version }}
+          path: |
+            ~/.rally/logs/
+            /tmp/ray/session_*/logs/
+          if-no-files-found: ignore
       - uses: elastic/es-perf-github-status@v2
         if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
         with:
@@ -127,6 +136,7 @@ jobs:
           path: |
             /home/runner/.rally/logs/
             /home/runner/.rally/benchmarks/races/**/*.log
+            /tmp/ray/session_*/logs/
           if-no-files-found: error
 
   install-with-pyenv:

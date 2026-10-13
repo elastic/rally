@@ -53,7 +53,7 @@ function main {
     add_license "psutil" "https://raw.githubusercontent.com/giampaolo/psutil/master/LICENSE"
     add_license "py-cpuinfo" "https://raw.githubusercontent.com/workhorsy/py-cpuinfo/master/LICENSE"
     add_license "tabulate" "https://raw.githubusercontent.com/astanin/python-tabulate/master/LICENSE"
-    add_license "thespian" "https://raw.githubusercontent.com/kquick/Thespian/master/LICENSE.txt"
+    add_license "ray" "https://raw.githubusercontent.com/ray-project/ray/master/LICENSE"
     add_license "yappi" "https://raw.githubusercontent.com/sumerc/yappi/master/LICENSE"
     add_license "ijson" "https://raw.githubusercontent.com/ICRAR/ijson/master/LICENSE.txt"
     add_license "aiosignal" "https://raw.githubusercontent.com/aio-libs/aiosignal/master/LICENSE"
@@ -100,6 +100,12 @@ function main {
     add_license "botocore" "https://raw.githubusercontent.com/boto/botocore/develop/LICENSE.txt"
     # google-resumable-media dependencies (google-crc32c is also a direct dependency in pyproject.toml)
     add_license "google-crc32c" "https://raw.githubusercontent.com/googleapis/python-crc32c/main/LICENSE"
+    # ray dependencies ("jsonschema", "packaging" and "requests" are already covered above)
+    add_license "click" "https://raw.githubusercontent.com/pallets/click/main/LICENSE.txt"
+    add_license "filelock" "https://raw.githubusercontent.com/tox-dev/filelock/main/LICENSE"
+    add_license "msgpack" "https://raw.githubusercontent.com/msgpack/msgpack-python/main/COPYING"
+    add_license "protobuf" "https://raw.githubusercontent.com/protocolbuffers/protobuf/main/LICENSE"
+    add_license "pyyaml" "https://raw.githubusercontent.com/yaml/pyyaml/main/LICENSE"
 }
 
 main

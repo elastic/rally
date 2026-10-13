@@ -15,14 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import collections
 import logging
 import os
 import sys
-from typing import Optional
 
 import tabulate
-import thespian.actors
 
 from esrally import (
     PROGRAM_NAME,
@@ -72,119 +71,6 @@ class Pipeline:
 
     def __call__(self, cfg: types.Config):
         self.target(cfg)
-
-
-class Setup:
-    def __init__(self, cfg: types.Config, sources=False, distribution=False, external=False, docker=False):
-        self.cfg = cfg
-        self.sources = sources
-        self.distribution = distribution
-        self.external = external
-        self.docker = docker
-
-
-class Success:
-    pass
-
-
-class BenchmarkActor(actor.RallyActor):
-    def __init__(self):
-        super().__init__()
-        self.cfg: Optional[types.Config] = None
-        self.start_sender = None
-        self.mechanic = None
-        self.main_driver = None
-        self.coordinator = None
-
-    def receiveMsg_PoisonMessage(self, msg, sender):
-        self.logger.debug("BenchmarkActor got notified of poison message [%s] (forwarding).", (str(msg)))
-        if self.coordinator:
-            self.coordinator.error = True
-        self.send(self.start_sender, msg)
-
-    def receiveUnrecognizedMessage(self, msg, sender):
-        self.logger.debug("BenchmarkActor received unknown message [%s] (ignoring).", (str(msg)))
-
-    @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_Setup(self, msg, sender):
-        self.start_sender = sender
-        self.cfg = msg.cfg
-        assert self.cfg is not None
-        self.coordinator = BenchmarkCoordinator(msg.cfg)
-        try:
-            self.coordinator.setup(sources=msg.sources)
-        except exceptions.RallyError as e:
-            self.logger.info("Setup failed due to a Rally error.", exc_info=e)
-            self.send(sender, actor.BenchmarkFailure(e.full_message))
-            return
-        self.logger.info("Asking mechanic to start the engine.")
-        self.mechanic = self.createActor(mechanic.MechanicActor, targetActorRequirements={"coordinator": True})
-        self.send(
-            self.mechanic,
-            mechanic.StartEngine(
-                self.cfg,
-                self.coordinator.metrics_store.open_context,
-                msg.sources,
-                msg.distribution,
-                msg.external,
-                msg.docker,
-            ),
-        )
-
-    @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_EngineStarted(self, msg, sender):
-        assert self.cfg is not None
-        self.logger.info("Mechanic has started engine successfully.")
-        self.coordinator.race.team_revision = msg.team_revision
-        self.main_driver = self.createActor(driver.DriverActor, targetActorRequirements={"coordinator": True})
-        self.logger.info("Telling driver to prepare for benchmarking.")
-        self.send(self.main_driver, driver.PrepareBenchmark(self.cfg, self.coordinator.current_track))
-
-    @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_PreparationComplete(self, msg, sender):
-        self.coordinator.on_preparation_complete(
-            msg.distribution_flavor,
-            msg.distribution_version,
-            msg.revision,
-            target_id=msg.target_id,
-            target_platform=msg.target_platform,
-            target_auth_type=msg.target_auth_type,
-        )
-        self.logger.info("Telling driver to start benchmark.")
-        self.send(self.main_driver, driver.StartBenchmark())
-
-    @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_TaskFinished(self, msg, sender):
-        self.coordinator.on_task_finished(msg.metrics)
-        # We choose *NOT* to reset our own metrics store's timer as this one is only used to collect complete metrics records from
-        # other stores (used by driver and mechanic). Hence there is no need to reset the timer in our own metrics store.
-        self.send(self.mechanic, mechanic.ResetRelativeTime(msg.next_task_scheduled_in))
-
-    @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_BenchmarkCancelled(self, msg, sender):
-        self.coordinator.cancelled = True
-        # even notify the start sender if it is the originator. The reason is that we call #ask() which waits for a reply.
-        # We also need to ask in order to avoid races between this notification and the following ActorExitRequest.
-        self.send(self.start_sender, msg)
-
-    @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_BenchmarkFailure(self, msg, sender):
-        self.logger.info("Received a benchmark failure from [%s] and will forward it now.", sender)
-        self.coordinator.error = True
-        self.send(self.start_sender, msg)
-
-    @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_BenchmarkComplete(self, msg, sender):
-        self.coordinator.on_benchmark_complete(msg.metrics)
-        self.send(self.main_driver, thespian.actors.ActorExitRequest())
-        self.main_driver = None
-        self.logger.info("Asking mechanic to stop the engine.")
-        self.send(self.mechanic, mechanic.StopEngine())
-
-    @actor.no_retry("race control")  # pylint: disable=no-value-for-parameter
-    def receiveMsg_EngineStopped(self, msg, sender):
-        self.logger.info("Mechanic has stopped engine successfully.")
-        self.send(self.start_sender, Success())
 
 
 class BenchmarkCoordinator:
@@ -304,32 +190,145 @@ class BenchmarkCoordinator:
         self.metrics_store.close()
 
 
+class RaceCoordinator:
+    """
+    Runs a race: starts the benchmark candidate, prepares and runs the benchmark, and reports results.
+
+    It runs in the main process (the one that owns the user's terminal) and coordinates Rally's actors:
+
+    * the mechanic (``mechanic.MechanicCoordinator``) which starts ``NodeMechanicActor`` instances on target hosts;
+    * the ``DriverActor`` which coordinates ``Worker`` actors on load driver hosts.
+    """
+
+    # how often race control polls the driver for progress and results of finished tasks
+    POLL_INTERVAL_SECONDS = 1
+    # how long race control waits for the driver to stop all workers when the benchmark is cancelled
+    CANCEL_TIMEOUT_SECONDS = 30
+
+    def __init__(self, cfg: types.Config, sources=False, distribution=False, external=False, docker=False):
+        self.logger = logging.getLogger(__name__)
+        self.cfg = cfg
+        self.sources = sources
+        self.distribution = distribution
+        self.external = external
+        self.docker = docker
+        self.coordinator = BenchmarkCoordinator(cfg)
+        self.mechanic = mechanic.MechanicCoordinator(cfg)
+        self.main_driver = None
+        self.progress = console.progress()
+
+    def setup(self):
+        self.coordinator.setup(sources=self.sources)
+
+    async def run(self):
+        """
+        Runs the race. ``setup()`` must have been called before.
+
+        :raise asyncio.CancelledError: if the race has been cancelled (by the user).
+        """
+        try:
+            await self._race()
+            self.logger.info("Benchmark has finished successfully.")
+        except asyncio.CancelledError:
+            self.logger.info("User has cancelled the benchmark (detected by race control).")
+            self.coordinator.cancelled = True
+            await self._cancel_driver()
+            raise
+        except BaseException as e:
+            cause = actor.unwrap(e)
+            if isinstance(cause, actor.BenchmarkCancelled):
+                # may happen if one of the load generators has detected that the user has cancelled the benchmark.
+                self.logger.info("User has cancelled the benchmark (detected by actor).")
+                self.coordinator.cancelled = True
+            elif isinstance(cause, actor.BenchmarkFailure):
+                self.logger.error("A benchmark failure has occurred")
+                self.coordinator.error = True
+                raise exceptions.RallyError(cause.message, cause.cause) from None
+            elif _is_ray_error(cause):
+                self.logger.error("A Rally actor has died unexpectedly", exc_info=True)
+                self.coordinator.error = True
+                raise exceptions.RallyError("A Rally actor has died unexpectedly.", str(cause)) from None
+            else:
+                self.coordinator.error = True
+                raise
+        finally:
+            await self._stop()
+
+    async def _race(self):
+        self.logger.info("Asking mechanic to start the engine.")
+        self.coordinator.race.team_revision = await self.mechanic.start_engine(
+            self.coordinator.metrics_store.open_context, self.sources, self.distribution, self.external, self.docker
+        )
+        self.logger.info("Mechanic has started engine successfully.")
+        self.main_driver = actor.create_actor(driver.DriverActor, self.cfg, self.mechanic.node_mechanics, host="localhost", name="driver")
+        self.logger.info("Telling driver to prepare for benchmarking.")
+        preparation = await self.main_driver.prepare_benchmark.remote(driver.TrackPayload(self.coordinator.current_track))
+        await actor.await_actor_output()
+        self.coordinator.on_preparation_complete(
+            preparation.distribution_flavor,
+            preparation.distribution_version,
+            preparation.revision,
+            target_id=preparation.target_id,
+            target_platform=preparation.target_platform,
+            target_auth_type=preparation.target_auth_type,
+        )
+        self.logger.info("Telling driver to start benchmark.")
+        benchmark = asyncio.ensure_future(self.main_driver.run_benchmark.remote())
+        try:
+            while not benchmark.done():
+                await asyncio.wait({benchmark}, timeout=RaceCoordinator.POLL_INTERVAL_SECONDS)
+                await self._poll()
+        finally:
+            if not benchmark.done():
+                benchmark.cancel()
+        metrics_of_last_task = benchmark.result()
+        # make sure that we have received all results and progress updates
+        await self._poll()
+        self.coordinator.on_benchmark_complete(metrics_of_last_task)
+
+    async def _poll(self):
+        status = await self.main_driver.poll.remote()
+        for event in status.progress:
+            if event is None:
+                self.progress.finish()
+            else:
+                self.progress.print(*event)
+        for task_finished in status.finished_tasks:
+            self.coordinator.on_task_finished(task_finished.metrics)
+        await self.mechanic.check_health()
+
+    async def _cancel_driver(self):
+        if self.main_driver is None:
+            return
+        try:
+            await actor.await_with_timeout(self.main_driver.cancel.remote(), RaceCoordinator.CANCEL_TIMEOUT_SECONDS)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            self.logger.warning("Could not cancel the benchmark gracefully: %s", e)
+
+    async def _stop(self):
+        if self.main_driver is not None:
+            self.logger.info("Telling driver to stop.")
+            main_driver = self.main_driver
+            self.main_driver = None
+            await actor.stop_actor(main_driver, name="driver")
+        self.logger.info("Asking mechanic to stop the engine.")
+        await self.mechanic.stop_engine()
+        self.logger.info("Mechanic has stopped engine successfully.")
+
+
+def _is_ray_error(e: BaseException) -> bool:
+    return any(c.__module__.startswith("ray.") for c in type(e).__mro__)
+
+
 def race(cfg: types.Config, sources=False, distribution=False, external=False, docker=False):
     logger = logging.getLogger(__name__)
-    # at this point an actor system has to run and we should only join
-    actor_system = actor.bootstrap_actor_system(try_join=True)
-    benchmark_actor = actor_system.createActor(BenchmarkActor, targetActorRequirements={"coordinator": True})
+    race_coordinator = RaceCoordinator(cfg, sources, distribution, external, docker)
     try:
-        result = actor_system.ask(benchmark_actor, Setup(cfg, sources, distribution, external, docker))
-        if isinstance(result, Success):
-            logger.info("Benchmark has finished successfully.")
-        # may happen if one of the load generators has detected that the user has cancelled the benchmark.
-        elif isinstance(result, actor.BenchmarkCancelled):
-            logger.info("User has cancelled the benchmark (detected by actor).")
-        elif isinstance(result, actor.BenchmarkFailure):
-            logger.error("A benchmark failure has occurred")
-            raise exceptions.RallyError(result.message, result.cause)
-        else:
-            raise exceptions.RallyError("Got an unexpected result during benchmarking: [%s]." % str(result))
+        race_coordinator.setup()
+        actor.run_async(race_coordinator.run)
     except KeyboardInterrupt:
         logger.info("User has cancelled the benchmark (detected by race control).")
-        # notify the coordinator so it can properly handle this state. Do it blocking so we don't have a race between this message
-        # and the actor exit request.
-        actor_system.ask(benchmark_actor, actor.BenchmarkCancelled())
         raise exceptions.UserInterrupted("User has cancelled the benchmark (detected by race control).") from None
-    finally:
-        logger.info("Telling benchmark actor to exit.")
-        actor_system.tell(benchmark_actor, thespian.actors.ActorExitRequest())
 
 
 def prepare_track(cfg: types.Config):
@@ -338,28 +337,36 @@ def prepare_track(cfg: types.Config):
     assert track_description is not None, "track description missing"
     logger.info("Preparing track [%s] ...", track_description)
     console.println(f"Preparing track [{track_description}] ...")
-    # at this point an actor system has to run and we should only join
-    actor_system = actor.bootstrap_actor_system(try_join=True)
-    # load the track in the coordinating process so track parameters are validated before preparing corpora
-    t = track.load_track(cfg, install_dependencies=True)
-    track.resolve_challenge_and_invoke_validators(t, cfg)
-    track_preparation_actor = actor_system.createActor(driver.TrackPreparationActor, targetActorRequirements={"coordinator": True})
     try:
-        result = actor_system.ask(track_preparation_actor, driver.PrepareTrackStandalone(cfg, t))
-        if isinstance(result, driver.TrackPrepared):
-            logger.info("Track [%s] has been prepared successfully.", t.name)
-            console.println(f"Track [{t.name}] has been prepared successfully.")
-        elif isinstance(result, actor.BenchmarkFailure):
-            logger.error("A track preparation failure has occurred")
-            raise exceptions.RallyError(result.message, result.cause)
-        else:
-            raise exceptions.RallyError("Got an unexpected result while preparing track: [%s]." % str(result))
+        # load the track in the coordinating process so track parameters are validated before preparing corpora
+        t = track.load_track(cfg, install_dependencies=True)
+        track.resolve_challenge_and_invoke_validators(t, cfg)
+        actor.run_async(lambda: _prepare_track(cfg, t))
     except KeyboardInterrupt:
         logger.info("User has cancelled track preparation.")
         raise exceptions.UserInterrupted("User has cancelled track preparation.") from None
+    logger.info("Track [%s] has been prepared successfully.", t.name)
+    console.println(f"Track [{t.name}] has been prepared successfully.")
+
+
+async def _prepare_track(cfg: types.Config, t):
+    logger = logging.getLogger(__name__)
+    track_preparation_actor = actor.create_actor(driver.TrackPreparationActor, cfg, host="localhost", name="track-preparator")
+    try:
+        # dependencies were already installed by this process, which runs on the same machine
+        await track_preparation_actor.prepare_track.remote(driver.TrackPayload(t), install_dependencies=False)
+        await actor.await_actor_output()
+    except asyncio.CancelledError:
+        raise
+    except BaseException as e:
+        cause = actor.unwrap(e)
+        if isinstance(cause, actor.BenchmarkFailure):
+            logger.error("A track preparation failure has occurred")
+            raise exceptions.RallyError(cause.message, cause.cause) from None
+        raise
     finally:
-        logger.info("Telling track preparation actor to exit.")
-        actor_system.tell(track_preparation_actor, thespian.actors.ActorExitRequest())
+        logger.info("Telling track preparation actor to stop.")
+        await actor.stop_actor(track_preparation_actor, name="track-preparator")
 
 
 def set_default_hosts(cfg: types.Config, host="127.0.0.1", port=9200):

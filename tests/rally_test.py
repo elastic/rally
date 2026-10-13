@@ -16,10 +16,11 @@
 # under the License.
 
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
-from esrally import exceptions, rally
+from esrally import actor, config, exceptions, rally
 
 
 def test_creates_default_configuration_when_missing(tmp_path, monkeypatch):
@@ -77,3 +78,70 @@ def test_prepare_track_parser_accepts_arguments():
     assert args.serverless_operator is True
     assert args.test_mode is True
     assert args.kill_running_processes is True
+
+
+class TestWithRay:
+    @pytest.fixture
+    def cfg(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "race.id", "6ebc6e53")
+        cfg.add(config.Scope.application, "system", "available.cores", 4)
+        return cfg
+
+    def test_connects_runs_and_disconnects(self, cfg, monkeypatch):
+        init_ray = mock.Mock(return_value=True)
+        shutdown_ray = mock.Mock()
+        monkeypatch.setattr(actor, "init_ray", init_ray)
+        monkeypatch.setattr(actor, "shutdown_ray", shutdown_ray)
+        runnable = mock.Mock()
+
+        rally.with_ray(runnable, cfg)
+
+        init_ray.assert_called_once_with(namespace="rally-6ebc6e53", num_cpus=4)
+        runnable.assert_called_once_with(cfg)
+        shutdown_ray.assert_called_once_with()
+        assert cfg.opts("system", "remote.benchmarking.supported") is True
+
+    def test_disconnects_when_runnable_fails(self, cfg, monkeypatch):
+        monkeypatch.setattr(actor, "init_ray", mock.Mock(return_value=False))
+        shutdown_ray = mock.Mock()
+        monkeypatch.setattr(actor, "shutdown_ray", shutdown_ray)
+
+        with pytest.raises(exceptions.RallyError):
+            rally.with_ray(mock.Mock(side_effect=exceptions.RallyError("boom")), cfg)
+
+        shutdown_ray.assert_called_once_with()
+
+    def test_converts_ctrl_c_while_starting(self, cfg, monkeypatch):
+        monkeypatch.setattr(actor, "init_ray", mock.Mock(side_effect=KeyboardInterrupt))
+        monkeypatch.setattr(actor, "shutdown_ray", mock.Mock())
+        runnable = mock.Mock()
+
+        with pytest.raises(exceptions.UserInterrupted):
+            rally.with_ray(runnable, cfg)
+
+        runnable.assert_not_called()
+
+
+class TestRunWithRay:
+    def test_refuses_to_run_with_other_rally_processes(self, monkeypatch):
+        monkeypatch.setattr(rally.process, "find_all_other_rally_processes", lambda: [mock.Mock(pid=42)])
+        with_ray = mock.Mock()
+        monkeypatch.setattr(rally, "with_ray", with_ray)
+
+        with pytest.raises(exceptions.RallyError, match=r"(?s)PIDs: \[42\].*--kill-running-processes"):
+            rally.run_with_ray(mock.Mock(), config.Config())
+
+        with_ray.assert_not_called()
+
+    def test_kills_other_rally_processes(self, monkeypatch):
+        kill = mock.Mock()
+        monkeypatch.setattr(rally.process, "kill_running_rally_instances", kill)
+        with_ray = mock.Mock()
+        monkeypatch.setattr(rally, "with_ray", with_ray)
+        runnable, cfg = mock.Mock(), config.Config()
+
+        rally.run_with_ray(runnable, cfg, kill_running_processes=True)
+
+        kill.assert_called_once_with()
+        with_ray.assert_called_once_with(runnable, cfg)
