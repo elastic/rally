@@ -20,6 +20,7 @@ import concurrent.futures
 import gzip
 import logging
 import os
+import re
 import subprocess
 import tempfile
 from unittest import mock
@@ -635,5 +636,61 @@ class TestOtlpProtobufFile:  # pylint: disable=too-many-public-methods
 
         batches = list(pb._iter_line_batches(8))
 
-        # blank lines are skipped; an oversized line forms its own batch; the remainder is flushed
-        assert batches == [["a" * 4, "b" * 4], ["c" * 25], ["d" * 3, "e" * 3, "f" * 3]]
+        # blank lines are kept as "" so line numbers stay exact; an oversized line forms its own batch; the remainder is flushed
+        assert batches == [(1, ["a" * 4, "", "b" * 4]), (4, ["c" * 25]), (5, ["d" * 3, "", "e" * 3, "f" * 3])]
+
+    @pytest.mark.parametrize(
+        "bad_line, reason",
+        [
+            ('{"resourceMetrics": [', "Failed to load JSON"),
+            ('{"unknownField": 1}', 'has no field named "unknownField"'),
+            ('{"resourceMetrics": [{"scopeMetrics": [{"metrics": [{"name": 42}]}]}]}', "Failed to parse name field"),
+        ],
+    )
+    def test_convert_lines_batch_raises_data_error_on_invalid_line(self, bad_line, reason):
+        lines = [self.SAMPLE_OTLP_JSON_LINE, "", bad_line]
+
+        with pytest.raises(exceptions.DataError, match=reason) as exc:
+            io._convert_lines_batch(("/data/metrics.otlp.json", 10, lines, False, "metrics"))
+
+        assert "line [12] of [/data/metrics.otlp.json]" in exc.value.message
+        assert "ExportMetricsServiceRequest" in exc.value.message
+
+    def test_convert_lines_batch_skips_blank_lines(self):
+        _, record_count = io._convert_lines_batch(("/data/metrics.otlp.json", 1, ["", self.SAMPLE_OTLP_JSON_LINE, ""], False, "metrics"))
+
+        assert record_count == 1
+
+    def test_create_raises_data_error_with_source_line_number(self, tmp_path):
+        lines = [self.SAMPLE_OTLP_JSON_LINE] * 5 + ["", '{"unknownField": 1}'] + [self.SAMPLE_OTLP_JSON_LINE] * 5
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+
+        # several batches so the failing line is not in the first one
+        with mock.patch.object(io.OtlpProtobufFile, "_BATCH_BYTES", len(self.SAMPLE_OTLP_JSON_LINE) * 2):
+            with pytest.raises(exceptions.DataError, match=rf"line \[7\] of \[{re.escape(json_path)}\]"):
+                pb.create(signal="metrics", workers=2)
+
+        assert not os.path.exists(pb.pb_path)
+        assert not os.path.exists(pb.offset_path)
+        assert os.path.exists(json_path)
+
+    def test_create_cancels_pending_batches_on_parse_error(self, tmp_path):
+        lines = ['{"unknownField": 1}'] + [self.SAMPLE_OTLP_JSON_LINE] * 10
+        json_path = self._write_json_lines(tmp_path, lines)
+        pb = io.OtlpProtobufFile.for_source_file(json_path)
+        original_shutdown = concurrent.futures.ThreadPoolExecutor.shutdown
+
+        with (
+            mock.patch.object(io.OtlpProtobufFile, "_BATCH_BYTES", len(self.SAMPLE_OTLP_JSON_LINE)),
+            mock.patch(
+                "concurrent.futures.ProcessPoolExecutor",
+                side_effect=lambda max_workers, **_: concurrent.futures.ThreadPoolExecutor(max_workers=max_workers),
+            ),
+            mock.patch.object(concurrent.futures.ThreadPoolExecutor, "shutdown", autospec=True, side_effect=original_shutdown) as shutdown,
+        ):
+            with pytest.raises(exceptions.DataError, match=r"line \[1\]"):
+                pb.create(signal="metrics", workers=1)
+
+        assert any(c.kwargs.get("cancel_futures") for c in shutdown.call_args_list)
+        assert not os.path.exists(pb.pb_path)

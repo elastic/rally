@@ -719,7 +719,7 @@ _OTLP_REQUEST_TYPES = {
 }
 
 
-def _convert_lines_batch(args: tuple[list[str], bool, str]) -> tuple[bytes, int]:
+def _convert_lines_batch(args: tuple[str, int, list[str], bool, str]) -> tuple[bytes, int]:
     """
     Worker function for parallel OTLP JSON → binary protobuf conversion.
 
@@ -732,24 +732,37 @@ def _convert_lines_batch(args: tuple[list[str], bool, str]) -> tuple[bytes, int]
     length || payload``. When ``gzip_records`` is True, each payload is gzip-compressed independently
     (so the length prefix is the compressed size). This is exactly the on-disk format the main
     process appends to the corpus file.
+
+    Blank entries in ``lines`` are skipped; they only keep ``first_line_number + index`` equal to the source line number.
+
+    :raises exceptions.DataError: if a line cannot be parsed into the request message of ``signal``.
     """
-    lines, gzip_records, signal = args
+    source_path, first_line_number, lines, gzip_records, signal = args
     # pylint: disable=import-outside-toplevel
-    from google.protobuf.json_format import Parse
+    from google.protobuf.json_format import Parse, ParseError
 
     module_name, class_name = _OTLP_REQUEST_TYPES[signal]
     request_type = getattr(importlib.import_module(module_name), class_name)
 
     parts: list[bytes] = []
-    for line in lines:
-        msg = Parse(line, request_type())
+    record_count = 0
+    for index, line in enumerate(lines):
+        if not line:
+            continue
+        try:
+            msg = Parse(line, request_type())
+        except ParseError as e:
+            raise exceptions.DataError(
+                f"Could not parse line [{first_line_number + index}] of [{source_path}] as OTLP {signal} [{class_name}]: {e}"
+            ) from e
         payload = msg.SerializeToString()
         if gzip_records:
             # mtime=0 keeps the output byte-deterministic across runs (no timestamp in the gzip header).
             payload = gzip.compress(payload, compresslevel=6, mtime=0)
         parts.append(struct.pack(">I", len(payload)))
         parts.append(payload)
-    return b"".join(parts), len(lines)
+        record_count += 1
+    return b"".join(parts), record_count
 
 
 class OtlpProtobufFile:
@@ -810,6 +823,7 @@ class OtlpProtobufFile:
                         if set to a positive integer, otherwise ``os.cpu_count()``.
         :return: Total number of records written.
         :raises exceptions.SystemSetupError: if opentelemetry-proto is not installed.
+        :raises exceptions.DataError: if a source line is not a valid OTLP request of ``signal``.
         """
         # opentelemetry-proto is an optional dependency, only needed when preparing an OTLP corpus.
         # we probe the import here so we fail fast with a clear message rather than inside the worker.
@@ -858,14 +872,22 @@ class OtlpProtobufFile:
             in_flight: collections.deque = collections.deque()
 
             # prime the pipeline with up to max_in_flight batches
-            for batch in batch_iter:
-                in_flight.append(pool.submit(_convert_lines_batch, (batch, self.gzip_records, signal)))
+            for first_line_number, batch in batch_iter:
+                in_flight.append(
+                    pool.submit(_convert_lines_batch, (self.source_json_path, first_line_number, batch, self.gzip_records, signal))
+                )
                 if len(in_flight) >= max_in_flight:
                     break
 
             # consume one result at a time (FIFO preserves source order) and submit a replacement
             while in_flight:
-                chunk_bytes, chunk_record_count = in_flight.popleft().result()
+                try:
+                    chunk_bytes, chunk_record_count = in_flight.popleft().result()
+                except exceptions.DataError:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    # is_valid() would otherwise accept the partial file on the next run
+                    self.remove()
+                    raise
                 dst.write(chunk_bytes)
                 record_count += chunk_record_count
                 byte_offset += len(chunk_bytes)
@@ -878,9 +900,13 @@ class OtlpProtobufFile:
                     )
                 # keep the pipeline full by submitting the next batch (if any)
                 try:
-                    in_flight.append(pool.submit(_convert_lines_batch, (next(batch_iter), self.gzip_records, signal)))
+                    first_line_number, batch = next(batch_iter)
                 except StopIteration:
                     pass
+                else:
+                    in_flight.append(
+                        pool.submit(_convert_lines_batch, (self.source_json_path, first_line_number, batch, self.gzip_records, signal))
+                    )
 
         # 1e-9 avoids division by zero later
         elapsed = max(time.perf_counter() - start, 1e-9)
@@ -902,24 +928,28 @@ class OtlpProtobufFile:
             except FileNotFoundError:
                 pass
 
-    def _iter_line_batches(self, batch_bytes: int) -> Iterator[list[str]]:
-        """Stream the source JSON file as batches of non-blank stripped lines, each closed once it reaches ``batch_bytes``."""
+    def _iter_line_batches(self, batch_bytes: int) -> Iterator[tuple[int, list[str]]]:
+        """
+        Stream the source JSON file as ``(first_line_number, stripped_lines)`` batches, each closed once it reaches
+        ``batch_bytes``. Line numbers are 1-based; blank lines are kept as empty strings so line numbers stay exact.
+        """
         batch: list[str] = []
+        first_line_number = 1
         size = 0
         with open(self.source_json_path, encoding="utf-8", buffering=8 * 1024 * 1024) as src:
-            for line in src:
+            for line_number, line in enumerate(src, start=1):
                 line = line.strip()
-                if not line:
-                    continue
+                if not batch:
+                    first_line_number = line_number
                 batch.append(line)
                 # character count approximates bytes: OTLP JSON is (almost) pure ASCII
                 size += len(line)
                 if size >= batch_bytes:
-                    yield batch
+                    yield first_line_number, batch
                     batch = []
                     size = 0
         if batch:
-            yield batch
+            yield first_line_number, batch
 
     def read_records(self, start_record: int, end_record: int | None = None) -> Iterator[bytes]:
         """
