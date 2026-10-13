@@ -12,7 +12,7 @@ Instead of bulk-indexing newline-delimited JSON, Rally sends pre-serialized ``Ex
 
 The data flow at a glance:
 
-1. **Generate** — Use ``metricsgenreceiver`` to produce an OTLP JSON corpus file (``metrics.otlp.json``).
+1. **Generate** — Produce an OTLP JSON corpus file (``metrics.otlp.json``), for example with ``metricsgenreceiver`` (see below) or by capturing real traffic with the Collector file exporter.
 2. **Prepare** — During ``prepare-track``, Rally converts the JSON corpus to a binary protobuf file (``metrics.otlp.json.pb`` or ``metrics.otlp.json.pbgz``). This is a one-time conversion per machine.
 3. **Race** — During ``race``, Rally streams records from the ``.pb`` file directly to Elasticsearch's ``/_otlp/v1/metrics`` endpoint.
 
@@ -259,7 +259,7 @@ OTLP corpora use ``"source-format": "otlp-metrics"`` in the track definition. A 
     ]
   }
 
-The ``track.json`` file references ``metrics-otel@custom.template.json`` file with the following content. Note how ``index.time_series`` settings are used to accept timestamps from statically defined time range which matches ``metricsgenreceiver`` configuration.
+The ``track.json`` file references the ``metrics-otel@custom.template.json`` file with the following content. The ``index.time_series`` settings define a fixed accepted timestamp range. It must cover the timestamps in the corpus; the range below matches the ``metricsgenreceiver`` configuration used above. Documents with timestamps outside this range are rejected. Adjust ``start_time`` and ``end_time`` if your corpus covers a different period.
 
 .. code-block:: json
 
@@ -300,7 +300,7 @@ The following fields are relevant for ``otlp-metrics`` corpora. See :ref:`track_
      - Name of the OTLP JSON file (one ``ExportMetricsServiceRequest`` per line, for example as produced by ``metricsgenreceiver`` or the OpenTelemetry Collector file exporter), relative to the corpus data directory. It may be an archive (e.g. ``metrics.otlp.json.zst``) containing exactly one file named like the archive without its extension; Rally decompresses it before conversion. Lines containing other signals (logs, traces) are rejected.
    * - ``document-count``
      - Yes
-     - Number of records (lines) in the source file. Used to verify a local or downloaded file.
+     - Number of records (non-blank lines) in the source file. Used to verify a local or downloaded file.
    * - ``base-url``
      - No
      - Location to download corpus files from. Rally first tries to download pre-built protobuf files (``<source-file>.pb`` or ``<source-file>.pbgz``, compressed with the same archive extension as ``source-file`` if any, plus the ``.offset`` index) and downloads ``source-file`` only if they are not available. Can also be specified at ``corpus`` level.
