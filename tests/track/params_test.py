@@ -1145,6 +1145,23 @@ class TestBulkIndexParamSource:
         partition = source.partition(0, 1)
         assert partition.corpora == corpora
 
+    def test_is_not_infinite(self):
+        corpus = track.DocumentCorpus(
+            name="default",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                    target_index="test-idx",
+                )
+            ],
+        )
+        source = params.BulkIndexParamSource(
+            track=track.Track(name="unit-test", corpora=[corpus]),
+            params={"bulk-size": 5},
+        )
+        assert source.partition(0, 1).infinite is False
+
     def test_filters_corpora(self):
         corpora = [
             track.DocumentCorpus(
@@ -3381,6 +3398,416 @@ class TestDownsampleParamSource:
         assert p["fixed-interval"] == "1h"
         assert p["target-index"] == f"{p['source-index']}-{p['fixed-interval']}"
         assert p.get("sampling-method") is None
+
+
+class TestOtlpParamSource:
+    """Tests for OtlpParamSource — covers partitioning, finite size signalling, and looping."""
+
+    _SAMPLE_OTLP_JSON_LINE = (
+        '{"resourceMetrics":[{"resource":{"attributes":[{"key":"host.name","value":{"stringValue":"host-0"}}]},'
+        '"scopeMetrics":[{"scope":{"name":"hostmetrics"},"metrics":['
+        '{"name":"system.cpu.utilization","gauge":{"dataPoints":['
+        '{"timeUnixNano":"1700000000000000000","asDouble":0.42,'
+        '"attributes":[{"key":"cpu","value":{"stringValue":"0"}}]}]}}]}]}]}'
+    )
+
+    def _build_corpus(self, tmp_path, num_records, corpus_name="otlp-corpus"):
+        json_path = tmp_path / "metrics.otlp.json"
+        json_path.write_text("\n".join([self._SAMPLE_OTLP_JSON_LINE] * num_records) + "\n")
+        pb = io.OtlpProtobufFile.for_source_file(str(json_path))
+        pb.create(signal="metrics")
+        corpus = track.DocumentCorpus(
+            name=corpus_name,
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
+                    number_of_documents=num_records,
+                    document_file=str(json_path),
+                )
+            ],
+        )
+        return corpus
+
+    def test_selects_corpus_by_operation_param(self, tmp_path):
+        # two OTLP corpora — make sure the operation's `corpora` param picks the right one
+        d_a = tmp_path / "a"
+        d_b = tmp_path / "b"
+        d_a.mkdir()
+        d_b.mkdir()
+        corpus_a = self._build_corpus(d_a, num_records=3, corpus_name="corpus-60m")
+        corpus_b = self._build_corpus(d_b, num_records=5, corpus_name="corpus-270m")
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus_a, corpus_b]),
+            params={"corpora": "corpus-270m"},
+        )
+        # _doc must come from corpus-270m, not the first-listed one (corpus-60m)
+        assert source._doc.number_of_documents == 5
+        # corpora exposed to prepare-track only contains the selected corpus
+        assert [c.name for c in source.corpora] == ["corpus-270m"]
+
+    def test_raises_when_multiple_otlp_corpora_match(self, tmp_path):
+        d_a = tmp_path / "a"
+        d_b = tmp_path / "b"
+        d_a.mkdir()
+        d_b.mkdir()
+        corpus_a = self._build_corpus(d_a, num_records=3, corpus_name="corpus-60m")
+        corpus_b = self._build_corpus(d_b, num_records=5, corpus_name="corpus-270m")
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.OtlpParamSource(
+                track_obj=track.Track(name="unit-test", corpora=[corpus_a, corpus_b]),
+                params={},
+            )
+        assert "exactly one" in exc.value.args[0]
+        assert "[corpus-60m]" in exc.value.args[0]
+        assert "[corpus-270m]" in exc.value.args[0]
+
+    def test_raises_when_corpora_param_doesnt_match(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=3, corpus_name="corpus-60m")
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.OtlpParamSource(
+                track_obj=track.Track(name="unit-test", corpora=[corpus]),
+                params={"corpora": "corpus-270m"},
+            )
+        assert "corpus-270m" in exc.value.args[0]
+        assert "corpus-60m" in exc.value.args[0]
+
+    def test_raises_when_no_otlp_corpus(self):
+        bulk_corpus = track.DocumentCorpus(
+            name="bulk-only",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_BULK,
+                    number_of_documents=10,
+                )
+            ],
+        )
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.OtlpParamSource(
+                track_obj=track.Track(name="unit-test", corpora=[bulk_corpus]),
+                params={},
+            )
+        assert "No OTLP corpus" in exc.value.args[0]
+
+    def test_exposes_corpora_for_prepare_track(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=3)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        # used_corpora() in loader.py checks for this attribute
+        assert source.corpora == [corpus]
+
+    def test_raises_when_corpus_has_multiple_otlp_document_sets(self, tmp_path):
+        json_path = tmp_path / "metrics.otlp.json"
+        json_path.write_text(self._SAMPLE_OTLP_JSON_LINE + "\n")
+        io.OtlpProtobufFile.for_source_file(str(json_path)).create(signal="metrics")
+        corpus = track.DocumentCorpus(
+            name="otlp-corpus",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
+                    number_of_documents=1,
+                    document_file=str(json_path),
+                ),
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
+                    number_of_documents=1,
+                    document_file=str(json_path),
+                ),
+            ],
+        )
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.OtlpParamSource(
+                track_obj=track.Track(name="unit-test", corpora=[corpus]),
+                params={"corpora": "otlp-corpus"},
+            )
+        assert "Found 2 OTLP document sets" in exc.value.args[0]
+
+    def test_exposes_only_otlp_document_set_of_mixed_corpus(self, tmp_path):
+        otlp_corpus = self._build_corpus(tmp_path, num_records=3, corpus_name="mixed")
+        otlp_doc = otlp_corpus.documents[0]
+        bulk_doc = track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=10, target_index="test-idx")
+        corpus = track.DocumentCorpus(name="mixed", documents=[bulk_doc, otlp_doc], meta_data={"m": 1})
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        assert [c.name for c in source.corpora] == ["mixed"]
+        assert source.corpora[0].documents == [otlp_doc]
+        assert source.corpora[0].meta_data == {"m": 1}
+        assert source._doc is otlp_doc
+
+    def test_accepts_corpora_list_resolving_to_one_document_set(self, tmp_path):
+        otlp_corpus = self._build_corpus(tmp_path, num_records=3)
+        bulk_corpus = track.DocumentCorpus(
+            name="bulk-only",
+            documents=[track.Documents(source_format=track.Documents.SOURCE_FORMAT_BULK, number_of_documents=10)],
+        )
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[bulk_corpus, otlp_corpus]),
+            params={"corpora": ["bulk-only", "otlp-corpus"]},
+        )
+        assert source.corpora == [otlp_corpus]
+        assert source._doc is otlp_corpus.documents[0]
+
+    @staticmethod
+    def _count_records(param_source):
+        count = 0
+        while True:
+            try:
+                param_source.params()
+            except StopIteration:
+                return count
+            count += 1
+
+    def test_is_not_infinite(self, tmp_path):
+        # if infinite, Rally defaults iterations=1 and each client sends exactly one request
+        corpus = self._build_corpus(tmp_path, num_records=10)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        assert source.infinite is False
+        assert source.partition(0, 1).infinite is False
+
+    def test_partitions_split_records(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=100)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        # 100 records / 8 partitions = 12 or 13 per partition (depending on rounding)
+        sizes = [self._count_records(source.partition(i, 8)) for i in range(8)]
+        assert sum(sizes) == 100
+        assert all(12 <= s <= 13 for s in sizes)
+
+    def test_partition_returns_separate_instances(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=8)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        p0 = source.partition(0, 4)
+        p1 = source.partition(1, 4)
+        # different instances with different state
+        assert p0 is not p1
+        assert p0._partition_index == 0
+        assert p1._partition_index == 1
+        assert p0._doc is p1._doc
+
+    def test_params_yields_full_corpus_across_partitions(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=8)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        all_bodies = []
+        for i in range(4):
+            p = source.partition(i, 4)
+            while True:
+                try:
+                    all_bodies.append(p.params()["body"])
+                except StopIteration:
+                    break
+        # 8 records total across 4 partitions
+        assert len(all_bodies) == 8
+
+    def test_params_raises_stop_iteration_when_exhausted(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=2)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        p = source.partition(0, 1)
+        p.params()
+        p.params()
+        with pytest.raises(StopIteration):
+            p.params()
+
+    def test_params_loops_when_looped_true(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=2)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={"looped": True},
+        )
+        p = source.partition(0, 1)
+        # take 5 records from a 2-record corpus
+        bodies = [p.params()["body"] for _ in range(5)]
+        # should cycle through the 2 records
+        assert bodies[0] == bodies[2] == bodies[4]
+        assert bodies[1] == bodies[3]
+
+    def test_percent_completed_progresses_with_cursor(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=10)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        p = source.partition(0, 1)
+        assert p.percent_completed == 0.0  # before any params() call
+        for i in range(1, 11):
+            p.params()
+            assert p.percent_completed == i / 10
+
+    def test_percent_completed_cycles_when_looped(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=3)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={"looped": True},
+        )
+        p = source.partition(0, 1)
+        assert p.percent_completed == 0.0
+        for _ in range(3):
+            p.params()
+        assert p.percent_completed == 1.0
+        p.params()
+        assert p.percent_completed == 1 / 3
+
+    def test_gzip_param_defaults_to_false_and_uses_pb(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        assert source.gzip is False
+        p = source.partition(0, 1)
+        result = p.params()
+        assert result["gzip"] is False
+
+    def test_gzip_param_true_yields_gzip_in_params(self, tmp_path):
+        # build a .pbgz alongside the default .pb so partition can read it
+        json_path = tmp_path / "metrics.otlp.json"
+        json_path.write_text("\n".join([self._SAMPLE_OTLP_JSON_LINE] * 3) + "\n")
+        io.OtlpProtobufFile.for_source_file(str(json_path), gzip_records=True).create(signal="metrics")
+        corpus = track.DocumentCorpus(
+            name="otlp-corpus",
+            documents=[
+                track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
+                    number_of_documents=3,
+                    document_file=str(json_path),
+                )
+            ],
+        )
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={"gzip": True},
+        )
+        assert source.gzip is True
+        p = source.partition(0, 1)
+        result = p.params()
+        assert result["gzip"] is True
+        # body should be gzip-magic-prefixed (each record is a gzip stream)
+        assert result["body"][:2] == b"\x1f\x8b"
+
+    def test_params_propagates_request_timeout(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={"request-timeout": 30},
+        )
+        p = source.partition(0, 1)
+        result = p.params()
+        assert result["request-timeout"] == 30
+        assert "body" in result
+
+    def test_params_signal_derived_from_source_format(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={"signal": "logs"},
+        )
+        assert source.signal == "metrics"
+        assert source.partition(0, 1).params()["signal"] == "metrics"
+
+    @pytest.mark.parametrize(
+        "key, value",
+        [
+            ("retries-on-error", -1),
+            ("retries-on-error", 1.5),
+            ("retries-on-error", True),
+            ("retries-on-error", "3"),
+            ("retries-on-error", None),
+            ("retry-wait-period", -0.5),
+            ("retry-wait-period", True),
+            ("retry-wait-period", "0.5"),
+            ("retry-wait-period", None),
+        ],
+    )
+    def test_invalid_retry_params_raise(self, tmp_path, key, value):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        with pytest.raises(exceptions.InvalidSyntax) as exc:
+            params.OtlpParamSource(
+                track_obj=track.Track(name="unit-test", corpora=[corpus]),
+                params={key: value},
+            )
+        assert f"parameter '{key}' must be a non-negative" in exc.value.message
+        assert repr(value) in exc.value.message
+
+    @pytest.mark.parametrize(
+        "key, value",
+        [
+            ("retries-on-error", 0),
+            ("retries-on-error", 5),
+            ("retry-wait-period", 0),
+            ("retry-wait-period", 0.0),
+            ("retry-wait-period", 2.5),
+        ],
+    )
+    def test_valid_retry_params_accepted(self, tmp_path, key, value):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={key: value},
+        )
+        assert source.partition(0, 1).params()[key] == value
+
+    def test_params_forwards_operation_params(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=2)
+        assertions = [{"property": "success", "condition": "==", "value": True}]
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={
+                "retries-on-error": 2,
+                "retry-wait-period": 1.5,
+                "assertions": assertions,
+                "body": b"must-not-leak",
+                "gzip": True,
+            },
+        )
+        source.gzip = False
+        p = source.partition(0, 1)
+        first = p.params()
+        second = p.params()
+
+        assert first["retries-on-error"] == 2
+        assert first["retry-wait-period"] == 1.5
+        assert first["assertions"] == assertions
+        assert first["body"] != b"must-not-leak"
+        assert first["gzip"] is False
+        assert first is not second
+
+    def test_params_body_is_non_empty_bytes(self, tmp_path):
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        source = params.OtlpParamSource(
+            track_obj=track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+        )
+        p = source.partition(0, 1)
+        result = p.params()
+        assert isinstance(result["body"], bytes)
+        assert len(result["body"]) > 0
+
+    def test_registered_for_otlp_ingest_operation(self, tmp_path):
+        # ensure Rally picks up our class for the otlp-ingest operation type
+        corpus = self._build_corpus(tmp_path, num_records=1)
+        source = params.param_source_for_operation(
+            track.OperationType.OtlpIngest.to_hyphenated_string(),
+            track.Track(name="unit-test", corpora=[corpus]),
+            params={},
+            task_name="unit-test-task",
+        )
+        assert isinstance(source, params.OtlpParamSource)
 
 
 class TestValidatorRegistry:

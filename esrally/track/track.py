@@ -177,6 +177,10 @@ class ComponentTemplate:
 
 class Documents:
     SOURCE_FORMAT_BULK = "bulk"
+    SOURCE_FORMAT_OTLP_METRICS = "otlp-metrics"
+    # OTLP logs/traces: add "otlp-logs"/"otlp-traces" here and in io._OTLP_REQUEST_TYPES, runner.OtlpIngest._ENDPOINTS,
+    # loader.DOCUMENT_SET_FORMATS (an OtlpDocumentSetFormat subclass) and the source-format enum in track-schema.json.
+    OTLP_SIGNALS = {SOURCE_FORMAT_OTLP_METRICS: "metrics"}
 
     def __init__(
         self,
@@ -725,6 +729,7 @@ class OperationType(Enum):
     # this is classed the same as RawRequest, but could potentially be used to call endpoints that are blocked
     RunUntil = (58, AdminStatus.No, serverless.Status.Public)
     EnrichPolicy = (59, AdminStatus.Yes, serverless.Status.Public)
+    OtlpIngest = (60, AdminStatus.No, serverless.Status.Public)
 
     def __init__(self, id: int, admin_status: AdminStatus, serverless_status: serverless.Status):
         self.id = id
@@ -864,6 +869,8 @@ class OperationType(Enum):
             return OperationType.RunUntil
         elif v == "enrich-policy":
             return OperationType.EnrichPolicy
+        elif v == "otlp-ingest":
+            return OperationType.OtlpIngest
         else:
             raise KeyError(f"No enum value for [{v}]")
 
