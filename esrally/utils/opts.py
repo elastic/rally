@@ -238,6 +238,35 @@ class TargetHosts(ConnectOptions):
         return self.all_options
 
 
+# Credential keys. When admin options set any of these, they replace benchmark credentials
+# so a telemetry client does not send both authentication schemes.
+_AUTH_CLIENT_OPTION_KEYS = ("api_key", "basic_auth_user", "basic_auth_password", "basic_auth", "http_auth")
+
+
+def merge_admin_client_options(benchmark_options, admin_options):
+    """Overlay per-cluster admin client options onto benchmark client options.
+
+    TLS, timeouts, and other non-auth settings are inherited from ``benchmark_options``.
+    Auth keys present in ``admin_options`` replace benchmark auth. ``create_api_key_per_client``
+    is omitted because per-client API keys are created only for load-driver clients.
+
+    :param benchmark_options: Cluster name to client option dict, from ``--client-options``.
+    :param admin_options: Cluster name to override dict, from ``--admin-client-options``.
+    :return: Cluster name to merged client option dict for the telemetry client.
+    """
+    merged = {}
+    for cluster_name, original in benchmark_options.items():
+        overrides = admin_options.get(cluster_name, {})
+        cluster_options = dict(original)
+        if any(key in overrides for key in _AUTH_CLIENT_OPTION_KEYS):
+            for key in _AUTH_CLIENT_OPTION_KEYS:
+                cluster_options.pop(key, None)
+        cluster_options.update(overrides)
+        cluster_options.pop("create_api_key_per_client", None)
+        merged[cluster_name] = cluster_options
+    return merged
+
+
 class ClientOptions(ConnectOptions):
     DEFAULT_CLIENT_OPTIONS = "timeout:60"
 
@@ -247,31 +276,35 @@ class ClientOptions(ConnectOptions):
     apply options defaults for all cluster names.
     """
 
-    def __init__(self, argvalue, target_hosts=None):
+    def __init__(self, argvalue, target_hosts=None, apply_defaults=True):
         self.argname = "--client-options"
         self.argvalue = argvalue
         self.target_hosts = target_hosts
+        self.apply_defaults = apply_defaults
         self.parsed_options = []
 
         self.parse_options()
 
     def parse_options(self):
         default_client_map = kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS])
-        if self.argvalue == ClientOptions.DEFAULT_CLIENT_OPTIONS and self.target_hosts is not None:
+        if self.apply_defaults and self.argvalue == ClientOptions.DEFAULT_CLIENT_OPTIONS and self.target_hosts is not None:
             # --client-options unset but multi-clusters used in --target-hosts? apply options defaults for all cluster names.
             self.parsed_options = {cluster_name: default_client_map for cluster_name in self.target_hosts.all_hosts.keys()}
         else:
-            self.parsed_options = to_dict(self.argvalue, default_parser=ClientOptions.normalize_to_dict)
+            self.parsed_options = to_dict(
+                self.argvalue,
+                default_parser=lambda arg: ClientOptions.normalize_to_dict(arg, apply_defaults=self.apply_defaults),
+            )
 
     @staticmethod
-    def normalize_to_dict(arg):
+    def normalize_to_dict(arg, apply_defaults=True):
         """
         When --client-options is a non-json csv string (single cluster mode),
         return parsed client options as dict with "default" key
         This is needed to support single cluster use of --client-options when not
         defined as a json string or file.
         """
-        default_client_map = kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS])
+        default_client_map = kv_to_map([ClientOptions.DEFAULT_CLIENT_OPTIONS]) if apply_defaults else {}
 
         return {TargetHosts.DEFAULT: {**default_client_map, **kv_to_map(arg)}}
 
