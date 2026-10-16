@@ -311,6 +311,8 @@ The following fields are relevant for ``otlp-metrics`` corpora. See :ref:`track_
      - No
      - Size in bytes of the uncompressed JSON file. Used to verify the file after download or decompression. A local file of a different size is downloaded again or, for data bundled with the track, rejected.
 
+In :ref:`test mode <add_track_test_mode>`, a corpus with more than 1000 records is replaced with its ``-1k`` variant, e.g. ``metrics.otlp-1k.json`` (or ``metrics.otlp-1k.json.zst``), which must contain exactly 1000 records. You can create it with ``head -n 1000 metrics.otlp.json > metrics.otlp-1k.json``. Pre-built protobuf files for the ``-1k`` variant (e.g. ``metrics.otlp-1k.json.pb``) are used if available at ``base-url``.
+
 The ``otlp-ingest`` operation
 ------------------------------
 
