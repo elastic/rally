@@ -267,10 +267,6 @@ class Documents:
         else:
             return self.number_of_documents
 
-    @property
-    def is_bulk(self):
-        return self.source_format == Documents.SOURCE_FORMAT_BULK
-
     def __str__(self):
         return "%s documents from %s" % (self.source_format, self.document_file)
 

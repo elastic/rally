@@ -1255,6 +1255,41 @@ class TestOtlpDocumentPreparation:
         assert p.downloader.download.call_count == 2
         create.assert_not_called()
 
+    @mock.patch("esrally.utils.net.download")
+    def test_raise_download_error_no_test_mode_file(self, download, tmp_path):
+        download.side_effect = urllib.error.HTTPError(
+            "http://example.com/otlp",
+            404,
+            "",
+            None,  # type: ignore[arg-type]  # TODO remove this ignore when introducing type hints
+            None,
+        )
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=False, test_mode=True), decompressor=loader.Decompressor()
+        )
+
+        with pytest.raises(exceptions.DataError) as exc:
+            p.prepare_document_set(
+                document_set=track.Documents(
+                    source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
+                    base_url="http://example.com/otlp",
+                    document_file="metrics.otlp-1k.json",
+                    document_archive="metrics.otlp-1k.json.zst",
+                    number_of_documents=1000,
+                    compressed_size_in_bytes=None,
+                    uncompressed_size_in_bytes=None,
+                ),
+                data_root=str(tmp_path),
+            )
+
+        assert exc.value.args[0] == "This track does not support test mode. Ask the track author to add it or disable test mode and retry."
+        # missing pre-built .pb files fall through to the source archive
+        assert [c.args[:2] for c in download.call_args_list] == [
+            ("http://example.com/otlp/metrics.otlp-1k.json.pb.zst", str(tmp_path / "metrics.otlp-1k.json.pb.zst")),
+            ("http://example.com/otlp/metrics.otlp-1k.json.pb", str(tmp_path / "metrics.otlp-1k.json.pb")),
+            ("http://example.com/otlp/metrics.otlp-1k.json.zst", str(tmp_path / "metrics.otlp-1k.json.zst")),
+        ]
+
     def test_converts_local_json_when_pb_unavailable(self, count_records):
         p = self._preparator()
         p.downloader.download.side_effect = exceptions.DataError("not found")
@@ -2056,6 +2091,41 @@ class TestTrackPostProcessing:
         assert actual == expected
 
         assert complete_track_params.sorted_track_defined_params == ["number_of_replicas", "number_of_shards"]
+
+    def test_post_processes_otlp_corpora(self):
+        def otlp_documents(archive, number_of_documents):
+            return track.Documents(
+                source_format=track.Documents.SOURCE_FORMAT_OTLP_METRICS,
+                document_file="metrics.otlp.json",
+                document_archive=archive,
+                number_of_documents=number_of_documents,
+                compressed_size_in_bytes=100 if archive else None,
+                uncompressed_size_in_bytes=10000,
+            )
+
+        compressed = otlp_documents("metrics.otlp.json.zst", 1001)
+        uncompressed = otlp_documents(None, 1001)
+        small = otlp_documents("metrics.otlp.json.zst", 1000)
+        t = track.Track(name="unittest", corpora=[track.DocumentCorpus("otlp", documents=[compressed, uncompressed, small])])
+
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "test.mode.enabled", True)
+        loader.TestModeTrackProcessor(cfg).on_after_load_track(t)
+
+        assert compressed.document_archive == "metrics.otlp-1k.json.zst"
+        assert compressed.document_file == "metrics.otlp-1k.json"
+        assert uncompressed.document_archive is None
+        assert uncompressed.document_file == "metrics.otlp-1k.json"
+        for docs in (compressed, uncompressed):
+            assert docs.number_of_documents == 1000
+            assert docs.compressed_size_in_bytes is None
+            assert docs.uncompressed_size_in_bytes is None
+
+        assert small.document_archive == "metrics.otlp.json.zst"
+        assert small.document_file == "metrics.otlp.json"
+        assert small.number_of_documents == 1000
+        assert small.compressed_size_in_bytes == 100
+        assert small.uncompressed_size_in_bytes == 10000
 
     def as_track(self, track_specification, track_params=None, complete_track_params=None, index_body=None):
         reader = loader.TrackSpecificationReader(
