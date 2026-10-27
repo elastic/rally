@@ -320,3 +320,53 @@ class TestClientOptions:
             "default": {"timeout": 60, "max_connections": 512},
             "remote": {"timeout": 60, "max_connections": 1024},
         }
+
+    def test_admin_options_do_not_inject_default_timeout(self):
+        parsed = opts.ClientOptions("api_key:'admin-key'", apply_defaults=False)
+        assert parsed.all_client_options == {"default": {"api_key": "admin-key"}}
+
+    def test_admin_options_replace_auth_and_inherit_transport_settings(self):
+        benchmark = {
+            "default": {
+                "use_ssl": True,
+                "timeout": 90,
+                "verify_certs": True,
+                "basic_auth_user": "bench",
+                "basic_auth_password": "secret",
+                "create_api_key_per_client": True,
+            }
+        }
+        admin = opts.ClientOptions("api_key:'admin-key'", apply_defaults=False).all_client_options
+        merged = opts.merge_admin_client_options(benchmark, admin)
+
+        assert merged == {
+            "default": {
+                "use_ssl": True,
+                "timeout": 90,
+                "verify_certs": True,
+                "api_key": "admin-key",
+            }
+        }
+        assert benchmark["default"]["create_api_key_per_client"] is True
+        assert benchmark["default"]["basic_auth_user"] == "bench"
+
+    def test_admin_basic_auth_replaces_api_key(self):
+        merged = opts.merge_admin_client_options(
+            {"default": {"timeout": 30, "api_key": "bench", "use_ssl": True, "http_auth": "legacy:secret"}},
+            {"default": {"basic_auth_user": "admin", "basic_auth_password": "pw"}},
+        )
+
+        assert merged["default"] == {
+            "timeout": 30,
+            "use_ssl": True,
+            "basic_auth_user": "admin",
+            "basic_auth_password": "pw",
+        }
+
+    def test_admin_options_without_auth_keep_benchmark_credentials(self):
+        merged = opts.merge_admin_client_options(
+            {"default": {"timeout": 30, "api_key": "bench", "create_api_key_per_client": True}},
+            {"default": {"http_compress": True}},
+        )
+
+        assert merged["default"] == {"timeout": 30, "api_key": "bench", "http_compress": True}
