@@ -134,7 +134,7 @@ jobs:
 
     steps:
       - name: Install Python with pyenv
-        uses: gabrielfalcao/pyenv-action@v13
+        uses: gabrielfalcao/pyenv-action@v19
         with:
           default: "3.13.7"
           command: python3 -m pip install --user --upgrade pip
