@@ -44,9 +44,15 @@ class VersionCase:
 
 @cases.cases(
     v309=VersionCase(esrally.Version(3, 9), want_error=RuntimeError(f"Expecting Python version >= {esrally.MIN_PYTHON_VERSION}, got 3.9")),
-    v310=VersionCase(esrally.Version(3, 10)),
-    v311=VersionCase(esrally.Version(3, 11)),
-    v321=VersionCase(esrally.Version(3, 12)),
+    v310=VersionCase(
+        esrally.Version(3, 10), want_error=RuntimeError(f"Expecting Python version >= {esrally.MIN_PYTHON_VERSION}, got 3.10")
+    ),
+    v311=VersionCase(
+        esrally.Version(3, 11), want_error=RuntimeError(f"Expecting Python version >= {esrally.MIN_PYTHON_VERSION}, got 3.11")
+    ),
+    v312=VersionCase(
+        esrally.Version(3, 12), want_error=RuntimeError(f"Expecting Python version >= {esrally.MIN_PYTHON_VERSION}, got 3.12")
+    ),
     v313=VersionCase(esrally.Version(3, 13)),
     v314=VersionCase(esrally.Version(3, 14)),
 )

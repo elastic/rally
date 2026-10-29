@@ -14,7 +14,7 @@ source of truth — prefer them over guessing.
 ## Setup
 
 Development uses [`uv`](https://docs.astral.sh/uv/) and needs `jq`. Rally runs on Linux/macOS
-only (no Windows) and targets Python 3.10–3.13. From a clone:
+only (no Windows) and targets Python 3.13. From a clone:
 
 ```
 make install            # create .venv and editable-install with dev extras
@@ -31,7 +31,7 @@ they auto-update from git (via `run.sh`) and only run on a clean `master`, other
 
 - `make lint` / `make format` — run/apply pre-commit linters (black, isort, …).
 - `make test` — unit tests. Scope with `make test ARGS=tests/foo_test.py`; `make test-all`
-  runs across Python 3.10–3.13.
+  runs across Python 3.13.
 - `make it` — integration tests (slow, CI-oriented). `make benchmark` runs the micro-benchmarks.
 - `make docs` / `make serve-docs` — build/serve the `docs/` site.
 
