@@ -219,7 +219,7 @@ The numbers under the ``documents`` property are needed to verify integrity and 
 
 .. note::
 
-    You can store any supporting scripts along with your track. However, you need to place them in a directory starting with "_", e.g. "_support". Rally loads track plugins (see below) from any directory but will ignore directories starting with "_".
+    You can store any supporting scripts along with your track. However, you need to place them in a directory starting with "_", e.g. "_support". Rally loads track plugins (see below) from any directory but will ignore directories starting with "_" or "test". Place the tests for your track plugins in a directory starting with "test", e.g. "tests", so Rally does not attempt to load them and their test-only dependencies.
 
 .. note::
 
