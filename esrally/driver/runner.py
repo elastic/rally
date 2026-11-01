@@ -2622,10 +2622,29 @@ class RestoreSnapshot(Runner):
 
 
 class IndicesRecovery(Runner):
+    """
+    Waits for indices recovery to complete and reports progress.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._completed = False
+        self._percent_completed = 0.0
+
+    @property
+    def completed(self):
+        return self._completed
+
+    @property
+    def percent_completed(self):
+        return self._percent_completed
+
     async def __call__(self, es, params):
         index = mandatory(params, "index", repr(self))
         wait_period = params.get("completion-recheck-wait-period", 1)
 
+        self._completed = False
+        self._percent_completed = 0.0
         all_shards_done = False
         total_recovered = 0
         total_start_millis = sys.maxsize
@@ -2643,6 +2662,8 @@ class IndicesRecovery(Runner):
                 # check whether all shards are done
                 all_shards_done = True
                 total_recovered = 0
+                currently_recovered = 0
+                total_bytes = 0
                 total_start_millis = sys.maxsize
                 total_end_millis = 0
                 for _, idx_data in response.items():
@@ -2650,16 +2671,27 @@ class IndicesRecovery(Runner):
                         for shard in shard_data:
                             current_shard_done = shard["stage"] == "DONE"
                             all_shards_done = all_shards_done and current_shard_done
+                            idx_size = shard.get("index", {}).get("size", {})
+                            total_bytes += idx_size.get("total_in_bytes", 0)
+                            recovered_bytes = idx_size.get("recovered_in_bytes", 0)
+                            currently_recovered += recovered_bytes
                             if current_shard_done:
                                 total_start_millis = min(total_start_millis, shard["start_time_in_millis"])
                                 total_end_millis = max(total_end_millis, shard["stop_time_in_millis"])
-                                idx_size = shard["index"]["size"]
-                                total_recovered += idx_size["recovered_in_bytes"]
+                                total_recovered += recovered_bytes
+
+                if total_bytes > 0:
+                    self._percent_completed = min(currently_recovered / total_bytes, 1.0)
+                elif all_shards_done:
+                    self._percent_completed = 1.0
+
                 self.logger.debug("All shards done for [%s]: [%s].", index, all_shards_done)
 
             if not all_shards_done:
                 await asyncio.sleep(wait_period)
 
+        self._completed = True
+        self._percent_completed = 1.0
         response_time_in_seconds = (total_end_millis - total_start_millis) / 1000
         return {
             "weight": total_recovered,
