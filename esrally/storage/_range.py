@@ -169,7 +169,7 @@ NO_RANGE: Final[EmptyRange] = EmptyRange()
 
 class Range(RangeSet):
 
-    def __init__(self, start: int = 0, end: int = MAX_LENGTH):
+    def __init__(self, start: int = 0, end: int = MAX_LENGTH) -> None:
         if start < 0:
             raise ValueError(f"range start can't be negative: {start} < 0")
         if end <= start:
@@ -186,7 +186,7 @@ class Range(RangeSet):
         return self._end
 
     @property
-    def size(self):
+    def size(self) -> int:
         return self._end - self._start
 
     def _intersect(self, others: Iterable[Range]) -> Iterator[Range]:
@@ -259,7 +259,7 @@ class Range(RangeSet):
 
 class RangeTree(RangeSet):
 
-    def __init__(self, left: RangeSet, right: RangeSet):
+    def __init__(self, left: RangeSet, right: RangeSet) -> None:
         assert isinstance(left, (Range, RangeTree)), "left must be an instance of Range | RangeTree"
         assert isinstance(right, (Range, RangeTree)), "right must be an instance of Range | RangeTree"
         assert left.start < left.end < right.start < right.end, "left and right ranges sets aren't sorted and disjoint"
@@ -307,7 +307,7 @@ class RangeTree(RangeSet):
     def __bool__(self) -> bool:
         return True
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._left) + len(self._right)
 
     def __iter__(self) -> Iterator[Range]:
@@ -328,7 +328,7 @@ class RangeTree(RangeSet):
 
 class RangeError(ValueError):
 
-    def __init__(self, msg: str, ranges: RangeSet = NO_RANGE):
+    def __init__(self, msg: str, ranges: RangeSet = NO_RANGE) -> None:
         super().__init__(msg)
         self.range = ranges
 

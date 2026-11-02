@@ -54,7 +54,7 @@ class FileSource(Generic[AnyStr]):
     FileSource is a wrapper around a plain file which simplifies testing of file I/O calls.
     """
 
-    def __init__(self, file_name: str, mode: str, encoding: str = "utf-8"):
+    def __init__(self, file_name: str, mode: str, encoding: str = "utf-8") -> None:
         self.file_name = file_name
         self.mode = mode
         self.encoding = encoding
@@ -112,7 +112,7 @@ class MmapSource:
     MmapSource is a wrapper around a memory-mapped file which simplifies testing of file I/O calls.
     """
 
-    def __init__(self, file_name: str, mode: str, encoding: str = "utf-8"):
+    def __init__(self, file_name: str, mode: str, encoding: str = "utf-8") -> None:
         self.file_name = file_name
         self.mode = mode
         self.encoding = encoding
@@ -179,7 +179,7 @@ class DictStringFileSourceFactory:
     It is intended for scenarios where multiple files may be read by client code.
     """
 
-    def __init__(self, name_to_contents: Mapping[str, Sequence[str]]):
+    def __init__(self, name_to_contents: Mapping[str, Sequence[str]]) -> None:
         self.name_to_contents = name_to_contents
 
     def __call__(self, name: str, mode: str, encoding: str = "utf-8") -> "StringAsFileSource":
@@ -192,7 +192,7 @@ class StringAsFileSource:
      be used in production code.
     """
 
-    def __init__(self, contents: Sequence[str], mode: str, encoding: str = "utf-8"):
+    def __init__(self, contents: Sequence[str], mode: str, encoding: str = "utf-8") -> None:
         """
         :param contents: The file contents as an array of strings. Each item in the array should correspond to one line.
         :param mode: The file mode. It is ignored in this implementation but kept to implement the same interface as ``FileSource``.
@@ -259,7 +259,7 @@ class ZstAdapter:
     Adapter class to make the zstandard API work with Rally's decompression abstractions
     """
 
-    def __init__(self, path: str):
+    def __init__(self, path: str) -> None:
         self.fh = open(path, "rb")
         self.dctx = zstandard.ZstdDecompressor()
         self.reader = self.dctx.stream_reader(self.fh)
@@ -455,8 +455,7 @@ def normalize_path(path: str, cwd: str = ".") -> str: ...
 def normalize_path(path: bytes) -> bytes: ...
 @overload
 def normalize_path(path: bytes, cwd: bytes = b".") -> bytes: ...
-def normalize_path(path, cwd="."):
-    # This is a bug in mypy, see https://github.com/python/mypy/issues/3737
+def normalize_path(path: AnyStr, cwd: Any = ".") -> AnyStr:
     """
     Normalizes a path by removing redundant "../" and also expanding the "~" character to the user home directory.
     :param path: A possibly non-normalized path.
@@ -465,7 +464,7 @@ def normalize_path(path, cwd="."):
     """
     normalized = os.path.normpath(os.path.expanduser(path))
     # user specified only a file name? -> treat as relative to the current directory
-    if dirname(normalized) == "":
+    if not dirname(normalized):
         return os.path.join(cwd, normalized)
     else:
         return normalized
@@ -508,7 +507,7 @@ class FileOffsetTable:
     data file. This helps bulk-indexing clients to advance quickly to a certain position in a large data file.
     """
 
-    def __init__(self, data_file_path: str, offset_table_path: str, mode: str):
+    def __init__(self, data_file_path: str, offset_table_path: str, mode: str) -> None:
         """
         Creates a new FileOffsetTable instance. The constructor should not be called directly but instead the
         respective factory methods should be used.
@@ -779,7 +778,7 @@ class OtlpProtobufFile:
 
     OFFSET_SAMPLING_INTERVAL = 1000
 
-    def __init__(self, source_json_path: str, pb_path: str, gzip_records: bool = False):
+    def __init__(self, source_json_path: str, pb_path: str, gzip_records: bool = False) -> None:
         self.source_json_path = source_json_path
         self.pb_path = pb_path
         self.offset_path = f"{pb_path}.offset"

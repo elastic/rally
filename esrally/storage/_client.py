@@ -24,6 +24,7 @@ import urllib.parse
 from collections import defaultdict, deque
 from collections.abc import Generator
 from random import Random
+from types import TracebackType
 from typing import Literal
 
 from typing_extensions import Self
@@ -58,7 +59,7 @@ class CachedHead:
     head: Head | None = None
     error: Exception | None = None
 
-    def __init__(self, timestamp: float, /, head: Head | None = None, error: Exception | None = None):
+    def __init__(self, timestamp: float, /, head: Head | None = None, error: Exception | None = None) -> None:
         self.timestamp = timestamp
         if head is not None:
             if error is not None:
@@ -115,7 +116,7 @@ class Client:
         random: Random | None = None,
         max_connections: int = StorageConfig.DEFAULT_MAX_CONNECTIONS,
         cache_ttl: float = StorageConfig.DEFAULT_CACHE_TTL,
-    ):
+    ) -> None:
         self._adapters: AdapterRegistry = adapters
         self._cached_heads: dict[str, CachedHead] = {}
         self._connections: dict[str, WaitGroup] = defaultdict(lambda: WaitGroup(max_count=max_connections))
@@ -127,7 +128,7 @@ class Client:
         self._mirror_failures: dict[str, dict[str, MirrorFailure]] = defaultdict(dict)
 
     @property
-    def adapters(self):
+    def adapters(self) -> AdapterRegistry:
         return self._adapters
 
     def head(self, url: str, *, cache_ttl: float | None = None) -> Head:
@@ -349,7 +350,7 @@ class Client:
             return 0.0
         return sum(s.throughput for s in stats) / len(stats)
 
-    def monitor(self):
+    def monitor(self) -> None:
         with self._lock:
             connections = {u: c for u, c in self._connections.items() if c.count > 0}
         infos = list[str]()
@@ -392,7 +393,7 @@ class RequestStat:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
         self.latency = self.duration = time.monotonic() - self.start_time
 
     @property

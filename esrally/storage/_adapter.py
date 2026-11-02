@@ -23,6 +23,7 @@ import logging
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Container, Generator
+from types import TracebackType
 from typing import Any
 
 from typing_extensions import Self
@@ -128,7 +129,7 @@ class GetResponse:
     def __enter__(self) -> GetResponse:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
         self.close()
 
     def close(self) -> None:

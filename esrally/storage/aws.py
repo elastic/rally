@@ -20,7 +20,7 @@ import logging
 import os
 import threading
 import urllib.parse
-from collections.abc import Mapping
+from collections.abc import Generator, Mapping
 from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 import boto3
@@ -124,7 +124,7 @@ class S3Adapter(Adapter):
             body.close()
             raise
 
-        def iter_chunks():
+        def iter_chunks() -> Generator[bytes, None, None]:
             try:
                 with body:
                     yield from body.iter_chunks(self.chunk_size)

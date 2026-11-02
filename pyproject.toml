@@ -148,12 +148,14 @@ develop = [
     "black==26.10.1",
     # mypy
     "boto3-stubs==1.26.125",
-    "mypy==1.15.0",
+    "mypy==2.4.1",
     "types-psutil==5.9.4",
     "types-tabulate==0.8.9",
     "types-requests>=2.31.0.7,<3",
     "types-jsonschema==3.2.0",
     "types-protobuf>=4.24,<8",
+    # type annotation coverage reporting (make type-coverage)
+    "pyrefly==1.4.0",
     # Python dead library removed in version 3.13 and used to build Rally docs.
     "standard-imghdr==3.13.0",
     # For RST docs preview using the reStructuredText VS Code extension, which relies on the Esbonio language server.
@@ -212,6 +214,8 @@ markers = [
 # Ref: https://github.com/elastic/rally/pull/1798
 [tool.mypy]
 python_version = "3.13"
+# Local stubs for untyped third-party packages (see stubs/README.md).
+mypy_path = "$MYPY_CONFIG_FILE_DIR/stubs"
 # subset of "strict", kept at global config level as some of the options are
 # supported only at this level
 # https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
@@ -244,7 +248,7 @@ files = ["esrally/", "it/", "tests/"]
 [[tool.mypy.overrides]]
 module = [
     "esrally.actor",
-    "estally.log",
+    "esrally.log",
     "esrally.mechanic.team",
     "esrally.storage.*",
     "esrally.utils.cases",
@@ -255,7 +259,7 @@ module = [
     "esrally.utils.process",
     "esrally.utils.threads",
 ]
-disallow_incomplete_defs = true
+disallow_untyped_defs = true
 # this should be a copy of disabled_error_code from above
 enable_error_code = [
     "assignment",
@@ -275,6 +279,13 @@ enable_error_code = [
     "union-attr",
     "var-annotated",
 ]
+
+# Pyrefly is only used for `make type-coverage` (annotation coverage reporting); mypy remains the
+# type checker run by `make lint`. When run without file arguments, pyrefly uses this section instead
+# of trying to translate [tool.mypy].
+[tool.pyrefly]
+project-includes = ["esrally"]
+search-path = ["stubs"]
 
 [tool.uv]
 python-preference = "only-managed"
