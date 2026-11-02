@@ -44,7 +44,7 @@ class ComponentLoader:
         :param root_path: An absolute path or list of paths to a directory which contains the component entry point.
         :param component_entry_point: The name of the component entry point. A corresponding file with the extension ".py" must exist in the
         ``root_path``.
-        :param recurse: Search recursively for modules but ignore modules starting with "_" (Default: ``True``).
+        :param recurse: Search recursively for modules but ignore directories starting with "_" or "test" (Default: ``True``).
         """
         self.root_path: Collection[str] = root_path if isinstance(root_path, list) else [str(root_path)]
         self.component_entry_point = component_entry_point
@@ -102,13 +102,15 @@ class ComponentLoader:
             component_name = io.basename(root_path)
             self.logger.info("Loading component [%s] from [%s]", component_name, root_path)
             module_dirs = []
-            # search all paths within this directory for modules but exclude all directories starting with "_"
+            # search all paths within this directory for modules but exclude all directories starting with "_" and all
+            # test directories. The latter are not part of the component and they often rely on test dependencies that
+            # are unavailable at runtime, e.g. when Rally is installed as a package.
             if self.recurse:
                 for dirpath, dirs, _ in os.walk(root_path):
                     module_dirs.append(dirpath)
                     ignore = []
                     for d in dirs:
-                        if d.startswith("_"):
+                        if d.startswith("_") or d.startswith("test"):
                             self.logger.debug("Removing [%s] from load path.", d)
                             ignore.append(d)
                     for d in ignore:
