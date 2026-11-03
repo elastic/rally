@@ -2073,6 +2073,9 @@ class Race:
         }
         if versions.is_version_identifier(self.distribution_version):
             result_template["distribution-major-version"] = versions.major_version(self.distribution_version)
+        if self.revision:
+            # the same value that metrics records carry as `meta.source_revision`
+            result_template["source-revision"] = self.revision
         if self.team_revision:
             result_template["team-revision"] = self.team_revision
         if self.track_revision:
