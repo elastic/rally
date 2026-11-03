@@ -455,16 +455,18 @@ def normalize_path(path: str, cwd: str = ".") -> str: ...
 def normalize_path(path: bytes) -> bytes: ...
 @overload
 def normalize_path(path: bytes, cwd: bytes = b".") -> bytes: ...
-def normalize_path(path: AnyStr, cwd: Any = ".") -> AnyStr:
+def normalize_path(path: AnyStr, cwd: AnyStr | None = None) -> AnyStr:
     """
     Normalizes a path by removing redundant "../" and also expanding the "~" character to the user home directory.
     :param path: A possibly non-normalized path.
-    :param cwd: The current working directory. "." by default.
+    :param cwd: The current working directory, of the same type as ``path``. "." (or b".") by default.
     :return: A normalized path.
     """
     normalized = os.path.normpath(os.path.expanduser(path))
     # user specified only a file name? -> treat as relative to the current directory
     if not dirname(normalized):
+        if cwd is None:
+            cwd = b"." if isinstance(normalized, bytes) else "."
         return os.path.join(cwd, normalized)
     else:
         return normalized
