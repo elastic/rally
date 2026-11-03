@@ -42,10 +42,11 @@ from esrally import (
     exceptions,
     metrics,
     paths,
+    profiling,
     telemetry,
-    track,
-    types,
 )
+from esrally import time as rally_time
+from esrally import track, types
 from esrally.client import delete_api_keys
 from esrally.driver import runner, scheduler
 from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
@@ -779,6 +780,8 @@ class Driver:
         self.sample_post_processor = SamplePostprocessor(
             self.metrics_store, downsample_factor, self.track.meta_data, self.challenge.meta_data
         )
+        if self.profiles_requested():
+            self.prepare_profile_storage()
 
         es_clients = self.create_es_clients()
         self.default_sync_es_client = es_clients.default
@@ -863,7 +866,7 @@ class Driver:
         self.telemetry.on_benchmark_start()
         self.logger.info("Cluster-level telemetry devices are now attached.")
 
-        allocator = Allocator(self.challenge.schedule)
+        allocator = Allocator(self.challenge.schedule, post_measurement_iterations=self.post_measurement_iterations)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
         self.tasks_per_join_point = allocator.tasks_per_joinpoint
@@ -908,6 +911,31 @@ class Driver:
                     worker_id += 1
 
         self.update_progress_message()
+
+    def profiles_requested(self):
+        global_config = self.config.opts("driver", "profile", mandatory=False, default_value=None)
+        return any(
+            profiling.effective_task_config(global_config, task.params.get("profile"), task.name, task.operation.type) is not None
+            for element in self.challenge.schedule
+            for task in element
+        )
+
+    def prepare_profile_storage(self):
+        if not self.metrics_store.persists_raw_documents:
+            console.warn(
+                "Profiling is enabled but the in-memory metrics store does not persist profile documents. "
+                "Configure an Elasticsearch metrics store to retain profiles.",
+                logger=self.logger,
+            )
+            self.sample_post_processor.persist_profile_responses = False
+        elif reason := self.metrics_store.ensure_profile_response_mapping():
+            console.warn(f"Profiles are recorded without their [profile_response] payload because {reason}", logger=self.logger)
+            self.sample_post_processor.persist_profile_responses = False
+
+    def post_measurement_iterations(self, task):
+        global_config = self.config.opts("driver", "profile", mandatory=False, default_value=None)
+        task_config = profiling.effective_task_config(global_config, task.params.get("profile"), task.name, task.operation.type)
+        return task_config.post_measurement.extra_iterations if task_config else 0
 
     def joinpoint_reached(self, worker_id, worker_local_timestamp, task_allocations):
         self.currently_completed += 1
@@ -1107,6 +1135,8 @@ class SamplePostprocessor:
         self.challenge_meta_data = challenge_meta_data
         self.throughput_calculator = ThroughputCalculator()
         self.downsample_factor = downsample_factor
+        # disabled when the metrics store cannot safely store profile payloads; documents are still written
+        self.persist_profile_responses = True
 
     def put_sample(self, sample, name, unit, meta_data):
         self.metrics_store.put_value_cluster_level(
@@ -1122,14 +1152,90 @@ class SamplePostprocessor:
             meta_data=meta_data,
         )
 
+    def put_profile_sample(self, sample):
+        profile = sample.profile
+        if profile.get("mode") == "post_measurement":
+            sample_type = profiling.PROFILE_POST_MEASUREMENT_SAMPLE_TYPE
+        else:
+            sample_type = profiling.PROFILE_WARMUP_SAMPLE_TYPE
+        response = profile.get("response")
+        complete = profile.get("complete", False)
+        capture_error = profile.get("capture_error")
+        if response is not None and not self.persist_profile_responses:
+            response, complete, capture_error = None, False, "storage_failed"
+        profile_meta = {
+            "client_id": sample.client_id,
+            "profile_iteration": profile.get("iteration"),
+            "profile_complete": complete,
+        }
+        if profile.get("requested_iterations") is not None:
+            profile_meta["profile_requested_iterations"] = profile["requested_iterations"]
+        if profile.get("fingerprint") is not None:
+            profile_meta["profile_request_fingerprint"] = profile["fingerprint"]
+        if profile.get("fingerprint_error") is not None:
+            profile_meta["profile_fingerprint_error"] = profile["fingerprint_error"]
+        if capture_error is not None:
+            profile_meta["profile_capture_error"] = capture_error
+        if profile.get("response_bytes") is not None:
+            profile_meta["profile_response_bytes"] = profile["response_bytes"]
+        meta_data = self.merge(
+            self.track_meta_data,
+            self.challenge_meta_data,
+            sample.operation_meta_data,
+            sample.task.meta_data,
+            sample.request_meta_data,
+            profile_meta,
+        )
+        for name in ["latency", "processing_time"]:
+            self.metrics_store.put_value_cluster_level(
+                name=name,
+                value=convert.seconds_to_ms(getattr(sample, name)),
+                unit="ms",
+                task=sample.task.name,
+                operation=sample.operation_name,
+                operation_type=sample.operation_type,
+                sample_type=sample_type,
+                absolute_time=sample.absolute_time,
+                relative_time=sample.relative_time,
+                meta_data=meta_data,
+            )
+        service_time_ms = convert.seconds_to_ms(sample.service_time)
+        doc = {
+            "name": "service_time",
+            "value": service_time_ms,
+            "unit": "ms",
+            "sample-type": sample_type,
+            "task": sample.task.name,
+            "operation": sample.operation_name,
+            "operation-type": sample.operation_type,
+            "response-timestamp": int(rally_time.to_epoch_millis(sample.absolute_time) + service_time_ms),
+        }
+        if response is not None:
+            doc["profile_response"] = response
+        self.metrics_store.put_doc(
+            doc,
+            level=metrics.MetaInfoScope.cluster,
+            meta_data=meta_data,
+            absolute_time=sample.absolute_time,
+            relative_time=sample.relative_time,
+        )
+
     def __call__(self, raw_samples):
         if len(raw_samples) == 0:
             return
         total_start = time.perf_counter()
         start = total_start
         final_sample_count = 0
-        for idx, sample in enumerate(raw_samples):
-            if idx % self.downsample_factor == 0:
+        # Post-measurement profiling samples are pure diagnostics: they must neither occupy
+        # downsampling positions nor contribute to throughput. Warmup profiling samples stay in
+        # the stream so downsampling positions and cumulative throughput counters are identical
+        # to a run without profiling; only their emitted documents are classified differently.
+        stream = [s for s in raw_samples if not s.profile_only]
+        post_measurement_samples = [s for s in raw_samples if s.profile_only]
+        for idx, sample in enumerate(stream):
+            if sample.profile is not None:
+                self.put_profile_sample(sample)
+            elif idx % self.downsample_factor == 0:
                 final_sample_count += 1
                 client_id_meta_data = {"client_id": sample.client_id}
                 meta_data = self.merge(
@@ -1167,10 +1273,13 @@ class SamplePostprocessor:
                         self.merge(timing.request_meta_data, client_id_meta_data),
                     )
 
+        for sample in post_measurement_samples:
+            self.put_profile_sample(sample)
+
         end = time.perf_counter()
         self.logger.debug("Storing latency and service time took [%f] seconds.", (end - start))
         start = end
-        aggregates = self.throughput_calculator.calculate(raw_samples)
+        aggregates = self.throughput_calculator.calculate(stream)
         end = time.perf_counter()
         self.logger.debug("Calculating throughput took [%f] seconds.", (end - start))
         start = end
@@ -1524,6 +1633,7 @@ class Sampler:
         time_period,
         percent_completed,
         dependent_timing=None,
+        profile=None,
     ):
         try:
             self.q.put_nowait(
@@ -1544,6 +1654,7 @@ class Sampler:
                     time_period,
                     percent_completed,
                     dependent_timing,
+                    profile=profile,
                 )
             )
         except queue.Full:
@@ -1581,6 +1692,7 @@ class Sample:
         dependent_timing=None,
         operation_name=None,
         operation_type=None,
+        profile=None,
     ):
         self.client_id = client_id
         self.absolute_time = absolute_time
@@ -1601,6 +1713,12 @@ class Sample:
         self._operation_type = operation_type
         # may be None for eternal tasks!
         self.percent_completed = percent_completed
+        # profiling attachment (dict) when this invocation was profiled, otherwise None
+        self.profile = profile
+
+    @property
+    def profile_only(self):
+        return self.profile is not None and self.profile.get("mode") == "post_measurement"
 
     @property
     def operation_name(self):
@@ -1865,6 +1983,7 @@ class AsyncIoAdapter:
         self.client_contexts = client_contexts
         self.parent_worker_id = worker_id
         self.profiling_enabled = self.cfg.opts("driver", "profiling")
+        self.profile_config = self.cfg.opts("driver", "profile", mandatory=False, default_value=None)
         self.assertions_enabled = self.cfg.opts("driver", "assertions")
         self.debug_event_loop = self.cfg.opts("system", "async.debug", mandatory=False, default_value=False)
         self.logger = logging.getLogger(__name__)
@@ -1884,6 +2003,16 @@ class AsyncIoAdapter:
 
     def _logging_exception_handler(self, loop, context):
         self.logger.error("Uncaught exception in event loop: %s", context)
+
+    def error_behavior(self, task_allocation):
+        if task_allocation.is_post_measurement_profile:
+            # additional diagnostic requests must never abort an otherwise successful benchmark; plain CONTINUE
+            # still aborts on connection errors (see execute_single)
+            return OnErrorBehavior.CONTINUE_ON_NETWORK
+        return task_allocation.task.error_behavior(self.on_error)
+
+    def task_profile_config(self, task):
+        return profiling.effective_task_config(self.profile_config, task.params.get("profile"), task.name, task.operation.type)
 
     async def run(self):
         def es_clients(client_id, all_hosts, all_client_options, distribution_version, distribution_flavor):
@@ -1942,8 +2071,10 @@ class AsyncIoAdapter:
                         self.sampler,
                         self.cancel,
                         self.complete,
-                        task.error_behavior(self.on_error),
+                        self.error_behavior(task_allocation),
                         cluster_name=cluster_name,
+                        profile_config=self.task_profile_config(task),
+                        post_measurement_iterations=task_allocation.post_measurement_iterations,
                     )
                     final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                     awaitables.append(final_executor())
@@ -1970,8 +2101,10 @@ class AsyncIoAdapter:
                     self.sampler,
                     self.cancel,
                     self.complete,
-                    task.error_behavior(self.on_error),
+                    self.error_behavior(task_allocation),
                     cluster_name=None,
+                    profile_config=self.task_profile_config(task),
+                    post_measurement_iterations=task_allocation.post_measurement_iterations,
                 )
                 final_executor = AsyncProfiler(async_executor) if self.profiling_enabled else async_executor
                 awaitables.append(final_executor())
@@ -2041,6 +2174,8 @@ class AsyncExecutor:
         complete,
         on_error: OnErrorBehavior,
         cluster_name=None,
+        profile_config=None,
+        post_measurement_iterations=None,
     ):
         """
         Executes tasks according to the schedule for a given operation.
@@ -2053,6 +2188,9 @@ class AsyncExecutor:
         :param complete: A shared boolean that indicates we need to prematurely complete execution.
         :param on_error: An Enum of type `OnErrorBehaviour` specifying how the load generator should behave on errors.
         :param cluster_name: Optional name of the target cluster (for multi-cluster reporting).
+        :param profile_config: Optional ``ProfileConfig`` for this task. ``None`` disables profiling.
+        :param post_measurement_iterations: If set, this executor runs a post-measurement profiling step and
+            profiles every iteration of its schedule, which consists of exactly this many iterations.
         """
         self.client_id = client_id
         self.task = task
@@ -2064,11 +2202,46 @@ class AsyncExecutor:
         self.complete = complete
         self.on_error = on_error
         self.cluster_name = cluster_name
+        self.profile_config = profile_config
+        self.post_measurement_iterations = post_measurement_iterations
         self.logger = logging.getLogger(__name__)
 
+    def _warmup_selector(self):
+        if self.profile_config is None or not self.profile_config.warmup.enabled:
+            return None
+        return self.profile_config.warmup.iterations
+
+    def _with_profile_capture(self, params):
+        profiled_params = dict(params)
+        profiled_params["profile-capture"] = True
+        max_response_bytes = self.profile_config.max_response_bytes if self.profile_config else profiling.DEFAULT_MAX_RESPONSE_BYTES
+        profiled_params["profile-max-response-bytes"] = max_response_bytes
+        if self.post_measurement_iterations is not None:
+            # assertion failures raise regardless of on-error and must not abort the race from a diagnostic request
+            profiled_params.pop("assertions", None)
+        return profiled_params
+
+    def _report_post_measurement_outcome(self, executed, failed):
+        requested = self.post_measurement_iterations
+        if executed < requested and not self.cancel.is_set() and not self.complete.is_set():
+            console.warn(
+                f"Post-measurement profiling of task [{self.task}] ran [{executed}] of [{requested}] iterations "
+                f"for client [{self.client_id}]; the parameter source ended early. Profiling is incomplete for this client.",
+                logger=self.logger,
+            )
+        if failed > 0:
+            console.warn(
+                f"[{failed}] of [{executed}] post-measurement profiling requests of task [{self.task}] failed "
+                f"for client [{self.client_id}]. See the profile documents for details.",
+                logger=self.logger,
+            )
+
     async def __call__(self, *args, **kwargs):
-        any_task_completes_parent = self.task.any_completes_parent
-        task_completes_parent = self.task.completes_parent
+        post_measurement = self.post_measurement_iterations is not None
+        # 'completed-by' governs the measured step only. In a post-measurement step, every client runs its requested
+        # iterations, and the completion event (shared by all clients of a worker) is neither signaled nor followed.
+        any_task_completes_parent = self.task.any_completes_parent and not post_measurement
+        task_completes_parent = self.task.completes_parent and not post_measurement
         total_start = time.perf_counter()
         # lazily initialize the schedule
         self.logger.debug("Initializing schedule for client id [%s].", self.client_id)
@@ -2081,12 +2254,30 @@ class AsyncExecutor:
             await asyncio.sleep(rampup_wait_time)
 
         self.logger.debug("Entering main loop for client id [%s].", self.client_id)
+        warmup_selector = None if post_measurement else self._warmup_selector()
+        warmup_iteration = 0
+        post_measurement_iteration = 0
+        post_measurement_failures = 0
         # noinspection PyBroadException
         try:
             async for expected_scheduled_time, sample_type, percent_completed, runner, params in schedule:
                 if self.cancel.is_set():
                     self.logger.info("User cancelled execution.")
                     break
+                profile = None
+                if post_measurement:
+                    post_measurement_iteration += 1
+                    params = self._with_profile_capture(params)
+                    profile = {
+                        "mode": "post_measurement",
+                        "iteration": post_measurement_iteration,
+                        "requested_iterations": self.post_measurement_iterations,
+                    }
+                elif warmup_selector is not None and sample_type == metrics.SampleType.Warmup:
+                    warmup_iteration += 1
+                    if warmup_selector.selects(warmup_iteration):
+                        params = self._with_profile_capture(params)
+                        profile = {"mode": "warmup", "iteration": warmup_iteration}
                 absolute_expected_schedule_time = total_start + expected_scheduled_time
                 throughput_throttled = expected_scheduled_time > 0
                 if throughput_throttled:
@@ -2126,7 +2317,7 @@ class AsyncExecutor:
                 # worker (process) could run multiple clients that execute the same task. We do not want all clients to
                 # finish this task as soon as the first of these clients has finished but rather continue until the last
                 # client has finished that task.
-                if task_completes_parent:
+                if task_completes_parent or post_measurement:
                     completed = runner.completed
                 else:
                     completed = self.complete.is_set() or runner.completed
@@ -2138,6 +2329,10 @@ class AsyncExecutor:
                 else:
                     progress = percent_completed
 
+                if profile is not None:
+                    take_profile_capture(profile, request_meta_data)
+                    if post_measurement and not request_meta_data.get("success", True):
+                        post_measurement_failures += 1
                 sample_meta = dict(request_meta_data) if request_meta_data else {}
                 if self.cluster_name is not None:
                     sample_meta["cluster"] = self.cluster_name
@@ -2157,11 +2352,23 @@ class AsyncExecutor:
                     time_period,
                     progress,
                     request_meta_data.pop("dependent_timing", None),
+                    profile=profile,
                 )
 
                 if completed:
                     self.logger.info("Task [%s] is considered completed due to external event.", self.task)
                     break
+            if post_measurement:
+                self._report_post_measurement_outcome(post_measurement_iteration, post_measurement_failures)
+            if warmup_selector is not None and (unreached := warmup_selector.unreached(warmup_iteration)):
+                self.logger.info(
+                    "Client id [%s] of task [%s] executed [%d] warmup iterations; "
+                    "selected warmup profiling iterations %s were not reached.",
+                    self.client_id,
+                    self.task,
+                    warmup_iteration,
+                    unreached,
+                )
         except BaseException as e:
             self.logger.exception("Could not execute schedule")
             raise exceptions.RallyError(f"Cannot run task [{self.task}]: {e}") from None
@@ -2182,6 +2389,30 @@ class AsyncExecutor:
                     self.client_id,
                 )
                 self.complete.set()
+
+
+PROFILE_CAPTURE_KEYS = {
+    "profile_response": "response",
+    "profile_complete": "complete",
+    "profile_capture_error": "capture_error",
+    "profile_response_bytes": "response_bytes",
+    "profile_request_fingerprint": "fingerprint",
+    "profile_fingerprint_error": "fingerprint_error",
+}
+
+
+def take_profile_capture(profile, request_meta_data):
+    """
+    Moves the capture results a runner returned for a profiled invocation from the request meta data into
+    the sample's profiling attachment, so profile payloads never end up in the ``meta`` of metric documents.
+    A request without capture results (e.g. because it failed) is marked as an incomplete capture.
+    """
+    for result_key, attachment_key in PROFILE_CAPTURE_KEYS.items():
+        if result_key in request_meta_data:
+            profile[attachment_key] = request_meta_data.pop(result_key)
+    if "complete" not in profile:
+        profile["complete"] = False
+        profile["capture_error"] = "request_failed" if not request_meta_data.get("success", True) else "profile_missing"
 
 
 async def execute_single(runner, es, params, on_error: OnErrorBehavior):
@@ -2353,7 +2584,7 @@ class JoinPoint:
 
 
 class TaskAllocation:
-    def __init__(self, task, client_index_in_task, global_client_index, total_clients):
+    def __init__(self, task, client_index_in_task, global_client_index, total_clients, post_measurement_iterations=None):
         """
 
         :param task: The current task which is always a leaf task.
@@ -2361,17 +2592,29 @@ class TaskAllocation:
         :param global_client_index:  The globally unique index for the allocated client across
                                      all concurrently executed tasks.
         :param total_clients: The total number of clients executing tasks concurrently.
+        :param post_measurement_iterations: If set, this allocation is a post-measurement profiling step
+                                     that runs exactly this many additional profiled iterations.
         """
         self.task = task
         self.client_index_in_task = client_index_in_task
         self.global_client_index = global_client_index
         self.total_clients = total_clients
+        self.post_measurement_iterations = post_measurement_iterations
+
+    @property
+    def is_post_measurement_profile(self):
+        return self.post_measurement_iterations is not None
 
     def __hash__(self):
-        return hash(self.task) ^ hash(self.global_client_index)
+        return hash(self.task) ^ hash(self.global_client_index) ^ hash(self.post_measurement_iterations)
 
     def __eq__(self, other):
-        return isinstance(other, type(self)) and self.task == other.task and self.global_client_index == other.global_client_index
+        return (
+            isinstance(other, type(self))
+            and self.task == other.task
+            and self.global_client_index == other.global_client_index
+            and self.post_measurement_iterations == other.post_measurement_iterations
+        )
 
     def __repr__(self, *args, **kwargs):
         return (
@@ -2385,8 +2628,14 @@ class Allocator:
     Decides which operations runs on which client and how to partition them.
     """
 
-    def __init__(self, schedule):
+    def __init__(self, schedule, post_measurement_iterations=None):
+        """
+        :param schedule: The challenge schedule.
+        :param post_measurement_iterations: Optional function returning, for a leaf task, the number of
+            additional post-measurement profiling iterations per client (0 disables them).
+        """
         self.schedule = schedule
+        self.post_measurement_iterations = post_measurement_iterations if post_measurement_iterations else lambda task: 0
 
     @property
     def allocations(self):
@@ -2450,7 +2699,40 @@ class Allocator:
             for client_index in range(max_clients):
                 allocations[client_index].append(next_join_point)
             join_point_id += 1
+
+            if any(self.post_measurement_iterations(sub_task) > 0 for sub_task in task):
+                # Post-measurement profiling runs as a separate step after the join point above, so it starts
+                # only when all clients finished every measured task of this schedule element. It mirrors the
+                # measured client layout; tasks without profiling get empty slots.
+                self._append_post_measurement_step(allocations, task, max_clients)
+                for client_index in range(max_clients):
+                    allocations[client_index].append(JoinPoint(join_point_id))
+                join_point_id += 1
         return allocations
+
+    def _append_post_measurement_step(self, allocations, task, max_clients):
+        start_client_index = 0
+        for sub_task in task:
+            iterations = self.post_measurement_iterations(sub_task)
+            for client_index in range(start_client_index, start_client_index + sub_task.clients):
+                physical_client_index = client_index % max_clients
+                if iterations > 0:
+                    allocations[physical_client_index].append(
+                        TaskAllocation(
+                            task=sub_task,
+                            client_index_in_task=client_index - start_client_index,
+                            global_client_index=client_index,
+                            total_clients=task.clients,
+                            post_measurement_iterations=iterations,
+                        )
+                    )
+                else:
+                    allocations[physical_client_index].append(None)
+            start_client_index += sub_task.clients
+        if start_client_index % max_clients > 0:
+            start_client_index = start_client_index % max_clients
+            for client_index in range(start_client_index, max_clients):
+                allocations[client_index].append(None)
 
     @property
     def join_points(self):
@@ -2546,7 +2828,15 @@ def schedule_for(task_allocation, parameter_source):
             logger.debug("Setting parameter source [%s] for scheduler [%s]", params_for_op, sched)
         sched.parameter_source = params_for_op
 
-    if requires_time_period_schedule(task, runner_for_op, params_for_op):
+    if task_allocation.is_post_measurement_profile:
+        if client_index == 0:
+            logger.info(
+                "Creating post-measurement profiling schedule for [%s] with [%d] iterations per client.",
+                task.name,
+                task_allocation.post_measurement_iterations,
+            )
+        loop_control = IterationBased(0, task_allocation.post_measurement_iterations)
+    elif requires_time_period_schedule(task, runner_for_op, params_for_op):
         warmup_time_period = task.warmup_time_period if task.warmup_time_period else 0
         if client_index == 0:
             logger.info(
@@ -2630,7 +2920,7 @@ class ScheduleHandle:
         :return: the number of seconds to wait until this client should start so load can gradually ramp-up.
         """
         ramp_up_time_period = self.task_allocation.task.ramp_up_time_period
-        if ramp_up_time_period:
+        if ramp_up_time_period and not self.task_allocation.is_post_measurement_profile:
             return ramp_up_time_period * (self.task_allocation.global_client_index / self.task_allocation.total_clients)
         else:
             return 0
