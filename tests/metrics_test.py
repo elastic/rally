@@ -4218,6 +4218,51 @@ class TestGlobalStats:
         assert windows[0]["end_timestamp"] == StaticClock.NOW * 1000 + 5080
         assert "warmup_start_timestamp" not in windows[0]
 
+    def test_result_docs_include_source_revision(self):
+        race = metrics.Race(
+            "1.0.0",
+            None,
+            "unittest",
+            "race-1",
+            datetime.datetime(2016, 1, 31, tzinfo=datetime.timezone.utc),
+            "benchmark-only",
+            {},
+            Track(name="test"),
+            {},
+            Challenge(name="default", schedule=[]),
+            "defaults",
+            {},
+            {},
+            distribution_version="8.6.0",
+            revision="757314695644ea9a1dc2fecd26d1a43856725e65",
+        )
+        race.add_results(metrics.GlobalStats({"young_gc_time": 100}))
+
+        assert race.result_doc_base()["source-revision"] == "757314695644ea9a1dc2fecd26d1a43856725e65"
+        assert all(doc["source-revision"] == "757314695644ea9a1dc2fecd26d1a43856725e65" for doc in race.to_result_dicts())
+
+    def test_result_docs_omit_unknown_source_revision(self):
+        race = metrics.Race(
+            "1.0.0",
+            None,
+            "unittest",
+            "race-1",
+            datetime.datetime(2016, 1, 31, tzinfo=datetime.timezone.utc),
+            "benchmark-only",
+            {},
+            Track(name="test"),
+            {},
+            Challenge(name="default", schedule=[]),
+            "defaults",
+            {},
+            {},
+            distribution_version="8.6.0",
+        )
+        race.add_results(metrics.GlobalStats({"young_gc_time": 100}))
+
+        assert "source-revision" not in race.result_doc_base()
+        assert all("source-revision" not in doc for doc in race.to_result_dicts())
+
 
 class TestSystemStats:
     def test_as_flat_list(self):
