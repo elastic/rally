@@ -23,9 +23,7 @@ esrally --help          # runs your working-tree code (editable install)
 ```
 
 `make install` editable-installs the workspace, so `esrally` / `esrallyd` (or `uv run esrally …`)
-run your working-tree code directly. Avoid the `./rally` / `./rallyd` wrappers while developing:
-they auto-update from git (via `run.sh`) and only run on a clean `master`, otherwise erroring
-`There are uncommitted changes …` — pass `--skip-update` if you must use them.
+run your working-tree code directly.
 
 ## Everyday make targets
 
