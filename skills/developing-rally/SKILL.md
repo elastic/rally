@@ -34,6 +34,7 @@ they auto-update from git (via `run.sh`) and only run on a clean `master`, other
   runs across Python 3.10–3.13.
 - `make it` — integration tests (slow, CI-oriented). `make benchmark` runs the micro-benchmarks.
 - `make docs` / `make serve-docs` — build/serve the `docs/` site.
+- `make type-coverage` — report type annotation coverage of `esrally/` (uses pyrefly).
 
 Before committing run `make lint test` (unit tests + lint; integration tests are too slow for
 the inner loop). Optionally `make install-pre-commit` to run lint automatically on each commit.
@@ -44,9 +45,10 @@ the inner loop). Optionally `make install-pre-commit` to run lint automatically 
   `it/`, micro-benchmarks in `benchmarks/`.
 - `asyncio_mode = strict`, so async tests need an explicit `@pytest.mark.asyncio`.
 - `xfail_strict = true`, so an `xfail` test that unexpectedly passes fails the suite.
-- Type hints are **not** used broadly — they're added opportunistically per module, with the
-  strictly-checked modules listed under `[tool.mypy].overrides` in `pyproject.toml`. Match the
-  surrounding code rather than typing everything.
+- Type hints are **not** used broadly yet — they're added per module. Modules listed under
+  `[tool.mypy].overrides` in `pyproject.toml` are strictly checked and must be fully annotated
+  (`disallow_untyped_defs`); elsewhere match the surrounding code. Stubs for untyped dependencies
+  (e.g. thespian) live in `stubs/`. `make type-coverage` reports overall annotation coverage.
 - **Keep the load-driver hot path tight.** Code in `driver/` runners, schedulers, and parameter
   sources runs per operation during measurement, so extra overhead (logging, allocations,
   blocking I/O, locks) perturbs the throughput/latency/service_time numbers Rally exists to

@@ -36,6 +36,8 @@ Rally uses automatic code formatters. You can apply them by running ``make forma
 
 However, consider using editor integrations to do it automatically: you'll need to configure `black <https://black.readthedocs.io/en/stable/integrations/editors.html>`_ and `isort <https://github.com/PyCQA/isort/wiki/isort-Plugins>`_.
 
+Type hints are checked with mypy as part of ``make lint``; modules listed under ``[tool.mypy.overrides]`` in ``pyproject.toml`` must be fully annotated. ``make type-coverage`` reports how much of the ``esrally`` package is annotated.
+
 Also consider running `pre-commit install` to run lint as part of your git commits.
 
 Automatic Updates

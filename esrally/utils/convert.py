@@ -58,7 +58,7 @@ class Size(int):
     def tb(self) -> float:
         return self.to_unit(Size.Unit.TB)
 
-    def __str__(self):
+    def __str__(self) -> str:
         unit = self.unit
         if unit == Size.Unit.B:
             return f"{int(self)}B"
@@ -148,25 +148,25 @@ class Duration(int):
     def ns(self) -> float:
         return self.to_unit(Duration.Unit.NS)
 
-    def us(self):
+    def us(self) -> float:
         return self.to_unit(Duration.Unit.US)
 
-    def ms(self):
+    def ms(self) -> float:
         return self.to_unit(Duration.Unit.MS)
 
-    def s(self):
+    def s(self) -> float:
         return self.to_unit(Duration.Unit.S)
 
-    def m(self):
+    def m(self) -> float:
         return self.to_unit(Duration.Unit.M)
 
-    def h(self):
+    def h(self) -> float:
         return self.to_unit(Duration.Unit.H)
 
-    def d(self):
+    def d(self) -> float:
         return self.to_unit(Duration.Unit.D)
 
-    def __str__(self):
+    def __str__(self) -> str:
         unit = self.unit
         if unit == Duration.Unit.NS:
             return f"{int(self)}ns"

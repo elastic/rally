@@ -56,7 +56,7 @@ class RallyEcsFormatter(ecs_logging.StdlibFormatter):
         *args: Any,
         mutators: list[MutatorType] | None = None,
         **kwargs: Any,
-    ):
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.mutators = mutators or []
 
@@ -106,7 +106,7 @@ def configure_ecs_formatter(*args: Any, **kwargs: Any) -> ecs_logging.StdlibForm
     return formatter
 
 
-def log_config_path():
+def log_config_path() -> str:
     """
     :return: The absolute path to Rally's log configuration file.
     """
@@ -121,7 +121,7 @@ def update_logger_config(
     *,
     config_path: str = CONFIG_PATH,
     template_path: str = TEMPLATE_PATH,
-):
+) -> None:
     """It appends any missing top level loggers found in resources/logging.json to current log configuration.
 
     It also ensures "disable_existing_loggers" is set to False by default.
@@ -150,7 +150,7 @@ def update_logger_config(
             json.dump(updated, fd, indent=2)
 
 
-def install_default_log_config():
+def install_default_log_config() -> None:
     """
     Ensures a log configuration file is present on this machine. The default
     log configuration is based on the template in resources/logging.json.

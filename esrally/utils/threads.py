@@ -33,7 +33,7 @@ class ContinuousTimer(threading.Thread):
         - the function is called periodically until the timer is cancelled.
     """
 
-    def __init__(self, interval: float, function: Callable[[], Any], name: str | None = None, daemon: bool = True):
+    def __init__(self, interval: float, function: Callable[[], Any], name: str | None = None, daemon: bool = True) -> None:
         super().__init__(name=name, daemon=daemon)
         if interval <= 0:
             raise ValueError("interval must be strictly positive")
@@ -41,11 +41,11 @@ class ContinuousTimer(threading.Thread):
         self._function = function
         self._finished = threading.Event()
 
-    def cancel(self):
+    def cancel(self) -> None:
         """Stop the timer if it hasn't finished yet."""
         self._finished.set()
 
-    def run(self):
+    def run(self) -> None:
         """It executes the function every interval seconds until the timer is cancelled."""
         self._finished.wait(self.interval)
         while not self._finished.is_set():
@@ -70,7 +70,7 @@ class TimedEvent:
 
     # After threading.Event class (with time() method)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._cond = threading.Condition(threading.Lock())
         self._flag = False
         self._time: int | None = None
@@ -94,7 +94,7 @@ class TimedEvent:
             self._cond.notify_all()
             return True
 
-    def clear(self):
+    def clear(self) -> None:
         """Reset the internal flag to false.
 
         Subsequently, threads calling wait() will block until set() is called to
@@ -136,7 +136,7 @@ class TimedEvent:
 class WaitGroupLimitError(Exception):
     """Raised when a wait group reach max workers limit."""
 
-    def __init__(self, msg: str, max_count: int):
+    def __init__(self, msg: str, max_count: int) -> None:
         super().__init__(msg)
         self.max_count = max_count
 
@@ -165,13 +165,13 @@ class WaitGroup(TimedEvent):
     MAX_COUNT = sys.maxsize
     _count = 0
 
-    def __init__(self, count: int = 0, max_count: int = MAX_COUNT):
+    def __init__(self, count: int = 0, max_count: int = MAX_COUNT) -> None:
         super().__init__()
         self.max_count = max_count
         if count != 0:
             self.add(count)
 
-    def clear(self):
+    def clear(self) -> None:
         self._count = 0
         super().clear()
 
