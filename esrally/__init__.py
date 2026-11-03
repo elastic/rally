@@ -82,7 +82,7 @@ class Version(typing.NamedTuple):
         return f"{self.major}.{self.minor}"
 
 
-MIN_PYTHON_VERSION = Version(3, 10)
+MIN_PYTHON_VERSION = Version(3, 13)
 
 
 def check_python_version() -> None:

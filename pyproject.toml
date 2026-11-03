@@ -20,7 +20,7 @@ authors = [
 description = "Macrobenchmarking framework for Elasticsearch"
 readme = "README.md"
 license = { text = "Apache License 2.0" }
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.13,<3.14"
 classifiers = [
     "Topic :: System :: Benchmark",
     "Development Status :: 5 - Production/Stable",
@@ -30,9 +30,6 @@ classifiers = [
     "Operating System :: POSIX",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
 ]
@@ -179,7 +176,7 @@ esrally-storage = "esrally.storage._cli:main"
 
 [tool.black]
 line-length = 140
-target-version = ['py310', 'py311', 'py312', 'py313']
+target-version = ['py313']
 
 [tool.isort]
 profile = 'black'

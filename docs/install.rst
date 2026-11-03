@@ -18,7 +18,7 @@ Rally does not support Windows and is only actively tested on macOS and Linux. I
 Python
 ~~~~~~
 
-* Python (from version 3.10.x to version 3.13.x) available as ``python3`` on the system executable path. Please verify with: ``python3 --version``.
+* Python 3.13.x available as ``python3`` on the system executable path. Please verify with: ``python3 --version``.
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 
@@ -147,7 +147,7 @@ If you are in a corporate environment using Linux servers that do not have any a
 
 .. note::
 
-    The offline installation package bundles dependencies for Python 3.11. Ensure ``python3`` on the target machine(s) is Python 3.11 (verify with ``python3 --version``), otherwise the installation may fail as some bundled dependencies cannot be installed with other Python versions.
+    The offline installation package bundles dependencies for Python 3.13. Ensure ``python3`` on the target machine(s) is Python 3.13 (verify with ``python3 --version``), otherwise the installation may fail as some bundled dependencies cannot be installed with other Python versions.
 
 1. Install all prerequisites as documented above.
 2. Download the offline installation package for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).

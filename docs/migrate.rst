@@ -4,6 +4,11 @@ Migration Guide
 Migrating to Rally 2.14.0 (unreleased)
 --------------------------------------
 
+Minimum Python version is 3.13
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Rally 2.14.0 drops support for Python 3.10, 3.11, and 3.12. Use Python 3.13.x and recreate existing virtual environments with that interpreter before upgrading Rally. Python 3.14 is not yet supported. See the :ref:`installation instructions <install_python>`.
+
 Document type fields are no longer supported
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
