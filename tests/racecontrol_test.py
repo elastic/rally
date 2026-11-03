@@ -16,6 +16,7 @@
 # under the License.
 # pylint: disable=protected-access
 
+import contextlib
 import os
 from unittest import mock
 
@@ -241,3 +242,69 @@ def test_benchmark_only_with_multi_cluster_flag(mock_race, unittest_pipeline):
     racecontrol.run(cfg)
 
     assert mock_race.call_count == 1
+
+
+def _prepare_track_cfg():
+    cfg = config.Config()
+    cfg.add(config.Scope.benchmark, "track", "track.name", "unittest")
+    return cfg
+
+
+@contextlib.contextmanager
+def _patched_prepare_track(ask_result):
+    actor_system = mock.Mock()
+    prep_actor = mock.sentinel.track_preparation_actor
+    actor_system.createActor.return_value = prep_actor
+    actor_system.ask.return_value = ask_result
+    with (
+        mock.patch("esrally.racecontrol.actor.bootstrap_actor_system", return_value=actor_system),
+        mock.patch("esrally.racecontrol.track.load_track", return_value=_track_with_challenge("unittest")),
+        mock.patch("esrally.racecontrol.track.resolve_challenge_and_invoke_validators"),
+    ):
+        yield actor_system, prep_actor
+
+
+def _assert_preparation_actor_stopped(actor_system, prep_actor):
+    actor_system.tell.assert_called_once()
+    stopped_actor, exit_msg = actor_system.tell.call_args.args
+    assert stopped_actor is prep_actor
+    assert isinstance(exit_msg, racecontrol.thespian.actors.ActorExitRequest)
+
+
+def test_prepare_track_succeeds_on_track_prepared():
+    with _patched_prepare_track(racecontrol.driver.TrackPrepared()) as (actor_system, prep_actor):
+        racecontrol.prepare_track(_prepare_track_cfg())
+
+    actor_system.ask.assert_called_once()
+    ask_actor, ask_msg = actor_system.ask.call_args.args
+    assert ask_actor is prep_actor
+    assert isinstance(ask_msg, racecontrol.driver.PrepareTrackStandalone)
+    _assert_preparation_actor_stopped(actor_system, prep_actor)
+
+
+def test_prepare_track_raises_on_benchmark_failure():
+    failure = racecontrol.actor.BenchmarkFailure("boom", "root cause")
+    with _patched_prepare_track(failure) as (actor_system, prep_actor):
+        with pytest.raises(exceptions.RallyError) as exc_info:
+            racecontrol.prepare_track(_prepare_track_cfg())
+
+    assert exc_info.value.message == "boom"
+    # the preparation actor must still be stopped even though result handling raised
+    _assert_preparation_actor_stopped(actor_system, prep_actor)
+
+
+def test_prepare_track_raises_on_unexpected_reply():
+    with _patched_prepare_track(mock.sentinel.unexpected) as (actor_system, prep_actor):
+        with pytest.raises(exceptions.RallyError, match="Got an unexpected result while preparing track"):
+            racecontrol.prepare_track(_prepare_track_cfg())
+
+    _assert_preparation_actor_stopped(actor_system, prep_actor)
+
+
+def test_prepare_track_stops_actor_on_keyboard_interrupt():
+    with _patched_prepare_track(None) as (actor_system, prep_actor):
+        actor_system.ask.side_effect = KeyboardInterrupt
+        with pytest.raises(exceptions.UserInterrupted):
+            racecontrol.prepare_track(_prepare_track_cfg())
+
+    _assert_preparation_actor_stopped(actor_system, prep_actor)

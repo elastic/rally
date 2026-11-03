@@ -49,9 +49,8 @@ def transfer_manager(storage_config: storage.StorageConfig) -> Generator[storage
         storage.shutdown_transfer_manager()
 
 
-READ_CHUNK_SIZE = 1024 * 1024
-SMALL_FILE = "big5/logs-1-1k.ndjson.bz2"
-BIG_FILE = "big5/logs-1.ndjson.bz2"
+SMALL_FILE = "geonames/documents-2-1k.json.bz2"
+BIG_FILE = "geonames/documents-2.json.bz2"
 
 
 @dataclasses.dataclass
@@ -62,8 +61,8 @@ class GetCase:
 
 @pytest.mark.slow
 @cases.cases(
-    small_file=GetCase(SMALL_FILE, want_size=55896),
-    big_file=GetCase(BIG_FILE, want_size=7103110671),
+    small_file=GetCase(SMALL_FILE, want_size=20985),
+    big_file=GetCase(BIG_FILE, want_size=265208777),
 )
 def test_get(case: GetCase, base_url: str, transfer_manager: storage.TransferManager):
     tr = transfer_manager.get(f"{base_url}/{case.path}")
@@ -74,5 +73,6 @@ def test_get(case: GetCase, base_url: str, transfer_manager: storage.TransferMan
         assert os.path.getsize(tr.path) == case.want_size
         assert tr.crc32c is not None
         assert crc32c.Checksum.from_filename(tr.path) == crc32c.Checksum.from_base64(tr.crc32c)
+        assert tr.verified
     finally:
         tr.prune()

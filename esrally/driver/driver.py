@@ -99,6 +99,20 @@ class PrepareTrack:
         self.track = track
 
 
+class PrepareTrackStandalone:
+    """
+    Initiates track preparation directly on a ``TrackPreparationActor`` without a ``DriverActor`` parent.
+    """
+
+    def __init__(self, config: types.Config, track):
+        """
+        :param config: Rally internal configuration object.
+        :param track: The track to prepare.
+        """
+        self.config = config
+        self.track = track
+
+
 class TrackPrepared:
     pass
 
@@ -480,6 +494,9 @@ class TrackPreparationActor(actor.RallyActor):
         super().__init__()
         self.processors = queue.Queue()
         self.driver_actor = None
+        # set when the actor is driven directly (e.g. by the ``prepare-track`` command) instead of by a DriverActor
+        self.start_sender = None
+        self.standalone = False
         self.logger.info("Track Preparator started")
         self.status = self.Status.INITIALIZING
         self.children = []
@@ -488,9 +505,13 @@ class TrackPreparationActor(actor.RallyActor):
         self.data_root_dir = None
         self.track = None
 
+    @property
+    def _reply_to(self):
+        return self.start_sender if self.standalone else self.driver_actor
+
     def receiveMsg_PoisonMessage(self, poisonmsg, sender):
         self.logger.error("Track Preparator received a fatal indication from a load generator (%s). Shutting down.", poisonmsg.details)
-        self.send(self.driver_actor, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
+        self.send(self._reply_to, actor.BenchmarkFailure("Fatal track preparation indication", poisonmsg.details))
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_Bootstrap(self, msg, sender):
@@ -510,14 +531,26 @@ class TrackPreparationActor(actor.RallyActor):
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_BenchmarkFailure(self, msg, sender):
         # sent by our generic worker; forward to parent
-        self.send(self.driver_actor, msg)
+        self.send(self._reply_to, msg)
+
+    @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
+    def receiveMsg_PrepareTrackStandalone(self, msg, sender):
+        self.standalone = True
+        self.start_sender = sender
+        # load node-specific config to have correct paths available
+        self.cfg = load_local_config(msg.config)
+        # dependencies were already installed by the coordinating process; _prepare_track reloads the track itself
+        self._prepare_track(msg.track)
 
     @actor.no_retry("track preparator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PrepareTrack(self, msg, sender):
+        self._prepare_track(msg.track)
+
+    def _prepare_track(self, track):
         assert self.cfg is not None
         self.data_root_dir = self.cfg.opts("benchmarks", "local.dataset.cache")
         tpr = TrackProcessorRegistry(self.cfg)
-        self.track = msg.track
+        self.track = track
         self.logger.info("Preparing track [%s]", self.track.name)
         self.logger.info("Reloading track [%s] to ensure plugins are up-to-date.", self.track.name)
         # the track might have been loaded on a different machine (the coordinator machine) so we force a track
@@ -541,7 +574,11 @@ class TrackPreparationActor(actor.RallyActor):
                 self, StartTaskLoop(self.track.name, self.cfg), self.Status.PROCESSOR_COMPLETE, self.Status.PROCESSOR_RUNNING
             )
         else:
-            self.send(self.driver_actor, TrackPrepared())
+            if self.standalone:
+                for child in self.children:
+                    self.send(child, thespian.actors.ActorExitRequest())
+                self.children = []
+            self.send(self._reply_to, TrackPrepared())
 
     def _seed_tasks(self, processor):
         self.tasks = list(WorkerTask(func, params) for func, params in processor.on_prepare_track(self.track, self.data_root_dir))

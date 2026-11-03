@@ -126,6 +126,8 @@ class FileWriter(FileDescriptor):
                 )
         return written
 
+    # Flushing only empties Python buffers. This does not guarantee the file is actually persisted on disk.
+    # This is an acceptable simplification because transfer manager is used in ephemeral environments.
     def flush(self):
         with self.lock:
             if self.fd is not None:

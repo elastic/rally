@@ -132,6 +132,11 @@ def cleanup_transfer_manager():
     shutdown_transfer_manager()
 
 
+def test_list_deduplicates_urls(manager: TransferManager) -> None:
+    transfers = manager.list(urls=[SIMPLE_URL, SIMPLE_URL])
+    assert [tr.url for tr in transfers] == [SIMPLE_URL]
+
+
 def test_transfer_manager(tmpdir: os.PathLike, cfg: StorageConfig) -> None:
     manager = init_transfer_manager(cfg=cfg)
     assert isinstance(manager, TransferManager)

@@ -633,7 +633,17 @@ class BulkIndexParamSource(ParamSource):
             self.on_conflict = None
             self.recency = None
 
-        self.corpora = self.used_corpora(track, params)
+        self.corpora = used_corpora(track, params, target_indices=params.get("indices"), target_data_streams=params.get("data-streams"))
+
+        # the track has corpora but none of them match
+        if track.corpora and not self.corpora:
+            track_corpora_names = [corpus.name for corpus in track.corpora]
+            corpora_names = params.get("corpora", track_corpora_names)
+            if isinstance(corpora_names, str):
+                corpora_names = [corpora_names]
+            raise exceptions.RallyAssertionError(
+                "The provided corpus %s does not match any of the corpora %s." % (corpora_names, track_corpora_names)
+            )
 
         if len(self.corpora) == 0:
             raise exceptions.InvalidSyntax(
@@ -724,31 +734,6 @@ class BulkIndexParamSource(ParamSource):
         except ValueError:
             raise exceptions.InvalidSyntax(f"'{name}' must be numeric")
 
-    def used_corpora(self, t, params):
-        corpora = []
-        track_corpora_names = [corpus.name for corpus in t.corpora]
-        corpora_names = params.get("corpora", track_corpora_names)
-        if isinstance(corpora_names, str):
-            corpora_names = [corpora_names]
-
-        for corpus in t.corpora:
-            if corpus.name in corpora_names:
-                filtered_corpus = corpus.filter(
-                    source_format=track.Documents.SOURCE_FORMAT_BULK,
-                    target_indices=params.get("indices"),
-                    target_data_streams=params.get("data-streams"),
-                )
-                if filtered_corpus.number_of_documents(source_format=track.Documents.SOURCE_FORMAT_BULK) > 0:
-                    corpora.append(filtered_corpus)
-
-        # the track has corpora but none of them match
-        if t.corpora and not corpora:
-            raise exceptions.RallyAssertionError(
-                "The provided corpus %s does not match any of the corpora %s." % (corpora_names, track_corpora_names)
-            )
-
-        return corpora
-
     def partition(self, partition_index, total_partitions):
         # register the new partition internally
         self.param_source.partition(partition_index, total_partitions)
@@ -756,6 +741,152 @@ class BulkIndexParamSource(ParamSource):
 
     def params(self):
         raise exceptions.RallyError("Do not use a BulkIndexParamSource without partitioning")
+
+
+class OtlpParamSource(ParamSource):
+    """
+    Parameter source for OTLP binary protobuf corpus files (source_format: one of ``Documents.OTLP_SIGNALS``).
+
+    Reads pre-generated OTLP Export*ServiceRequest records from a .pb file.
+    Supports multi-client partitioning via the companion .pb.offset index.
+    """
+
+    def __init__(self, track_obj, params, **kwargs):
+        super().__init__(track_obj, params, **kwargs)
+        self._validate_retry_params(params)
+        self._partition_index = 0
+        self._total_partitions = 1
+        # Streaming state — generators can't be pickled, so they're created lazily on the first
+        # params() call inside the worker process (after Rally has done its actor pickling).
+        # The cursor and end_record bounds let us track progress without materializing records.
+        self._record_iter = None
+        self._cursor = 0
+        self.looped = params.get("looped", False)
+        # When True, the corpus file is a ``.pbgz`` where each record is independently gzipped.
+        # The runner ships those bytes verbatim with ``Content-Encoding: gzip``; no hot-path
+        # compression/decompression happens on the Rally side. Prepare-track produces the matching
+        # file format based on this flag.
+        self.gzip = bool(params.get("gzip", False))
+
+        otlp_formats = sorted(track.Documents.OTLP_SIGNALS)
+        corpora = [c for source_format in otlp_formats for c in used_corpora(track_obj, params, source_format=source_format)]
+        otlp_docs = [(corpus, doc) for corpus in corpora for doc in corpus.documents]
+        if not otlp_docs:
+            requested = self._params.get("corpora")
+            if requested:
+                raise exceptions.InvalidSyntax(
+                    f"No OTLP corpus matching 'corpora'={requested!r} found in track [{track_obj}]. "
+                    f"Available corpora: {[c.name for c in self.track.corpora]}."
+                )
+            raise exceptions.InvalidSyntax(
+                f"No OTLP corpus found in track [{track_obj}]. Add at least one document corpus with source_format in {otlp_formats!r}."
+            )
+        if len(otlp_docs) > 1:
+            matches = ", ".join(f"[{corpus}] {doc}" for corpus, doc in otlp_docs)
+            raise exceptions.InvalidSyntax(
+                f"Found {len(otlp_docs)} OTLP document sets in track [{track_obj}] but an otlp-ingest operation requires "
+                f"exactly one: {matches}. Set 'corpora' to a single corpus or define each document set in its own corpus."
+            )
+        # read by used_corpora() in loader.py so that prepare-track only prepares this document set
+        self.corpora = corpora
+        _, self._doc = otlp_docs[0]
+        self.signal = track.Documents.OTLP_SIGNALS[self._doc.source_format]
+
+    @staticmethod
+    def _validate_retry_params(params):
+        if "retries-on-error" in params:
+            retries = params["retries-on-error"]
+            if isinstance(retries, bool) or not isinstance(retries, int) or retries < 0:
+                raise exceptions.InvalidSyntax(f"parameter 'retries-on-error' must be a non-negative integer but was {retries!r}")
+        if "retry-wait-period" in params:
+            wait = params["retry-wait-period"]
+            if isinstance(wait, bool) or not isinstance(wait, numbers.Real) or wait < 0:
+                raise exceptions.InvalidSyntax(f"parameter 'retry-wait-period' must be a non-negative number but was {wait!r}")
+
+    def partition(self, partition_index, total_partitions):
+        # pylint: disable=protected-access
+        # the "copy" is another OtlpParamSource instance, so accessing its private state is fine
+        copy = OtlpParamSource.__new__(OtlpParamSource)
+        copy.__dict__.update(self.__dict__)
+        copy._partition_index = partition_index
+        copy._total_partitions = total_partitions
+        copy._record_iter = None  # streaming iterator created lazily on first params() call
+        copy._cursor = 0
+        return copy
+
+    def _total_records(self):
+        # verified against the .pb during prepare-track
+        return self._doc.number_of_documents
+
+    @property
+    def infinite(self):
+        return False
+
+    def _partition_bounds(self) -> tuple[int, int]:
+        start, count, _ = bounds(
+            self._total_records(),
+            self._partition_index,
+            self._partition_index,
+            self._total_partitions,
+            includes_action_and_meta_data=False,
+        )
+        return start, start + count
+
+    @property
+    def percent_completed(self):
+        start, end = self._partition_bounds()
+        if end == start:
+            return 1.0
+        return min(self._cursor / (end - start), 1.0)
+
+    def _open_iter(self):
+        """
+        Create a new streaming iterator over this partition's records. We do NOT materialize them
+        into memory — for large corpora (e.g. 1 MB protobuf records, 6k records per partition) that
+        would consume 6+ GB per worker. The iterator holds an open file handle and yields one
+        record at a time; the file handle closes when the generator completes or is GC'd.
+        """
+        if not self._doc.document_file:
+            raise exceptions.SystemSetupError(
+                f"OTLP corpus document_file is unset for [{self._doc}]. This usually means neither the "
+                "source .json nor the pre-built .pb was found in any data root after prepare-track. "
+                "Check that the prepare-track phase completed successfully (look for the "
+                "'Successfully downloaded binary protobuf file from ...' log line) and that the "
+                "data directory is the same as Rally is reading from."
+            )
+        pb_file = io.OtlpProtobufFile.for_source_file(self._doc.document_file, gzip_records=self.gzip)
+        start_record, end_record = self._partition_bounds()
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "OtlpParamSource partition %d/%d: total_records=%s start=%d end=%d (streaming, not preloading)",
+            self._partition_index,
+            self._total_partitions,
+            self._total_records(),
+            start_record,
+            end_record,
+        )
+        return pb_file.read_records(start_record, end_record)
+
+    def params(self):
+        if self._record_iter is None:
+            self._record_iter = self._open_iter()
+
+        try:
+            payload = next(self._record_iter)
+        except StopIteration:
+            if not self.looped:
+                raise
+            # restart the iterator from the start of this partition. If even the fresh iterator
+            # is empty (partition has no records at all), the StopIteration here propagates.
+            self._record_iter = self._open_iter()
+            self._cursor = 0
+            payload = next(self._record_iter)
+
+        self._cursor += 1
+
+        # a fresh dict per call: runners may pop keys from the params they receive
+        return {**self._params, "body": payload, "gzip": self.gzip, "signal": self.signal}
 
 
 class PartitionBulkIndexParamSource:
@@ -818,7 +949,10 @@ class PartitionBulkIndexParamSource:
         self.current_bulk = 0
         # use a value > 0 so percent_completed returns a sensible value
         self.total_bulks = 1
-        self.infinite = False
+
+    @property
+    def infinite(self):
+        return False
 
     def partition(self, partition_index, total_partitions):
         if self.total_partitions is None:
@@ -968,6 +1102,27 @@ def get_target(track, params):
     if not target_name:
         target_name = params.get("data-stream", default_target)
     return target_name
+
+
+def used_corpora(t, params, source_format=track.Documents.SOURCE_FORMAT_BULK, target_indices=None, target_data_streams=None):
+    """
+    :return: The corpora selected by the operation's ``corpora`` parameter (default: all), each reduced to the document
+             sets matching ``source_format`` and the given targets. Corpora without matching documents are omitted.
+    """
+    track_corpora_names = [corpus.name for corpus in t.corpora]
+    corpora_names = params.get("corpora", track_corpora_names)
+    if isinstance(corpora_names, str):
+        corpora_names = [corpora_names]
+
+    corpora = []
+    for corpus in t.corpora:
+        if corpus.name in corpora_names:
+            filtered_corpus = corpus.filter(
+                source_format=source_format, target_indices=target_indices, target_data_streams=target_data_streams
+            )
+            if filtered_corpus.number_of_documents(source_format=source_format) > 0:
+                corpora.append(filtered_corpus)
+    return corpora
 
 
 def number_of_bulks(corpora, start_partition_index, end_partition_index, total_partitions, bulk_size):
@@ -1461,6 +1616,7 @@ register_param_source_for_operation(track.OperationType.DeleteComposableTemplate
 register_param_source_for_operation(track.OperationType.Sleep, SleepParamSource)
 register_param_source_for_operation(track.OperationType.ForceMerge, ForceMergeParamSource)
 register_param_source_for_operation(track.OperationType.Downsample, DownsampleParamSource)
+register_param_source_for_operation(track.OperationType.OtlpIngest, OtlpParamSource)
 
 # Also register by name, so users can use it too
 register_param_source_for_name("file-reader", BulkIndexParamSource)

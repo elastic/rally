@@ -341,7 +341,7 @@ class TestJfr:
 
     def test_sets_options_for_pre_java_9_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(
-            telemetry_params={"recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(0, 8)
+            telemetry_params={"jfr-recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(0, 8)
         )
         assert jfr.java_opts("/var/log/test-recording.jfr") == [
             "-XX:+UnlockDiagnosticVMOptions",
@@ -354,7 +354,7 @@ class TestJfr:
 
     def test_sets_options_for_java_9_or_10_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(
-            telemetry_params={"recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(9, 10)
+            telemetry_params={"jfr-recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(9, 10)
         )
         assert jfr.java_opts("/var/log/test-recording.jfr") == [
             "-XX:+UnlockDiagnosticVMOptions",
@@ -366,7 +366,7 @@ class TestJfr:
 
     def test_sets_options_for_java_11_or_above_custom_recording_template(self):
         jfr = telemetry.FlightRecorder(
-            telemetry_params={"recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(11, 999)
+            telemetry_params={"jfr-recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(11, 999)
         )
         assert jfr.java_opts("/var/log/test-recording.jfr") == [
             "-XX:+UnlockDiagnosticVMOptions",
@@ -377,7 +377,7 @@ class TestJfr:
 
     def test_sets_options_for_java_11_or_above_custom_delay_duration_recording_template(self):
         jfr = telemetry.FlightRecorder(
-            telemetry_params={"recording-template": "profile", "jfr-duration": "20m", "jfr-delay": "10s"},
+            telemetry_params={"jfr-recording-template": "profile", "jfr-duration": "20m", "jfr-delay": "10s"},
             log_root="/var/log",
             java_major_version=random.randint(11, 999),
         )
@@ -387,6 +387,36 @@ class TestJfr:
             "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
             "filename=/var/log/test-recording.jfr,delay=10s,duration=20m,settings=profile",
         ]
+
+    def test_deprecated_recording_template_name_is_still_supported(self, caplog):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"recording-template": "profile"}, log_root="/var/log", java_major_version=random.randint(11, 999)
+        )
+        with caplog.at_level(logging.WARNING):
+            java_opts = jfr.java_opts("/var/log/test-recording.jfr")
+        assert java_opts == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,settings=profile",
+        ]
+        assert "Telemetry parameter [recording-template] is deprecated. Please use [jfr-recording-template] instead." in caplog.text
+
+    def test_prefixed_recording_template_takes_precedence_over_deprecated_name(self, caplog):
+        jfr = telemetry.FlightRecorder(
+            telemetry_params={"jfr-recording-template": "profile", "recording-template": "ignored"},
+            log_root="/var/log",
+            java_major_version=random.randint(11, 999),
+        )
+        with caplog.at_level(logging.WARNING):
+            java_opts = jfr.java_opts("/var/log/test-recording.jfr")
+        assert java_opts == [
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
+            "-XX:StartFlightRecording=maxsize=0,maxage=0s,disk=true,dumponexit=true,"
+            "filename=/var/log/test-recording.jfr,settings=profile",
+        ]
+        assert "deprecated" not in caplog.text
 
 
 class TestGc:
@@ -5332,6 +5362,7 @@ class TestDiskUsageStats:
             "foo": {
                 "fields": {
                     "prcp": {
+                        "type": "float",
                         "total_in_bytes": 1498,
                         "doc_values_in_bytes": 748,
                         "points_in_bytes": 750,
@@ -5344,9 +5375,9 @@ class TestDiskUsageStats:
         t.on_benchmark_start()
         t.on_benchmark_stop()
         assert metrics_store_cluster_level.mock_calls == [
-            self._mock_store("disk_usage_total", 1498, "prcp"),
-            self._mock_store("disk_usage_doc_values", 748, "prcp"),
-            self._mock_store("disk_usage_points", 750, "prcp"),
+            self._mock_store("disk_usage_total", 1498, "prcp", field_type="float"),
+            self._mock_store("disk_usage_doc_values", 748, "prcp", field_type="float"),
+            self._mock_store("disk_usage_points", 750, "prcp", field_type="float"),
         ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
@@ -5359,6 +5390,7 @@ class TestDiskUsageStats:
             "foo": {
                 "fields": {
                     "station.country_code": {
+                        "type": "keyword",
                         "total_in_bytes": 346,
                         "doc_values_in_bytes": 328,
                         "points_in_bytes": 18,
@@ -5371,9 +5403,9 @@ class TestDiskUsageStats:
         t.on_benchmark_start()
         t.on_benchmark_stop()
         assert metrics_store_cluster_level.mock_calls == [
-            self._mock_store("disk_usage_total", 346, "station.country_code"),
-            self._mock_store("disk_usage_doc_values", 328, "station.country_code"),
-            self._mock_store("disk_usage_points", 18, "station.country_code"),
+            self._mock_store("disk_usage_total", 346, "station.country_code", field_type="keyword"),
+            self._mock_store("disk_usage_doc_values", 328, "station.country_code", field_type="keyword"),
+            self._mock_store("disk_usage_points", 18, "station.country_code", field_type="keyword"),
         ]
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
@@ -5394,8 +5426,11 @@ class TestDiskUsageStats:
             self._mock_store("disk_usage_knn_vectors", 64179820, "title_vector"),
         ]
 
-    def _mock_store(self, name, size, field):
-        return mock.call(name, size, meta_data={"index": "foo", "field": field}, unit="byte")
+    def _mock_store(self, name, size, field, field_type=None):
+        meta = {"index": "foo", "field": field}
+        if field_type is not None:
+            meta["field_type"] = field_type
+        return mock.call(name, size, meta_data=meta, unit="byte")
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_value_cluster_level")
     @mock.patch("elasticsearch.Elasticsearch")

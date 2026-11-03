@@ -70,6 +70,9 @@ function main {
     add_license "wheel" "https://raw.githubusercontent.com/pypa/wheel/main/LICENSE.txt"
     add_license "pip" "https://raw.githubusercontent.com/pypa/pip/main/LICENSE.txt"
     add_license "boto3" "https://raw.githubusercontent.com/boto/boto3/develop/LICENSE"
+    # OTLP corpus preparation dependencies (otlp extra)
+    add_license "opentelemetry-proto" "https://raw.githubusercontent.com/open-telemetry/opentelemetry-python/main/LICENSE"
+    add_license "protobuf" "https://raw.githubusercontent.com/protocolbuffers/protobuf/main/LICENSE"
 
     # transitive dependencies
     # Jinja2 dependencies

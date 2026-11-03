@@ -332,6 +332,36 @@ def race(cfg: types.Config, sources=False, distribution=False, external=False, d
         actor_system.tell(benchmark_actor, thespian.actors.ActorExitRequest())
 
 
+def prepare_track(cfg: types.Config):
+    logger = logging.getLogger(__name__)
+    track_description = cfg.opts("track", "track.name", mandatory=False) or cfg.opts("track", "track.path", mandatory=False)
+    assert track_description is not None, "track description missing"
+    logger.info("Preparing track [%s] ...", track_description)
+    console.println(f"Preparing track [{track_description}] ...")
+    # at this point an actor system has to run and we should only join
+    actor_system = actor.bootstrap_actor_system(try_join=True)
+    # load the track in the coordinating process so track parameters are validated before preparing corpora
+    t = track.load_track(cfg, install_dependencies=True)
+    track.resolve_challenge_and_invoke_validators(t, cfg)
+    track_preparation_actor = actor_system.createActor(driver.TrackPreparationActor, targetActorRequirements={"coordinator": True})
+    try:
+        result = actor_system.ask(track_preparation_actor, driver.PrepareTrackStandalone(cfg, t))
+        if isinstance(result, driver.TrackPrepared):
+            logger.info("Track [%s] has been prepared successfully.", t.name)
+            console.println(f"Track [{t.name}] has been prepared successfully.")
+        elif isinstance(result, actor.BenchmarkFailure):
+            logger.error("A track preparation failure has occurred")
+            raise exceptions.RallyError(result.message, result.cause)
+        else:
+            raise exceptions.RallyError("Got an unexpected result while preparing track: [%s]." % str(result))
+    except KeyboardInterrupt:
+        logger.info("User has cancelled track preparation.")
+        raise exceptions.UserInterrupted("User has cancelled track preparation.") from None
+    finally:
+        logger.info("Telling track preparation actor to exit.")
+        actor_system.tell(track_preparation_actor, thespian.actors.ActorExitRequest())
+
+
 def set_default_hosts(cfg: types.Config, host="127.0.0.1", port=9200):
     logger = logging.getLogger(__name__)
     configured_hosts = cfg.opts("client", "hosts")

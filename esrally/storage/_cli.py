@@ -49,41 +49,39 @@ def main():
     parser = argparse.ArgumentParser(description="Interacts with ES Rally remote storage services.")
 
     subparsers = parser.add_subparsers(dest="command")
-    ls_parser = subparsers.add_parser("ls", help="It lists file(s) downloaded from ES Rally remote storage services.")
-    get_parser = subparsers.add_parser("get", help="It downloads file(s) from ES Rally rem1ote storage services.")
-    put_parser = subparsers.add_parser("put", help="It uploads file(s) to mirror server.")
-    prune_parser = subparsers.add_parser("prune", help="It deletes transfer files from local directories.")
+    ls_parser = subparsers.add_parser("ls", help="List file(s) downloaded from ES Rally remote storage services.")
+    get_parser = subparsers.add_parser("get", help="Download file(s) from ES Rally rem1ote storage services.")
+    put_parser = subparsers.add_parser("put", help="Upload file(s) to mirror server.")
+    prune_parser = subparsers.add_parser("prune", help="Delete transfer files from local directories.")
 
     for p in (parser, ls_parser, get_parser, put_parser, prune_parser):
-        p.add_argument("-v", "--verbose", action="count", required=False, default=0, help="It increases the verbosity level.")
-        p.add_argument("-q", "--quiet", action="count", required=False, default=0, help="It decreases the verbosity level.")
-        p.add_argument(
-            "--local-dir", type=str, default=cfg.local_dir, help="It specifies local destination directory for downloading files."
-        )
-        p.add_argument("--base-url", type=str, default=None, help="It specifies the base URL for remote storage.")
-        p.add_argument("--mirror-failures", action="store_true", help="It considers only those files which have recorded mirror failures.")
+        p.add_argument("-v", "--verbose", action="count", required=False, default=0, help="Increase the verbosity level.")
+        p.add_argument("-q", "--quiet", action="count", required=False, default=0, help="Decrease the verbosity level.")
+        p.add_argument("--local-dir", type=str, default=cfg.local_dir, help="Specify local destination directory for downloading files.")
+        p.add_argument("--base-url", type=str, default=None, help="Specify the base URL for remote storage.")
+        p.add_argument("--mirror-failures", action="store_true", help="Consider only those files which have recorded mirror failures.")
 
     # It defines ls sub-command output options.
     for p in (parser, ls_parser):
-        p.add_argument("--filebeat", action="store_true", help="It prints a JSON entry for each file, each separated by a newline.")
-        p.add_argument("--json", action="store_true", help="It prints a pretty entry for each file.")
-        p.add_argument("--stats", action="store_true", help="It adds connectivity statistics to produced output.")
-        p.add_argument("--filenames", action="store_true", help="It shows downloaded file names.")
-        p.add_argument("--status-filenames", action="store_true", help="It shows status file names.")
+        p.add_argument("--filebeat", action="store_true", help="Print a JSON entry for each file, each separated by a newline.")
+        p.add_argument("--json", action="store_true", help="Print a pretty entry for each file.")
+        p.add_argument("--stats", action="store_true", help="Add connectivity statistics to produced output.")
+        p.add_argument("--filenames", action="store_true", help="Show downloaded file names.")
+        p.add_argument("--status-filenames", action="store_true", help="Show status file names.")
 
     # It defines get sub-command options.
-    get_parser.add_argument("--range", type=str, default="", help="It will only download given range of each file.")
-    get_parser.add_argument("--mirrors", type=str, default="", nargs="*", help="It will look for mirror services in given mirror file.")
+    get_parser.add_argument("--range", type=str, default="", help="Download only the given range of each file.")
+    get_parser.add_argument("--mirrors", type=str, default="", nargs="*", help="Look for mirror services in a given mirror file.")
     get_parser.add_argument(
         "--monitor-interval",
         type=float,
         default=cfg.monitor_interval,
-        help="It specify the period of time (in seconds) for monitoring ongoing transfers.",
+        help="Specify the period of time (in seconds) for monitoring ongoing transfers.",
     )
 
     # It defines prune sub-command options.
-    prune_parser.add_argument("--status-filenames", action="store_true", help="It deletes only status files.")
-    prune_parser.add_argument("--filenames", action="store_true", help="It deletes downloaded files.")
+    prune_parser.add_argument("--status-filenames", action="store_true", help="Delete status files only.")
+    prune_parser.add_argument("--filenames", action="store_true", help="Delete downloaded files.")
 
     # It defines positional arguments.
     for p in (ls_parser, get_parser, put_parser, prune_parser):
@@ -91,6 +89,7 @@ def main():
 
     # It defines put sub-command options.
     put_parser.add_argument("target_dir", type=str)
+    put_parser.add_argument("--dry-run", action="store_true", help="Only show upload commands. Do not execute.")
 
     args = parser.parse_args()
     logging_level = (args.quiet - args.verbose) * (logging.INFO - logging.DEBUG) + logging.INFO
@@ -160,7 +159,7 @@ def main():
         case "get":
             get(transfers, todo=storage.rangeset(args.range), monitor_interval=cfg.monitor_interval)
         case "put":
-            put(transfers, args.target_dir, base_url=cfg.base_url)
+            put(transfers, args.target_dir, base_url=cfg.base_url, dry_run=bool(args.dry_run))
         case "prune":
             prune(transfers, file_types=file_types)
         case _:
@@ -212,6 +211,7 @@ class TransferDict(BaseTransferDict):
     done: str
     todo: str
     finished: bool
+    verified: bool
     mirror_failures: NotRequired[list[MirrorFailureDict]]
     stats: NotRequired[list[StatsDict]]
 
@@ -250,6 +250,7 @@ def transfer_to_dict(tr: storage.Transfer, *, stats: bool = False) -> TransferDi
         done=str(tr.done),
         todo=str(tr.todo),
         finished=tr.finished,
+        verified=tr.verified,
     )
     if tr.mirror_failures:
         d["mirror_failures"] = [MirrorFailureDict(url=f.url, error=f.error) for f in tr.mirror_failures]
@@ -325,11 +326,17 @@ def get(
     LOG.info("All transfers finished.")
 
 
-def put(transfers: list[storage.Transfer], target_dir: str, *, base_url: str | None = None) -> None:
+def put(transfers: list[storage.Transfer], target_dir: str, *, base_url: str | None = None, dry_run: bool = False) -> None:
     if ":" not in target_dir:
         target_dir = os.path.normpath(os.path.expanduser(target_dir))
     commands: dict[str, list[str]] = {}
     for tr in transfers:
+        if tr.document_length is None or tr.done != storage.Range(0, tr.document_length):
+            LOG.warning("Skipping incomplete file: %s (done: %s, size: %s)", tr.url, tr.done, tr.document_length)
+            continue
+        if tr.crc32c and not tr.verified:
+            LOG.warning("Skipping file not verified against its CRC32C checksum: %s", tr.url)
+            continue
         if base_url and tr.url.startswith(base_url):
             subdir = os.path.dirname(tr.url[len(base_url) :]).strip("/")
         else:
@@ -346,6 +353,9 @@ def put(transfers: list[storage.Transfer], target_dir: str, *, base_url: str | N
     failures: dict[str, str] = {}
     for url, command in commands.items():
         cmd = " ".join(shlex.quote(s) for s in command)
+        if dry_run:
+            LOG.info("Dry-run: %s", cmd)
+            continue
         LOG.debug("Running command: '%s' ...", cmd)
         try:
             subprocess.run(command, check=True)
