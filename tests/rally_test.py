@@ -77,3 +77,20 @@ def test_prepare_track_parser_accepts_arguments():
     assert args.serverless_operator is True
     assert args.test_mode is True
     assert args.kill_running_processes is True
+
+
+def test_compare_parser_accepts_error_margin():
+    arg_parser = rally.create_arg_parser()
+
+    args = arg_parser.parse_args(["compare", "--baseline=baseline-race-id", "--contender=contender-race-id"])
+    assert args.error_margin == 0.0
+
+    args = arg_parser.parse_args(["compare", "--baseline=baseline-race-id", "--contender=contender-race-id", "--error-margin=2.5"])
+    assert args.error_margin == 2.5
+
+
+def test_compare_parser_rejects_negative_error_margin():
+    arg_parser = rally.create_arg_parser()
+
+    with pytest.raises(SystemExit):
+        arg_parser.parse_args(["compare", "--baseline=baseline-race-id", "--contender=contender-race-id", "--error-margin=-1"])
