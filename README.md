@@ -26,7 +26,7 @@ Rally is developed for Unix and is actively tested on Linux and macOS. Rally sup
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and git 1.9+, then run:
 
-    uv tool install esrally
+    uv tool install --python 3.13 esrally
 
 The race below has Rally download and start Elasticsearch, which requires an [appropriate JDK](https://www.elastic.co/support/matrix#matrix_jvm) with `JAVA_HOME` pointing to it. You don't need a JDK to benchmark an existing cluster.
 

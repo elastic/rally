@@ -10,9 +10,9 @@ Rally does not support Windows and is only actively tested on macOS and Linux. C
 
 The recommended way to install Rally is as a standalone tool with `uv <https://docs.astral.sh/uv/>`_ (see their `installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_)::
 
-    uv tool install esrally
+    uv tool install --python 3.13 esrally
 
-uv installs Rally into its own isolated environment and puts ``esrally`` on your ``PATH``. If needed, it also downloads a suitable Python version. To choose a specific one, add for example ``--python 3.13``. `pipx <https://pipx.pypa.io/>`_ works the same way: ``pipx install esrally``.
+uv installs Rally into its own isolated environment, downloading Python 3.13 if needed. If ``esrally`` is not found afterwards, run ``uv tool update-shell`` and restart your shell. `pipx <https://pipx.pypa.io/>`_ works the same way: ``pipx install esrally`` (and ``pipx ensurepath``).
 
 Alternatively, install Rally into a virtual environment::
 
@@ -31,7 +31,7 @@ Verify the installation with ``esrally --version``.
 Optional features
 ~~~~~~~~~~~~~~~~~
 
-Some features need extra dependencies, which you can install with `extras <https://packaging.python.org/en/latest/specifications/dependency-specifiers/#extras>`_, e.g. ``uv tool install 'esrally[s3]'``:
+Some features need extra dependencies, which you can install with `extras <https://packaging.python.org/en/latest/specifications/dependency-specifiers/#extras>`_, e.g. ``uv tool install --python 3.13 'esrally[s3]'``:
 
 * ``s3``: download track data from a private AWS S3 bucket.
 * ``otlp``: convert :doc:`OTLP JSON corpora </otlp_ingest>` to binary protobuf.
@@ -51,7 +51,7 @@ Requirements
 Python
 ~~~~~~
 
-Rally requires Python 3.10 to 3.13. ``uv tool install`` takes care of this for you; otherwise verify with ``python3 --version``.
+Rally requires Python 3.10 to 3.13. Verify with ``python3 --version``, or pass ``--python`` to ``uv tool install`` as shown above.
 
 git
 ~~~
