@@ -59,7 +59,7 @@ dependencies = [
     # License: Apache 2.0 (avoid specific requests version to fix bug in docker-py)
     "requests<2.32.0",
     # License: BSD
-    "psutil==5.9.4",
+    "psutil==7.2.2",
     # License: MIT
     "py-cpuinfo==7.0.0",
     # License: MIT
@@ -149,7 +149,7 @@ develop = [
     # mypy
     "boto3-stubs==1.26.125",
     "mypy==1.15.0",
-    "types-psutil==5.9.4",
+    "types-psutil==7.2.2.20260906",
     "types-tabulate==0.8.9",
     "types-requests>=2.31.0.7,<3",
     "types-jsonschema==3.2.0",
