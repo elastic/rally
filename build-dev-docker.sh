@@ -106,7 +106,7 @@ echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
 echo "======================================================="
 
-./release-docker-test.sh dev
+./release-docker-test.sh
 
 echo "======================================================="
 echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION_TAG   "
