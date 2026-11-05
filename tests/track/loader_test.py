@@ -2019,6 +2019,20 @@ class TestTrackPostProcessing:
                                         "operation": "search",
                                         "iterations": 1,
                                     },
+                                    {
+                                        "name": "search #4",
+                                        "clients": 20,
+                                        "operation": "search",
+                                        "warmup-iterations": 10,
+                                        "iterations": 10,
+                                    },
+                                    {
+                                        "name": "search #5",
+                                        "clients": 2,
+                                        "operation": "search",
+                                        "warmup-iterations": 5,
+                                        "iterations": 0,
+                                    },
                                 ]
                             }
                         },
@@ -2082,14 +2096,14 @@ class TestTrackPostProcessing:
                                         "name": "search #1",
                                         "clients": 4,
                                         "operation": "search",
-                                        "warmup-iterations": 4,
-                                        "iterations": 4,
+                                        "warmup-iterations": 0,
+                                        "iterations": 1,
                                     },
                                     {
                                         "name": "search #2",
                                         "clients": 1,
                                         "operation": "search",
-                                        "warmup-iterations": 1,
+                                        "warmup-iterations": 0,
                                         "iterations": 1,
                                     },
                                     {
@@ -2097,6 +2111,20 @@ class TestTrackPostProcessing:
                                         "clients": 1,
                                         "operation": "search",
                                         "iterations": 1,
+                                    },
+                                    {
+                                        "name": "search #4",
+                                        "clients": 20,
+                                        "operation": "search",
+                                        "warmup-iterations": 0,
+                                        "iterations": 1,
+                                    },
+                                    {
+                                        "name": "search #5",
+                                        "clients": 2,
+                                        "operation": "search",
+                                        "warmup-iterations": 1,
+                                        "iterations": 0,
                                     },
                                 ]
                             }
