@@ -969,6 +969,18 @@ The following invocation will list the 50 most recent races::
    esrally list races --limit=50
 
 
+``format``
+~~~~~~~~~~
+
+Controls the output format of ``esrally list races`` and ``esrally list tracks``. Possible values are ``text`` (the default) and ``json``.
+
+**Example**
+
+The following invocation will list the available tracks as JSON::
+
+   esrally list tracks --format=json
+
+
 ``quiet``
 ~~~~~~~~~
 
