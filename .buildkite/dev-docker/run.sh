@@ -19,6 +19,12 @@ fi
 
 ACTION="$1"
 
+# build-dev-docker.sh needs uv (for `uvx hatch version`), which is not installed on the agents
+if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/0.11.19/install.sh | env UV_UNMANAGED_INSTALL="${HOME}/.local/bin" sh
+    export PATH="${HOME}/.local/bin:${PATH}"
+fi
+
 # login to docker registry
 if [[ $PUBLIC_DOCKER_REPO == "true" ]]; then
     VAULT_PATH="secret/ci/elastic-rally/release/docker-hub-rally"
