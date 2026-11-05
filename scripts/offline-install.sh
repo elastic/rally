@@ -76,7 +76,7 @@ function main {
         exit 1
     fi
     # Prepare install
-    pip3 download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}" --no-binary=MarkupSafe --constraint "${CONSTRAINTS_FILE}"
+    pip3 download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}" --constraint "${CONSTRAINTS_FILE}"
 
 
     echo "Preparing NOTICE file"
