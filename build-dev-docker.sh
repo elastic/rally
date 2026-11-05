@@ -58,7 +58,7 @@ if [[ "${RALLY_BRANCH}" =~ .*\/.* ]]; then
 else
   branch_name="${RALLY_BRANCH}"
 fi
-export RALLY_VERSION="${branch_name}-${GIT_SHA}-${DATE}-${ARCH}"
+export RALLY_VERSION="${RALLY_BUILD_VERSION:-${branch_name}-${GIT_SHA}-${DATE}}-${ARCH}"
 export RALLY_VERSION_TAG="${RALLY_VERSION}"
 MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
@@ -68,13 +68,16 @@ else
     export DOCKER_TAG_LATEST="${branch_name}-latest-${ARCH}"
 fi
 
-# Make new temporary directory to checkout the `RALLY_BRANCH` branch
+# Check out the resolved CI commit, or the requested branch for standalone builds.
 tmp_dir=$(mktemp --directory)
 pushd "$tmp_dir"
 git clone https://github.com/elastic/rally
 pushd rally
 
-if [[ "${RALLY_BRANCH}" =~ refs\/.* ]]; then
+if [[ -n "${RALLY_BUILD_COMMIT:-}" ]]; then
+  git fetch origin "$RALLY_BUILD_COMMIT"
+  git checkout --detach "$RALLY_BUILD_COMMIT"
+elif [[ "${RALLY_BRANCH}" =~ refs\/.* ]]; then
   branch_name=$(echo "${RALLY_BRANCH}" | sed 's/refs\///')
   git fetch origin "${branch_name}:_temp"
   git checkout "_temp"

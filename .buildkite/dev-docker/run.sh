@@ -8,16 +8,39 @@ source .buildkite/retry.sh
 set +x
 
 BUILD_FROM_BRANCH="$(buildkite-agent meta-data get BUILD_FROM_BRANCH --default "${BUILDKITE_BRANCH}")"
+BUILD_FROM_BRANCH="${BUILD_FROM_BRANCH:-${BUILDKITE_BRANCH}}"
 PUSH_LATEST="$(buildkite-agent meta-data get PUSH_LATEST --default true)"
 # SCHEDULED_PUBLIC_REPO is set by the "Daily Public" schedule in catalog-info.yaml
 PUBLIC_DOCKER_REPO="${SCHEDULED_PUBLIC_REPO:-$(buildkite-agent meta-data get PUBLIC_DOCKER_REPO --default false)}"
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 (build|manifest) ..."
+    echo "Usage: $0 (prepare|build|manifest) ..."
     exit 1
 fi
 
 ACTION="$1"
+
+# Resolve the source and tag once, before the architecture jobs start. The
+# default branch uses Buildkite's pinned checkout, not the current remote HEAD.
+if [[ "$ACTION" == "prepare" ]]; then
+    if [[ "$BUILD_FROM_BRANCH" == "$BUILDKITE_BRANCH" ]]; then
+        RALLY_BUILD_COMMIT=$(git rev-parse HEAD)
+    else
+        git fetch origin "$BUILD_FROM_BRANCH"
+        RALLY_BUILD_COMMIT=$(git rev-parse FETCH_HEAD)
+    fi
+    branch_name="${BUILD_FROM_BRANCH//\//_}"
+    RALLY_BUILD_VERSION="${branch_name}-${RALLY_BUILD_COMMIT:0:8}-$(date -u +%Y%m%d)"
+    buildkite-agent meta-data set RALLY_BUILD_COMMIT "$RALLY_BUILD_COMMIT"
+    buildkite-agent meta-data set RALLY_BUILD_VERSION "$RALLY_BUILD_VERSION"
+    echo "Resolved Rally commit: $RALLY_BUILD_COMMIT"
+    echo "Resolved Rally version: $RALLY_BUILD_VERSION"
+    exit 0
+fi
+
+RALLY_BUILD_COMMIT=$(buildkite-agent meta-data get RALLY_BUILD_COMMIT)
+RALLY_BUILD_VERSION=$(buildkite-agent meta-data get RALLY_BUILD_VERSION)
+export RALLY_BUILD_COMMIT RALLY_BUILD_VERSION
 
 # login to docker registry
 if [[ $PUBLIC_DOCKER_REPO == "true" ]]; then
@@ -37,38 +60,10 @@ unset DOCKER_PASSWORD
 unset DOCKER_USERNAME
 
 build_docker_image() {
-    tmp_dir=$(mktemp --directory)
-    pushd "$tmp_dir"
-    git clone https://github.com/elastic/rally
-    pushd rally
-    # checkout the version from the buildkite branch, but build it from the branch we specified
-    local checkout_branch
-    if [[ -n "${BUILDKITE_BRANCH}" ]]; then
-      checkout_branch="${BUILDKITE_BRANCH}"
-    else
-      checkout_branch="${BUILD_FROM_BRANCH}"
-    fi
-
-    # If the branch is a pull request, it will be in the format "refs/pull/123/head".
-    # Strip off the "refs/" prefix to get the branch name, and check it out to a temporary branch.
-    if [[ "${checkout_branch}" =~ refs\/.* ]]; then
-      local branch_name
-      branch_name=$(echo "${checkout_branch}" | sed 's/refs\///')
-      git fetch origin "${branch_name}:_temp"
-      git checkout "_temp"
-    else
-      git checkout "${checkout_branch}"
-    fi
-    echo "Docker commit: $(git --no-pager log --oneline -n1)"
-
     set -x
     export TERM=dumb
     export LC_ALL=en_US.UTF-8
     ./build-dev-docker.sh "$BUILD_FROM_BRANCH" "$ARCH" "$PUSH_LATEST" "$PUBLIC_DOCKER_REPO"
-
-    popd
-    popd
-    rm -rf "$tmp_dir"
 }
 
 build_docker_manifest() {
