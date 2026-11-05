@@ -22,6 +22,7 @@ import collections
 import concurrent.futures
 import gzip
 import importlib
+import itertools
 import logging
 import mmap
 import multiprocessing
@@ -508,6 +509,9 @@ class FileOffsetTable:
     data file. This helps bulk-indexing clients to advance quickly to a certain position in a large data file.
     """
 
+    # one offset entry is written every ``OFFSET_INTERVAL`` lines
+    OFFSET_INTERVAL = 50000
+
     def __init__(self, data_file_path: str, offset_table_path: str, mode: str):
         """
         Creates a new FileOffsetTable instance. The constructor should not be called directly but instead the
@@ -551,10 +555,16 @@ class FileOffsetTable:
                     int(parts[1])
                     valid_lines += 1
             if valid_lines == 0:
-                return False
+                # legitimately empty for data files with fewer lines than the offset interval (e.g. test-mode corpora)
+                return self._data_file_shorter_than_offset_interval()
             return True
         except (OSError, ValueError):
             return False
+
+    def _data_file_shorter_than_offset_interval(self) -> bool:
+        with open(self.data_file_path, "rb") as data_file:
+            lines = sum(1 for _ in itertools.islice(data_file, FileOffsetTable.OFFSET_INTERVAL))
+        return lines < FileOffsetTable.OFFSET_INTERVAL
 
     def try_download_from_corpus_location(self, corpus_base_url: str | None) -> bool:
         """
@@ -694,7 +704,7 @@ def prepare_file_offset_table(data_file_path: str, corpus_base_url: str | None) 
                     if len(line) == 0:
                         break
                     line_number += 1
-                    if line_number % 50000 == 0:
+                    if line_number % FileOffsetTable.OFFSET_INTERVAL == 0:
                         file_offset_table.add_offset(line_number, data_file.tell())
         console.println("[OK]")
         return line_number
