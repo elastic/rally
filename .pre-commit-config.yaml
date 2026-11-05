@@ -55,5 +55,5 @@ repos:
             "-j0",
             "--rcfile=.pylintrc",
           ]
-        exclude: ^(docs/|changelog.py)
+        exclude: ^docs/
         require_serial: true
