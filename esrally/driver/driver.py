@@ -52,6 +52,10 @@ from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
 from esrally.utils import console, convert, net
 from esrally.utils.error_behavior import OnErrorBehavior
 
+# Workers poll for task completion this often in test mode. Tasks finish almost instantly there, so the default polling
+# interval of 5 seconds would dominate the runtime of a race.
+TEST_MODE_WAKEUP_INTERVAL_SECONDS = 0.1
+
 
 ##################################
 #
@@ -439,7 +443,7 @@ class TaskExecutionActor(actor.RallyActor):
         self.track_name = msg.track_name
         self.cfg = load_local_config(msg.cfg)
         if self.cfg.opts("track", "test.mode.enabled"):
-            self.wakeup_interval = 0.5
+            self.wakeup_interval = TEST_MODE_WAKEUP_INTERVAL_SECONDS
         track.load_track_plugins(self.cfg, self.track_name)
         self.send(self.task_preparation_actor, ReadyForWork())
 
@@ -1341,7 +1345,7 @@ class Worker(actor.RallyActor):
         self.cancel.clear()
         # we need to wake up more often in test mode
         if self.config.opts("track", "test.mode.enabled"):
-            self.wakeup_interval = 0.5
+            self.wakeup_interval = TEST_MODE_WAKEUP_INTERVAL_SECONDS
         runner.register_default_runners(self.config)
         if self.track.has_plugins:
             track.load_track_plugins(self.config, self.track.name, runner.register_runner, scheduler.register_scheduler)
@@ -2030,6 +2034,10 @@ class AsyncProfiler:
 
 
 class AsyncExecutor:
+    # Upper bound (in seconds) on how long a client waiting for its next scheduled request goes without checking
+    # whether it has been cancelled or completed.
+    MAX_WAIT_SLICE = 0.1
+
     def __init__(
         self,
         client_id,
@@ -2066,6 +2074,20 @@ class AsyncExecutor:
         self.cluster_name = cluster_name
         self.logger = logging.getLogger(__name__)
 
+    async def _wait_until(self, deadline, task_completes_parent):
+        """
+        Sleeps until ``deadline`` (in ``time.perf_counter()`` terms) but returns early once the task is cancelled or,
+        unless this task completes its parent itself, once it is completed by another task. ``cancel`` and
+        ``complete`` are ``threading.Event`` instances that may be set from other threads, so we sleep in short slices
+        and re-check them. Otherwise, clients of custom schedulers with long intervals would only notice completion
+        when their next request is due, which can be minutes later.
+        """
+        while not self.cancel.is_set() and (task_completes_parent or not self.complete.is_set()):
+            rest = deadline - time.perf_counter()
+            if rest <= 0:
+                return
+            await asyncio.sleep(min(rest, self.MAX_WAIT_SLICE))
+
     async def __call__(self, *args, **kwargs):
         any_task_completes_parent = self.task.any_completes_parent
         task_completes_parent = self.task.completes_parent
@@ -2090,9 +2112,13 @@ class AsyncExecutor:
                 absolute_expected_schedule_time = total_start + expected_scheduled_time
                 throughput_throttled = expected_scheduled_time > 0
                 if throughput_throttled:
-                    rest = absolute_expected_schedule_time - time.perf_counter()
-                    if rest > 0:
-                        await asyncio.sleep(rest)
+                    await self._wait_until(absolute_expected_schedule_time, task_completes_parent)
+                    if self.cancel.is_set():
+                        self.logger.info("User cancelled execution.")
+                        break
+                    if not task_completes_parent and self.complete.is_set():
+                        self.logger.info("Task [%s] is considered completed due to external event.", self.task)
+                        break
 
                 absolute_processing_start = time.time()
                 processing_start = time.perf_counter()

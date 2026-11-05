@@ -331,3 +331,38 @@ def test_actor_system_already_running(
         mock_socket.connect.assert_called_once_with(case.want_connect)
     else:
         mock_socket.connect.assert_not_called()
+
+
+def _fake_actor_address(sockname):
+    return mock.Mock(addressDetails=mock.Mock(sockname=sockname))
+
+
+class TestWaitForActorExit:
+    @mock.patch("esrally.actor.time.sleep")
+    @mock.patch("esrally.actor._accepts_connections", return_value=False)
+    def test_returns_immediately_when_actor_has_exited(self, accepts_connections, sleep):
+        assert actor.wait_for_actor_exit(_fake_actor_address(("127.0.0.1", 52541))) is True
+        accepts_connections.assert_called_once_with(("127.0.0.1", 52541))
+        sleep.assert_not_called()
+
+    @mock.patch("esrally.actor.time.sleep")
+    @mock.patch("esrally.actor._accepts_connections", side_effect=[True, True, False])
+    def test_polls_at_short_interval_until_actor_has_exited(self, accepts_connections, sleep):
+        assert actor.wait_for_actor_exit(_fake_actor_address(("127.0.0.1", 52541)), timeout=3, poll_interval=0.05) is True
+        assert accepts_connections.call_count == 3
+        assert sleep.call_args_list == [mock.call(0.05), mock.call(0.05)]
+
+    @mock.patch("esrally.actor.time.monotonic", side_effect=[0.0, 0.0, 0.05, 0.1])
+    @mock.patch("esrally.actor.time.sleep")
+    @mock.patch("esrally.actor._accepts_connections", return_value=True)
+    def test_gives_up_after_timeout(self, accepts_connections, sleep, monotonic):
+        assert actor.wait_for_actor_exit(_fake_actor_address(("127.0.0.1", 52541)), timeout=0.1, poll_interval=0.05) is False
+        assert sleep.call_count == 2
+
+    @mock.patch("esrally.actor.time.sleep")
+    @mock.patch("esrally.actor._accepts_connections")
+    def test_waits_full_timeout_when_liveness_cannot_be_checked(self, accepts_connections, sleep):
+        # e.g. multiprocQueueBase addresses are not IP-based
+        assert actor.wait_for_actor_exit(mock.Mock(addressDetails=object()), timeout=3.0) is False
+        accepts_connections.assert_not_called()
+        sleep.assert_called_once_with(3.0)

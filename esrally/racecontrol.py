@@ -330,6 +330,7 @@ def race(cfg: types.Config, sources=False, distribution=False, external=False, d
     finally:
         logger.info("Telling benchmark actor to exit.")
         actor_system.tell(benchmark_actor, thespian.actors.ActorExitRequest())
+        actor.wait_for_actor_exit(benchmark_actor)
 
 
 def prepare_track(cfg: types.Config):
@@ -360,6 +361,7 @@ def prepare_track(cfg: types.Config):
     finally:
         logger.info("Telling track preparation actor to exit.")
         actor_system.tell(track_preparation_actor, thespian.actors.ActorExitRequest())
+        actor.wait_for_actor_exit(track_preparation_actor)
 
 
 def set_default_hosts(cfg: types.Config, host="127.0.0.1", port=9200):
