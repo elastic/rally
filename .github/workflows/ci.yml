@@ -104,7 +104,9 @@ jobs:
           sudo apt-get clean
           df -h
       - name: Run tests
-        run: make it_tracks_compat
+        # Use the latest prebuilt Elasticsearch snapshot of main instead of building it from source
+        # (saves ~11 minutes). Run `make it_tracks_compat` to test against a source build instead.
+        run: make it_tracks_compat_snapshot
         timeout-minutes: 160
         env:
           # elastic/endpoint fetches assets from GitHub, authenticate to avoid
