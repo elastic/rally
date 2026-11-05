@@ -836,6 +836,12 @@ def create_arg_parser():
         default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS,
     )
     race_parser.add_argument(
+        "--admin-client-options",
+        default=None,
+        help="Client options for telemetry requests, in the same format as --client-options. "
+        "When omitted, telemetry uses --client-options. Challenge operations always use --client-options.",
+    )
+    race_parser.add_argument(
         "--on-error",
         type=OnErrorBehavior,
         choices=list(OnErrorBehavior),
@@ -1259,6 +1265,22 @@ def configure_connection_params(arg_parser, args, cfg: types.Config):
     cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
     client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
     cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
+    admin_client_options = getattr(args, "admin_client_options", None)
+    if admin_client_options:
+        # Do not inject the default timeout. Only keys the user supplied should overlay --client-options.
+        parsed_admin_client_options = opts.ClientOptions(admin_client_options, apply_defaults=False)
+        unknown_admin_clusters = set(parsed_admin_client_options.all_client_options) - set(target_hosts.all_hosts)
+        if unknown_admin_clusters:
+            arg_parser.error(
+                "--admin-client-options contains cluster keys %s that are not present in --target-hosts. "
+                "Omit a cluster to inherit its benchmark client options." % sorted(unknown_admin_clusters)
+            )
+        cfg.add(
+            config.Scope.applicationOverride,
+            "client",
+            "admin.options",
+            parsed_admin_client_options,
+        )
     if set(target_hosts.all_hosts) != set(client_options.all_client_options):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
     if hasattr(args, "multi_cluster") and args.multi_cluster:
@@ -1473,6 +1495,15 @@ def load_configuration(config_name):
     return cfg
 
 
+def redact_namespace(args):
+    """Return a copy of ``args`` with client credentials masked for logging."""
+    redacted = argparse.Namespace(**vars(args))
+    for name in ("client_options", "admin_client_options"):
+        if getattr(redacted, name, None):
+            setattr(redacted, name, "*****")
+    return redacted
+
+
 def main():
     check_python_version()
     log.install_default_log_config()
@@ -1484,7 +1515,7 @@ def main():
     # Early init of console output so we start to show everything consistently.
     console.init(quiet=False)
 
-    logger.debug("Command line: %s", " ".join(sys.argv))
+    logger.debug("Command line: %s", " ".join(process.redact_cmdline(sys.argv)))
     arg_parser = create_arg_parser()
     args = arg_parser.parse_args()
 
@@ -1514,7 +1545,7 @@ def main():
     logger.info("OS [%s]", str(platform.uname()))
     logger.info("Python [%s]", str(sys.implementation))
     logger.info("Rally version [%s]", version.version())
-    logger.debug("Command line arguments: %s", args)
+    logger.debug("Command line arguments: %s", redact_namespace(args))
     # Configure networking
     net.init()
 

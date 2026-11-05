@@ -45,6 +45,14 @@ The Serverless detection and the skip manifests through the following messages o
   [INFO] Racing on track [geonames], challenge [append-no-conflicts] and car ['external'] with version [serverless].
   [..]
 
+Telemetry uses the same credentials unless you pass :ref:`--admin-client-options <clr_admin_client_options>`. That client is used only for telemetry. When the admin user is a serverless operator, Rally collects operator telemetry devices without treating the benchmark user as an operator, so challenge tasks stay on the restricted credentials. Omit the flag to keep the previous behavior: telemetry uses ``--client-options`` and devices that the benchmark user cannot call are skipped or fail as they do today.
+
+ ::
+
+    esrally race --track="geonames" --target-hosts=${ES_HOST}:443 --pipeline=benchmark-only \
+        --client-options="use_ssl:true,api_key:${ES_API_KEY}" \
+        --admin-client-options="api_key:${ES_ADMIN_API_KEY}"
+
 The automatic skip does not apply to the following tasks:
 
 - tasks specified in ``parallel`` elements,

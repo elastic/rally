@@ -891,6 +891,27 @@ Save the above responses as ``responses.json`` and execute a benchmark as follow
 
 * Enable API-key generation per client: ``--client-options="use_ssl:true,basic_auth_user:'user',basic_auth_password:'password',create_api_key_per_client:true"``
 
+.. _clr_admin_client_options:
+
+``admin-client-options``
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Optional client options for telemetry requests. The format is the same as :ref:`client-options <clr_client_options>` (comma-separated ``key:value`` pairs, a JSON object, or a JSON file). Rally does not apply the default ``timeout:60``; only the keys you pass are used.
+
+When this option is set, Rally opens a second client for telemetry. TLS, timeouts, and certificates are taken from ``--client-options`` and overlaid with ``--admin-client-options``. If the admin options include authentication (``api_key`` or basic auth), those credentials replace the benchmark credentials for telemetry only. Challenge operations, including ``create_api_key_per_client``, keep using ``--client-options``.
+
+When this option is omitted, telemetry uses ``--client-options``, which is the same behavior as earlier Rally versions. If those credentials cannot collect stats, the race still runs and telemetry devices keep their existing error handling.
+
+On Elasticsearch Serverless, Rally decides which telemetry devices to run from the admin user's operator status. ``driver.serverless.operator`` and challenge-task skipping still follow the benchmark user. On stateful clusters there is no operator probe; telemetry devices call the stats APIs with the admin client.
+
+**Example**
+
+ ::
+
+    esrally race --pipeline=benchmark-only --target-hosts=host:443 \
+        --client-options="use_ssl:true,api_key:'benchmark-key'" \
+        --admin-client-options="api_key:'operator-key'"
+
 .. _command_line_reference_on_error:
 
 ``on-error``

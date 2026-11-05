@@ -50,6 +50,7 @@ Key = Literal[
     "add.message",
     "add.race_timestamp",
     "admin.dry_run",
+    "admin.options",
     "admin.track",
     "assertions",
     "async.debug",
