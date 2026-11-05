@@ -1,0 +1,28 @@
+name: Changelog
+
+# Separate from ci.yml so that adding or removing the `skip-changelog` label re-runs this check
+# without re-running the whole test suite.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  fragment:
+    runs-on: ubuntu-latest
+    # Internal-only changes (tests, CI, refactoring) get the skip-changelog label; Dependabot PRs are exempt.
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+      - name: Check for a changelog fragment
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 changelog.py check --base "origin/${BASE_REF}"
