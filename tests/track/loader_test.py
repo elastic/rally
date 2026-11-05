@@ -424,6 +424,33 @@ class TestTrackPreparation:
     @mock.patch("esrally.utils.io.prepare_file_offset_table")
     @mock.patch("os.path.getsize")
     @mock.patch("os.path.isfile")
+    def test_does_not_download_offset_file_in_offline_mode(self, is_file, get_size, prepare_file_offset_table):
+        is_file.return_value = True
+        get_size.return_value = 2000
+        prepare_file_offset_table.return_value = 5
+
+        p = loader.DocumentSetPreparator(
+            track_name="unit-test", downloader=loader.Downloader(offline=True, test_mode=False), decompressor=loader.Decompressor()
+        )
+
+        p.prepare_document_set(
+            document_set=track.Documents(
+                source_format=track.Documents.SOURCE_FORMAT_BULK,
+                base_url="http://benchmarks.elasticsearch.org/corpora/unit-test",
+                document_file="docs.json",
+                document_archive="docs.json.bz2",
+                number_of_documents=5,
+                compressed_size_in_bytes=200,
+                uncompressed_size_in_bytes=2000,
+            ),
+            data_root="/tmp",
+        )
+
+        prepare_file_offset_table.assert_called_with("/tmp/docs.json", None)
+
+    @mock.patch("esrally.utils.io.prepare_file_offset_table")
+    @mock.patch("os.path.getsize")
+    @mock.patch("os.path.isfile")
     def test_decompresses_if_archive_available(self, is_file, get_size, prepare_file_offset_table):
         is_file.return_value = True
         get_size.return_value = 2000
