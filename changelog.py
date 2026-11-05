@@ -48,6 +48,8 @@ HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 HEADING = re.compile(r"^###\s+(.+?)\s*$")
 BULLET = re.compile(r"^[*-]\s+(.*)$")
 ALREADY_LINKED = re.compile(r"^\[#\d+\]\(")
+# The "[#1234](url): " prefix of a linked bullet, to check that a description follows it.
+LINK_PREFIX = re.compile(r"^\[#\d+\]\([^)]*\):?")
 # Squash merges end with "(#1234)", merge commits start with "Merge pull request #1234".
 SQUASH_PR = re.compile(r"\(#(\d+)\)\s*$")
 MERGE_PR = re.compile(r"^Merge pull request #(\d+)")
@@ -88,7 +90,10 @@ def validate(path, known_categories):
             problems.append(f"text outside of a '### <category>' section: [{line.strip()}]")
         elif m := BULLET.match(line):
             bullets += 1
-            if m.group(1).strip() == PLACEHOLDER:
+            description = LINK_PREFIX.sub("", m.group(1)).strip()
+            if not description:
+                problems.append("empty bullet: describe your change")
+            elif description == PLACEHOLDER:
                 problems.append("replace the placeholder bullet with a description of your change")
     if bullets == 0:
         problems.append("no entry found: uncomment a category and add a bullet below it")
