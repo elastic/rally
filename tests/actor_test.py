@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 import socket
+import time
 import typing
 from unittest import mock
 
@@ -333,35 +334,45 @@ def test_actor_system_already_running(
         mock_socket.connect.assert_not_called()
 
 
+@pytest.fixture
+def fake_time(monkeypatch):
+    # Replace only esrally.actor's reference to the time module. Patching "esrally.actor.time.sleep" would patch
+    # time.sleep globally, and calls from threads leaked by other tests would end up in the mock.
+    fake = mock.Mock(wraps=time)
+    fake.sleep = mock.Mock()
+    monkeypatch.setattr(actor, "time", fake)
+    return fake
+
+
 def _fake_actor_address(sockname):
     return mock.Mock(addressDetails=mock.Mock(sockname=sockname))
 
 
 class TestWaitForActorExit:
-    @mock.patch("esrally.actor.time.sleep")
     @mock.patch("esrally.actor._accepts_connections", return_value=False)
-    def test_returns_immediately_when_actor_has_exited(self, accepts_connections, sleep):
+    def test_returns_immediately_when_actor_has_exited(self, accepts_connections, fake_time):
+        sleep = fake_time.sleep
         assert actor.wait_for_actor_exit(_fake_actor_address(("127.0.0.1", 52541))) is True
         accepts_connections.assert_called_once_with(("127.0.0.1", 52541))
         sleep.assert_not_called()
 
-    @mock.patch("esrally.actor.time.sleep")
     @mock.patch("esrally.actor._accepts_connections", side_effect=[True, True, False])
-    def test_polls_at_short_interval_until_actor_has_exited(self, accepts_connections, sleep):
+    def test_polls_at_short_interval_until_actor_has_exited(self, accepts_connections, fake_time):
+        sleep = fake_time.sleep
         assert actor.wait_for_actor_exit(_fake_actor_address(("127.0.0.1", 52541)), timeout=3, poll_interval=0.05) is True
         assert accepts_connections.call_count == 3
         assert sleep.call_args_list == [mock.call(0.05), mock.call(0.05)]
 
-    @mock.patch("esrally.actor.time.monotonic", side_effect=[0.0, 0.0, 0.05, 0.1])
-    @mock.patch("esrally.actor.time.sleep")
     @mock.patch("esrally.actor._accepts_connections", return_value=True)
-    def test_gives_up_after_timeout(self, accepts_connections, sleep, monotonic):
+    def test_gives_up_after_timeout(self, accepts_connections, fake_time):
+        fake_time.monotonic = mock.Mock(side_effect=[0.0, 0.0, 0.05, 0.1])
+        sleep = fake_time.sleep
         assert actor.wait_for_actor_exit(_fake_actor_address(("127.0.0.1", 52541)), timeout=0.1, poll_interval=0.05) is False
         assert sleep.call_count == 2
 
-    @mock.patch("esrally.actor.time.sleep")
     @mock.patch("esrally.actor._accepts_connections")
-    def test_waits_full_timeout_when_liveness_cannot_be_checked(self, accepts_connections, sleep):
+    def test_waits_full_timeout_when_liveness_cannot_be_checked(self, accepts_connections, fake_time):
+        sleep = fake_time.sleep
         # e.g. multiprocQueueBase addresses are not IP-based
         assert actor.wait_for_actor_exit(mock.Mock(addressDetails=object()), timeout=3.0) is False
         accepts_connections.assert_not_called()

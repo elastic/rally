@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import time
 from pathlib import Path
 from unittest import mock
 
@@ -80,34 +81,44 @@ def test_prepare_track_parser_accepts_arguments():
     assert args.kill_running_processes is True
 
 
+@pytest.fixture
+def fake_time(monkeypatch):
+    # Replace only esrally.rally's reference to the time module. Patching "esrally.rally.time.sleep" would patch
+    # time.sleep globally, and calls from threads leaked by other tests would end up in the mock.
+    fake = mock.Mock(wraps=time)
+    fake.sleep = mock.Mock()
+    monkeypatch.setattr(rally, "time", fake)
+    return fake
+
+
 class TestWaitForActorSystemShutdown:
-    @mock.patch("esrally.rally.time.sleep")
     @mock.patch("esrally.actor.actor_system_already_running", return_value=False)
-    def test_returns_immediately_when_already_stopped(self, already_running, sleep):
+    def test_returns_immediately_when_already_stopped(self, already_running, fake_time):
+        sleep = fake_time.sleep
         assert rally.wait_for_actor_system_shutdown() is True
         already_running.assert_called_once()
         sleep.assert_not_called()
 
-    @mock.patch("esrally.rally.time.sleep")
     @mock.patch("esrally.actor.actor_system_already_running", side_effect=[True, True, False])
-    def test_polls_at_short_interval_until_stopped(self, already_running, sleep):
+    def test_polls_at_short_interval_until_stopped(self, already_running, fake_time):
+        sleep = fake_time.sleep
         assert rally.wait_for_actor_system_shutdown(timeout=15, poll_interval=0.05) is True
         assert already_running.call_count == 3
         assert sleep.call_args_list == [mock.call(0.05), mock.call(0.05)]
 
-    @mock.patch("esrally.rally.time.monotonic", side_effect=[0.0, 0.0, 0.05, 0.1])
-    @mock.patch("esrally.rally.time.sleep")
     @mock.patch("esrally.actor.actor_system_already_running", return_value=True)
-    def test_gives_up_after_timeout(self, already_running, sleep, monotonic):
+    def test_gives_up_after_timeout(self, already_running, fake_time):
+        fake_time.monotonic = mock.Mock(side_effect=[0.0, 0.0, 0.05, 0.1])
+        sleep = fake_time.sleep
         assert rally.wait_for_actor_system_shutdown(timeout=0.1, poll_interval=0.05) is False
         assert sleep.call_count == 2
 
 
 class TestWithActorSystem:
-    @mock.patch("esrally.rally.time.sleep")
     @mock.patch("esrally.actor.bootstrap_actor_system")
     @mock.patch("esrally.actor.actor_system_already_running", return_value=False)
-    def test_shuts_down_local_actor_system_without_fixed_delay(self, already_running, bootstrap, sleep):
+    def test_shuts_down_local_actor_system_without_fixed_delay(self, already_running, bootstrap, fake_time):
+        sleep = fake_time.sleep
         cfg = mock.Mock()
         cfg.opts.return_value = None
         runnable = mock.Mock()
@@ -118,10 +129,10 @@ class TestWithActorSystem:
         bootstrap.return_value.shutdown.assert_called_once()
         sleep.assert_not_called()
 
-    @mock.patch("esrally.rally.time.sleep")
     @mock.patch("esrally.actor.bootstrap_actor_system")
     @mock.patch("esrally.actor.actor_system_already_running", return_value=True)
-    def test_does_not_shut_down_actor_system_that_was_already_running(self, already_running, bootstrap, sleep):
+    def test_does_not_shut_down_actor_system_that_was_already_running(self, already_running, bootstrap, fake_time):
+        sleep = fake_time.sleep
         cfg = mock.Mock()
         cfg.opts.return_value = None
 
