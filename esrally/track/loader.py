@@ -639,8 +639,12 @@ class BulkDocumentSetFormat(DocumentSetFormat):
     source_format = track.Documents.SOURCE_FORMAT_BULK
 
     def finalize(self, preparator, document_set, doc_path):
-        # never attempt to download a pre-computed offset file in offline mode
-        corpus_base_url = None if preparator.downloader.offline else document_set.base_url
+        # Downloading a pre-computed offset file is pointless in offline mode, and for corpora shorter than the
+        # offset interval (e.g. in test mode) whose offset table is empty and built locally in no time.
+        if preparator.downloader.offline or document_set.number_of_lines < io.FileOffsetTable.OFFSET_INTERVAL:
+            corpus_base_url = None
+        else:
+            corpus_base_url = document_set.base_url
         lines_read = io.prepare_file_offset_table(doc_path, corpus_base_url)
         if lines_read and lines_read != document_set.number_of_lines:
             io.remove_file_offset_table(doc_path)
