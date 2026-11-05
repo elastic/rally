@@ -3183,6 +3183,46 @@ class TestInMemoryMetricsStore:
         assert len(self.metrics_store.docs) == 1
         assert self.metrics_store.get_one("final_index_size") == 1000
 
+    def test_externalize_with_clear_and_bulk_add_keeps_lookups_consistent(self):
+        self.metrics_store.open(
+            self.RACE_ID,
+            self.RACE_TIMESTAMP,
+            "test",
+            "append-no-conflicts",
+            "defaults",
+            create=True,
+        )
+        for i in range(3):
+            for task in ["task-a", "task-b"]:
+                self.metrics_store.put_value_cluster_level("latency", i, "ms", task=task, meta_data={"success": True})
+                self.metrics_store.put_value_cluster_level("service_time", i, "ms", task=task, meta_data={"success": task == "task-a"})
+        self.metrics_store.put_value_cluster_level("final_index_size", 1000, "GB")
+
+        def value(doc):
+            return doc["value"]
+
+        assert self.metrics_store.get_raw("latency", mapper=value) == [0, 0, 1, 1, 2, 2]
+        assert self.metrics_store.get_raw("latency", task="task-b", mapper=value) == [0, 1, 2]
+        assert self.metrics_store.get_error_rate("task-b") == 1.0
+
+        memento = self.metrics_store.to_externalizable(clear=True)
+
+        assert self.metrics_store.docs == []
+        assert self.metrics_store.get_raw("latency") == []
+        assert self.metrics_store.get_raw("latency", task="task-b") == []
+        assert self.metrics_store.get_one("final_index_size") is None
+        assert self.metrics_store.get_error_rate("task-b") == 0.0
+
+        self.metrics_store.bulk_add(memento)
+
+        assert len(self.metrics_store.docs) == 13
+        assert self.metrics_store.get_raw("latency", mapper=value) == [0, 0, 1, 1, 2, 2]
+        assert self.metrics_store.get_raw("latency", task="task-a", mapper=value) == [0, 1, 2]
+        assert self.metrics_store.get_one("latency", task="task-b", sort_key="value", sort_reverse=True) == 2
+        assert self.metrics_store.get_one("final_index_size") == 1000
+        assert self.metrics_store.get_error_rate("task-a") == 0.0
+        assert self.metrics_store.get_error_rate("task-b") == 1.0
+
     def test_meta_data_per_document(self):
         self.metrics_store.open(
             self.RACE_ID,
