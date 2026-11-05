@@ -23,9 +23,11 @@ Manage Rally's changelog fragments (see changelog.d/README.md).
   python3 changelog.py check --base origin/master   # CI: the branch adds valid fragments
   python3 changelog.py collect X.Y.Z --dry-run      # release checks: every fragment is valid and maps to a PR
   python3 changelog.py collect X.Y.Z                # release: link fragments to their PRs, then `scriv collect`
+  python3 changelog.py render                       # print the changelog with unreleased entries, as in the docs
 """
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -175,6 +177,42 @@ def cmd_collect(args):
     return 0
 
 
+def render(fallback_pr=None):
+    """
+    Return CHANGELOG.md as Markdown, preceded by an "Unreleased" entry built from the pending fragments,
+    as ``scriv collect`` would. Fragments are left untouched. Bullets of fragments that can't be traced to
+    a merged pull request (e.g. in a pull request preview) are linked to ``fallback_pr`` if given.
+    """
+    # pylint: disable=import-outside-toplevel
+    from scriv.format import get_format_tools
+    from scriv.scriv import Scriv
+
+    class LinkingScriv(Scriv):
+        def sections_from_fragment(self, fragment):
+            fragment.read()
+            number = pr_number(fragment.path) or fallback_pr
+            text = link_bullets(fragment.content, number) if number else fragment.content
+            return get_format_tools(fragment.format, self.config).parse_text(text.rstrip())
+
+    released = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").replace("<!-- scriv-insert-here -->", "").lstrip()
+    cwd = os.getcwd()
+    os.chdir(ROOT)  # scriv reads its configuration and fragments relative to the working directory
+    try:
+        scriv = LinkingScriv()
+        fragments = scriv.fragments_to_combine()
+        if not fragments:
+            return released
+        unreleased = scriv.changelog().entry_text(scriv.combine_fragments(fragments)).strip()
+    finally:
+        os.chdir(cwd)
+    return f"### Unreleased\n\n{unreleased}\n\n{released}"
+
+
+def cmd_render(args):
+    print(render(args.pr))
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -187,6 +225,10 @@ def main():
     collect.add_argument("version", help="the version being released, e.g. 2.14.0")
     collect.add_argument("--dry-run", action="store_true", help="only validate fragments and resolve their pull requests")
     collect.set_defaults(func=cmd_collect)
+
+    render_ = subparsers.add_parser("render", help="print the changelog including unreleased fragments, as shown in the docs")
+    render_.add_argument("--pr", type=int, help="pull request to link fragments to when they can't be traced to a merged one")
+    render_.set_defaults(func=cmd_render)
 
     args = parser.parse_args()
     sys.exit(args.func(args))

@@ -59,7 +59,7 @@ the PR number or link — release tooling adds it from the merge commit. Example
 
 Categories: Breaking Changes, Highlights, Enhancements, Bug Fixes, Doc Changes, Miscellaneous
 Changes. Check the fragment with `python3 changelog.py check --base origin/master` (it needs the
-fragment committed). If the change is internal-only, add no fragment and say in the PR
+fragment committed) and preview it with `python3 changelog.py render`. If the change is internal-only, add no fragment and say in the PR
 description that it needs the `skip-changelog` label. Details: `changelog.d/README.md`.
 
 ## Testing & conventions

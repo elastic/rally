@@ -21,6 +21,9 @@ one category and write one bullet describing the change for Rally users, for exa
 
 You can also create the file by hand: any unique `.md` name in this directory works.
 
+To see how your entry will look, open the Changelog page of the Read the Docs preview linked
+from your pull request checks, or run `python3 changelog.py render` locally.
+
 - Write for users, not reviewers: say what changed for them, not how it was implemented.
 - Don't add the PR number or link. It is added at release time from the merge commit.
 - Use one fragment per pull request, usually with one bullet. Several categories in one fragment
