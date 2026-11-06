@@ -237,12 +237,19 @@ def actor_system_already_running(
     return False
 
 
-def _accepts_connections(sockname: tuple[str, int]) -> bool:
+def accepts_connections(sockname: tuple[str, int]) -> bool:
+    """Returns ``False`` only if the connection is refused, i.e. nothing listens on ``sockname`` anymore.
+
+    Other errors (e.g. a timeout or running out of file descriptors) are inconclusive, so we assume it still listens.
+    """
     try:
         with socket.create_connection(sockname, timeout=0.1):
             return True
-    except OSError:
+    except ConnectionRefusedError:
         return False
+    except OSError as e:
+        LOG.debug("Could not determine whether [%s] accepts connections: %s", sockname, e)
+        return True
 
 
 def wait_for_actor_exit(actor_address: Any, timeout: float = 3.0, poll_interval: float = 0.05) -> bool:
@@ -264,7 +271,7 @@ def wait_for_actor_exit(actor_address: Any, timeout: float = 3.0, poll_interval:
         time.sleep(timeout)
         return False
     deadline = time.monotonic() + timeout
-    while _accepts_connections((sockname[0], sockname[1])):
+    while accepts_connections((sockname[0], sockname[1])):
         if time.monotonic() >= deadline:
             LOG.warning("Actor [%s] has not exited within [%.1f] seconds.", actor_address, timeout)
             return False
