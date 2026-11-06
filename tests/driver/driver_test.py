@@ -15,11 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import collections
 import copy
 import io
+import logging
 import threading
 import time
+import zlib
 from datetime import datetime
 from unittest import mock
 
@@ -27,7 +30,7 @@ import elastic_transport
 import elasticsearch
 import pytest
 
-from esrally import config, exceptions, metrics, track
+from esrally import config, exceptions, metrics, profiling, track
 from esrally.driver import driver, runner, scheduler
 from esrally.driver.driver import ApiKey, ClientContext
 from esrally.track import params
@@ -2554,3 +2557,747 @@ class TestAsyncProfiler:
         profiler = driver.AsyncProfiler(f)
         assert await profiler(1) == 2
         assert f_called
+
+
+class TestSamplePostprocessorProfiling:
+    def task(self):
+        return track.Task("search-task", track.Operation("search-op", "search", param_source="driver-test-param-source"))
+
+    def sample(self, task, client_id=0, absolute_time=38598, request_start=24, sample_type=metrics.SampleType.Warmup, profile=None):
+        return driver.Sample(
+            client_id,
+            absolute_time,
+            request_start,
+            0,
+            task,
+            sample_type,
+            None,
+            0.01,
+            0.007,
+            0.009,
+            None,
+            1,
+            "ops",
+            1,
+            1 / 2,
+            profile=profile,
+        )
+
+    def profile_attachment(self, mode="warmup", iteration=1, response=None, **kwargs):
+        attachment = {"mode": mode, "iteration": iteration, "complete": response is not None, "response": response}
+        attachment.update(kwargs)
+        return attachment
+
+    def ordinary_metric_calls(self, metrics_store):
+        return [
+            c
+            for c in metrics_store.put_value_cluster_level.call_args_list
+            if isinstance(c.kwargs["sample_type"], metrics.SampleType) and c.kwargs["name"] != "throughput"
+        ]
+
+    def throughput_calls(self, metrics_store):
+        return [c for c in metrics_store.put_value_cluster_level.call_args_list if c.kwargs["name"] == "throughput"]
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_warmup_profiling_keeps_measured_downsampling_positions(self, profiled_store):
+        # NOTE: identical sample streams, except that the second warmup invocation is profiled;
+        # the ordinary documents and their downsampling slots must be identical
+        task = self.task()
+
+        def samples(profiled):
+            profile = self.profile_attachment(response={"shards": []}) if profiled else None
+            return [
+                self.sample(task, absolute_time=38598, request_start=24),
+                self.sample(task, absolute_time=38599, request_start=25, profile=profile),
+                self.sample(task, absolute_time=38600, request_start=26, sample_type=metrics.SampleType.Normal),
+                self.sample(task, absolute_time=38601, request_start=27, sample_type=metrics.SampleType.Normal),
+                self.sample(task, absolute_time=38602, request_start=28, sample_type=metrics.SampleType.Normal),
+            ]
+
+        plain_store = mock.Mock()
+        driver.SamplePostprocessor(plain_store, downsample_factor=2, track_meta_data={}, challenge_meta_data={})(samples(profiled=False))
+        driver.SamplePostprocessor(profiled_store, downsample_factor=2, track_meta_data={}, challenge_meta_data={})(samples(profiled=True))
+
+        plain_ordinary = self.ordinary_metric_calls(plain_store)
+        profiled_ordinary = self.ordinary_metric_calls(profiled_store)
+        # the profiled invocation occupies its positional slot but emits no ordinary documents
+        plain_without_profiled_invocation = [c for c in plain_ordinary if c.kwargs["absolute_time"] != 38599]
+        assert profiled_ordinary == plain_without_profiled_invocation
+        # downsampling factor 2 keeps positions 0, 2, 4
+        assert sorted({c.kwargs["absolute_time"] for c in profiled_ordinary}) == [38598, 38600, 38602]
+        # throughput inputs are identical: the profiled warmup sample stays in the stream
+        assert self.throughput_calls(profiled_store) == self.throughput_calls(plain_store)
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_profiled_warmup_sample_emits_profile_documents(self, metrics_store):
+        task = self.task()
+        profile = self.profile_attachment(
+            iteration=4,
+            response={"shards": [{"node_id": "n0"}]},
+            fingerprint="a" * 64,
+            response_bytes=123,
+        )
+        post_process = driver.SamplePostprocessor(metrics_store, downsample_factor=1, track_meta_data={}, challenge_meta_data={})
+        post_process([self.sample(task, profile=profile)])
+
+        profile_metric_calls = [
+            c for c in metrics_store.put_value_cluster_level.call_args_list if c.kwargs["sample_type"] == "profile_warmup"
+        ]
+        assert {c.kwargs["name"] for c in profile_metric_calls} == {"latency", "processing_time"}
+        for c in profile_metric_calls:
+            assert c.kwargs["meta_data"]["profile_iteration"] == 4
+            assert c.kwargs["meta_data"]["profile_complete"] is True
+            assert c.kwargs["meta_data"]["profile_request_fingerprint"] == "a" * 64
+            assert c.kwargs["meta_data"]["profile_response_bytes"] == 123
+            assert c.kwargs["meta_data"]["client_id"] == 0
+
+        doc = metrics_store.put_doc.call_args.args[0]
+        assert doc["name"] == "service_time"
+        assert doc["sample-type"] == "profile_warmup"
+        assert doc["task"] == "search-task"
+        assert doc["profile_response"] == {"shards": [{"node_id": "n0"}]}
+        assert doc["response-timestamp"] == int(38598 * 1000 + 7.0)
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_incomplete_capture_omits_profile_response(self, metrics_store):
+        task = self.task()
+        profile = self.profile_attachment(response=None, capture_error="size_exceeded", response_bytes=999)
+        post_process = driver.SamplePostprocessor(metrics_store, downsample_factor=1, track_meta_data={}, challenge_meta_data={})
+        post_process([self.sample(task, profile=profile)])
+        doc = metrics_store.put_doc.call_args.args[0]
+        assert "profile_response" not in doc
+        meta = metrics_store.put_doc.call_args.kwargs["meta_data"]
+        assert meta["profile_complete"] is False
+        assert meta["profile_capture_error"] == "size_exceeded"
+        assert meta["profile_response_bytes"] == 999
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_post_measurement_samples_are_pure_diagnostics(self, metrics_store):
+        task = self.task()
+        profile = self.profile_attachment(mode="post_measurement", iteration=2, response={"drivers": []}, requested_iterations=3)
+        measured = self.sample(task, absolute_time=38598, sample_type=metrics.SampleType.Normal)
+        diagnostic = self.sample(task, absolute_time=38700, sample_type=metrics.SampleType.Normal, profile=profile)
+        post_process = driver.SamplePostprocessor(metrics_store, downsample_factor=1, track_meta_data={}, challenge_meta_data={})
+        post_process([measured, diagnostic])
+
+        # ordinary documents only for the measured sample
+        assert {c.kwargs["absolute_time"] for c in self.ordinary_metric_calls(metrics_store)} == {38598}
+        # throughput only from the measured sample
+        assert {c.kwargs["absolute_time"] for c in self.throughput_calls(metrics_store)} == {38598}
+        # all three timing documents carry the post-measurement sample type
+        profile_calls = [
+            c for c in metrics_store.put_value_cluster_level.call_args_list if c.kwargs["sample_type"] == "profile_post_measurement"
+        ]
+        assert {c.kwargs["name"] for c in profile_calls} == {"latency", "processing_time"}
+        doc = metrics_store.put_doc.call_args.args[0]
+        assert doc["sample-type"] == "profile_post_measurement"
+        meta = metrics_store.put_doc.call_args.kwargs["meta_data"]
+        assert meta["profile_iteration"] == 2
+        assert meta["profile_requested_iterations"] == 3
+
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_profile_documents_bypass_downsampling(self, metrics_store):
+        task = self.task()
+        samples = [
+            self.sample(task, absolute_time=38598 + i, profile=self.profile_attachment(iteration=i + 1, response={"x": i}))
+            for i in range(3)
+        ]
+        post_process = driver.SamplePostprocessor(metrics_store, downsample_factor=10, track_meta_data={}, challenge_meta_data={})
+        post_process(samples)
+        assert metrics_store.put_doc.call_count == 3
+
+
+class TestAsyncExecutorWarmupProfiling:
+    class FakeSchedule:
+        # NOTE: yields one invocation per given sample type; mirrors the ScheduleHandle interface used by AsyncExecutor
+        def __init__(self, runner, sample_types, params):
+            self.runner = runner
+            self.sample_types = sample_types
+            self.params = params
+            self.ramp_up_wait_time = 0
+
+        def start(self):
+            pass
+
+        def before_request(self, now):
+            pass
+
+        def after_request(self, now, weight, unit, request_meta_data):
+            pass
+
+        def __call__(self):
+            async def generator():
+                for i, sample_type in enumerate(self.sample_types):
+                    yield 0, sample_type, (i + 1) / len(self.sample_types), self.runner, self.params
+
+            return generator()
+
+    class CapturingRunner:
+        # NOTE: returns capture results only for profiled invocations, like the search and esql runners
+        def __init__(self, fail=False):
+            self.calls = []
+            self.fail = fail
+            self.completed = None
+            self.percent_completed = None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+        async def __call__(self, es, params):
+            self.calls.append(dict(params))
+            if self.fail:
+                return {"weight": 0, "unit": "ops", "success": False, "error-type": "api"}
+            result = {"weight": 1, "unit": "ops", "success": True}
+            if params.get("profile-capture"):
+                result.update(
+                    {
+                        "profile_complete": True,
+                        "profile_response": {"shards": [{"node_id": "n0"}]},
+                        "profile_response_bytes": 42,
+                        "profile_request_fingerprint": "f" * 64,
+                    }
+                )
+            return result
+
+    def task(self):
+        return track.Task("search-task", track.Operation("search-op", "search"))
+
+    async def run(self, sample_types, profile_config, fail=False, client_id=0):
+        es = mock.Mock()
+        es.new_request_context.return_value = TestAsyncExecutor.StaticRequestTiming(task_start=0)
+        capturing_runner = self.CapturingRunner(fail=fail)
+        source_params = {"index": "logs", "body": {"query": {"match_all": {}}}}
+        sampler = driver.Sampler(start_timestamp=0)
+        executor = driver.AsyncExecutor(
+            client_id=client_id,
+            task=self.task(),
+            schedule=self.FakeSchedule(capturing_runner, sample_types, source_params),
+            es=driver.EsClients({"default": es}),
+            sampler=sampler,
+            cancel=threading.Event(),
+            complete=threading.Event(),
+            on_error=OnErrorBehavior.CONTINUE,
+            profile_config=profile_config,
+        )
+        await executor()
+        return capturing_runner, sampler.samples, source_params
+
+    def config(self, iterations="all", warmup_enabled=True, max_response_bytes=1024):
+        return profiling.ProfileConfig.from_dict(
+            {"enabled": True, "warmup": {"enabled": warmup_enabled, "iterations": iterations}, "max_response_bytes": max_response_bytes}
+        )
+
+    W = metrics.SampleType.Warmup
+    N = metrics.SampleType.Normal
+
+    @pytest.mark.asyncio
+    async def test_profiles_exactly_the_selected_warmup_iterations(self):
+        sample_types = [self.W] * 10 + [self.N] * 5
+        capturing_runner, samples, _ = await self.run(sample_types, self.config(iterations=[1, 4, 9]))
+        profiled = [i + 1 for i, call in enumerate(capturing_runner.calls) if call.get("profile-capture")]
+        assert profiled == [1, 4, 9]
+        assert [s.profile["iteration"] for s in samples if s.profile] == [1, 4, 9]
+
+    @pytest.mark.asyncio
+    async def test_does_not_add_requests_or_samples(self):
+        sample_types = [self.W] * 10 + [self.N] * 5
+        capturing_runner, samples, _ = await self.run(sample_types, self.config())
+        assert len(capturing_runner.calls) == 15
+        assert len(samples) == 15
+        # profiled samples keep their internal warmup classification
+        assert [s.sample_type for s in samples] == sample_types
+
+    @pytest.mark.asyncio
+    async def test_all_profiles_every_warmup_request_and_no_measured_request(self):
+        sample_types = [self.W] * 4 + [self.N] * 3
+        _, samples, _ = await self.run(sample_types, self.config(iterations="all"))
+        assert [s.profile is not None for s in samples] == [True] * 4 + [False] * 3
+
+    @pytest.mark.asyncio
+    async def test_counts_requests_of_a_time_based_warmup_period(self):
+        # a time-based warmup period yields an a priori unknown number of warmup invocations
+        sample_types = [self.W] * 3 + [self.N] * 2
+        _, samples, _ = await self.run(sample_types, self.config(iterations="2-5"))
+        assert [s.profile["iteration"] for s in samples if s.profile] == [2, 3]
+
+    @pytest.mark.asyncio
+    async def test_unreached_selection_is_logged(self, caplog):
+        sample_types = [self.W] * 3 + [self.N]
+        with caplog.at_level(logging.INFO, logger="esrally.driver.driver"):
+            await self.run(sample_types, self.config(iterations=[2, 7, 9]))
+        assert any("[7, 9] were not reached" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_capture_results_move_into_the_attachment(self):
+        _, samples, _ = await self.run([self.W], self.config())
+        sample = samples[0]
+        assert sample.profile == {
+            "mode": "warmup",
+            "iteration": 1,
+            "complete": True,
+            "response": {"shards": [{"node_id": "n0"}]},
+            "response_bytes": 42,
+            "fingerprint": "f" * 64,
+        }
+        assert not any(k.startswith("profile_") for k in sample.request_meta_data)
+
+    @pytest.mark.asyncio
+    async def test_passes_size_limit_and_does_not_mutate_source_params(self):
+        capturing_runner, _, source_params = await self.run([self.W], self.config(max_response_bytes=777))
+        assert capturing_runner.calls[0]["profile-max-response-bytes"] == 777
+        assert "profile-capture" not in source_params
+
+    @pytest.mark.asyncio
+    async def test_failed_profiled_request_is_reported(self):
+        _, samples, _ = await self.run([self.W], self.config(), fail=True)
+        assert samples[0].profile["complete"] is False
+        assert samples[0].profile["capture_error"] == "request_failed"
+        assert samples[0].request_meta_data["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_disabled_warmup_profiling_profiles_nothing(self):
+        capturing_runner, samples, _ = await self.run([self.W] * 3, self.config(warmup_enabled=False))
+        assert not any(call.get("profile-capture") for call in capturing_runner.calls)
+        assert all(s.profile is None for s in samples)
+
+    @pytest.mark.asyncio
+    async def test_no_profile_config_leaves_params_untouched(self):
+        capturing_runner, samples, _ = await self.run([self.W] * 3, profile_config=None)
+        assert all("profile-capture" not in call for call in capturing_runner.calls)
+        assert all(s.profile is None for s in samples)
+
+    @pytest.mark.asyncio
+    async def test_clients_count_independently(self):
+        sample_types = [self.W] * 5
+        _, samples_client_0, _ = await self.run(sample_types, self.config(iterations=[2, 5]), client_id=0)
+        _, samples_client_1, _ = await self.run(sample_types, self.config(iterations=[2, 5]), client_id=1)
+        for samples in (samples_client_0, samples_client_1):
+            assert [s.profile["iteration"] for s in samples if s.profile] == [2, 5]
+
+
+class TestProfilingStatisticsIsolation:
+    def race_results(self, profiled, downsample_factor):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        cfg.add(config.Scope.application, "track", "params", {})
+        store = metrics.InMemoryMetricsStore(cfg)
+        store.open("race-id", datetime(2026, 11, 3), "unittest", "default", "defaults", create=True)
+
+        task = track.Task("search-task", track.Operation("search-op", "search"), warmup_iterations=6, iterations=12)
+        challenge = track.Challenge("default", schedule=[task])
+        test_track = track.Track(name="unittest", challenges=[challenge])
+
+        samples = []
+        for i in range(18):
+            sample_type = metrics.SampleType.Warmup if i < 6 else metrics.SampleType.Normal
+            profile = None
+            if profiled and i in (1, 4):
+                profile = {"mode": "warmup", "iteration": i + 1, "complete": True, "response": {"shards": []}}
+            service_time = 0.001 * (1 + (i * 7) % 11)
+            samples.append(
+                driver.Sample(
+                    0,
+                    1000 + i,
+                    i,
+                    0,
+                    task,
+                    sample_type,
+                    {"success": True},
+                    service_time,
+                    service_time,
+                    service_time,
+                    None,
+                    1,
+                    "ops",
+                    i + 1,
+                    (i + 1) / 18,
+                    profile=profile,
+                )
+            )
+        if profiled:
+            for n in range(3):
+                profile = {"mode": "post_measurement", "iteration": n + 1, "complete": True, "response": {"drivers": []}}
+                samples.append(
+                    driver.Sample(
+                        0,
+                        2000 + n,
+                        100 + n,
+                        0,
+                        task,
+                        metrics.SampleType.Normal,
+                        {"success": False},
+                        9.0,
+                        9.0,
+                        9.0,
+                        None,
+                        1,
+                        "ops",
+                        100 + n,
+                        1.0,
+                        profile=profile,
+                    )
+                )
+
+        driver.SamplePostprocessor(store, downsample_factor=downsample_factor, track_meta_data={}, challenge_meta_data={})(samples)
+        stats = metrics.GlobalStatsCalculator(store, test_track, challenge)()
+        return stats, store
+
+    def test_profiling_samples_do_not_change_ordinary_statistics(self):
+        plain_stats, _ = self.race_results(profiled=False, downsample_factor=1)
+        profiled_stats, profiled_store = self.race_results(profiled=True, downsample_factor=1)
+        assert profiled_stats.op_metrics == plain_stats.op_metrics
+        # the diagnostic documents exist, but outside ordinary statistics
+        sample_types = {d["sample-type"] for d in profiled_store.docs if d["name"] == "service_time"}
+        assert {"profile_warmup", "profile_post_measurement", "normal", "warmup"} <= sample_types
+
+    def test_downsampling_only_affects_the_approximate_warmup_window(self):
+        # NOTE: with downsampling, the warmup window of a plain run is computed from the kept warmup documents
+        # only and under-reports the warmup end. Profiled warmup documents bypass downsampling, so the window
+        # of a profiled run can only move toward the true warmup boundaries; measured statistics are identical.
+        plain_stats, _ = self.race_results(profiled=False, downsample_factor=3)
+        profiled_stats, _ = self.race_results(profiled=True, downsample_factor=3)
+        exact_stats, _ = self.race_results(profiled=False, downsample_factor=1)
+        warmup_window_keys = {"warmup_start_timestamp", "warmup_end_timestamp"}
+        plain, profiled, exact = plain_stats.op_metrics[0], profiled_stats.op_metrics[0], exact_stats.op_metrics[0]
+        assert {k: v for k, v in profiled.items() if k not in warmup_window_keys} == {
+            k: v for k, v in plain.items() if k not in warmup_window_keys
+        }
+        assert plain["warmup_start_timestamp"] == profiled["warmup_start_timestamp"] == exact["warmup_start_timestamp"]
+        assert plain["warmup_end_timestamp"] <= profiled["warmup_end_timestamp"] <= exact["warmup_end_timestamp"]
+
+
+class TestPostMeasurementAllocation:
+    def search_task(self, name, clients=1, completes_parent=False):
+        return track.Task(name, op(name, track.OperationType.Search), clients=clients, completes_parent=completes_parent)
+
+    @staticmethod
+    def measured_entries(allocations):
+        # NOTE: profile steps occupy the same columns for all clients; drop them and their trailing join point
+        profile_columns = set()
+        for column in range(len(allocations[0])):
+            if any(isinstance(row[column], driver.TaskAllocation) and row[column].is_post_measurement_profile for row in allocations):
+                profile_columns.update({column, column + 1})
+
+        def comparable(entry):
+            # join point ids shift when profile steps are inserted; their coordination semantics must not change
+            if isinstance(entry, driver.JoinPoint):
+                return ("join-point", entry.clients_executing_completing_task, entry.any_task_completes_parent)
+            return entry
+
+        return [[comparable(entry) for column, entry in enumerate(row) if column not in profile_columns] for row in allocations]
+
+    def test_no_profiling_keeps_the_allocation_matrix(self):
+        task = self.search_task("search", clients=2)
+        plain = driver.Allocator([task]).allocations
+        with_resolver = driver.Allocator([task], post_measurement_iterations=lambda t: 0).allocations
+        assert with_resolver == plain
+
+    def test_profile_step_follows_the_measured_join_point(self):
+        task = self.search_task("search", clients=2)
+        allocator = driver.Allocator([task], post_measurement_iterations=lambda t: 3)
+        for client_index, client_allocations in enumerate(allocator.allocations):
+            assert isinstance(client_allocations[0], driver.JoinPoint)
+            measured, measured_join_point, profile, profile_join_point = client_allocations[1:]
+            assert not measured.is_post_measurement_profile
+            assert isinstance(measured_join_point, driver.JoinPoint)
+            assert profile.is_post_measurement_profile
+            assert profile.post_measurement_iterations == 3
+            assert profile.task is task
+            assert profile.client_index_in_task == measured.client_index_in_task == client_index
+            assert isinstance(profile_join_point, driver.JoinPoint)
+        assert len(allocator.join_points) == 3
+        assert allocator.tasks_per_joinpoint == [{task}, {task}]
+
+    def test_measured_allocations_are_unchanged(self):
+        a = self.search_task("a", clients=2)
+        b = self.search_task("b", clients=3)
+        c = self.search_task("c")
+        schedule = [a, track.Parallel([b, c]), a]
+        plain = driver.Allocator(schedule).allocations
+        profiled = driver.Allocator(schedule, post_measurement_iterations=lambda t: 2 if t.name in ("a", "b") else 0).allocations
+        assert self.measured_entries(profiled) == self.measured_entries(plain)
+
+    def test_parallel_element_gets_one_combined_profile_step(self):
+        b = self.search_task("b", clients=2, completes_parent=True)
+        c = self.search_task("c")
+        allocator = driver.Allocator([track.Parallel([b, c])], post_measurement_iterations=lambda t: 1 if t.name == "b" else 0)
+        allocations = allocator.allocations
+        # leading join point, measured step, join point, one profile step, join point
+        assert all(len(client_allocations) == 5 for client_allocations in allocations)
+        profile_step = [entry for client_allocations in allocations for column, entry in enumerate(client_allocations) if column == 3]
+        assert [e.task.name if e else None for e in profile_step] == ["b", "b", None]
+        # completion semantics stay on the measured join point only
+        assert allocator.join_points[1].preceding_task_completes_parent
+        assert not allocator.join_points[2].preceding_task_completes_parent
+        assert allocator.join_points[2].clients_executing_completing_task == []
+
+    def test_matrix_stays_rectangular_when_tasks_exceed_clients(self):
+        tasks = [self.search_task(f"t{i}") for i in range(5)]
+        allocator = driver.Allocator([track.Parallel(tasks, clients=2)], post_measurement_iterations=lambda t: 1)
+        lengths = {len(client_allocations) for client_allocations in allocator.allocations}
+        assert len(lengths) == 1
+
+
+class TestPostMeasurementSchedule:
+    def setup_method(self, method):
+        runner.register_default_runners()
+
+    def test_runs_exactly_the_requested_iterations_as_normal_samples(self):
+        task = track.Task(
+            "search",
+            track.Operation("search", track.OperationType.Search.to_hyphenated_string(), params={"index": "logs", "body": {}}),
+            warmup_iterations=100,
+            iterations=1000,
+        )
+        test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
+        allocation = driver.TaskAllocation(task, 0, 0, 1, post_measurement_iterations=3)
+        handle = driver.schedule_for(allocation, track.operation_parameters(test_track, task))
+        assert handle.ramp_up_wait_time == 0
+        handle.start()
+
+        async def collect():
+            return [sample_type async for _, sample_type, _, _, _ in handle()]
+
+        assert asyncio.run(collect()) == [metrics.SampleType.Normal] * 3
+
+    def test_ramp_up_does_not_apply(self):
+        task = track.Task(
+            "search",
+            track.Operation("search", track.OperationType.Search.to_hyphenated_string(), params={"index": "logs", "body": {}}),
+            warmup_time_period=10,
+            ramp_up_time_period=10,
+            clients=2,
+        )
+        test_track = track.Track(name="unittest", description="unittest track", indices=None, challenges=None)
+        allocation = driver.TaskAllocation(task, 1, 1, 2, post_measurement_iterations=1)
+        assert driver.schedule_for(allocation, track.operation_parameters(test_track, task)).ramp_up_wait_time == 0
+
+
+class TestPostMeasurementExecution:
+    FakeSchedule = TestAsyncExecutorWarmupProfiling.FakeSchedule
+    CapturingRunner = TestAsyncExecutorWarmupProfiling.CapturingRunner
+
+    def task(self):
+        return track.Task("search-task", track.Operation("search-op", "search"))
+
+    def config(self):
+        return profiling.ProfileConfig.from_dict({"enabled": True})
+
+    async def run_post_measurement(self, iterations, executed=None, fail=False, extra_params=None, task=None, complete=None):
+        es = mock.Mock()
+        es.new_request_context.return_value = TestAsyncExecutor.StaticRequestTiming(task_start=0)
+        capturing_runner = self.CapturingRunner(fail=fail)
+        source_params = {"index": "logs", "body": {}, **(extra_params or {})}
+        sample_types = [metrics.SampleType.Normal] * (iterations if executed is None else executed)
+        sampler = driver.Sampler(start_timestamp=0)
+        executor = driver.AsyncExecutor(
+            client_id=1,
+            task=task or self.task(),
+            schedule=self.FakeSchedule(capturing_runner, sample_types, source_params),
+            es=driver.EsClients({"default": es}),
+            sampler=sampler,
+            cancel=threading.Event(),
+            complete=complete or threading.Event(),
+            on_error=OnErrorBehavior.CONTINUE_ON_NETWORK,
+            profile_config=self.config(),
+            post_measurement_iterations=iterations,
+        )
+        await executor()
+        return capturing_runner, sampler.samples
+
+    @pytest.mark.parametrize("completion", [{"completes_parent": True}, {"any_completes_parent": True}])
+    @pytest.mark.asyncio
+    async def test_parent_completion_neither_stops_nor_is_signaled(self, completion):
+        # NOTE: in the measured step, another client of the same worker sets the shared event when it finishes
+        task = track.Task("search-task", track.Operation("search-op", "search"), clients=2, **completion)
+        complete = threading.Event()
+        complete.set()
+        capturing_runner, samples = await self.run_post_measurement(3, task=task, complete=complete)
+        assert len(capturing_runner.calls) == 3
+        assert [s.profile["iteration"] for s in samples] == [1, 2, 3]
+
+        complete.clear()
+        await self.run_post_measurement(1, task=task, complete=complete)
+        assert not complete.is_set()
+
+    @pytest.mark.asyncio
+    async def test_profiles_every_iteration_with_per_client_numbering(self):
+        capturing_runner, samples = await self.run_post_measurement(3)
+        assert len(capturing_runner.calls) == 3
+        assert all(call["profile-capture"] for call in capturing_runner.calls)
+        assert [s.profile["iteration"] for s in samples] == [1, 2, 3]
+        assert all(s.profile["mode"] == "post_measurement" and s.profile["requested_iterations"] == 3 for s in samples)
+        assert all(s.profile_only for s in samples)
+
+    @pytest.mark.asyncio
+    async def test_drops_assertions_from_diagnostic_requests(self):
+        capturing_runner, _ = await self.run_post_measurement(
+            1, extra_params={"assertions": [{"property": "hits", "condition": ">", "value": 0}]}
+        )
+        assert "assertions" not in capturing_runner.calls[0]
+
+    @pytest.mark.asyncio
+    async def test_shortfall_is_reported_and_not_fatal(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="esrally.driver.driver"):
+            _, samples = await self.run_post_measurement(5, executed=2)
+        assert len(samples) == 2
+        assert any("ran [2] of [5] iterations" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_failures_are_recorded_and_not_fatal(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="esrally.driver.driver"):
+            _, samples = await self.run_post_measurement(2, fail=True)
+        assert [s.profile["capture_error"] for s in samples] == ["request_failed", "request_failed"]
+        assert any("[2] of [2] post-measurement profiling requests" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_network_errors_do_not_abort(self):
+        class ConnectionFailingRunner(self.CapturingRunner):
+            async def __call__(self, es, params):
+                self.calls.append(dict(params))
+                raise elasticsearch.ConnectionError("node unreachable")
+
+        es = mock.Mock()
+        es.new_request_context.return_value = TestAsyncExecutor.StaticRequestTiming(task_start=0)
+        failing_runner = ConnectionFailingRunner()
+        sampler = driver.Sampler(start_timestamp=0)
+        executor = driver.AsyncExecutor(
+            client_id=0,
+            task=self.task(),
+            schedule=self.FakeSchedule(failing_runner, [metrics.SampleType.Normal] * 2, {"index": "logs", "body": {}}),
+            es=driver.EsClients({"default": es}),
+            sampler=sampler,
+            cancel=threading.Event(),
+            complete=threading.Event(),
+            on_error=OnErrorBehavior.CONTINUE_ON_NETWORK,
+            profile_config=self.config(),
+            post_measurement_iterations=2,
+        )
+        await executor()
+        assert len(failing_runner.calls) == 2
+        assert [s.profile["capture_error"] for s in sampler.samples] == ["request_failed", "request_failed"]
+
+
+class TestPostMeasurementErrorBehavior:
+    def adapter(self, on_error):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "driver", "profiling", False)
+        cfg.add(config.Scope.application, "driver", "assertions", False)
+        return driver.AsyncIoAdapter(cfg, None, [], None, None, None, on_error, {}, 0)
+
+    def test_profile_steps_never_abort(self):
+        task = track.Task("search", op("search", track.OperationType.Search))
+        adapter = self.adapter(OnErrorBehavior.ABORT)
+        assert (
+            adapter.error_behavior(driver.TaskAllocation(task, 0, 0, 1, post_measurement_iterations=1))
+            == OnErrorBehavior.CONTINUE_ON_NETWORK
+        )
+        assert adapter.error_behavior(driver.TaskAllocation(task, 0, 0, 1)) == OnErrorBehavior.ABORT
+
+
+class TestPostMeasurementResolution:
+    def resolver(self, profile_config):
+        cfg = config.Config()
+        if profile_config is not None:
+            cfg.add(config.Scope.application, "driver", "profile", profile_config)
+        d = driver.Driver(mock.Mock(), cfg)
+        return d.post_measurement_iterations
+
+    def test_resolves_global_and_task_level_settings(self):
+        global_config = profiling.ProfileConfig.from_dict({"enabled": True, "post_measurement": {"extra_iterations": 2}})
+        resolve = self.resolver(global_config)
+        search = track.Task("search", track.Operation("search", "search"))
+        bulk = track.Task("bulk", track.Operation("bulk", "bulk"))
+        override = track.Task("esql", track.Operation("esql", "esql"), params={"profile": {"post_measurement": {"extra_iterations": 5}}})
+        disabled = track.Task("search-2", track.Operation("search", "search"), params={"profile": False})
+        assert resolve(search) == 2
+        assert resolve(bulk) == 0
+        assert resolve(override) == 5
+        assert resolve(disabled) == 0
+
+    def test_without_configuration_nothing_is_added(self):
+        assert self.resolver(None)(track.Task("search", track.Operation("search", "search"))) == 0
+
+
+class TestProfileStorage:
+    @mock.patch("esrally.metrics.MetricsStore")
+    def test_disabled_payload_persistence_marks_documents_incomplete(self, metrics_store):
+        task = track.Task("search-task", track.Operation("search-op", "search"))
+        profile = {"mode": "warmup", "iteration": 1, "complete": True, "response": {"shards": []}, "response_bytes": 10}
+        sample = driver.Sample(
+            0, 38598, 24, 0, task, metrics.SampleType.Warmup, None, 0.01, 0.007, 0.009, None, 1, "ops", 1, 1, profile=profile
+        )
+        post_process = driver.SamplePostprocessor(metrics_store, downsample_factor=1, track_meta_data={}, challenge_meta_data={})
+        post_process.persist_profile_responses = False
+        post_process([sample])
+        doc = metrics_store.put_doc.call_args.args[0]
+        meta = metrics_store.put_doc.call_args.kwargs["meta_data"]
+        assert "profile_response" not in doc
+        assert meta["profile_complete"] is False
+        assert meta["profile_capture_error"] == "storage_failed"
+        assert meta["profile_response_bytes"] == 10
+
+    def prepared_driver(self, profile_config, metrics_store):
+        cfg = config.Config()
+        if profile_config is not None:
+            cfg.add(config.Scope.application, "driver", "profile", profile_config)
+        d = driver.Driver(mock.Mock(), cfg)
+        d.challenge = track.Challenge("default", schedule=[track.Task("search", track.Operation("search", "search"))])
+        d.metrics_store = metrics_store
+        d.sample_post_processor = driver.SamplePostprocessor(metrics_store, 1, {}, {})
+        return d
+
+    def test_profiling_is_inactive_without_configuration(self):
+        d = self.prepared_driver(None, mock.Mock())
+        assert not d.profiles_requested()
+
+    def test_profiling_is_active_for_a_supported_task(self):
+        d = self.prepared_driver(profiling.ProfileConfig.from_dict({"enabled": True}), mock.Mock())
+        assert d.profiles_requested()
+
+    def test_rejected_mapping_disables_payload_persistence(self):
+        store = mock.Mock(persists_raw_documents=True)
+        store.ensure_profile_response_mapping.return_value = "the template is stale"
+        d = self.prepared_driver(profiling.ProfileConfig.from_dict({"enabled": True}), store)
+        d.prepare_profile_storage()
+        assert d.sample_post_processor.persist_profile_responses is False
+
+    def test_compatible_mapping_keeps_payload_persistence(self):
+        store = mock.Mock(persists_raw_documents=True)
+        store.ensure_profile_response_mapping.return_value = None
+        d = self.prepared_driver(profiling.ProfileConfig.from_dict({"enabled": True}), store)
+        d.prepare_profile_storage()
+        assert d.sample_post_processor.persist_profile_responses is True
+
+    def test_in_memory_store_warns_and_skips_the_preflight(self, caplog):
+        store = mock.Mock(persists_raw_documents=False)
+        d = self.prepared_driver(profiling.ProfileConfig.from_dict({"enabled": True}), store)
+        with caplog.at_level(logging.WARNING, logger="esrally.driver.driver"):
+            d.prepare_profile_storage()
+        store.ensure_profile_response_mapping.assert_not_called()
+        assert any("does not persist profile documents" in r.getMessage() for r in caplog.records)
+
+    def test_in_memory_store_neither_keeps_nor_forwards_payloads(self):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        cfg.add(config.Scope.application, "track", "params", {})
+        store = metrics.InMemoryMetricsStore(cfg)
+        store.open("6ebc6e53-ee20-4b0c-99b4-09697987e9f4", datetime(2016, 1, 31), "test", "default", "defaults", create=True)
+        d = self.prepared_driver(profiling.ProfileConfig.from_dict({"enabled": True}), store)
+        d.prepare_profile_storage()
+        task = track.Task("search-task", track.Operation("search-op", "search"))
+        profile = {"mode": "warmup", "iteration": 1, "complete": True, "response": {"shards": ["payload"]}, "response_bytes": 20}
+        sample = driver.Sample(
+            0, 38598, 24, 0, task, metrics.SampleType.Warmup, None, 0.01, 0.007, 0.009, None, 1, "ops", 1, 1, profile=profile
+        )
+
+        d.sample_post_processor([sample])
+
+        profile_docs = [doc for doc in store.docs if doc.get("sample-type") == profiling.PROFILE_WARMUP_SAMPLE_TYPE]
+        assert profile_docs
+        assert all("profile_response" not in doc for doc in profile_docs)
+        assert all(doc["meta"]["profile_capture_error"] == "storage_failed" for doc in profile_docs)
+        assert b"payload" not in zlib.decompress(store.to_externalizable())

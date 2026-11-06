@@ -74,6 +74,10 @@
         "operation-type": {
           "type": "keyword"
         },
+        "profile_response": {
+          "type": "object",
+          "enabled": false
+        },
         "race-id": {
           "type": "keyword"
         },

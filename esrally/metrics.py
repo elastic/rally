@@ -35,11 +35,11 @@ import tabulate
 import urllib3.connection
 from elastic_transport import Urllib3HttpNode
 
-from esrally import client, config, exceptions, paths, time, types, version
+from esrally import client, config, exceptions, paths, profiling, time, types, version
 from esrally.utils import console, convert, io, pretty, versions
 
 
-class EsClient:
+class EsClient:  # pylint: disable=too-many-public-methods
     """
     Provides a stripped-down client interface that is easier to exchange for testing
     """
@@ -110,6 +110,10 @@ class EsClient:
     def refresh(self, index):
         return self.guarded(self._flush_client.indices.refresh, index=index)
 
+    # Bounds the serialized size of each bulk request, including action metadata, well below the
+    # http.max_content_length default (100mb), e.g. when large profile documents are indexed.
+    BULK_MAX_CHUNK_BYTES = 50 * 1024 * 1024
+
     def bulk_index(self, *, index, items, use_data_streams):
         # pylint: disable=import-outside-toplevel
         import elasticsearch.helpers
@@ -117,7 +121,20 @@ class EsClient:
         if use_data_streams:
             for item in items:
                 item["_op_type"] = "create"
-        self.guarded(elasticsearch.helpers.bulk, self._flush_client, items, index=index, chunk_size=5000)
+        self.guarded(
+            elasticsearch.helpers.bulk,
+            self._flush_client,
+            items,
+            index=index,
+            chunk_size=5000,
+            max_chunk_bytes=self.BULK_MAX_CHUNK_BYTES,
+        )
+
+    def put_mapping(self, *, index, properties, write_index_only):
+        return self.guarded(self._client.indices.put_mapping, index=index, properties=properties, write_index_only=write_index_only)
+
+    def create_data_stream(self, name):
+        return self.guarded(self._client.indices.create_data_stream, name=name)
 
     def index(self, *, index, item, id=None, use_data_streams):
         doc = {"_source": item}
@@ -481,6 +498,9 @@ class ComponentTemplateProvider(IndexTemplateProvider):
         )
 
 
+PROFILE_RESPONSE_MAPPING = {"type": "object", "enabled": False}
+
+
 class IndexHandler:
 
     TEMPLATE_PRIORITY = 500
@@ -633,6 +653,37 @@ class IndexHandler:
         if self._should_apply_update(f"lifecycle policy [{name}]", old_policy, new_policy_body):
             self._client.put_lifecycle(name, policy)
 
+    def ensure_profile_response_mapping(self, race_timestamp):
+        """
+        Verifies that profile payloads can be stored without dynamic mapping of their inner fields: the
+        installed template must map ``profile_response`` as a disabled object (so indices created later, e.g.
+        by rollover, are safe) and the current write target gets that mapping added if it is missing.
+
+        :return: ``None`` if profile payloads can be stored, otherwise a human-readable reason.
+        """
+        expected = PROFILE_RESPONSE_MAPPING
+        try:
+            if self.use_data_streams:
+                template_name = f"{self._es_store_type.index_prefix}{self._es_store_type.data_stream_version}"
+                templates = self._client.get_component_template(template_name).body.get("component_templates", [])
+                template_body = templates[0].get("component_template", {}).get("template", {}) if templates else {}
+            else:
+                template_name = self._es_store_type.date_based_template_name
+                templates = self._client.get_template(template_name).body.get("index_templates", [])
+                template_body = templates[0].get("index_template", {}).get("template", {}) if templates else {}
+            if template_body.get("mappings", {}).get("properties", {}).get("profile_response") != expected:
+                return (
+                    f"the metrics store template [{template_name}] does not map [profile_response] as a disabled object. "
+                    "Set datastore.overwrite_existing_templates = true in the reporting section of rally.ini to update it."
+                )
+            index_name = self.index_name(race_timestamp)
+            if self.use_data_streams and not self._client.exists(index=index_name):
+                self._client.create_data_stream(index_name)
+            self._client.put_mapping(index=index_name, properties={"profile_response": expected}, write_index_only=self.use_data_streams)
+        except exceptions.RallyError as e:
+            return f"the [profile_response] mapping could not be verified or added: {e}"
+        return None
+
     def _ensure_component_template(self, name, template):
         new_template_body = json.loads(template).get("template", {})
 
@@ -709,6 +760,14 @@ def metrics_store_class(cfg: types.Config):
 class SampleType(IntEnum):
     Warmup = 0
     Normal = 1
+
+
+def sample_type_value(sample_type):
+    """
+    Returns the stored ``sample-type`` field value for either a ``SampleType`` enum member or a
+    plain string such as a profiling sample type.
+    """
+    return sample_type if isinstance(sample_type, str) else sample_type.name.lower()
 
 
 SECRET_TRACK_PARAM_PLACEHOLDER = "<hidden>"
@@ -814,6 +873,21 @@ class MetricsStore:  # pylint: disable=too-many-public-methods
         Resets the internal relative-time counter to zero.
         """
         self._stop_watch.start()
+
+    @property
+    def persists_raw_documents(self):
+        """
+        :return: ``True`` if raw metric documents (e.g. profile documents) are persisted beyond result calculation.
+        """
+        return False
+
+    def ensure_profile_response_mapping(self):
+        """
+        Prepares the store for documents with a ``profile_response`` payload.
+
+        :return: ``None`` if such payloads can be stored safely, otherwise a human-readable reason.
+        """
+        return None
 
     def flush(self, refresh=True, closing=False):
         """
@@ -1001,7 +1075,7 @@ class MetricsStore:  # pylint: disable=too-many-public-methods
             "name": name,
             "value": value,
             "unit": unit,
-            "sample-type": sample_type.name.lower(),
+            "sample-type": sample_type_value(sample_type),
             "meta": meta,
         }
         if name == "service_time":
@@ -1040,7 +1114,7 @@ class MetricsStore:  # pylint: disable=too-many-public-methods
         else:
             raise exceptions.SystemSetupError(f"Unknown meta info level [{level}]")
 
-        if meta and meta_data:
+        if meta is not None and meta_data:
             meta.update(meta_data)
 
         if absolute_time is None:
@@ -1312,6 +1386,13 @@ class EsMetricsStore(MetricsStore):
             self._client.refresh(index=index_name)
 
     _MAX_FLUSH_FAILURES = 10
+
+    @property
+    def persists_raw_documents(self):
+        return True
+
+    def ensure_profile_response_mapping(self):
+        return self._index_handler.ensure_profile_response_mapping(self._race_timestamp)
 
     def flush(self, refresh=True, closing=False):
         with self._docs_lock:
@@ -1597,7 +1678,7 @@ class EsMetricsStore(MetricsStore):
             q["bool"]["filter"].append(
                 {
                     "term": {
-                        "sample-type": sample_type.name.lower(),
+                        "sample-type": sample_type_value(sample_type),
                     },
                 },
             )
@@ -1711,7 +1792,7 @@ class InMemoryMetricsStore(MetricsStore):
                 doc["name"] == "service_time"
                 and doc["task"] == task
                 and (operation_type is None or doc["operation-type"] == operation_type)
-                and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+                and (sample_type is None or doc["sample-type"] == sample_type_value(sample_type))
                 and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
             ):
                 total_count += 1
@@ -1756,7 +1837,7 @@ class InMemoryMetricsStore(MetricsStore):
             if doc["name"] == name
             and (task is None or doc["task"] == task)
             and (operation_type is None or doc["operation-type"] == operation_type)
-            and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+            and (sample_type is None or doc["sample-type"] == sample_type_value(sample_type))
             and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
             and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
         ]
@@ -1780,7 +1861,7 @@ class InMemoryMetricsStore(MetricsStore):
             if (
                 doc["name"] == name
                 and (task is None or doc["task"] == task)
-                and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+                and (sample_type is None or doc["sample-type"] == sample_type_value(sample_type))
                 and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
                 and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
             ):
@@ -2867,7 +2948,7 @@ class GlobalStatsCalculator:
 
     def time_window(self, task_name, cluster_name=None):
         phases = {
-            "warmup": self.store.get_op_window(task_name, sample_type=SampleType.Warmup, cluster_name=cluster_name),
+            "warmup": self.warmup_time_window(task_name, cluster_name),
             "normal": self.store.get_op_window(task_name, sample_type=SampleType.Normal, cluster_name=cluster_name),
         }
         window = {}
@@ -2885,6 +2966,18 @@ class GlobalStatsCalculator:
             # end_timestamp is the timestamp of last response across phases (the last operation to complete)
             window["end_timestamp"] = int(max(ends))
         return window
+
+    def warmup_time_window(self, task_name, cluster_name=None):
+        # profiled warmup invocations are real warmup requests whose documents carry a profiling
+        # sample type, so the warmup phase window spans both sample types
+        windows = [
+            self.store.get_op_window(task_name, sample_type=SampleType.Warmup, cluster_name=cluster_name),
+            self.store.get_op_window(task_name, sample_type=profiling.PROFILE_WARMUP_SAMPLE_TYPE, cluster_name=cluster_name),
+        ]
+        windows = [w for w in windows if w]
+        if not windows:
+            return None
+        return min(start for start, _ in windows), max(end for _, end in windows)
 
     def median(self, metric_name, task_name=None, operation_type=None, sample_type=None, cluster_name=None):
         return self.store.get_median(

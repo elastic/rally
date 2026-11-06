@@ -41,6 +41,7 @@ from esrally import (
     log,
     metrics,
     paths,
+    profiling,
     racecontrol,
     reporter,
     telemetry,
@@ -918,6 +919,12 @@ def create_arg_parser():
         action="store_true",
     )
     race_parser.add_argument(
+        "--profile",
+        help="Experimental: opt-in Elasticsearch profiling configuration for search and esql tasks. "
+        "Accepts inline JSON or a path to a JSON file (default: disabled).",
+        default=None,
+    )
+    race_parser.add_argument(
         "--enable-assertions",
         help="Enables assertion checks for tasks (default: false).",
         default=False,
@@ -1373,6 +1380,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
             cfg.add(config.Scope.applicationOverride, "race", "user.tags", opts.to_dict(args.user_tags))
             cfg.add(config.Scope.applicationOverride, "driver", "multi.cluster", args.multi_cluster)
             cfg.add(config.Scope.applicationOverride, "driver", "profiling", args.enable_driver_profiling)
+            cfg.add(config.Scope.applicationOverride, "driver", "profile", profiling.from_cli(args.profile))
             cfg.add(config.Scope.applicationOverride, "driver", "assertions", args.enable_assertions)
             cfg.add(config.Scope.applicationOverride, "driver", "on.error", args.on_error)
             cfg.add(config.Scope.applicationOverride, "driver", "load_driver_hosts", opts.csv_to_list(args.load_driver_hosts))
