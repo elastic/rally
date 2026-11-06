@@ -1,0 +1,206 @@
+name: Install script
+
+on:
+  push:
+    paths:
+      - ".github/workflows/install-script.yml"
+      - "scripts/install.sh"
+      - "scripts/dependency_constraints_build_hook.py"
+      - "pyproject.toml"
+      - "uv.lock"
+  pull_request:
+    paths:
+      - ".github/workflows/install-script.yml"
+      - "scripts/install.sh"
+      - "scripts/dependency_constraints_build_hook.py"
+      - "pyproject.toml"
+      - "uv.lock"
+  # Allows checking a release that is already on PyPI
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Rally release on PyPI to install, e.g. 2.14.0. Empty: build a wheel from this commit"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.12.23"
+          enable-cache: false
+      - name: Build wheel
+        # The build hook ships rally-constraints.txt, generated from uv.lock, in the wheel
+        run: uv build --wheel --out-dir dist
+      - name: Upload wheel
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: esrally-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+
+  install:
+    name: ${{ matrix.os }}, uv ${{ matrix.uv }}, Python ${{ matrix.python }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest runner images that are still supported. "bootstrap" makes the script download its own uv.
+          - { os: ubuntu-22.04, uv: bootstrap, python: "3.13" }
+          - { os: ubuntu-22.04, uv: "0.6.17", python: "3.10" }
+          - { os: macos-15, uv: bootstrap, python: "3.13" }
+          - { os: macos-15, uv: "0.6.17", python: "3.10" }
+    env:
+      REQUESTED_VERSION: ${{ inputs.version }}
+      PYTHON_VERSION: ${{ matrix.python }}
+      UV_MODE: ${{ matrix.uv }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Download wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: esrally-wheel
+          path: ${{ runner.temp }}/wheels
+      - name: Install the oldest supported uv
+        if: matrix.uv != 'bootstrap'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: ${{ matrix.uv }}
+          enable-cache: false
+      - name: Refuse to run as root
+        run: |
+          # The check runs before anything is downloaded
+          if output="$(sudo bash scripts/install.sh 2>&1)"; then
+            echo "::error::install.sh ran as root"
+            exit 1
+          fi
+          echo "${output}"
+          grep -q "do not run this script as root" <<< "${output}"
+      - name: Install Rally
+        run: |
+          if [[ -n "${REQUESTED_VERSION}" ]]; then
+            version="${REQUESTED_VERSION}"
+          else
+            # Serve the wheel built from this commit next to PyPI, which still provides the dependencies
+            wheel="$(ls "${RUNNER_TEMP}"/wheels/esrally-*.whl)"
+            version="$(basename "${wheel}" | cut -d - -f 2)"
+            export UV_FIND_LINKS="${RUNNER_TEMP}/wheels"
+          fi
+          path="${PATH}"
+          if [[ "${UV_MODE}" == "bootstrap" ]]; then
+            # Hide any uv that comes with the runner image, so that the script installs its own
+            while found="$(PATH="${path}" command -v uv)"; do
+              echo "Hiding ${found} from PATH"
+              path="$(printf '%s' "${path}" | tr ':' '\n' | grep -vxF "$(dirname "${found}")" | paste -s -d : -)"
+            done
+          fi
+          PATH="${path}" bash scripts/install.sh --version "${version}" --python "${PYTHON_VERSION}"
+          echo "Running the script again, as an upgrade would"
+          PATH="${path}" bash scripts/install.sh --version "${version}" --python "${PYTHON_VERSION}"
+          # Where both esrally and a bootstrapped uv end up
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+      - name: Check installed dependencies against the constraints
+        run: |
+          esrally --version
+          tool_python="$(uv tool dir)/esrally/bin/python"
+          # Rally installs track dependencies with "sys.executable -m pip"
+          "${tool_python}" -m pip --version
+          constraints="$("${tool_python}" -I -c "from importlib import metadata; print(metadata.distribution('esrally').locate_file('esrally/resources/rally-constraints.txt'))")"
+          echo "CONSTRAINTS_FILE=${constraints}" >> "${GITHUB_ENV}"
+          uv pip freeze --python "${tool_python}" > "${RUNNER_TEMP}/freeze.txt"
+          # Markers are evaluated by Rally's own interpreter
+          uv run --no-project --python "${tool_python}" --with packaging python -I - "${constraints}" "${RUNNER_TEMP}/freeze.txt" <<'EOF'
+          import sys
+
+          from packaging.requirements import Requirement
+          from packaging.utils import canonicalize_name
+
+          constraints_file, freeze_file = sys.argv[1:]
+          expected = {}
+          with open(constraints_file) as f:
+              for line in f:
+                  line = line.strip()
+                  if not line or line.startswith("#"):
+                      continue
+                  requirement = Requirement(line)
+                  if requirement.marker is None or requirement.marker.evaluate():
+                      (specifier,) = requirement.specifier
+                      expected[canonicalize_name(requirement.name)] = specifier.version
+          installed = {}
+          with open(freeze_file) as f:
+              for line in f:
+                  name, separator, version = line.strip().partition("==")
+                  if not separator:
+                      sys.exit(f"Unexpected line in uv pip freeze output: {line!r}")
+                  installed[canonicalize_name(name)] = version
+          installed.pop("esrally")
+          errors = [
+              f"{name}=={version} is installed, the constraints pin {expected[name]}"
+              if name in expected
+              else f"{name}=={version} is installed but not constrained"
+              for name, version in sorted(installed.items())
+              if expected.get(name) != version
+          ]
+          print(f"Checked {len(installed)} installed dependencies against {len(expected)} constraints for this platform")
+          if errors:
+              sys.exit("\n".join(errors))
+          EOF
+      - name: Install track dependencies through Rally
+        run: |
+          export RALLY_HOME="${RUNNER_TEMP}/rally-home"
+          tracks="${RUNNER_TEMP}/tracks"
+          mkdir -p "${tracks}/unpinned" "${tracks}/conflicting"
+          # A dependency that Rally does not pin, and one that contradicts Rally's own pins
+          pinned_elasticsearch="$(grep '^elasticsearch==' "${CONSTRAINTS_FILE}" | cut -d = -f 3)"
+          for track in unpinned conflicting; do
+            if [[ "${track}" == "conflicting" ]]; then
+              dependency="\"elasticsearch!=${pinned_elasticsearch}\""
+            else
+              dependency='"pytoml==0.1.21"'
+            fi
+            cat > "${tracks}/${track}/track.json" <<EOF
+          {
+            "version": 2,
+            "description": "Track dependencies",
+            "dependencies": [${dependency}],
+            "schedule": [{"operation": {"name": "nap", "operation-type": "sleep", "duration": 1}}]
+          }
+          EOF
+          done
+          esrally validate-track --track-path="${tracks}/unpinned" --offline --no-quiet
+          if esrally validate-track --track-path="${tracks}/conflicting" --offline; then
+            echo "::error::A track dependency overrode one of Rally's pinned dependencies"
+            exit 1
+          fi
+          grep ResolutionImpossible "${RALLY_HOME}/.rally/logs/dependency.log"
+      - name: Uninstall Rally
+        run: |
+          tool_dir="$(uv tool dir)/esrally"
+          bash scripts/install.sh --uninstall
+          if command -v esrally || [[ -e "${tool_dir}" ]]; then
+            echo "::error::esrally is still installed"
+            exit 1
+          fi
+          echo "Uninstalling again, which must succeed and do nothing"
+          bash scripts/install.sh --uninstall

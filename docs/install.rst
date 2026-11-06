@@ -22,6 +22,8 @@ Python
 * Python3 header files (included in the Python3 development package).
 * ``pip3`` available on the path. Verify with ``pip3 --version``.
 
+You do not need to install Python yourself if you :ref:`install Rally with uv <install_uv>`.
+
 If you need multiple Python versions, consider using `uv <https://github.com/astral-sh/uv>`_. For details refer to their `installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_.
 
 git
@@ -123,6 +125,46 @@ You can also use virtualenv to install Rally into an isolated Python environment
 4. Install Rally with ``python3 -m pip install esrally``
 
 Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
+
+.. _install_uv:
+
+Install with uv
+---------------
+
+`uv <https://docs.astral.sh/uv/>`__ can install Rally together with the exact dependency versions that the Rally release was tested with (those from Rally's ``uv.lock``, shipped inside every release as ``rally-constraints.txt``). This is the recommended method if you want a reproducible installation. It does not need Python or pip on your machine: uv downloads a Python interpreter for Rally and keeps Rally in its own isolated environment.
+
+.. note::
+
+    By default, the installation script installs the latest release of Rally on PyPI, never a pre-release or a development version. It refuses to install a release that does not ship dependency constraints instead of silently installing unpinned dependencies.
+
+Run the installation script as a regular user (it refuses to run as root, because Elasticsearch cannot be started as root)::
+
+    curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/elastic/rally/master/scripts/install.sh | bash
+
+If you prefer to read the script before running it, download it with ``curl -sSf -o install.sh <url>`` and run ``bash install.sh``. The script supports the following options, which you pass after ``bash -s --`` when piping it from ``curl``:
+
+* ``--version VERSION``: the Rally release to install, for example ``--version 2.14.0``. Defaults to the latest release on PyPI.
+* ``--python VERSION``: the Python version Rally runs with, from 3.10 to 3.13. Defaults to 3.13, the version of Rally's Docker image. The Python is always managed by uv and downloaded if necessary, so it does not depend on your system Python.
+
+For example, to install Rally 2.14.0 with Python 3.12::
+
+    curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/elastic/rally/master/scripts/install.sh | bash -s -- --version 2.14.0 --python 3.12
+
+The script:
+
+1. Uses the ``uv`` on your ``PATH`` or in ``~/.local/bin`` (version 0.6.17 or newer). If there is none, it installs a fixed uv version with `uv's standalone installer <https://docs.astral.sh/uv/getting-started/installation/>`__, which verifies the checksum of what it downloads, installs uv to ``~/.local/bin`` and adds that directory to the ``PATH`` in your shell configuration.
+2. Downloads the Rally release from PyPI and reads the constraints that ship in it. The Rally version and the constraints therefore always come from the same release.
+3. Runs ``uv tool install`` with these constraints, which puts ``esrally`` into ``~/.local/bin`` (or ``$XDG_BIN_HOME``). If that directory is not on your ``PATH``, uv tells you how to add it with ``uv tool update-shell``.
+
+Rally also applies the constraints when it installs the dependencies of tracks with ``pip``, so a track cannot move a Rally dependency to a version that Rally was not tested with.
+
+To upgrade Rally, run the script again: it installs the latest release together with the constraints of that release. Do not use ``uv tool upgrade esrally``, which keeps Rally at its pinned version, and do not follow its hint to run ``uv tool install esrally@latest``, which drops the constraints.
+
+To uninstall Rally, run the script with ``--uninstall``::
+
+    curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/elastic/rally/master/scripts/install.sh | bash -s -- --uninstall
+
+This removes Rally and its ``esrally`` command. It keeps uv, the Python versions uv downloaded, and Rally's configuration and data in ``~/.rally``, and prints where they are so that you can remove them yourself.
 
 Docker
 ------
