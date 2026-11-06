@@ -24,6 +24,8 @@
 # fail this script immediately if any command fails with a non-zero exit code
 set -eu
 
+source scripts/dry-run.sh
+
 function push_failed {
     echo "Error while pushing Docker image. Did you \`docker login\`?"
 }
@@ -95,28 +97,28 @@ echo "========================================================"
 echo "Building Docker image for Rally $RALLY_VERSION          "
 echo "========================================================"
 
-docker build --provenance=false -t "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile "${rally_dir}"
+run_or_dry_run docker build --provenance=false -t "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile "${rally_dir}"
 
 echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
 echo "======================================================="
 
-./release-docker-test.sh dev
+run_or_dry_run ./release-docker-test.sh dev
 
 echo "======================================================="
 echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION   "
 echo "======================================================="
 
 trap push_failed ERR
-docker push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}"
+run_or_dry_run docker push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}"
 
 if [[ $PUSH_LATEST == "true" ]]; then
     echo "============================================"
     echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     echo "============================================"
 
-    docker tag "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
-    docker push "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
+    run_or_dry_run docker tag "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
+    run_or_dry_run docker push "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
 fi
 
 trap - ERR

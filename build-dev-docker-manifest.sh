@@ -24,6 +24,8 @@
 # fail this script immediately if any command fails with a non-zero exit code
 set -eu
 
+source scripts/dry-run.sh
+
 function push_failed {
     echo "Error while pushing Docker image. Did you \`docker login\`?"
 }
@@ -66,7 +68,7 @@ echo "======================================================="
 echo "Creating Docker manifest list for Rally $RALLY_VERSION"
 echo "======================================================="
 
-docker manifest create "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" \
+run_or_dry_run docker manifest create "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" \
     --amend "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-amd64" \
     --amend "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-arm64"
 
@@ -74,7 +76,7 @@ trap push_failed ERR
 echo "======================================================="
 echo "Publishing Docker manifest list ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION   "
 echo "======================================================="
-docker manifest push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}"
+run_or_dry_run docker manifest push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}"
 trap - ERR
 
 if [[ $PUSH_LATEST == "true" ]]; then
@@ -82,7 +84,7 @@ if [[ $PUSH_LATEST == "true" ]]; then
     echo "Creating Docker manifest list for Rally $DOCKER_TAG_LATEST"
     echo "======================================================="
 
-    docker manifest create "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}" \
+    run_or_dry_run docker manifest create "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}" \
         --amend "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}-amd64" \
         --amend "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}-arm64"
 
@@ -90,6 +92,6 @@ if [[ $PUSH_LATEST == "true" ]]; then
     echo "======================================================="
     echo "Publishing Docker manifest list ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     echo "======================================================="
-    docker manifest push "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
+    run_or_dry_run docker manifest push "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     trap - ERR
 fi

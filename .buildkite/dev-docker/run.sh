@@ -10,6 +10,12 @@ set +x
 BUILD_FROM_BRANCH="$(buildkite-agent meta-data get BUILD_FROM_BRANCH --default "${BUILDKITE_BRANCH}")"
 BUILD_FROM_BRANCH="${BUILD_FROM_BRANCH:-${BUILDKITE_BRANCH}}"
 PUSH_LATEST="$(buildkite-agent meta-data get PUSH_LATEST --default true)"
+DRY_RUN="$(buildkite-agent meta-data get DRY_RUN --default "${DRY_RUN:-false}")"
+case "$DRY_RUN" in
+    true|false) ;;
+    *) echo "DRY_RUN must be true or false"; exit 1 ;;
+esac
+export DRY_RUN
 # SCHEDULED_PUBLIC_REPO is set by the "Daily Public" schedule in catalog-info.yaml
 PUBLIC_DOCKER_REPO="${SCHEDULED_PUBLIC_REPO:-$(buildkite-agent meta-data get PUBLIC_DOCKER_REPO --default false)}"
 
@@ -42,22 +48,26 @@ RALLY_BUILD_COMMIT=$(buildkite-agent meta-data get RALLY_BUILD_COMMIT)
 RALLY_BUILD_VERSION=$(buildkite-agent meta-data get RALLY_BUILD_VERSION)
 export RALLY_BUILD_COMMIT RALLY_BUILD_VERSION
 
-# login to docker registry
-if [[ $PUBLIC_DOCKER_REPO == "true" ]]; then
-    VAULT_PATH="secret/ci/elastic-rally/release/docker-hub-rally"
-    DOCKER_REGISTRY="docker.io"
-    PASSWORD_FIELD="token"
+if [[ "$DRY_RUN" == "true" ]]; then
+    echo "DRY RUN: Docker commands and image tests will only be printed; registry login is skipped."
 else
-    VAULT_PATH="kv/ci-shared/elasticsearch-benchmarks/cloud/docker-registry-api-credentials"
-    DOCKER_REGISTRY="docker.elastic.co"
-    PASSWORD_FIELD="password"
-fi
+    # login to docker registry
+    if [[ $PUBLIC_DOCKER_REPO == "true" ]]; then
+        VAULT_PATH="secret/ci/elastic-rally/release/docker-hub-rally"
+        DOCKER_REGISTRY="docker.io"
+        PASSWORD_FIELD="token"
+    else
+        VAULT_PATH="kv/ci-shared/elasticsearch-benchmarks/cloud/docker-registry-api-credentials"
+        DOCKER_REGISTRY="docker.elastic.co"
+        PASSWORD_FIELD="password"
+    fi
 
-DOCKER_USERNAME=$(retry 5 vault kv get -field username "${VAULT_PATH}")
-DOCKER_PASSWORD=$(retry 5 vault kv get -field "${PASSWORD_FIELD}" "${VAULT_PATH}")
-retry 5 docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" "${DOCKER_REGISTRY}"
-unset DOCKER_PASSWORD
-unset DOCKER_USERNAME
+    DOCKER_USERNAME=$(retry 5 vault kv get -field username "${VAULT_PATH}")
+    DOCKER_PASSWORD=$(retry 5 vault kv get -field "${PASSWORD_FIELD}" "${VAULT_PATH}")
+    retry 5 docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" "${DOCKER_REGISTRY}"
+    unset DOCKER_PASSWORD
+    unset DOCKER_USERNAME
+fi
 
 build_docker_image() {
     set -x
