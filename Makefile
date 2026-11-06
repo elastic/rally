@@ -111,7 +111,7 @@ clean-venv:
 
 # It installs the Rally PyTest plugin.
 install_pytest_rally_plugin: venv
-	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
+	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git@382e45eb9fca09a3bde332f1a548c8edf70caec1'
 
 # Old legacy alias goals
 install: venv
