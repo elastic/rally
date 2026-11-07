@@ -170,6 +170,89 @@ class TestGitRepository:
         assert repo.track_file("unittest") == "/tmp/tracks/default/unittest/track.json"
 
 
+class TestListTracks:
+    @staticmethod
+    def a_track(name, *challenges):
+        return track.Track(name=name, description=f"description of {name}", challenges=list(challenges))
+
+    @staticmethod
+    def default_challenge():
+        return track.Challenge(name="default", default=True, auto_generated=True)
+
+    @staticmethod
+    def _cfg_with_format(output_format):
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "system", "list.format", output_format)
+        return cfg
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.tracks")
+    def test_lists_tracks_as_text_by_default(self, available_tracks, println):
+        available_tracks.return_value = [self.a_track("unittest", self.default_challenge())]
+
+        loader.list_tracks(config.Config())
+
+        printed = [call.args[0] for call in println.call_args_list]
+        assert printed[0] == "Available tracks:\n"
+        assert "unittest" in printed[1]
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(printed[1])
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.tracks")
+    def test_lists_tracks_as_json(self, available_tracks, println):
+        available_tracks.return_value = [
+            self.a_track("zzz", self.default_challenge()),
+            self.a_track("aaa", self.default_challenge()),
+        ]
+
+        loader.list_tracks(self._cfg_with_format("json"))
+
+        println.assert_called_once()
+        assert json.loads(println.call_args.args[0]) == {
+            "tracks": [
+                {
+                    "name": "aaa",
+                    "description": "description of aaa",
+                    "documents": 0,
+                    "compressed-size-in-bytes": 0,
+                    "uncompressed-size-in-bytes": 0,
+                },
+                {
+                    "name": "zzz",
+                    "description": "description of zzz",
+                    "documents": 0,
+                    "compressed-size-in-bytes": 0,
+                    "uncompressed-size-in-bytes": 0,
+                },
+            ]
+        }
+
+    @mock.patch("esrally.track.loader.console.println")
+    @mock.patch("esrally.track.loader.tracks")
+    def test_lists_challenges_as_json_when_tracks_define_them(self, available_tracks, println):
+        available_tracks.return_value = [
+            self.a_track(
+                "unittest",
+                track.Challenge(name="append-no-conflicts", default=True),
+                track.Challenge(name="append-fast-with-conflicts"),
+            )
+        ]
+
+        loader.list_tracks(self._cfg_with_format("json"))
+
+        listed_track = json.loads(println.call_args.args[0])["tracks"][0]
+        assert listed_track["default-challenge"] == "append-no-conflicts"
+        assert listed_track["challenges"] == ["append-fast-with-conflicts", "append-no-conflicts"]
+
+    @mock.patch("esrally.track.loader.tracks")
+    def test_rejects_unknown_output_format(self, available_tracks):
+        available_tracks.return_value = [self.a_track("unittest", self.default_challenge())]
+
+        with pytest.raises(exceptions.RallyAssertionError, match=r"Unknown output format \[yaml\]"):
+            loader.list_tracks(self._cfg_with_format("yaml"))
+
+
 class TestRenderTrack:
     @mock.patch("esrally.track.loader.track_repo")
     @mock.patch("esrally.track.loader.render_template_from_file")
