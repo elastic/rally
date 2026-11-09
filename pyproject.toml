@@ -146,7 +146,9 @@ develop = [
     "werkzeug==3.1.9",
     "sphinx==5.1.1",
     "furo==2022.06.21",
-    "github3.py==3.2.0",
+    "myst-parser==1.0.0",
+    # changelog fragments, see changelog.d/README.md
+    "scriv[toml]==1.8.0",
     "pre-commit==2.20.0",
     "pylint==4.0.9",
     "trustme==0.9.0",
@@ -183,6 +185,18 @@ esrally-storage = "esrally.storage._cli:main"
 "Code" = "https://github.com/elastic/rally"
 "Issue tracker" = "https://github.com/elastic/rally/issues"
 
+
+[tool.scriv]
+# Changelog fragments live in changelog.d/ and are assembled into CHANGELOG.md at release time
+# by `python3 changelog.py collect X.Y.Z`. See changelog.d/README.md.
+format = "md"
+changelog = "CHANGELOG.md"
+categories = ["Breaking Changes", "Highlights", "Enhancements", "Bug Fixes", "Doc Changes", "Miscellaneous Changes"]
+md_header_level = "3"
+md_html_anchors = false
+compact_fragments = true
+entry_title_template = "{{ version }}"
+new_fragment_template = "file: changelog.d/new_fragment.md.j2"
 
 [tool.black]
 line-length = 140

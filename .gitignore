@@ -96,6 +96,7 @@ junit-*.xml
 
 # Sphinx documentation
 docs/_build/
+docs/_generated/
 
 # PyBuilder
 target/
