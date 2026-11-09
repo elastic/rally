@@ -70,6 +70,12 @@ else
 fi
 
 build_docker_image() {
+    # build-dev-docker.sh needs uv (for `uvx hatch version`), which is not installed on the agents
+    if ! command -v uv >/dev/null 2>&1; then
+        curl -LsSf https://astral.sh/uv/0.11.19/install.sh | env UV_UNMANAGED_INSTALL="${HOME}/.local/bin" sh
+        export PATH="${HOME}/.local/bin:${PATH}"
+    fi
+
     set -x
     export TERM=dumb
     export LC_ALL=en_US.UTF-8

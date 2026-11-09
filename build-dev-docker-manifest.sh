@@ -55,7 +55,7 @@ if [[ "${RALLY_BRANCH}" =~ .*\/.* ]]; then
 else
   branch_name="${RALLY_BRANCH}"
 fi
-export RALLY_VERSION="${RALLY_BUILD_VERSION:-${branch_name}-${GIT_SHA}-${DATE}}"
+export RALLY_VERSION_TAG="${RALLY_BUILD_VERSION:-${branch_name}-${GIT_SHA}-${DATE}}"
 MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
 if [[ "$RALLY_BRANCH" == "$MAIN_BRANCH" ]]; then
@@ -65,18 +65,18 @@ else
 fi
 
 echo "======================================================="
-echo "Creating Docker manifest list for Rally $RALLY_VERSION"
+echo "Creating Docker manifest list for Rally $RALLY_VERSION_TAG"
 echo "======================================================="
 
-run_or_dry_run docker manifest create "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}" \
-    --amend "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-amd64" \
-    --amend "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}-arm64"
+run_or_dry_run docker manifest create "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" \
+    --amend "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}-amd64" \
+    --amend "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}-arm64"
 
 trap push_failed ERR
 echo "======================================================="
-echo "Publishing Docker manifest list ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION   "
+echo "Publishing Docker manifest list ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION_TAG   "
 echo "======================================================="
-run_or_dry_run docker manifest push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION}"
+run_or_dry_run docker manifest push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}"
 trap - ERR
 
 if [[ $PUSH_LATEST == "true" ]]; then
