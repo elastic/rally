@@ -750,6 +750,17 @@ By default, the command line reporter will print the results only on standard ou
 
    esrally race --track=geonames --report-format=csv --report-file=~/benchmarks/result.csv
 
+``error-margin``
+~~~~~~~~~~~~~~~~
+
+This command line parameter is only available for comparing races. Results fluctuate between races, so small differences are often just noise. With this option you can specify the relative difference in percent up to which a metric is not highlighted in the comparison report. Affected metrics are still part of the report, they are only printed without color coding. Default: ``0.0``, i.e. every difference is highlighted.
+
+**Example**
+
+ ::
+
+   esrally compare --baseline=<race-id> --contender=<race-id> --error-margin=2.5
+
 .. _clr_client_options:
 
 ``client-options``

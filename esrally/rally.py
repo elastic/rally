@@ -79,6 +79,12 @@ def create_arg_parser():
             raise argparse.ArgumentTypeError(f"must be positive but was {value}")
         return value
 
+    def non_negative_decimal(v):
+        value = float(v)
+        if value < 0:
+            raise argparse.ArgumentTypeError(f"must be non-negative but was {value}")
+        return value
+
     def non_empty_list(arg):
         lst = opts.csv_to_list(arg)
         if len(lst) < 1:
@@ -438,6 +444,12 @@ def create_arg_parser():
         "--show-in-report",
         help="Whether to include the comparison in the results file.",
         default=True,
+    )
+    compare_parser.add_argument(
+        "--error-margin",
+        type=non_negative_decimal,
+        help="Relative difference in percent up to which a metric is not highlighted in the report (default: 0.0).",
+        default=0.0,
     )
 
     build_parser = subparsers.add_parser("build", help="Builds an artifact")
@@ -1288,6 +1300,7 @@ def dispatch_sub_command(arg_parser, args, cfg: types.Config):
     try:
         if sub_command == "compare":
             configure_reporting_params(args, cfg)
+            cfg.add(config.Scope.applicationOverride, "reporting", "error.margin", args.error_margin)
             reporter.compare(cfg, args.baseline, args.contender)
         elif sub_command == "list":
             cfg.add(config.Scope.applicationOverride, "system", "list.config.option", args.configuration)
