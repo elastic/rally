@@ -1638,21 +1638,45 @@ class InMemoryMetricsStore(MetricsStore):
         :param meta_info: This parameter is optional and intended for creating a metrics store with a previously serialized meta-info.
         """
         super().__init__(cfg=cfg, clock=clock, meta_info=meta_info)
-        self.docs = []
+        self._reset_docs()
 
     def __del__(self):
         """
         Deletes the metrics store instance.
         """
         del self.docs
+        del self._docs_by_name
+        del self._docs_by_name_and_task
+
+    def _reset_docs(self):
+        # All documents in insertion order.
+        self.docs = []
+        # Indices to avoid scanning all documents on every query. Each bucket preserves insertion order, i.e. it is a
+        # subsequence of ``self.docs``, so filtering a bucket yields the same results in the same order as filtering ``self.docs``.
+        self._docs_by_name = collections.defaultdict(list)
+        self._docs_by_name_and_task = collections.defaultdict(list)
 
     def _add(self, doc):
         with self._docs_lock:
-            self.docs.append(doc)
+            self._add_unlocked(doc)
 
     # for testing purposes only
     def _add_unlocked(self, doc):
         self.docs.append(doc)
+        name = doc["name"]
+        self._docs_by_name[name].append(doc)
+        task = doc.get("task")
+        if task is not None:
+            self._docs_by_name_and_task[(name, task)].append(doc)
+
+    def _candidates(self, name, task=None):
+        """
+        :return: All documents with the given name (and task, if provided) in insertion order. The caller must not modify the result.
+        """
+        if task is None:
+            return self._docs_by_name.get(name, [])
+        else:
+            return self._docs_by_name_and_task.get((name, task), [])
 
     def flush(self, refresh=True, closing=False):
         pass
@@ -1660,7 +1684,8 @@ class InMemoryMetricsStore(MetricsStore):
     def to_externalizable(self, clear=False):
         with self._docs_lock:
             if clear:
-                docs, self.docs = self.docs, []
+                docs = self.docs
+                self._reset_docs()
             else:
                 docs = list(self.docs)
         compressed = zlib.compress(pickle.dumps(docs))
@@ -1705,12 +1730,10 @@ class InMemoryMetricsStore(MetricsStore):
     def get_error_rate(self, task, operation_type=None, sample_type=None, cluster_name=None):
         error = 0
         total_count = 0
-        for doc in self.docs:
-            # we can use any request metrics record (i.e. service time or latency)
+        # we can use any request metrics record (i.e. service time or latency)
+        for doc in self._candidates("service_time", task):
             if (
-                doc["name"] == "service_time"
-                and doc["task"] == task
-                and (operation_type is None or doc["operation-type"] == operation_type)
+                (operation_type is None or doc["operation-type"] == operation_type)
                 and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
                 and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
             ):
@@ -1752,10 +1775,8 @@ class InMemoryMetricsStore(MetricsStore):
     def _get(self, name, task, operation_type, sample_type, node_name, cluster_name, mapper):
         return [
             mapper(doc)
-            for doc in self.docs
-            if doc["name"] == name
-            and (task is None or doc["task"] == task)
-            and (operation_type is None or doc["operation-type"] == operation_type)
+            for doc in self._candidates(name, task)
+            if (operation_type is None or doc["operation-type"] == operation_type)
             and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
             and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
             and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
@@ -1772,15 +1793,13 @@ class InMemoryMetricsStore(MetricsStore):
         sort_key=None,
         sort_reverse=False,
     ):
+        # sorted() is stable, so sorting only the matching candidates yields the same order as sorting all documents.
+        docs = self._candidates(name, task)
         if sort_key:
-            docs = sorted(self.docs, key=lambda k: k[sort_key], reverse=sort_reverse)
-        else:
-            docs = self.docs
+            docs = sorted(docs, key=lambda k: k[sort_key], reverse=sort_reverse)
         for doc in docs:
             if (
-                doc["name"] == name
-                and (task is None or doc["task"] == task)
-                and (sample_type is None or doc["sample-type"] == sample_type.name.lower())
+                (sample_type is None or doc["sample-type"] == sample_type.name.lower())
                 and (node_name is None or doc.get("meta", {}).get("node_name") == node_name)
                 and (cluster_name is None or doc.get("meta", {}).get("cluster") == cluster_name)
             ):

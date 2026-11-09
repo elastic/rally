@@ -152,8 +152,13 @@ class TestFileOffsetTable:
         table = self._make_table(tmp_path, "line1\n", "0;0\n")
         assert table.is_valid() is True
 
-    def test_is_valid_rejects_empty_file(self, tmp_path):
-        table = self._make_table(tmp_path, "line1\n", "")
+    def test_is_valid_accepts_empty_file_for_data_file_shorter_than_offset_interval(self, tmp_path):
+        table = self._make_table(tmp_path, "line1\nline2\n", "")
+        assert table.is_valid() is True
+
+    def test_is_valid_rejects_empty_file_for_data_file_with_offset_interval_lines(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(io.FileOffsetTable, "OFFSET_INTERVAL", 2)
+        table = self._make_table(tmp_path, "line1\nline2\n", "")
         assert table.is_valid() is False
 
     def test_is_valid_rejects_missing_offset_file(self, tmp_path):
@@ -284,6 +289,33 @@ class TestPrepareFileOffsetTable:
 
         mock_dl.assert_not_called()
         assert result == 100
+
+    def test_does_not_rebuild_or_download_empty_offset_file_for_small_data_file(self, tmp_path):
+        data_file_path = self._write_data_file(tmp_path)
+
+        assert io.prepare_file_offset_table(data_file_path, None) == 100
+        assert os.path.getsize(f"{data_file_path}.offset") == 0
+
+        with mock.patch("esrally.utils.net.download") as mock_dl:
+            result = io.prepare_file_offset_table(data_file_path, "http://example.com/corpora")
+
+        mock_dl.assert_not_called()
+        assert result is None
+
+    def test_rebuilds_empty_offset_file_for_large_data_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(io.FileOffsetTable, "OFFSET_INTERVAL", 10)
+        data_file_path = self._write_data_file(tmp_path)
+        offset_file_path = f"{data_file_path}.offset"
+        with open(offset_file_path, "w"):
+            pass
+        data_mtime = os.path.getmtime(data_file_path)
+        os.utime(offset_file_path, (data_mtime + 1, data_mtime + 1))
+
+        result = io.prepare_file_offset_table(data_file_path, None)
+
+        assert result == 100
+        with open(offset_file_path) as f:
+            assert len(f.readlines()) == 10
 
     def test_returns_none_when_valid_offset_already_exists(self, tmp_path):
         data_file_path = self._write_data_file(tmp_path)

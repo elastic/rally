@@ -17,6 +17,7 @@
 import logging
 import os
 import socket
+import time
 import traceback
 import typing
 from typing import Any
@@ -234,6 +235,41 @@ def actor_system_already_running(
             LOG.info("Failed to connect to already running actor system (ip='%s', port=%d): %s", ip, port, ex)
 
     return False
+
+
+def _accepts_connections(sockname: tuple[str, int]) -> bool:
+    try:
+        with socket.create_connection(sockname, timeout=0.1):
+            return True
+    except OSError:
+        return False
+
+
+def wait_for_actor_exit(actor_address: Any, timeout: float = 3.0, poll_interval: float = 0.05) -> bool:
+    """Waits until the actor at ``actor_address`` has exited, e.g. after it was sent an ``ActorExitRequest``.
+
+    Thespian forwards an actor's log records to the actor system's logger process only after the actor's message
+    handler has returned, so they may still be in flight when the caller has already received the actor's reply. If
+    the actor system shuts down at that moment, the logger exits before these records arrive and they never make it
+    into the log file. An exiting actor first drains its pending transmits (including log records), so once it does
+    not accept connections anymore, its log records have been delivered.
+
+    Liveness can only be checked for TCP-based actor systems. For other system bases this waits for ``timeout``.
+
+    :return: ``True`` if the actor has exited within ``timeout`` seconds, ``False`` otherwise.
+    """
+    sockname = getattr(getattr(actor_address, "addressDetails", None), "sockname", None)
+    if not (isinstance(sockname, tuple) and len(sockname) >= 2):
+        LOG.info("Cannot check whether actor [%s] has exited. Waiting [%.1f] seconds.", actor_address, timeout)
+        time.sleep(timeout)
+        return False
+    deadline = time.monotonic() + timeout
+    while _accepts_connections((sockname[0], sockname[1])):
+        if time.monotonic() >= deadline:
+            LOG.warning("Actor [%s] has not exited within [%.1f] seconds.", actor_address, timeout)
+            return False
+        time.sleep(poll_interval)
+    return True
 
 
 def use_offline_actor_system() -> None:

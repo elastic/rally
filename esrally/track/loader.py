@@ -639,8 +639,13 @@ class BulkDocumentSetFormat(DocumentSetFormat):
     source_format = track.Documents.SOURCE_FORMAT_BULK
 
     def finalize(self, preparator, document_set, doc_path):
-        # just rebuild the file every time for the time being. Later on, we might check the data file fingerprint to avoid it
-        lines_read = io.prepare_file_offset_table(doc_path, document_set.base_url)
+        # Downloading a pre-computed offset file is pointless in offline mode, and for corpora shorter than the
+        # offset interval (e.g. in test mode) whose offset table is empty and built locally in no time.
+        if preparator.downloader.offline or document_set.number_of_lines < io.FileOffsetTable.OFFSET_INTERVAL:
+            corpus_base_url = None
+        else:
+            corpus_base_url = document_set.base_url
+        lines_read = io.prepare_file_offset_table(doc_path, corpus_base_url)
         if lines_read and lines_read != document_set.number_of_lines:
             io.remove_file_offset_table(doc_path)
             raise exceptions.DataError(
@@ -1357,16 +1362,17 @@ class TestModeTrackProcessor(TrackProcessor):
             for task in challenge.schedule:
                 # we need iterate over leaf tasks and await iterating over possible intermediate 'parallel' elements
                 for leaf_task in task:
-                    # iteration-based schedules are divided among all clients and we should provide
-                    # at least one iteration for each client.
-                    if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
-                        count = leaf_task.clients
-                        LOG.debug("Resetting warmup iterations to %d for [%s]", count, leaf_task)
-                        leaf_task.warmup_iterations = count
-                    if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
-                        count = leaf_task.clients
-                        LOG.debug("Resetting measurement iterations to %d for [%s]", count, leaf_task)
-                        leaf_task.iterations = count
+                    # iterations are per client, so a single measurement iteration (and no warmup)
+                    # is enough for every client to exercise the operation once. A task without
+                    # measurement iterations keeps one warmup iteration because each client must
+                    # run at least one iteration.
+                    min_warmup_iterations = 1 if leaf_task.iterations == 0 else 0
+                    if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > min_warmup_iterations:
+                        leaf_task.warmup_iterations = min_warmup_iterations
+                        LOG.debug("Resetting warmup iterations to %d for [%s]", leaf_task.warmup_iterations, leaf_task)
+                    if leaf_task.iterations is not None and leaf_task.iterations > 1:
+                        leaf_task.iterations = 1
+                        LOG.debug("Resetting measurement iterations to %d for [%s]", leaf_task.iterations, leaf_task)
                     if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
                         leaf_task.warmup_time_period = 0
                         LOG.debug("Resetting warmup time period for [%s] to [%d] seconds.", leaf_task, leaf_task.warmup_time_period)
