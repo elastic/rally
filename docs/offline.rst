@@ -10,7 +10,7 @@ In some corporate environments servers do not have Internet access. You can stil
 Installation
 ------------
 
-.. ifconfig:: release.endswith('.dev0')
+.. ifconfig:: 'dev' in release
 
     .. warning::
 

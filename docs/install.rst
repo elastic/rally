@@ -51,7 +51,7 @@ Requirements
 Python
 ~~~~~~
 
-Rally requires Python 3.10 to 3.13. Verify with ``python3 --version``, or pass ``--python`` to ``uv tool install`` as shown above.
+Rally requires Python 3.10 or above. Verify with ``python3 --version``, or pass ``--python`` to ``uv tool install`` as shown above.
 
 git
 ~~~
