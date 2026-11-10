@@ -50,6 +50,15 @@ jobs:
         run: |
           scripts/offline-install.sh "${RALLY_VERSION}"
           echo "DIST_NAME=esrally-dist-linux-$(uname -m)-${RALLY_VERSION}" >> "${GITHUB_ENV}"
+      - name: Check offline install package
+        run: |
+          sha256sum --check "${DIST_NAME}.tar.gz.sha256"
+          tar -xzf "${DIST_NAME}.tar.gz" -C "${RUNNER_TEMP}"
+          python -m venv "${RUNNER_TEMP}/venv"
+          source "${RUNNER_TEMP}/venv/bin/activate"
+          "${RUNNER_TEMP}/${DIST_NAME}/install.sh"
+          pip check
+          esrally --version
       - name: Upload to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
