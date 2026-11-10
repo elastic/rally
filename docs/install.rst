@@ -147,10 +147,10 @@ If you are in a corporate environment using Linux servers that do not have any a
 
 .. note::
 
-    The offline installation package bundles dependencies for Python 3.11. Ensure ``python3`` on the target machine(s) is Python 3.11 (verify with ``python3 --version``), otherwise the installation may fail as some bundled dependencies cannot be installed with other Python versions.
+    The offline installation package bundles dependencies for Python 3.11 on x86_64 Linux. Ensure ``python3`` on the target machine(s) is Python 3.11 (verify with ``python3 --version``), otherwise the installation may fail as some bundled dependencies cannot be installed with other Python versions. There is no offline installation package for other architectures such as aarch64.
 
 1. Install all prerequisites as documented above.
-2. Download the offline installation package for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
+2. Download the offline installation package ``esrally-dist-linux-x86_64-*.tar.gz`` for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
 3. Decompress the installation package with ``tar -xzf esrally-dist-linux-*.tar.gz``.
 4. Run the install script with ``sudo ./esrally-dist-linux-*/install.sh``.
 

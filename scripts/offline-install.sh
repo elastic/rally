@@ -42,7 +42,10 @@ fi
 readonly RALLY_VERSION=$1
 
 readonly WD=$(pwd)
-readonly RELATIVE_DOWNLOAD_DIR="esrally-dist-${RALLY_VERSION}"
+# The bundled wheels only work on the architecture they were downloaded on
+ARCH=$(uname -m)
+readonly ARCH
+readonly RELATIVE_DOWNLOAD_DIR="esrally-dist-linux-${ARCH}-${RALLY_VERSION}"
 readonly ABSOLUTE_DOWNLOAD_DIR="${WD}/${RELATIVE_DOWNLOAD_DIR}"
 readonly ABSOLUTE_DOWNLOAD_BIN_DIR="${ABSOLUTE_DOWNLOAD_DIR}/bin"
 CONSTRAINTS_FILE=$(mktemp)
@@ -59,7 +62,7 @@ done
 SCRIPT_SRC_HOME="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 function main {
-    local archive_name="esrally-dist-linux-${RALLY_VERSION}.tar.gz"
+    local archive_name="${RELATIVE_DOWNLOAD_DIR}.tar.gz"
     local install_script_file="install.sh"
     local install_script="${ABSOLUTE_DOWNLOAD_DIR}/${install_script_file}"
 

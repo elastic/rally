@@ -51,7 +51,9 @@ jobs:
           echo "esrally ${RALLY_VERSION} is not available on PyPI"
           exit 1
       - name: Build offline install package
-        run: scripts/offline-install.sh "${RALLY_VERSION}"
+        run: |
+          scripts/offline-install.sh "${RALLY_VERSION}"
+          echo "DIST_NAME=esrally-dist-linux-$(uname -m)-${RALLY_VERSION}" >> "${GITHUB_ENV}"
       - name: Upload to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,5 +63,5 @@ jobs:
             gh release create "${RALLY_VERSION}" --repo "${GITHUB_REPOSITORY}" --draft --verify-tag --title "${RALLY_VERSION}"
           fi
           gh release upload "${RALLY_VERSION}" --repo "${GITHUB_REPOSITORY}" --clobber \
-            "esrally-dist-linux-${RALLY_VERSION}.tar.gz" \
-            "esrally-dist-linux-${RALLY_VERSION}.tar.gz.sha256"
+            "${DIST_NAME}.tar.gz" \
+            "${DIST_NAME}.tar.gz.sha256"
