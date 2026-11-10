@@ -42,14 +42,10 @@ jobs:
           python-version: "3.11"
       - name: Wait for release to be available on PyPI
         run: |
-          for _ in $(seq 1 20); do
-            if python -m pip download --no-deps --dest "$(mktemp -d)" "esrally==${RALLY_VERSION}"; then
-              exit 0
-            fi
-            sleep 30
-          done
-          echo "esrally ${RALLY_VERSION} is not available on PyPI"
-          exit 1
+          # curl also retries while PyPI does not know the version yet (404)
+          curl --fail --no-progress-meter --show-error --output /dev/null \
+            --retry 20 --retry-delay 30 --retry-all-errors \
+            "https://pypi.org/pypi/esrally/${RALLY_VERSION}/json"
       - name: Build offline install package
         run: |
           scripts/offline-install.sh "${RALLY_VERSION}"
