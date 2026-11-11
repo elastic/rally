@@ -902,6 +902,8 @@ When this option is set, Rally opens a second client for telemetry. TLS, timeout
 
 When this option is omitted, telemetry uses ``--client-options``, which is the same behavior as earlier Rally versions. If those credentials cannot collect stats, the race still runs and telemetry devices keep their existing error handling.
 
+This option is not supported in multi-cluster setups (``--multi-cluster``), where telemetry devices are disabled and the option is ignored.
+
 On Elasticsearch Serverless, Rally decides which telemetry devices to run from the telemetry user's operator status. ``driver.serverless.operator`` and challenge-task skipping still follow the benchmark user. On stateful clusters there is no operator probe; telemetry devices call the stats APIs with the telemetry client.
 
 **Example**
