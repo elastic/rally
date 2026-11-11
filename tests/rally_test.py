@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from esrally import config, exceptions, rally
+from esrally.utils import process
 
 
 def test_creates_default_configuration_when_missing(tmp_path, monkeypatch):
@@ -163,3 +164,26 @@ def test_redact_namespace_masks_client_credentials_without_changing_args():
     assert redacted.track == "geonames"
     assert "secret" not in str(redacted)
     assert "pw" not in str(redacted)
+
+
+@pytest.mark.parametrize("flag, dest", [("--client-options", "client_options"), ("--telemetry-client-options", "telemetry_client_options")])
+def test_redact_cmdline_hides_every_form_argparse_accepts_for_credential_flags(flag, dest):
+    arg_parser = rally.create_arg_parser()
+    secret = "api_key:'top-secret'"
+    base = ["race", "--pipeline=benchmark-only", "--target-hosts=localhost:9200"]
+    accepted = 0
+
+    # every prefix of the flag that argparse resolves to it, plus the full flag
+    for end in range(len("--c"), len(flag) + 1):
+        option = flag[:end]
+        for tokens in ([f"{option}={secret}"], [option, secret]):
+            try:
+                args = arg_parser.parse_args(base + tokens)
+            except SystemExit:
+                continue  # ambiguous or unknown prefix: Rally rejects the command
+            if getattr(args, dest, None) != secret:
+                continue  # the prefix resolved to a different option
+            accepted += 1
+            redacted = process.redact_cmdline(["esrally"] + base + tokens)
+            assert "top-secret" not in " ".join(redacted), f"credentials leaked for {tokens}"
+    assert accepted >= 2, "expected at least the full flag in both spellings to be accepted"
