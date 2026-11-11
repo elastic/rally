@@ -204,11 +204,13 @@ def redact_cmdline(cmdline: list) -> list[str]:
     Redact client options in cmdline as it contains sensitive information like passwords
     """
 
-    sensitive_flags = ("--client-options", "--telemetry-client-options")
+    # Flag and the shortest abbreviation argparse resolves to it. Shorter prefixes are either ambiguous (argparse rejects
+    # them) or belong to other options, e.g. "--telemetry" and "--telemetry-params" must not be redacted.
+    sensitive_flags = (("--client-options", len("--cli")), ("--telemetry-client-options", len("--telemetry-c")))
 
     def is_sensitive_flag(value):
         option = value.split("=", 1)[0]
-        return len(option) > 2 and any(flag.startswith(option) for flag in sensitive_flags)
+        return any(option == flag or (len(option) >= min_length and flag.startswith(option)) for flag, min_length in sensitive_flags)
 
     redacted = []
     redact_next = False
