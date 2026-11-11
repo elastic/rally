@@ -832,7 +832,10 @@ class Driver:
             # Challenge tasks keep driver.serverless.operator from the benchmark user. Telemetry devices follow the
             # telemetry user so a restricted benchmark client can still collect operator stats.
             if serverless_mode:
-                telemetry_operator = client.serverless_operator_status(telemetry_clients.default)
+                try:
+                    telemetry_operator = client.serverless_operator_status(telemetry_clients.default)
+                except exceptions.SystemSetupError as e:
+                    raise exceptions.SystemSetupError(f"Invalid credentials in --telemetry-client-options: {e.message}") from e
         self.prepare_telemetry(
             telemetry_clients,
             enable=enable_telemetry,

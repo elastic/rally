@@ -263,6 +263,7 @@ class TestDriver:
         instances = []
         build_flavor = "default"
         telemetry_operator = True
+        reject_telemetry_credentials = False
 
         def __init__(self, hosts, client_options, distribution_version=None, distribution_flavor=None):
             self.client_options = dict(client_options)
@@ -275,21 +276,33 @@ class TestDriver:
             }
             operator = type(self).telemetry_operator if client_options.get("api_key") == "telemetry-key" else False
             self.client.perform_request.return_value = mock.Mock(body={"operator": operator})
+            if type(self).reject_telemetry_credentials and client_options.get("api_key") == "telemetry-key":
+                meta = elastic_transport.ApiResponseMeta(
+                    status=401,
+                    http_version="1.1",
+                    headers=elastic_transport.HttpHeaders(),
+                    duration=0.0,
+                    node=elastic_transport.NodeConfig(scheme="https", host="localhost", port=9200),
+                )
+                self.client.perform_request.side_effect = elasticsearch.AuthenticationException("unauthorized", meta, None)
             type(self).instances.append(self)
 
         def create(self):
             return self.client
 
         @classmethod
-        def reset(cls, build_flavor="default", telemetry_operator=True):
+        def reset(cls, build_flavor="default", telemetry_operator=True, reject_telemetry_credentials=False):
             cls.instances = []
             cls.build_flavor = build_flavor
             cls.telemetry_operator = telemetry_operator
+            cls.reject_telemetry_credentials = reject_telemetry_credentials
 
-    def _use_recording_factory(self, build_flavor="default", telemetry_operator=True):
+    def _use_recording_factory(self, build_flavor="default", telemetry_operator=True, reject_telemetry_credentials=False):
         # Avoid StaticClientFactory teardown stopping a patcher this test never started.
         self.StaticClientFactory.PATCHER = mock.Mock()
-        self.RecordingClientFactory.reset(build_flavor=build_flavor, telemetry_operator=telemetry_operator)
+        self.RecordingClientFactory.reset(
+            build_flavor=build_flavor, telemetry_operator=telemetry_operator, reject_telemetry_credentials=reject_telemetry_credentials
+        )
         return self.RecordingClientFactory
 
     def _device(self, telemetry_devices, name):
@@ -489,6 +502,31 @@ class TestDriver:
         assert "IndexStats" not in invoked
         assert "ExternalEnvironmentInfo" not in invoked
         assert "ClusterEnvironmentInfo" in invoked
+
+    def test_serverless_rejected_telemetry_credentials_fail_fast(self):
+        self.cfg.add(config.Scope.applicationOverride, "driver", "serverless.mode", True)
+        self.cfg.add(config.Scope.applicationOverride, "driver", "serverless.operator", False)
+        self.cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", False)
+        self.cfg.add(
+            config.Scope.applicationOverride,
+            "client",
+            "options",
+            self.Holder(all_client_options={"default": {"use_ssl": True, "api_key": "benchmark-key"}}),
+        )
+        self.cfg.add(
+            config.Scope.applicationOverride,
+            "client",
+            "telemetry.options",
+            opts.ClientOptions("api_key:'telemetry-key'", apply_defaults=False),
+        )
+        factory = self._use_recording_factory(build_flavor="serverless", reject_telemetry_credentials=True)
+        driver_actor = self.create_test_driver_actor()
+        d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=factory)
+
+        with pytest.raises(
+            exceptions.SystemSetupError, match=r"Invalid credentials in --telemetry-client-options: .*rejected the configured credentials"
+        ):
+            d.prepare_benchmark(t=self.track)
 
     @mock.patch("esrally.driver.driver.delete_api_keys")
     @mock.patch("esrally.driver.driver.client.create_api_key")

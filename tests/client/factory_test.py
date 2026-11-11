@@ -792,6 +792,14 @@ def test_serverless_operator_status_is_false_when_authenticate_is_rejected():
     assert factory.serverless_operator_status(es) is False
 
 
+def test_serverless_operator_status_fails_fast_when_credentials_are_rejected():
+    es = mock.Mock()
+    es.perform_request.side_effect = _api_error(401, "unauthorized")
+
+    with pytest.raises(exceptions.SystemSetupError, match=r"rejected the configured credentials"):
+        factory.serverless_operator_status(es)
+
+
 def test_client_factory_masks_credentials_in_logs(caplog):
     caplog.set_level(logging.INFO, logger="esrally.client.factory")
     client_options = {"basic_auth_user": "elastic", "basic_auth_password": "secret", "api_key": "hidden-key"}
