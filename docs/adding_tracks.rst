@@ -287,10 +287,10 @@ In test mode Rally postprocesses its internal track representation as follows:
 * Iteration-based tasks run at most one warmup iteration and one measurement iteration.
 * Time-period-based tasks run at most for 10 seconds without warmup.
 
-In test mode Rally also post-processes all data file names:
+In test mode Rally also post-processes all data file names, regardless of their ``source-format``:
 
 * If ``documents.json`` has 1000 documents or fewer, Rally uses it (no modifications).
-* If ``documents.json`` has more than 1000 documents, Rally assumes an additional ``documents-1k.json`` file is present and uses it. You need to prepare these additional files manually. Pick 1000 documents for every data file in your track and store them in a file with the ``-1k`` suffix. On Linux you can do it as follows: ``head -n 1000 documents.json > documents-1k.json``.
+* If ``documents.json`` has more than 1000 documents, Rally assumes an additional ``documents-1k.json`` file is present and uses it. You need to prepare these additional files manually. Pick 1000 documents for every data file in your track and store them in a file with the ``-1k`` suffix. On Linux you can do it as follows: ``head -n 1000 documents.json > documents-1k.json``. For compressed files the suffix goes before the file extension, e.g. ``documents.json.bz2`` becomes ``documents-1k.json.bz2`` and ``metrics.otlp.json.zst`` becomes ``metrics.otlp-1k.json.zst``.
 
 Challenges
 ----------

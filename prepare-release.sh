@@ -40,10 +40,9 @@ git diff --exit-code
 set -e
 
 echo "Updating changelog"
-# For exit on error to work we have to separate
-#  CHANGELOG.md generation into two steps.
-CHANGELOG="$(python3 changelog.py ${RELEASE_VERSION})"
-printf "$CHANGELOG\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
+# Links each fragment in changelog.d/ to its pull request, then runs `scriv collect`,
+# which adds them to CHANGELOG.md and deletes them.
+python3 changelog.py collect "${RELEASE_VERSION}"
 
 echo "Updating release version number"
 printf '__version__ = "%s"\n' $RELEASE_VERSION > esrally/_version.py

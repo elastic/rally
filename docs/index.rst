@@ -48,6 +48,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    :maxdepth: 2
 
    adding_tracks
+   otlp_ingest
    advanced
    developing
 
@@ -73,6 +74,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    :maxdepth: 2
 
    migrate
+   changelog
    faq
    glossary
    community

@@ -1,9 +1,16 @@
 [build-system]
-requires = ["hatchling", "uv==0.12.6"]
+requires = ["hatchling", "hatch-vcs", "uv==0.12.6"]
 build-backend = "hatchling.build"
 
+# Create a version file without a git hash
+# N commits after X.Y.Z, version is X.Y.Z.post1.devN
 [tool.hatch.version]
-path = "esrally/_version.py"
+source = "vcs"
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+version_scheme = "no-guess-dev"
+[tool.hatch.build.hooks.vcs]
+version-file = "esrally/_version.py"
 
 [tool.hatch.build.hooks.custom]
 path = "scripts/dependency_constraints_build_hook.py"
@@ -20,7 +27,7 @@ authors = [
 description = "Macrobenchmarking framework for Elasticsearch"
 readme = "README.md"
 license = { text = "Apache License 2.0" }
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10"
 classifiers = [
     "Topic :: System :: Benchmark",
     "Development Status :: 5 - Production/Stable",
@@ -51,7 +58,7 @@ dependencies = [
     # License: MIT
     "urllib3==2.8.0",
     # License: Apache 2.0
-    "aiohttp==3.14.3",
+    "aiohttp==3.14.4",
     # License: Apache 2.0
     "aiosignal==1.4.0",
     # License: Apache 2.0 (docker-py)
@@ -59,7 +66,7 @@ dependencies = [
     # License: Apache 2.0 (avoid specific requests version to fix bug in docker-py)
     "requests<2.32.0",
     # License: BSD
-    "psutil==5.9.4",
+    "psutil==7.2.2",
     # License: MIT
     "py-cpuinfo==7.0.0",
     # License: MIT
@@ -69,7 +76,7 @@ dependencies = [
     # License: BSD
     # transitive dependency Markupsafe: BSD
     "Jinja2==3.1.6",
-    "markupsafe==2.0.1",
+    "markupsafe==2.1.5",
     # License: MIT
     "thespian==4.0.1",
     # recommended library for thespian to identify actors more easily with `ps`
@@ -78,7 +85,7 @@ dependencies = [
     # License: MPL 2.0
     "certifi",
     # License: MIT
-    "yappi==1.6.10",
+    "yappi==1.7.6",
     # License: BSD
     "ijson==3.4.0",
     # License: Apache 2.0
@@ -104,6 +111,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# These packages are required for pre-processing OTLP JSON corpus files into binary protobuf format.
+# Only needed during corpus preparation (prepare-track phase), not during the benchmark hot path.
+otlp = [
+    # License: Apache 2.0
+    "opentelemetry-proto==1.34.0",
+    # License: BSD
+    "protobuf>=5.29.0",
+]
+
 # These packages are required to download files from a private AWS S3 bucket
 s3 = [
     # License: Apache 2.0
@@ -118,28 +134,35 @@ s3 = [
 develop = [
     # s3
     "boto3==1.34.68",
+    # otlp — required for the OtlpProtobufFile / OtlpParamSource / OtlpIngest test suites
+    "opentelemetry-proto==1.34.0",
+    "protobuf>=5.29.0",
     # tests
     "ujson",
     "pytest==8.4.2",
     "pytest-asyncio==1.2.0",
     "pytest-benchmark==5.2.2",
     "pytest-httpserver==1.1.3",
+    "werkzeug==3.1.9",
     "sphinx==5.1.1",
     "furo==2022.06.21",
-    "github3.py==3.2.0",
+    "myst-parser==1.0.0",
+    # changelog fragments, see changelog.d/README.md
+    "scriv[toml]==1.8.0",
     "pre-commit==2.20.0",
-    "pylint==3.3.8",
+    "pylint==4.0.9",
     "trustme==0.9.0",
     "GitPython==3.1.60",
     # formatting
-    "black==26.3.1",
+    "black==26.10.1",
     # mypy
     "boto3-stubs==1.26.125",
     "mypy==1.15.0",
-    "types-psutil==5.9.4",
+    "types-psutil==7.2.2.20260906",
     "types-tabulate==0.8.9",
     "types-requests>=2.31.0.7,<3",
     "types-jsonschema==3.2.0",
+    "types-protobuf>=4.24,<8",
     # Python dead library removed in version 3.13 and used to build Rally docs.
     "standard-imghdr==3.13.0",
     # For RST docs preview using the reStructuredText VS Code extension, which relies on the Esbonio language server.
@@ -163,6 +186,18 @@ esrally-storage = "esrally.storage._cli:main"
 "Issue tracker" = "https://github.com/elastic/rally/issues"
 
 
+[tool.scriv]
+# Changelog fragments live in changelog.d/ and are assembled into CHANGELOG.md at release time
+# by `python3 changelog.py collect X.Y.Z`. See changelog.d/README.md.
+format = "md"
+changelog = "CHANGELOG.md"
+categories = ["Breaking Changes", "Highlights", "Enhancements", "Bug Fixes", "Doc Changes", "Miscellaneous Changes"]
+md_header_level = "3"
+md_html_anchors = false
+compact_fragments = true
+entry_title_template = "{{ version }}"
+new_fragment_template = "file: changelog.d/new_fragment.md.j2"
+
 [tool.black]
 line-length = 140
 target-version = ['py310', 'py311', 'py312', 'py313']
@@ -176,7 +211,7 @@ log_cli = false
 log_date_format = "%Y-%m-%d %H:%M:%S"
 log_format = "%(asctime)s %(levelname)-8s %(name)s:%(filename)s:%(lineno)d %(message)s"
 log_level = "INFO"
-addopts = "--verbose --color=yes"
+addopts = "--verbose --color=yes --import-mode=importlib"
 testpaths = "tests"
 junit_family = "xunit2"
 junit_logging = "all"

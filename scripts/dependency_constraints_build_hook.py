@@ -38,6 +38,7 @@ class DependencyConstraintsBuildHook(BuildHookInterface):
             "--no-hashes",
             "--no-annotate",
             "--no-header",
+            "--no-cache",
             "--output-file",
             str(constraints_path),
         ]

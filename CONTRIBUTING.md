@@ -51,6 +51,7 @@ When working on your changes, keep the following in mind.
   * One way to achieve the previous goals is to submit refactorings and other pre-requisites as their own pull requests.
 * Documentation and Context
   * All user-facing changes should include documentation changes.
+  * All user-facing changes should include a changelog fragment in `changelog.d/`: run `uv run scriv create` and fill in the generated file. See [changelog.d/README.md](changelog.d/README.md). Internal-only changes get the `skip-changelog` label instead.
   * Describe clearly the intent behind your pull request (the problem it solves), rather than just listing implementation details that AI can already generate.
 
 ### Submitting your changes

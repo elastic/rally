@@ -1,0 +1,14 @@
+<!--
+A changelog fragment for Rally. See changelog.d/README.md.
+
+Uncomment the category that fits (remove the HTML comment wrapper around it)
+and describe the change for Rally users in one bullet. Don't add the PR number:
+it is added automatically at release time.
+-->
+{% for cat in config.categories %}
+<!--
+### {{ cat }}
+
+* Describe the change for Rally users.
+-->
+{% endfor -%}
