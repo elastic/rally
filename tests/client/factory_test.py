@@ -805,8 +805,8 @@ def test_client_factory_masks_basic_auth_in_logs(caplog):
     assert "*****" in caplog.text
 
 
-def test_admin_client_factory_accepts_merged_options_without_per_client_api_keys():
-    merged = opts.merge_admin_client_options(
+def test_telemetry_client_factory_accepts_merged_options_without_per_client_api_keys():
+    merged = opts.merge_telemetry_client_options(
         {
             "default": {
                 "timeout": 30,
@@ -815,11 +815,11 @@ def test_admin_client_factory_accepts_merged_options_without_per_client_api_keys
                 "create_api_key_per_client": True,
             }
         },
-        {"default": {"api_key": "admin-key"}},
+        {"default": {"api_key": "telemetry-key"}},
     )
 
     es_factory = factory.EsClientFactory([{"host": "127.0.0.1", "port": 9200}], merged["default"])
 
-    assert es_factory.client_options["api_key"] == "admin-key"
+    assert es_factory.client_options["api_key"] == "telemetry-key"
     assert "basic_auth" not in es_factory.client_options
     assert "create_api_key_per_client" not in es_factory.client_options

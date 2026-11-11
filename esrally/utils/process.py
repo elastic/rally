@@ -204,7 +204,7 @@ def redact_cmdline(cmdline: list) -> list[str]:
     Redact client options in cmdline as it contains sensitive information like passwords
     """
 
-    sensitive_flags = ("--client-options", "--admin-client-options")
+    sensitive_flags = ("--client-options", "--telemetry-client-options")
 
     def is_sensitive_flag(value):
         option = value.split("=", 1)[0]

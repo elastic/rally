@@ -138,7 +138,7 @@ class TestDriver:
                     "number": "8.10.0",
                     "build_flavor": "serverless",
                     "build_type": "docker",
-                    "build_hash": "00000000",
+                    "build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80",
                     "build_date": "2023-10-31",
                     "build_snapshot": False,
                     "lucene_version": "9.7.0",
@@ -146,12 +146,6 @@ class TestDriver:
                     "minimum_index_compatibility_version": "8.10.0",
                 },
                 "tagline": "You Know, for Search",
-            }
-            self.es.nodes.info.return_value = {
-                "nodes": {
-                    "PNAuTQt3Seum5BpPleo0wA": {"build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80"},
-                    "i9FafotsSSOrOZdDyhA2Ng": {"build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80"},
-                }
             }
 
         def create(self):
@@ -237,7 +231,7 @@ class TestDriver:
         d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=self.StaticServerlessClientFactory)
         d.prepare_benchmark(t=self.track)
 
-        # was build hash and version determined correctly?
+        # is the static serverless version number overwritten while the build hash from the info API is kept?
         assert driver_actor.cluster_details == {
             "name": "serverless",
             "cluster_name": "serverless",
@@ -246,7 +240,7 @@ class TestDriver:
                 "number": "serverless",  # <--- THIS
                 "build_flavor": "serverless",
                 "build_type": "docker",
-                "build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80",  # <--- THIS
+                "build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80",
                 "build_date": "2023-10-31",
                 "build_snapshot": False,
                 "lucene_version": "9.7.0",
@@ -268,52 +262,34 @@ class TestDriver:
     class RecordingClientFactory:
         instances = []
         build_flavor = "default"
-        admin_operator = True
-        configure_nodes_info = False
-        wrap_info_response = False
+        telemetry_operator = True
 
         def __init__(self, hosts, client_options, distribution_version=None, distribution_flavor=None):
             self.client_options = dict(client_options)
             self.client = mock.MagicMock()
             flavor = type(self).build_flavor
-            info_body = {
+            self.client.info.return_value = {
                 "name": flavor,
                 "cluster_name": flavor,
-                "version": {"number": "8.15.0", "build_flavor": flavor, "build_hash": "00000000"},
+                "version": {"number": "8.15.0", "build_flavor": flavor, "build_hash": "5f626ea4014dc029b8ae3f0bca06944975bf2d80"},
             }
-            if type(self).wrap_info_response:
-                # pylint: disable=import-outside-toplevel
-                from elastic_transport import ObjectApiResponse
-
-                self.client.info.return_value = ObjectApiResponse(body=info_body, meta=None)
-            else:
-                self.client.info.return_value = info_body
-            operator = type(self).admin_operator if client_options.get("api_key") == "admin-key" else False
+            operator = type(self).telemetry_operator if client_options.get("api_key") == "telemetry-key" else False
             self.client.perform_request.return_value = mock.Mock(body={"operator": operator})
-            if type(self).configure_nodes_info and client_options.get("api_key") == "admin-key":
-                self.client.nodes.info.return_value = {"nodes": {"n1": {"build_hash": "from-admin"}}}
             type(self).instances.append(self)
 
         def create(self):
             return self.client
 
         @classmethod
-        def reset(cls, build_flavor="default", admin_operator=True, configure_nodes_info=False, wrap_info_response=False):
+        def reset(cls, build_flavor="default", telemetry_operator=True):
             cls.instances = []
             cls.build_flavor = build_flavor
-            cls.admin_operator = admin_operator
-            cls.configure_nodes_info = configure_nodes_info
-            cls.wrap_info_response = wrap_info_response
+            cls.telemetry_operator = telemetry_operator
 
-    def _use_recording_factory(self, build_flavor="default", admin_operator=True, configure_nodes_info=False, wrap_info_response=False):
+    def _use_recording_factory(self, build_flavor="default", telemetry_operator=True):
         # Avoid StaticClientFactory teardown stopping a patcher this test never started.
         self.StaticClientFactory.PATCHER = mock.Mock()
-        self.RecordingClientFactory.reset(
-            build_flavor=build_flavor,
-            admin_operator=admin_operator,
-            configure_nodes_info=configure_nodes_info,
-            wrap_info_response=wrap_info_response,
-        )
+        self.RecordingClientFactory.reset(build_flavor=build_flavor, telemetry_operator=telemetry_operator)
         return self.RecordingClientFactory
 
     def _device(self, telemetry_devices, name):
@@ -349,7 +325,7 @@ class TestDriver:
         assert "IndexStats" in self._invoked_on_benchmark_start(d.telemetry)
 
     @mock.patch("esrally.driver.driver.client.wait_for_rest_layer", return_value=True)
-    def test_stateful_without_admin_options_reuses_benchmark_client(self, wait_for_rest_layer):
+    def test_stateful_without_telemetry_options_reuses_benchmark_client(self, wait_for_rest_layer):
         self.cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", False)
         self.cfg.add(
             config.Scope.applicationOverride,
@@ -379,7 +355,7 @@ class TestDriver:
         wait_for_rest_layer.assert_called_once_with(benchmark_client, max_attempts=40)
 
     @mock.patch("esrally.driver.driver.client.wait_for_rest_layer", return_value=True)
-    def test_stateful_admin_options_use_separate_telemetry_client(self, wait_for_rest_layer):
+    def test_stateful_telemetry_options_use_separate_telemetry_client(self, wait_for_rest_layer):
         self.cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", False)
         self.cfg.add(
             config.Scope.applicationOverride,
@@ -400,8 +376,8 @@ class TestDriver:
         self.cfg.add(
             config.Scope.applicationOverride,
             "client",
-            "admin.options",
-            opts.ClientOptions("api_key:'admin-key'", apply_defaults=False),
+            "telemetry.options",
+            opts.ClientOptions("api_key:'telemetry-key'", apply_defaults=False),
         )
         factory = self._use_recording_factory()
         driver_actor = self.create_test_driver_actor()
@@ -410,35 +386,35 @@ class TestDriver:
 
         assert len(factory.instances) == 2
         benchmark_factory = factory.instances[0]
-        admin_factory = factory.instances[1]
+        telemetry_factory = factory.instances[1]
         assert benchmark_factory.client_options["basic_auth_user"] == "bench"
         assert benchmark_factory.client_options["create_api_key_per_client"] is True
-        assert admin_factory.client_options["api_key"] == "admin-key"
-        assert admin_factory.client_options["use_ssl"] is True
-        assert admin_factory.client_options["timeout"] == 90
-        assert "basic_auth_user" not in admin_factory.client_options
-        assert "basic_auth_password" not in admin_factory.client_options
-        assert "create_api_key_per_client" not in admin_factory.client_options
-        assert "timeout" not in opts.ClientOptions("api_key:'admin-key'", apply_defaults=False).default_or_first
+        assert telemetry_factory.client_options["api_key"] == "telemetry-key"
+        assert telemetry_factory.client_options["use_ssl"] is True
+        assert telemetry_factory.client_options["timeout"] == 90
+        assert "basic_auth_user" not in telemetry_factory.client_options
+        assert "basic_auth_password" not in telemetry_factory.client_options
+        assert "create_api_key_per_client" not in telemetry_factory.client_options
+        assert "timeout" not in opts.ClientOptions("api_key:'telemetry-key'", apply_defaults=False).default_or_first
         assert d.default_sync_es_client is benchmark_factory.client
-        assert self._device(d.telemetry, "IndexStats").client is admin_factory.client
-        assert self._device(d.telemetry, "ClusterEnvironmentInfo").client is admin_factory.client
+        assert self._device(d.telemetry, "IndexStats").client is telemetry_factory.client
+        assert self._device(d.telemetry, "ClusterEnvironmentInfo").client is telemetry_factory.client
         assert self._device(d.telemetry, "ClusterEnvironmentInfo").client_options["basic_auth_user"] == "bench"
         assert driver_actor.target_auth_type == "basic"
-        assert admin_factory.client.perform_request.call_count == 0
-        assert admin_factory.client.nodes.info.call_count == 0
+        assert telemetry_factory.client.perform_request.call_count == 0
+        assert telemetry_factory.client.nodes.info.call_count == 0
         assert not self.cfg.exists("driver", "serverless.operator")
         assert d.config.opts("client", "options").default_or_first["create_api_key_per_client"] is True
         assert "IndexStats" in self._invoked_on_benchmark_start(d.telemetry)
         wait_for_rest_layer.assert_called_once_with(benchmark_factory.client, max_attempts=40)
 
-    def test_multi_cluster_does_not_create_admin_client(self):
+    def test_multi_cluster_does_not_create_telemetry_client(self):
         self.cfg.add(config.Scope.applicationOverride, "driver", "multi.cluster", True)
         self.cfg.add(
             config.Scope.applicationOverride,
             "client",
-            "admin.options",
-            opts.ClientOptions("api_key:'admin-key'", apply_defaults=False),
+            "telemetry.options",
+            opts.ClientOptions("api_key:'telemetry-key'", apply_defaults=False),
         )
         factory = self._use_recording_factory()
         driver_actor = self.create_test_driver_actor()
@@ -449,7 +425,7 @@ class TestDriver:
         assert d.telemetry.devices == []
         assert factory.instances[0].client.perform_request.call_count == 0
 
-    def test_serverless_admin_operator_enables_internal_telemetry(self):
+    def test_serverless_telemetry_operator_enables_internal_telemetry(self):
         self.cfg.add(config.Scope.applicationOverride, "driver", "serverless.mode", True)
         self.cfg.add(config.Scope.applicationOverride, "driver", "serverless.operator", False)
         self.cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", False)
@@ -462,12 +438,10 @@ class TestDriver:
         self.cfg.add(
             config.Scope.applicationOverride,
             "client",
-            "admin.options",
-            opts.ClientOptions("api_key:'admin-key'", apply_defaults=False),
+            "telemetry.options",
+            opts.ClientOptions("api_key:'telemetry-key'", apply_defaults=False),
         )
-        factory = self._use_recording_factory(
-            build_flavor="serverless", admin_operator=True, configure_nodes_info=True, wrap_info_response=True
-        )
+        factory = self._use_recording_factory(build_flavor="serverless", telemetry_operator=True)
         driver_actor = self.create_test_driver_actor()
         d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=factory)
         d.prepare_benchmark(t=self.track)
@@ -476,11 +450,10 @@ class TestDriver:
         assert d.telemetry.serverless_operator is True
         assert d.telemetry.serverless_mode is True
         assert driver_actor.target_auth_type == "api_key"
-        assert driver_actor.cluster_details["version"]["build_hash"] == "from-admin"
+        assert driver_actor.cluster_details["version"]["build_hash"] == "5f626ea4014dc029b8ae3f0bca06944975bf2d80"
         environment = self._device(d.telemetry, "ClusterEnvironmentInfo")
         assert environment.client is factory.instances[1].client
         assert environment.client_options["api_key"] == "benchmark-key"
-        assert environment.revision_override == "from-admin"
         assert factory.instances[0].client.perform_request.call_count == 0
         assert factory.instances[1].client.perform_request.call_count == 1
         invoked = self._invoked_on_benchmark_start(d.telemetry)
@@ -488,7 +461,7 @@ class TestDriver:
         assert "ExternalEnvironmentInfo" in invoked
         assert "ClusterEnvironmentInfo" in invoked
 
-    def test_serverless_non_operator_admin_skips_internal_telemetry(self):
+    def test_serverless_non_operator_telemetry_skips_internal_telemetry(self):
         self.cfg.add(config.Scope.applicationOverride, "driver", "serverless.mode", True)
         self.cfg.add(config.Scope.applicationOverride, "driver", "serverless.operator", False)
         self.cfg.add(config.Scope.applicationOverride, "mechanic", "skip.rest.api.check", False)
@@ -501,17 +474,17 @@ class TestDriver:
         self.cfg.add(
             config.Scope.applicationOverride,
             "client",
-            "admin.options",
-            opts.ClientOptions("api_key:'admin-key'", apply_defaults=False),
+            "telemetry.options",
+            opts.ClientOptions("api_key:'telemetry-key'", apply_defaults=False),
         )
-        factory = self._use_recording_factory(build_flavor="serverless", admin_operator=False)
+        factory = self._use_recording_factory(build_flavor="serverless", telemetry_operator=False)
         driver_actor = self.create_test_driver_actor()
         d = driver.Driver(driver_actor, self.cfg, es_client_factory_class=factory)
         d.prepare_benchmark(t=self.track)
 
         assert self.cfg.opts("driver", "serverless.operator") is False
         assert d.telemetry.serverless_operator is False
-        assert driver_actor.cluster_details["version"]["build_hash"] == "00000000"
+        assert driver_actor.cluster_details["version"]["build_hash"] == "5f626ea4014dc029b8ae3f0bca06944975bf2d80"
         invoked = self._invoked_on_benchmark_start(d.telemetry)
         assert "IndexStats" not in invoked
         assert "ExternalEnvironmentInfo" not in invoked
@@ -519,7 +492,7 @@ class TestDriver:
 
     @mock.patch("esrally.driver.driver.delete_api_keys")
     @mock.patch("esrally.driver.driver.client.create_api_key")
-    def test_admin_client_does_not_change_per_client_api_keys(self, create_api_key, delete):
+    def test_telemetry_client_does_not_change_per_client_api_keys(self, create_api_key, delete):
         create_api_key.side_effect = [
             {"id": "abc", "api_key": "123"},
             {"id": "def", "api_key": "456"},
@@ -543,8 +516,8 @@ class TestDriver:
         self.cfg.add(
             config.Scope.applicationOverride,
             "client",
-            "admin.options",
-            opts.ClientOptions("api_key:'admin-key'", apply_defaults=False),
+            "telemetry.options",
+            opts.ClientOptions("api_key:'telemetry-key'", apply_defaults=False),
         )
         factory = self._use_recording_factory()
         driver_actor = self.create_test_driver_actor()

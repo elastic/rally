@@ -689,17 +689,17 @@ class Driver:
             ).create()
         return EsClients(es)
 
-    def admin_client_options(self):
-        """Return merged telemetry client options, or None when ``--admin-client-options`` was not set."""
-        admin_options = self.config.opts("client", "admin.options", mandatory=False)
-        if not admin_options:
+    def telemetry_client_options(self):
+        """Return merged telemetry client options, or None when ``--telemetry-client-options`` was not set."""
+        telemetry_options = self.config.opts("client", "telemetry.options", mandatory=False)
+        if not telemetry_options:
             return None
-        return opts.merge_admin_client_options(
+        return opts.merge_telemetry_client_options(
             self.config.opts("client", "options").all_client_options,
-            admin_options.all_client_options,
+            telemetry_options.all_client_options,
         )
 
-    def prepare_telemetry(self, es, enable, index_names, data_stream_names, build_hash, serverless_mode, serverless_operator):
+    def prepare_telemetry(self, es, enable, index_names, data_stream_names, serverless_mode, serverless_operator):
         enabled_devices = self.config.opts("telemetry", "devices")
         telemetry_params = self.config.opts("telemetry", "params")
         log_root = paths.race_root(self.config)
@@ -711,7 +711,7 @@ class Driver:
             devices = [
                 telemetry.NodeStats(telemetry_params, es, self.metrics_store),
                 telemetry.ExternalEnvironmentInfo(es_default, self.metrics_store),
-                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store, build_hash, default_client_options),
+                telemetry.ClusterEnvironmentInfo(es_default, self.metrics_store, default_client_options),
                 telemetry.JvmStatsSummary(es_default, self.metrics_store),
                 telemetry.IndexStats(es_default, self.metrics_store),
                 telemetry.MlBucketProcessingTime(es_default, self.metrics_store),
@@ -754,32 +754,6 @@ class Driver:
             self.logger.exception("Could not retrieve cluster info on benchmark start")
             return None
 
-    def _apply_admin_build_hash(self, build_hash):
-        # info() returns an ObjectApiResponse, which supports item access but is not a dict.
-        cluster_details = getattr(self.driver_actor, "cluster_details", None)
-        version = None
-        if cluster_details is not None:
-            try:
-                version = cluster_details["version"]
-            except (KeyError, TypeError):
-                version = None
-        if isinstance(version, dict):
-            version["build_hash"] = build_hash
-
-    def retrieve_build_hash_from_nodes_info(self, es):
-        try:
-            es_default = es.default
-            if not es_default:
-                return None
-            nodes_info = es_default.nodes.info(filter_path="**.build_hash")
-            nodes = nodes_info["nodes"]
-            # assumption: build hash is the same across all the nodes
-            first_node_id = next(iter(nodes))
-            return nodes[first_node_id]["build_hash"]
-        except BaseException:
-            self.logger.exception("Could not retrieve build hash from nodes info")
-            return None
-
     def create_api_key(self, es, client_id):
         self.logger.debug("Creating ES API key for client [%s].", client_id)
         try:
@@ -811,7 +785,6 @@ class Driver:
         multi_cluster = self.config.opts("driver", "multi.cluster", mandatory=False)
         serverless_mode = convert.to_bool(self.config.opts("driver", "serverless.mode", mandatory=False, default_value=False))
         serverless_operator = convert.to_bool(self.config.opts("driver", "serverless.operator", mandatory=False, default_value=False))
-        build_hash = None
         if skip_rest_api_check:
             self.logger.info("Skipping REST API check as requested explicitly.")
         elif uses_static_responses:
@@ -825,11 +798,6 @@ class Driver:
             if serverless_mode:
                 # overwrite static serverless version number
                 self.driver_actor.cluster_details["version"]["number"] = "serverless"
-                if serverless_operator:
-                    # overwrite build hash if running as operator
-                    build_hash = self.retrieve_build_hash_from_nodes_info(es_clients)
-                    self.logger.info("Retrieved actual build hash [%s] from serverless cluster.", build_hash)
-                    self.driver_actor.cluster_details["version"]["build_hash"] = build_hash
 
             # Determine target_platform while we still have the API response object (with response headers)
             if serverless_mode:
@@ -857,26 +825,19 @@ class Driver:
         enable_telemetry = not uses_static_responses and not multi_cluster
         telemetry_clients = es_clients
         telemetry_operator = serverless_operator
-        admin_client_options = self.admin_client_options() if enable_telemetry else None
-        if admin_client_options:
-            self.logger.info("Using separate admin credentials for telemetry.")
-            telemetry_clients = self.create_es_clients(all_client_options=admin_client_options)
+        telemetry_client_options = self.telemetry_client_options() if enable_telemetry else None
+        if telemetry_client_options:
+            self.logger.info("Using separate client options for telemetry.")
+            telemetry_clients = self.create_es_clients(all_client_options=telemetry_client_options)
             # Challenge tasks keep driver.serverless.operator from the benchmark user. Telemetry devices follow the
-            # admin user so a restricted benchmark client can still collect operator stats.
+            # telemetry user so a restricted benchmark client can still collect operator stats.
             if serverless_mode:
                 telemetry_operator = client.serverless_operator_status(telemetry_clients.default)
-                if telemetry_operator:
-                    admin_build_hash = self.retrieve_build_hash_from_nodes_info(telemetry_clients)
-                    if admin_build_hash:
-                        build_hash = admin_build_hash
-                        self.logger.info("Retrieved actual build hash [%s] from serverless cluster with admin credentials.", build_hash)
-                        self._apply_admin_build_hash(build_hash)
         self.prepare_telemetry(
             telemetry_clients,
             enable=enable_telemetry,
             index_names=self.track.index_names(),
             data_stream_names=self.track.data_stream_names(),
-            build_hash=build_hash,
             serverless_mode=serverless_mode,
             serverless_operator=telemetry_operator,
         )

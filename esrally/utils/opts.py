@@ -238,25 +238,25 @@ class TargetHosts(ConnectOptions):
         return self.all_options
 
 
-# Credential keys. When admin options set any of these, they replace benchmark credentials
+# Credential keys. When telemetry options set any of these, they replace benchmark credentials
 # so a telemetry client does not send both authentication schemes.
 _AUTH_CLIENT_OPTION_KEYS = ("api_key", "basic_auth_user", "basic_auth_password", "basic_auth", "http_auth")
 
 
-def merge_admin_client_options(benchmark_options, admin_options):
-    """Overlay per-cluster admin client options onto benchmark client options.
+def merge_telemetry_client_options(benchmark_options, telemetry_options):
+    """Overlay per-cluster telemetry client options onto benchmark client options.
 
     TLS, timeouts, and other non-auth settings are inherited from ``benchmark_options``.
-    Auth keys present in ``admin_options`` replace benchmark auth. ``create_api_key_per_client``
+    Auth keys present in ``telemetry_options`` replace benchmark auth. ``create_api_key_per_client``
     is omitted because per-client API keys are created only for load-driver clients.
 
     :param benchmark_options: Cluster name to client option dict, from ``--client-options``.
-    :param admin_options: Cluster name to override dict, from ``--admin-client-options``.
+    :param telemetry_options: Cluster name to override dict, from ``--telemetry-client-options``.
     :return: Cluster name to merged client option dict for the telemetry client.
     """
     merged = {}
     for cluster_name, original in benchmark_options.items():
-        overrides = admin_options.get(cluster_name, {})
+        overrides = telemetry_options.get(cluster_name, {})
         cluster_options = dict(original)
         if any(key in overrides for key in _AUTH_CLIENT_OPTION_KEYS):
             for key in _AUTH_CLIENT_OPTION_KEYS:

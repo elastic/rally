@@ -836,7 +836,7 @@ def create_arg_parser():
         default=opts.ClientOptions.DEFAULT_CLIENT_OPTIONS,
     )
     race_parser.add_argument(
-        "--admin-client-options",
+        "--telemetry-client-options",
         default=None,
         help="Client options for telemetry requests, in the same format as --client-options. "
         "When omitted, telemetry uses --client-options. Challenge operations always use --client-options.",
@@ -1265,21 +1265,21 @@ def configure_connection_params(arg_parser, args, cfg: types.Config):
     cfg.add(config.Scope.applicationOverride, "client", "hosts", target_hosts)
     client_options = opts.ClientOptions(args.client_options, target_hosts=target_hosts)
     cfg.add(config.Scope.applicationOverride, "client", "options", client_options)
-    admin_client_options = getattr(args, "admin_client_options", None)
-    if admin_client_options:
+    telemetry_client_options = getattr(args, "telemetry_client_options", None)
+    if telemetry_client_options:
         # Do not inject the default timeout. Only keys the user supplied should overlay --client-options.
-        parsed_admin_client_options = opts.ClientOptions(admin_client_options, apply_defaults=False)
-        unknown_admin_clusters = set(parsed_admin_client_options.all_client_options) - set(target_hosts.all_hosts)
-        if unknown_admin_clusters:
+        parsed_telemetry_client_options = opts.ClientOptions(telemetry_client_options, apply_defaults=False)
+        unknown_telemetry_clusters = set(parsed_telemetry_client_options.all_client_options) - set(target_hosts.all_hosts)
+        if unknown_telemetry_clusters:
             arg_parser.error(
-                "--admin-client-options contains cluster keys %s that are not present in --target-hosts. "
-                "Omit a cluster to inherit its benchmark client options." % sorted(unknown_admin_clusters)
+                "--telemetry-client-options contains cluster keys %s that are not present in --target-hosts. "
+                "Omit a cluster to inherit its benchmark client options." % sorted(unknown_telemetry_clusters)
             )
         cfg.add(
             config.Scope.applicationOverride,
             "client",
-            "admin.options",
-            parsed_admin_client_options,
+            "telemetry.options",
+            parsed_telemetry_client_options,
         )
     if set(target_hosts.all_hosts) != set(client_options.all_client_options):
         arg_parser.error("--target-hosts and --client-options must define the same keys for multi cluster setups.")
@@ -1498,7 +1498,7 @@ def load_configuration(config_name):
 def redact_namespace(args):
     """Return a copy of ``args`` with client credentials masked for logging."""
     redacted = argparse.Namespace(**vars(args))
-    for name in ("client_options", "admin_client_options"):
+    for name in ("client_options", "telemetry_client_options"):
         if getattr(redacted, name, None):
             setattr(redacted, name, "*****")
     return redacted

@@ -204,12 +204,12 @@ class TestProcess:
         assert not night_rally_process.killed
 
 
-def test_redact_cmdline_hides_client_and_admin_credentials():
+def test_redact_cmdline_hides_client_and_telemetry_credentials():
     cmdline = [
         "esrally",
         "race",
         "--client-options=basic_auth_user:'elastic',basic_auth_password:'secret'",
-        "--admin-client-options=api_key:'op-key'",
+        "--telemetry-client-options=api_key:'op-key'",
         "--track=geonames",
     ]
 
@@ -217,18 +217,18 @@ def test_redact_cmdline_hides_client_and_admin_credentials():
         "esrally",
         "race",
         '--client-options="*****"',
-        '--admin-client-options="*****"',
+        '--telemetry-client-options="*****"',
         "--track=geonames",
     ]
 
 
-def test_redact_cmdline_hides_space_separated_client_and_admin_credentials():
+def test_redact_cmdline_hides_space_separated_client_and_telemetry_credentials():
     cmdline = [
         "esrally",
         "race",
         "--client-options",
         "basic_auth_user:'elastic',basic_auth_password:'secret'",
-        "--admin-client-options",
+        "--telemetry-client-options",
         "api_key:'op-key'",
         "--track=geonames",
     ]
@@ -238,7 +238,7 @@ def test_redact_cmdline_hides_space_separated_client_and_admin_credentials():
         "race",
         "--client-options",
         '"*****"',
-        "--admin-client-options",
+        "--telemetry-client-options",
         '"*****"',
         "--track=geonames",
     ]
