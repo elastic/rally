@@ -240,7 +240,7 @@ class TargetHosts(ConnectOptions):
 
 # Credential keys. When telemetry options set any of these, they replace benchmark credentials
 # so a telemetry client does not send both authentication schemes.
-_AUTH_CLIENT_OPTION_KEYS = ("api_key", "basic_auth_user", "basic_auth_password", "basic_auth", "http_auth")
+_AUTH_CLIENT_OPTION_KEYS = ("api_key", "basic_auth_user", "basic_auth_password")
 
 
 def merge_telemetry_client_options(benchmark_options, telemetry_options):

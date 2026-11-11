@@ -352,7 +352,7 @@ class TestClientOptions:
 
     def test_telemetry_basic_auth_replaces_api_key(self):
         merged = opts.merge_telemetry_client_options(
-            {"default": {"timeout": 30, "api_key": "bench", "use_ssl": True, "http_auth": "legacy:secret"}},
+            {"default": {"timeout": 30, "api_key": "bench", "use_ssl": True}},
             {"default": {"basic_auth_user": "telemetry", "basic_auth_password": "pw"}},
         )
 

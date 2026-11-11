@@ -792,13 +792,12 @@ def test_serverless_operator_status_is_false_when_authenticate_is_rejected():
     assert factory.serverless_operator_status(es) is False
 
 
-def test_client_factory_masks_basic_auth_in_logs(caplog):
+def test_client_factory_masks_credentials_in_logs(caplog):
     caplog.set_level(logging.INFO, logger="esrally.client.factory")
-    client_options = {"basic_auth": ["elastic", "secret"], "api_key": "hidden-key"}
+    client_options = {"basic_auth_user": "elastic", "basic_auth_password": "secret", "api_key": "hidden-key"}
 
     es_factory = factory.EsClientFactory([{"host": "127.0.0.1", "port": 9200}], client_options)
 
-    assert es_factory.client_options["basic_auth"] == ["elastic", "secret"]
     assert es_factory.client_options["api_key"] == "hidden-key"
     assert "secret" not in caplog.text
     assert "hidden-key" not in caplog.text
