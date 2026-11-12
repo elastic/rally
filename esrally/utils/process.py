@@ -238,7 +238,29 @@ def redact_cmdline(cmdline: list) -> list[str]:
     Redact client options in cmdline as it contains sensitive information like passwords
     """
 
-    return ["=".join((value.split("=")[0], '"*****"')) if "--client-options" in value else value for value in cmdline]
+    # Flag and the shortest abbreviation argparse resolves to it. Shorter prefixes are either ambiguous (argparse rejects
+    # them) or belong to other options, e.g. "--telemetry" and "--telemetry-params" must not be redacted.
+    sensitive_flags = (("--client-options", len("--cli")), ("--telemetry-client-options", len("--telemetry-c")))
+
+    def is_sensitive_flag(value):
+        option = value.split("=", 1)[0]
+        return any(option == flag or (len(option) >= min_length and flag.startswith(option)) for flag, min_length in sensitive_flags)
+
+    redacted = []
+    redact_next = False
+    for value in cmdline:
+        if redact_next:
+            redacted.append('"*****"')
+            redact_next = False
+        elif is_sensitive_flag(value):
+            if "=" in value:
+                redacted.append("=".join((value.split("=", 1)[0], '"*****"')))
+            else:
+                redacted.append(value)
+                redact_next = True
+        else:
+            redacted.append(value)
+    return redacted
 
 
 def kill_all(predicate: Callable[[psutil.Process], bool]) -> None:
