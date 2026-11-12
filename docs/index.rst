@@ -2,7 +2,7 @@ Rally |release|
 ===============
 
 
-.. ifconfig:: release.endswith('.dev0')
+.. ifconfig:: 'dev' in release
 
     .. warning::
 
