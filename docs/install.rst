@@ -3,156 +3,88 @@ Installation
 
 This is the detailed installation guide for Rally. If you are in a hurry you can check the :doc:`quickstart guide </quickstart>`.
 
-Hardware Requirements
----------------------
+Installing Rally
+----------------
 
-Use an SSD on the load generator machine. If you run bulk-indexing benchmarks, Rally will read one or more data files from disk. Usually, you will configure multiple clients and each client reads a portion of the data file. To the disk this appears as a random access pattern where spinning disks perform poorly. To avoid an accidental bottleneck on client-side you should therefore use an SSD on each load generator machine.
+Rally does not support Windows and is only actively tested on macOS and Linux. Check the :ref:`requirements <install_requirements>` below first.
 
-Prerequisites
--------------
+The recommended way to install Rally is as a standalone tool with `uv <https://docs.astral.sh/uv/>`_ (see their `installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_)::
 
-Rally does not support Windows and is only actively tested on macOS and Linux. Install the following packages first.
+    uv tool install --python 3.13 esrally
+
+uv installs Rally into its own isolated environment, downloading Python 3.13 if needed. If ``esrally`` is not found afterwards, run ``uv tool update-shell`` and restart your shell. `pipx <https://pipx.pypa.io/>`_ works the same way: ``pipx install esrally`` (and ``pipx ensurepath``).
+
+Alternatively, install Rally into a virtual environment::
+
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python3 -m pip install esrally
+
+Run ``source .venv/bin/activate`` whenever you want to use Rally, and ``deactivate`` when you are done.
+
+.. note::
+
+   Avoid ``pip install --user`` or ``sudo pip install``. Many recent Linux distributions and Homebrew prevent installing packages into the system Python (`PEP 668 <https://peps.python.org/pep-0668/>`_).
+
+Verify the installation with ``esrally --version``.
+
+Optional features
+~~~~~~~~~~~~~~~~~
+
+Some features need extra dependencies, which you can install with `extras <https://packaging.python.org/en/latest/specifications/dependency-specifiers/#extras>`_, e.g. ``uv tool install --python 3.13 'esrally[s3]'``:
+
+* ``s3``: download track data from a private AWS S3 bucket.
+* ``otlp``: convert :doc:`OTLP JSON corpora </otlp_ingest>` to binary protobuf.
+
+Upgrading
+~~~~~~~~~
+
+Run ``uv tool upgrade esrally``, ``pipx upgrade esrally`` or, in a virtual environment, ``python3 -m pip install --upgrade esrally``.
+
+.. _install_requirements:
+
+Requirements
+------------
 
 .. _install_python:
 
 Python
 ~~~~~~
 
-* Python (from version 3.10.x to version 3.13.x) available as ``python3`` on the system executable path. Please verify with: ``python3 --version``.
-* Python3 header files (included in the Python3 development package).
-* ``pip3`` available on the path. Verify with ``pip3 --version``.
-
-If you need multiple Python versions, consider using `uv <https://github.com/astral-sh/uv>`_. For details refer to their `installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_.
+Rally requires Python 3.10 or above. Verify with ``python3 --version``, or pass ``--python`` to ``uv tool install`` as shown above.
 
 git
 ~~~
 
-Git is not required if **all** of the following conditions are met:
+Rally requires git 1.9 or later (verify with ``git --version``) to fetch tracks and Elasticsearch configurations. You don't need git if you only use your own tracks (``--track-path``) and either benchmark an existing cluster (``--pipeline=benchmark-only``) or refer to Elasticsearch configurations with ``--team-path``.
 
-* You are using Rally only as a load generator (``--pipeline=benchmark-only``) or you are referring to Elasticsearch configurations with ``--team-path``.
-* You create your own tracks and refer to them with ``--track-path``.
+Faster decompression (optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In all other cases, Rally requires ``git 1.9`` or better. Verify with ``git --version``.
+Install ``pbzip2``, ``pigz`` and ``zstd`` with your package manager to speed up decompressing track corpora. Rally uses them for ``.bz2``, ``.gz`` and ``.zst`` files respectively when they are available, and falls back to Python's built-in decompression otherwise. The corpora of the `standard tracks <https://github.com/elastic/rally-tracks>`_ are compressed with ``bzip2``, so ``pbzip2`` makes the biggest difference.
 
-**Debian / Ubuntu**
+Hardware
+~~~~~~~~
 
-::
+Use an SSD on each load generator machine. In bulk-indexing benchmarks, multiple clients read different parts of the data files concurrently, and spinning disks handle this random access pattern poorly.
 
-    sudo apt-get install git
+Running Elasticsearch with Rally
+--------------------------------
 
+These requirements only apply to machines where Rally provisions Elasticsearch. If you use Rally only as a load generator to :doc:`benchmark an existing cluster </recipes>`, you can skip them.
 
-**Red Hat / CentOS / Amazon Linux**
-
-::
-
-    sudo yum install git
-
-
-.. note::
-
-   If you use RHEL, install a recent version of git via the `Red Hat Software Collections <https://www.softwarecollections.org/en/scls/rhscl/git19/>`_.
-
-**macOS**
-
-``git`` is already installed on macOS.
-
-pbzip2, pigz, zstd
-~~~~~~~~~~~~~~~~~~
-
-It is strongly recommended to install ``pbzip2`` to speed up decompressing the corpora of Rally `standard tracks <https://github.com/elastic/rally-tracks>`_.
-If you have created :doc:`custom tracks </adding_tracks>` using corpora compressed with ``gzip`` instead of ``bzip2``, it's also advisable to install ``pigz`` to speed up the process.
-Rally also supports ``zst`` compressed corpora out of the box, installing ``zstd`` speeds up the process.
-
-**Debian / Ubuntu**
-
-::
-
-    sudo apt-get install pbzip2
-
-**Red Hat / CentOS / Amazon Linux**
-
-``pbzip`` is available via the `EPEL repository <https://fedoraproject.org/wiki/EPEL#Quickstart>`_.
-
-::
-
-    sudo yum install pbzip2
-
-**macOS**
-
-Install via `Homebrew <https://brew.sh/>`_:
-
-::
-
-    brew install pbzip2
-
-
-JDK
-~~~
-
-A JDK is required on all machines where you want to launch Elasticsearch. If you use Rally just as a load generator to :doc:`benchmark remote clusters </recipes>`, no JDK is required. For details on how to install a JDK check your operating system's documentation pages.
-
-To find the JDK, Rally expects the environment variable ``JAVA_HOME`` to be set on all targeted machines. To have more specific control, for example when you want to benchmark across a wide range of Elasticsearch releases, you can also set ``JAVAx_HOME`` where ``x``  is the major version of a JDK (e.g. ``JAVA8_HOME`` would point to a JDK 8 installation). Rally will then choose the highest supported JDK per version of Elasticsearch that is available.
-
-
-.. note::
-
-   If you have Rally download, install and benchmark a local copy of Elasticsearch (i.e., the `default Rally behavior <http://esrally.readthedocs.io/en/stable/quickstart.html#run-your-first-race>`_) be sure to configure the Operating System (OS) of your Rally server with the `recommended kernel settings <https://www.elastic.co/guide/en/elasticsearch/reference/master/system-config.html>`_
-
-Optional dependencies
----------------------
-
-S3 support is optional and can be installed using the ``s3`` extra. If you need S3 support, install ``esrally[s3]`` instead of just ``esrally``, but other than that follow the instructions below.
-
-Installing Rally
-----------------
-
-1. Ensure ``~/.local/bin`` is in your ``$PATH``.
-2. Ensure pip is the latest version: ``python3 -m pip install --user --upgrade pip``
-3. Install Rally: ``python3 -m pip install --user esrally``.
-
-Virtual environment Install
----------------------------
-
-You can also use virtualenv to install Rally into an isolated Python environment without sudo.
-
-1. Set up a new virtualenv environment in a directory with ``python3 -m venv .venv``
-2. Activate the environment with ``source /path/to/virtualenv/.venv/bin/activate``
-3. Ensure pip is the latest version: ``python3 -m pip install --upgrade pip``
-    .. important::
-       Omitting this step might cause the next step (Rally installation) to fail due to broken dependencies. The pip version must be at minimum ``20.3``.
-4. Install Rally with ``python3 -m pip install esrally``
-
-Whenever you want to use Rally, run the activation script (step 2 above) first.  When you are done, simply execute ``deactivate`` in the shell to exit the virtual environment.
+* A JDK that is `supported by the Elasticsearch version <https://www.elastic.co/support/matrix#matrix_jvm>`_ you benchmark. Rally finds it via the ``JAVA_HOME`` environment variable. To benchmark a wide range of Elasticsearch releases, you can also set ``JAVAx_HOME``, where ``x`` is the major version of a JDK (e.g. ``JAVA17_HOME``). Rally then chooses the highest JDK version that the benchmarked Elasticsearch version supports.
+* The `recommended system settings <https://www.elastic.co/guide/en/elasticsearch/reference/current/system-config.html>`_ for Elasticsearch.
 
 Docker
 ------
 
-Docker images of Rally can be found in `Docker Hub <https://hub.docker.com/r/elastic/rally>`_.
-
-Please refer to :doc:`Running Rally with Docker <docker/>` for detailed instructions.
-
-.. _install_offline-install:
+Docker images of Rally are available on `Docker Hub <https://hub.docker.com/r/elastic/rally>`_. See :doc:`Running Rally with Docker </docker>` for details.
 
 Offline Install
 ---------------
 
-.. ifconfig:: release.endswith('.dev0')
-
-    .. warning::
-
-        This documentation is for the version of Rally currently under development. We do not provide offline installation packages for development versions.
-        Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
-
-If you are in a corporate environment using Linux servers that do not have any access to the Internet, you can use Rally's offline installation package. Follow these steps to install Rally:
-
-.. note::
-
-    The offline installation package bundles dependencies for Python 3.11. Ensure ``python3`` on the target machine(s) is Python 3.11 (verify with ``python3 --version``), otherwise the installation may fail as some bundled dependencies cannot be installed with other Python versions.
-
-1. Install all prerequisites as documented above.
-2. Download the offline installation package for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
-3. Decompress the installation package with ``tar -xzf esrally-dist-linux-*.tar.gz``.
-4. Run the install script with ``sudo ./esrally-dist-linux-*/install.sh``.
+For machines without Internet access, Rally provides an offline installation package. See :ref:`offline installation <offline_install>`.
 
 Next Steps
 ----------
