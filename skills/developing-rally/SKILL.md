@@ -3,7 +3,8 @@ name: developing-rally
 description: >-
   Work on Rally's own codebase, not running benchmarks with it. Use when
   setting up the dev environment, running Rally's tests or linters, navigating
-  its source, debugging Rally's own code, or making changes to Rally itself.
+  its source, debugging Rally's own code, making changes to Rally itself, or
+  preparing a pull request (changelog fragments).
 ---
 
 # Developing Rally
@@ -35,6 +36,31 @@ run your working-tree code directly.
 
 Before committing run `make lint test` (unit tests + lint; integration tests are too slow for
 the inner loop). Optionally `make install-pre-commit` to run lint automatically on each commit.
+
+## Changelog entries
+
+Every PR with a user-visible change adds a fragment in `changelog.d/`; CI fails without one
+unless the PR has the `skip-changelog` label (tests, CI, refactoring, dev tooling). When your
+change is user-visible, add the fragment in the same commit as the code, before opening the PR:
+
+```
+uv run scriv create     # creates changelog.d/<timestamp>_<author>_<branch>.md
+```
+
+Then edit the file: uncomment exactly one `### <category>` section and write one bullet for
+Rally users (what changed for them, not how). Delete the other commented-out sections. Never add
+the PR number or link — release tooling adds it from the merge commit. Example:
+
+```markdown
+### Bug Fixes
+
+* Fix `esrally compare` failing when the baseline race has no `error_rate` metric.
+```
+
+Categories: Breaking Changes, Highlights, Enhancements, Bug Fixes, Doc Changes, Miscellaneous
+Changes. Check the fragment with `python3 changelog.py check --base origin/master` (it needs the
+fragment committed) and preview it with `python3 changelog.py render`. If the change is internal-only, add no fragment and say in the PR
+description that it needs the `skip-changelog` label. Details: `changelog.d/README.md`.
 
 ## Testing & conventions
 

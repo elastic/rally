@@ -19,6 +19,7 @@
 
 import json
 import os
+import sys
 from datetime import date
 from os.path import dirname, join
 
@@ -31,6 +32,8 @@ from sphinx.config import ConfigError
 # ones.
 extensions = [
     "sphinx.ext.ifconfig",
+    # Renders CHANGELOG.md and the pending changelog fragments in changelog.rst
+    "myst_parser",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -73,8 +76,28 @@ def replace_globals(app, docname, source):
     source[0] = tmp_source
 
 
+def write_changelog():
+    """
+    Render CHANGELOG.md with the unreleased changelog fragments on top, so that new entries can be reviewed in
+    Read the Docs pull request previews. See changelog.d/README.md.
+    """
+    root = join(dirname(__file__), os.pardir)
+    sys.path.insert(0, root)
+    import changelog  # pylint: disable=import-outside-toplevel
+
+    # In pull request previews, fragments added by the pull request aren't merged yet: link them to it.
+    pr = None
+    if os.environ.get("READTHEDOCS_VERSION_TYPE") == "external":
+        pr = int(os.environ["READTHEDOCS_VERSION"])
+    out = join(dirname(__file__), "_generated", "changelog.md")
+    os.makedirs(dirname(out), exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(changelog.render(fallback_pr=pr))
+
+
 def setup(app):
     app.connect("source-read", replace_globals)
+    write_changelog()
 
 
 def read_min_es_version():
@@ -115,7 +138,10 @@ release = version
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ["_build", "architecture"]
+exclude_patterns = ["_build", "_generated", "architecture"]
+
+# CHANGELOG.md entries start at level 3 headings, nested under the title of changelog.rst
+suppress_warnings = ["myst.header"]
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
 # add_function_parentheses = True
