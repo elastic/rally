@@ -104,7 +104,7 @@ target/
 #Pickles
 *.pk
 
-# pyenv
+# Python version (uv)
 .python-version
 
 # direnv

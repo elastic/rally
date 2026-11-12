@@ -19,10 +19,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@v4
+      - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.13"
+          version: "0.11.19"
+          python-version: "3.13.7"
       - name: Check for a changelog fragment
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: python3 changelog.py check --base "origin/${BASE_REF}"
+        run: uv run --no-project python changelog.py check --base "origin/${BASE_REF}"
