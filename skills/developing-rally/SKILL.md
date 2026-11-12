@@ -33,7 +33,6 @@ run your working-tree code directly.
   runs across Python 3.10–3.13.
 - `make it` — integration tests (slow, CI-oriented). `make benchmark` runs the micro-benchmarks.
 - `make docs` / `make serve-docs` — build/serve the `docs/` site.
-- `make type-coverage` — report type annotation coverage of `esrally/` (uses pyrefly).
 
 Before committing run `make lint test` (unit tests + lint; integration tests are too slow for
 the inner loop). Optionally `make install-pre-commit` to run lint automatically on each commit.
@@ -72,7 +71,8 @@ description that it needs the `skip-changelog` label. Details: `changelog.d/READ
 - Type hints are **not** used broadly yet — they're added per module. Modules listed under
   `[tool.mypy].overrides` in `pyproject.toml` are strictly checked and must be fully annotated
   (`disallow_untyped_defs`); elsewhere match the surrounding code. Stubs for untyped dependencies
-  (e.g. thespian) live in `stubs/`. `make type-coverage` reports overall annotation coverage.
+  (e.g. thespian) live in `stubs/`. `make lint` also checks overall annotation coverage
+  with pyrefly (the `type-coverage` hook in `.pre-commit-config.yaml`).
 - **Keep the load-driver hot path tight.** Code in `driver/` runners, schedulers, and parameter
   sources runs per operation during measurement, so extra overhead (logging, allocations,
   blocking I/O, locks) perturbs the throughput/latency/service_time numbers Rally exists to

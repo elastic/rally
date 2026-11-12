@@ -55,7 +55,6 @@ check-all: all
 	clean-pycache \
 	lint \
 	format \
-	type-coverage \
 	pre-commit \
 	precommit \
 	install-pre-commit \
@@ -155,10 +154,6 @@ $(PRE_COMMIT_HOOK_PATH):
 
 # pre-commit run also formats files, but let's keep `make format` for convenience.
 format: lint
-
-# It reports the type annotation coverage of the esrally package.
-type-coverage: venv
-	uv run -- pyrefly coverage report | jq .summary
 
 
 # --- Doc goals ---

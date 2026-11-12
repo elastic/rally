@@ -163,7 +163,7 @@ develop = [
     "types-requests>=2.31.0.7,<3",
     "types-jsonschema==3.2.0",
     "types-protobuf>=4.24,<8",
-    # type annotation coverage reporting (make type-coverage)
+    # type annotation coverage check (type-coverage pre-commit hook)
     "pyrefly==1.4.0",
     # Python dead library removed in version 3.13 and used to build Rally docs.
     "standard-imghdr==3.13.0",
@@ -301,7 +301,7 @@ enable_error_code = [
     "var-annotated",
 ]
 
-# Pyrefly is only used for `make type-coverage` (annotation coverage reporting); mypy remains the
+# Pyrefly is only used by the type-coverage pre-commit hook (annotation coverage); mypy remains the
 # type checker run by `make lint`. When run without file arguments, pyrefly uses this section instead
 # of trying to translate [tool.mypy].
 [tool.pyrefly]
