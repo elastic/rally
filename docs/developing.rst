@@ -27,7 +27,9 @@ Installation Instructions for Development
     cd rally
     make install
     source .venv/bin/activate
-    ./rally --help
+    esrally --help
+
+``make install`` creates a virtual environment in ``.venv`` with an editable install of Rally, so ``esrally`` and ``esrallyd`` (or ``uv run esrally``) run the code from your working tree directly. To pick up upstream changes, pull them with git as usual.
 
 IDE Setup
 ---------
@@ -39,25 +41,6 @@ However, consider using editor integrations to do it automatically: you'll need 
 Type hints are checked with mypy as part of ``make lint``; modules listed under ``[tool.mypy.overrides]`` in ``pyproject.toml`` must be fully annotated. ``make type-coverage`` reports how much of the ``esrally`` package is annotated.
 
 Also consider running `pre-commit install` to run lint as part of your git commits.
-
-Automatic Updates
-~~~~~~~~~~~~~~~~~
-
-Rally has a built-in auto-update feature when you install it from sources. By default, it will update from the remote named ``origin``. If you want to auto-update from a different remote, provide ``--update-from-remote=YOUR_REMOTE_NAME`` as first parameter.
-
-To work conveniently with Rally, we suggest that you add the Rally project directory to your ``PATH``. In case you use a different remote, you should also define aliases in your shell's config file, e.g.::
-
-    alias rally='rally --update-from-remote=elastic '
-    alias rallyd='rallyd --update-from-remote=elastic '
-
-Then you can invoke Rally or the :doc:`Rally daemon </rally_daemon>` as usual and have auto-update still work.
-
-Also note that automatic updates are disabled in the following cases:
-
-* There are local (uncommitted) changes in the Rally project directory
-* A different branch than ``master`` is checked out
-* You have specified ``--skip-update`` as the first command line parameter
-* You have specified ``--offline`` as a command line parameter for Rally
 
 Configuring Rally
 ~~~~~~~~~~~~~~~~~
