@@ -1845,7 +1845,7 @@ def list_races(cfg: types.Config):
         else:
             return None
 
-    output_format: str = cfg.opts("system", "list.races.format")
+    output_format: str = cfg.opts("system", "list.format")
     if output_format == "text":
         races = []
         for race in race_store(cfg).list():
