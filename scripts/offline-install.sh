@@ -48,6 +48,12 @@ readonly ABSOLUTE_DOWNLOAD_BIN_DIR="${ABSOLUTE_DOWNLOAD_DIR}/bin"
 readonly PYTHON_INSTALL_LINK="https://esrally.readthedocs.io/en/stable/install.html#python"
 readonly PYTHON_ERROR_MSG="is required but not installed. Follow the instructions in ${PYTHON_INSTALL_LINK} and try again."
 
+# The dependency bundle contains wheels for Python 3.13.
+python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 13))' || {
+    echo >&2 "Python 3.13 is required. Follow the instructions in ${PYTHON_INSTALL_LINK} and try again."
+    exit 1
+}
+
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
   DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
@@ -65,7 +71,7 @@ function main {
 
     mkdir -p "${ABSOLUTE_DOWNLOAD_BIN_DIR}"
     # Prepare install
-    pip3 download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}" --no-binary=MarkupSafe
+    python3 -m pip download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}" --no-binary=MarkupSafe
 
 
     echo "Preparing NOTICE file"
@@ -95,9 +101,14 @@ echo "Installing Rally ${RALLY_VERSION}..."
 
 # Check if mandatory prerequisites are installed
 command -v python3 >/dev/null 2>&1 || { echo >&2 "Python3 ${PYTHON_ERROR_MSG}"; exit 1; }
-command -v pip3 >/dev/null 2>&1 || { echo >&2 "pip3 ${PYTHON_ERROR_MSG}"; exit 1; }
+# The dependency bundle contains wheels for Python 3.13.
+python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 13))' || {
+    echo >&2 "Python 3.13 is required. Follow the instructions in ${PYTHON_INSTALL_LINK} and try again."
+    exit 1
+}
+python3 -m pip --version >/dev/null 2>&1 || { echo >&2 "pip ${PYTHON_ERROR_MSG}"; exit 1; }
 
-pip3 install esrally==${RALLY_VERSION} --no-index --find-links file://\${SRC_HOME}/bin
+python3 -m pip install esrally==${RALLY_VERSION} --no-index --find-links file://\${SRC_HOME}/bin
 EOL
     chmod u+x ${install_script}
 

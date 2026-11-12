@@ -63,9 +63,6 @@ check-all: all
 	clean-docs \
 	test \
 	test-all \
-	test-3.10 \
-	test-3.11 \
-	test-3.12 \
 	test-3.13 \
 	it \
 	it_serverless \
@@ -178,19 +175,7 @@ test: venv
 	uv run -- pytest -s --log-file="$${RALLY_HOME:-$$HOME}/.rally/logs/pytest.log" $(or $(ARGS), tests/)
 
 # It runs unit tests using all supported python versions.
-test-all: test-3.10 test-3.11 test-3.12 test-3.13
-
-# It runs unit tests using Python 3.10.
-test-3.10:
-	$(MAKE) test PY_VERSION=3.10
-
-# It runs unit tests using Python 3.11.
-test-3.11:
-	$(MAKE) test PY_VERSION=3.11
-
-# It runs unit tests using Python 3.12.
-test-3.12:
-	$(MAKE) test PY_VERSION=3.12
+test-all: test-3.13
 
 # It runs unit tests using Python 3.13.
 test-3.13:

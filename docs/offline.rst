@@ -17,7 +17,7 @@ Installation
         This documentation is for the version of Rally currently under development. We do not provide offline installation packages for development versions.
         Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
 
-We provide an offline installation package for Linux. It bundles all dependencies for Python 3.11, so ensure that ``python3`` on the target machine(s) is Python 3.11 (verify with ``python3 --version``). Other Python versions may fail because some bundled dependencies cannot be installed with them. On Debian and Ubuntu, also install the ``python3.11-venv`` package beforehand.
+We provide an offline installation package for Linux. It bundles all dependencies for Python 3.13, so ensure that ``python3`` on the target machine(s) is Python 3.13 (verify with ``python3 --version``). Other Python versions may fail because some bundled dependencies cannot be installed with them. On Debian and Ubuntu, also install the ``python3.13-venv`` package beforehand.
 
 1. Download the offline installation package for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
 2. Decompress it with ``tar -xzf esrally-dist-linux-*.tar.gz``.
