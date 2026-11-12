@@ -39,7 +39,7 @@ LOG = logging.getLogger(__name__)
 LsFormat = Literal["json", "filebeat", "pretty", "filenames"]
 
 
-def main():
+def main() -> None:
     cfg = storage.StorageConfig()
     try:
         cfg.load_config()

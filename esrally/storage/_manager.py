@@ -22,6 +22,8 @@ import os
 import subprocess
 import threading
 from collections.abc import Iterable
+from types import TracebackType
+from typing import Literal
 
 import urllib3.exceptions
 from typing_extensions import Self
@@ -55,7 +57,7 @@ class TransferManager:
         cfg: StorageConfig,
         client: Client,
         executor: Executor,
-    ):
+    ) -> None:
         """It manages files transfers.
 
         It executes file transfers in background. It periodically logs the status of transfers that are in progress.
@@ -86,11 +88,11 @@ class TransferManager:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> Literal[False]:
         self.shutdown()
         return False
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         with self._lock:
             transfers = self._transfers
             self._transfers = {}
@@ -214,7 +216,7 @@ class TransferManager:
         transfers.sort(key=lambda tr: tr.url)
         return transfers
 
-    def monitor(self):
+    def monitor(self) -> None:
         self._update_transfers()
         self._client.monitor()
 

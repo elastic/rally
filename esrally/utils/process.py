@@ -242,11 +242,11 @@ def redact_cmdline(cmdline: list) -> list[str]:
     # them) or belong to other options, e.g. "--telemetry" and "--telemetry-params" must not be redacted.
     sensitive_flags = (("--client-options", len("--cli")), ("--telemetry-client-options", len("--telemetry-c")))
 
-    def is_sensitive_flag(value):
+    def is_sensitive_flag(value: str) -> bool:
         option = value.split("=", 1)[0]
         return any(option == flag or (len(option) >= min_length and flag.startswith(option)) for flag, min_length in sensitive_flags)
 
-    redacted = []
+    redacted: list[str] = []
     redact_next = False
     for value in cmdline:
         if redact_next:

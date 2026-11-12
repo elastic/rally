@@ -37,7 +37,7 @@ class ComponentLoader:
 
     """
 
-    def __init__(self, root_path: Union[str, Collection[str]], component_entry_point: str, recurse: bool = True):
+    def __init__(self, root_path: Union[str, Collection[str]], component_entry_point: str, recurse: bool = True) -> None:
         """
         Creates a new component loader.
 
@@ -81,7 +81,7 @@ class ComponentLoader:
             raise RuntimeError(f"Could not find root module: '{root_module_name}'")
         return root_module
 
-    def can_load(self):
+    def can_load(self) -> bool:
         """
         :return: True iff the component entry point could be found.
         """

@@ -68,9 +68,11 @@ description that it needs the `skip-changelog` label. Details: `changelog.d/READ
   `it/`, micro-benchmarks in `benchmarks/`.
 - `asyncio_mode = strict`, so async tests need an explicit `@pytest.mark.asyncio`.
 - `xfail_strict = true`, so an `xfail` test that unexpectedly passes fails the suite.
-- Type hints are **not** used broadly — they're added opportunistically per module, with the
-  strictly-checked modules listed under `[tool.mypy].overrides` in `pyproject.toml`. Match the
-  surrounding code rather than typing everything.
+- Type hints are **not** used broadly yet — they're added per module. Modules listed under
+  `[tool.mypy].overrides` in `pyproject.toml` are strictly checked and must be fully annotated
+  (`disallow_untyped_defs`); elsewhere match the surrounding code. Stubs for untyped dependencies
+  (e.g. thespian) live in `stubs/`. `make lint` also checks overall annotation coverage
+  with pyrefly (the `type-coverage` hook in `.pre-commit-config.yaml`).
 - **Keep the load-driver hot path tight.** Code in `driver/` runners, schedulers, and parameter
   sources runs per operation during measurement, so extra overhead (logging, allocations,
   blocking I/O, locks) perturbs the throughput/latency/service_time numbers Rally exists to
