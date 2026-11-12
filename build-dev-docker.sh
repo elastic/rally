@@ -24,6 +24,8 @@
 # fail this script immediately if any command fails with a non-zero exit code
 set -euo pipefail
 
+source scripts/dry-run.sh
+
 function push_failed {
     echo "Error while pushing Docker image. Did you \`docker login\`?"
 }
@@ -58,7 +60,7 @@ if [[ "${RALLY_BRANCH}" =~ .*\/.* ]]; then
 else
   branch_name="${RALLY_BRANCH}"
 fi
-export RALLY_VERSION_TAG="${branch_name}-${GIT_SHA}-${DATE}-${ARCH}"
+export RALLY_VERSION_TAG="${RALLY_BUILD_VERSION:-${branch_name}-${GIT_SHA}-${DATE}}-${ARCH}"
 MAIN_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
 
 if [[ "$RALLY_BRANCH" == "$MAIN_BRANCH" ]]; then
@@ -67,13 +69,16 @@ else
     export DOCKER_TAG_LATEST="${branch_name}-latest-${ARCH}"
 fi
 
-# Make new temporary directory to checkout the `RALLY_BRANCH` branch
+# Check out the resolved CI commit, or the requested branch for standalone builds.
 tmp_dir=$(mktemp --directory)
 pushd "$tmp_dir"
 git clone https://github.com/elastic/rally
 pushd rally
 
-if [[ "${RALLY_BRANCH}" =~ refs\/.* ]]; then
+if [[ -n "${RALLY_BUILD_COMMIT:-}" ]]; then
+  git fetch origin "$RALLY_BUILD_COMMIT"
+  git checkout --detach "$RALLY_BUILD_COMMIT"
+elif [[ "${RALLY_BRANCH}" =~ refs\/.* ]]; then
   branch_name=$(echo "${RALLY_BRANCH}" | sed 's/refs\///')
   git fetch origin "${branch_name}:_temp"
   git checkout "_temp"
@@ -96,32 +101,33 @@ if [[ -z "${RALLY_VERSION}" ]]; then
     exit 1
 fi
 
+
 echo "========================================================"
 echo "Building Docker image ${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG} for Rally ${RALLY_VERSION}"
 echo "========================================================"
 
-docker build --provenance=false -t "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile "${rally_dir}"
+run_or_dry_run docker build --provenance=false -t "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" --build-arg RALLY_VERSION --build-arg RALLY_LICENSE -f docker/Dockerfiles/dev/Dockerfile "${rally_dir}"
 
 echo "======================================================="
 echo "Testing Docker image for Rally release $RALLY_VERSION  "
 echo "======================================================="
 
-./release-docker-test.sh
+run_or_dry_run ./release-docker-test.sh
 
 echo "======================================================="
 echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:$RALLY_VERSION_TAG   "
 echo "======================================================="
 
 trap push_failed ERR
-docker push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}"
+run_or_dry_run docker push "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}"
 
 if [[ $PUSH_LATEST == "true" ]]; then
     echo "============================================"
     echo "Publishing Docker image ${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
     echo "============================================"
 
-    docker tag "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
-    docker push "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
+    run_or_dry_run docker tag "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
+    run_or_dry_run docker push "${RALLY_DOCKER_IMAGE}:${DOCKER_TAG_LATEST}"
 fi
 
 trap - ERR
