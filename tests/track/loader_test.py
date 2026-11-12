@@ -2084,7 +2084,7 @@ class TestTrackPostProcessing:
                                         "name": "search #5",
                                         "clients": 2,
                                         "operation": "search",
-                                        "warmup-iterations": 1,
+                                        "warmup-iterations": 0,
                                         "iterations": 0,
                                     },
                                 ]

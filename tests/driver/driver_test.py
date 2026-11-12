@@ -30,7 +30,7 @@ import pytest
 from esrally import config, exceptions, metrics, track
 from esrally.driver import driver, runner, scheduler
 from esrally.driver.driver import ApiKey, ClientContext
-from esrally.track import params
+from esrally.track import loader, params
 from esrally.utils.error_behavior import OnErrorBehavior
 
 
@@ -1284,6 +1284,39 @@ class TestScheduler:
             (1.0, metrics.SampleType.Normal, 6 / 6, {"operation-type": "search"}),
         ]
         await self.assert_schedule(expected_schedule, schedule)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "warmup_iterations, iterations",
+        [
+            (None, 20),
+            (10, 10),
+            (100, 200),
+            (5, 0),
+        ],
+    )
+    async def test_test_mode_runs_one_iteration_per_client(self, warmup_iterations, iterations):
+        task = track.Task(
+            "search",
+            track.Operation("search", track.OperationType.Search.to_hyphenated_string(), param_source="driver-test-param-source"),
+            warmup_iterations=warmup_iterations,
+            iterations=iterations,
+            clients=20,
+        )
+        cfg = config.Config()
+        cfg.add(config.Scope.application, "track", "test.mode.enabled", True)
+        loader.TestModeTrackProcessor(cfg).on_after_load_track(
+            track.Track(name="unittest", challenges=[track.Challenge(name="default", schedule=[task])])
+        )
+
+        param_source = track.operation_parameters(self.test_track, task)
+        for client_index in range(task.clients):
+            task_allocation = driver.TaskAllocation(
+                task=task, client_index_in_task=client_index, global_client_index=client_index, total_clients=task.clients
+            )
+            schedule = driver.schedule_for(task_allocation, param_source)
+            expected_schedule = [(0, metrics.SampleType.Normal, 1.0, {"operation-type": "search"})]
+            await self.assert_schedule(expected_schedule, schedule)
 
     @pytest.mark.asyncio
     async def test_schedule_param_source_determines_iterations_no_warmup(self):

@@ -1358,12 +1358,9 @@ class TestModeTrackProcessor(TrackProcessor):
                 # we need iterate over leaf tasks and await iterating over possible intermediate 'parallel' elements
                 for leaf_task in task:
                     # iterations are per client, so a single measurement iteration (and no warmup)
-                    # is enough for every client to exercise the operation once. A task without
-                    # measurement iterations keeps one warmup iteration because each client must
-                    # run at least one iteration.
-                    min_warmup_iterations = 1 if leaf_task.iterations == 0 else 0
-                    if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > min_warmup_iterations:
-                        leaf_task.warmup_iterations = min_warmup_iterations
+                    # is enough for every client to exercise the operation once.
+                    if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > 0:
+                        leaf_task.warmup_iterations = 0
                         LOG.debug("Resetting warmup iterations to %d for [%s]", leaf_task.warmup_iterations, leaf_task)
                     if leaf_task.iterations is not None and leaf_task.iterations > 1:
                         leaf_task.iterations = 1
