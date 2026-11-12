@@ -45,7 +45,8 @@ USER 1000
 COPY Makefile /rally/
 COPY README.md /rally/
 COPY .ci/variables.json /rally/.ci/
-COPY esrally/ /rally/esrally/
+# COPY ignores USER, but hatch-vcs writes esrally/_version.py during `make install`
+COPY --chown=1000:0 esrally/ /rally/esrally/
 COPY pyproject.toml /rally/
 COPY uv.lock /rally/
 COPY scripts/dependency_constraints_build_hook.py /rally/scripts/
@@ -57,6 +58,7 @@ ENV UV_PROJECT_ENVIRONMENT=/rally/venv
 # Wipe away any lingering caches, copied over from the local machine
 RUN find /rally -name "__pycache__" -exec rm -rf -- \{\} \; 2>/dev/null || true
 RUN find /rally -name ".pyc" -exec rm -rf -- \{\} \; 2>/dev/null || true
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${RALLY_VERSION}
 RUN make install
 
 LABEL org.label-schema.schema-version="1.0" \

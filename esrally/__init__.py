@@ -26,7 +26,8 @@ from ._version import __version__
 # Allow an alternative program name be set in case Rally is invoked a wrapper script
 PROGRAM_NAME = os.getenv("RALLY_ALTERNATIVE_BINARY_NAME", os.path.basename(sys.argv[0]))
 
-if __version__.endswith("dev0"):
+# hatch-vcs computes dev versions like X.Y.Z.post1.devN, where N is the number of commits since the X.Y.Z tag
+if ".dev" in __version__:
     DOC_LINK = "https://esrally.readthedocs.io/en/latest/"
 else:
     DOC_LINK = "https://esrally.readthedocs.io/en/%s/" % __version__

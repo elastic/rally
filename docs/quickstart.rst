@@ -6,9 +6,11 @@ Rally is developed for Unix and is actively tested on Linux and macOS. Rally sup
 Install
 -------
 
-Install Python 3.13 including ``pip3``, git 1.9+ and an `appropriate JDK to run Elasticsearch <https://www.elastic.co/support/matrix#matrix_jvm>`_ Be sure that ``JAVA_HOME`` points to that JDK. Then run the following command, optionally prefixed by ``sudo`` if necessary::
+Install `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ and git 1.9+, then run::
 
-    pip3 install esrally
+    uv tool install --python 3.13 esrally
+
+The race below has Rally download and start Elasticsearch, which requires an `appropriate JDK <https://www.elastic.co/support/matrix#matrix_jvm>`_ with ``JAVA_HOME`` pointing to it. You don't need a JDK to benchmark an existing cluster.
 
 
 If you have any trouble or need more detailed instructions, look in the :doc:`detailed installation guide </install>`.

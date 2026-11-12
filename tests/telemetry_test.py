@@ -3486,7 +3486,7 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(nodes=SubClient(info=nodes_info), info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
         calls = [
@@ -3503,7 +3503,7 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(nodes=SubClient(stats=raiseTransportError, info=raiseTransportError), info=raiseTransportError)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 
@@ -3522,36 +3522,11 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
         calls = [
             mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "00000000"),
-            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "serverless"),
-            mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "serverless"),
-            mock.call(metrics.MetaInfoScope.cluster, None, "target_platform", "serverless"),
-        ]
-
-        metrics_store_add_meta_info.assert_has_calls(calls)
-
-    @mock.patch("esrally.metrics.EsMetricsStore.add_meta_info")
-    def test_revision_override(self, metrics_store_add_meta_info):
-        cluster_info = {
-            "version": {
-                "build_hash": "00000000",
-                "number": "8.11.0",
-                "build_flavor": "serverless",
-            },
-        }
-
-        cfg = create_config()
-        client = Client(info=cluster_info)
-        metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, "abc123")
-        t = telemetry.Telemetry(cfg, devices=[env_device])
-        t.on_benchmark_start()
-        calls = [
-            mock.call(metrics.MetaInfoScope.cluster, None, "source_revision", "abc123"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_version", "serverless"),
             mock.call(metrics.MetaInfoScope.cluster, None, "distribution_flavor", "serverless"),
             mock.call(metrics.MetaInfoScope.cluster, None, "target_platform", "serverless"),
@@ -3573,7 +3548,7 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
         calls = [
@@ -3615,7 +3590,7 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 
@@ -3635,7 +3610,7 @@ class TestClusterEnvironmentInfo:
         client = Client(info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
         client_options = {"api_key": "my-api-key", "timeout": 60}
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None, client_options)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, client_options)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 
@@ -3655,7 +3630,7 @@ class TestClusterEnvironmentInfo:
         client = Client(info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
         client_options = {"basic_auth_user": "elastic", "basic_auth_password": "changeme", "timeout": 60}
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None, client_options)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, client_options)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 
@@ -3675,7 +3650,7 @@ class TestClusterEnvironmentInfo:
         client = Client(info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
         client_options = {"basic_auth": ("elastic", "changeme"), "timeout": 60}
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None, client_options)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, client_options)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 
@@ -3694,7 +3669,7 @@ class TestClusterEnvironmentInfo:
         cfg = create_config()
         client = Client(info=cluster_info)
         metrics_store = metrics.EsMetricsStore(cfg)
-        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store, None)
+        env_device = telemetry.ClusterEnvironmentInfo(client, metrics_store)
         t = telemetry.Telemetry(cfg, devices=[env_device])
         t.on_benchmark_start()
 

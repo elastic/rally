@@ -15,12 +15,16 @@
 # specific language governing permissions and limitations
 # under the License.
 import concurrent.futures
-from typing import Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import ParamSpec, Protocol, TypeVar, runtime_checkable
 
 from typing_extensions import Self
 
 from esrally import types
 from esrally.storage._config import StorageConfig
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 @runtime_checkable
@@ -33,14 +37,14 @@ class Executor(Protocol):
     [1] https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
     """
 
-    def submit(self, fn, /, *args, **kwargs):
+    def submit(self, fn: Callable[_P, _T], /, *args: _P.args, **kwargs: _P.kwargs) -> concurrent.futures.Future[_T] | None:
         """Submits a callable to be executed with the given arguments.
 
         Schedules the callable to be executed as fn(*args, **kwargs) and returns
         a Future instance representing the execution of the callable.
 
         Returns:
-            A Future representing the given call.
+            A Future representing the given call, or None for executors that do not track results.
         """
         raise NotImplementedError()
 

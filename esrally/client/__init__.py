@@ -21,5 +21,6 @@ from .factory import (
     cluster_distribution_version,
     create_api_key,
     delete_api_keys,
+    serverless_operator_status,
     wait_for_rest_layer,
 )

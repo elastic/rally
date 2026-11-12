@@ -42,6 +42,26 @@ repos:
         # Suppress a flaky internal mypy error appearing randomly when executing make lint.
         require_serial: true
 
+      # Fails when type annotation coverage of the esrally package drops below the threshold.
+      - id: type-coverage
+        name: type coverage
+        entry: pyrefly
+        language: system
+        args: [
+          "coverage",
+          "check",
+          "--output-format",
+          "omit-errors",
+          "--fail-under",
+          "20"
+        ]
+        # pyrefly measures the whole project as configured in [tool.pyrefly]; passing the changed files
+        # would only measure those.
+        pass_filenames: false
+        files: ^esrally/.*\.py$
+        # Always show the coverage percentage, not only on failure.
+        verbose: true
+
   - repo: local
     hooks:
       - id: pylint
@@ -55,5 +75,5 @@ repos:
             "-j0",
             "--rcfile=.pylintrc",
           ]
-        exclude: ^(docs/|changelog.py)
+        exclude: ^docs/
         require_serial: true

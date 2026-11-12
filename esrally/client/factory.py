@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import contextlib
 import logging
 import sys
 import time
@@ -438,19 +437,37 @@ def cluster_distribution_version(hosts, client_options, client_factory=EsClientF
         # overwrite static serverless version number
         version_number = "serverless"
 
-        # determine serverless operator status if security enabled
-        # pylint: disable=import-outside-toplevel
-        from elasticsearch.exceptions import ApiError
-
-        with contextlib.suppress(ApiError):
-            authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
-            serverless_operator = authentication_info.body.get("operator", False)
+        serverless_operator = serverless_operator_status(es)
 
     if not versions.is_serverless(version_build_flavor) or serverless_operator is True:
         # if available, unconditionally wait for the REST layer - if it's not up, we'll intentionally raise the original error
         wait_for_rest_layer(es)
 
     return version_build_flavor, version_number, version_build_hash, serverless_operator
+
+
+def serverless_operator_status(es):
+    """Return whether ``es`` is authenticated as a serverless operator.
+
+    Callers decide when a cluster is serverless. Returns False when security is disabled or the call is otherwise
+    rejected. Fails fast when the credentials themselves are rejected (HTTP 401), because every later request with
+    them would fail too.
+
+    :raises exceptions.SystemSetupError: if Elasticsearch rejects the credentials.
+    """
+    # pylint: disable=import-outside-toplevel
+    from elasticsearch.exceptions import ApiError
+
+    try:
+        authentication_info = es.perform_request(method="GET", path="/_security/_authenticate")
+    except ApiError as e:
+        if e.status_code == 401:
+            raise exceptions.SystemSetupError(
+                "Elasticsearch rejected the configured credentials (HTTP 401) while checking the serverless operator status. "
+                "Check the API key or user name and password."
+            ) from e
+        return False
+    return bool(authentication_info.body.get("operator", False))
 
 
 def create_api_key(es, client_id, max_attempts=5):
