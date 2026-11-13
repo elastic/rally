@@ -1,7 +1,7 @@
 Offline Usage
 =============
 
-In some corporate environments servers do not have Internet access. You can still use Rally in such environments and this page summarizes all information that you need to get started.
+In some corporate environments, servers do not have Internet access. You can still use Rally in such environments and this page summarizes all information that you need to get started.
 
 .. _offline_install:
 
@@ -17,9 +17,9 @@ Installation
         This documentation is for the version of Rally currently under development. We do not provide offline installation packages for development versions.
         Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
 
-We provide an offline installation package for Linux. It bundles all dependencies for Python 3.11, so ensure that ``python3`` on the target machine(s) is Python 3.11 (verify with ``python3 --version``). Other Python versions may fail because some bundled dependencies cannot be installed with them. On Debian and Ubuntu, also install the ``python3.11-venv`` package beforehand.
+We currently provide an offline installation package for x86_64 Linux only. On other architectures, such as aarch64, follow the regular :doc:`installation guide </install>` instead. The offline package bundles all dependencies for Python 3.11, so ensure that ``python3`` on the target machine(s) is Python 3.11 (verify with ``python3 --version``). Other Python versions will fail to install without Internet access. On Debian and Ubuntu, also install the ``python3.11-venv`` package beforehand.
 
-1. Download the offline installation package for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
+1. Download the offline installation package ``esrally-dist-linux-x86_64-*.tar.gz`` for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
 2. Decompress it with ``tar -xzf esrally-dist-linux-*.tar.gz``.
 3. Install Rally into a virtual environment::
 

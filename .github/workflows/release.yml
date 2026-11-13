@@ -75,3 +75,12 @@ jobs:
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
         with:
           repository-url: https://test.pypi.org/legacy/
+
+  offline-dist:
+    name: Offline install package
+    needs: [pypi-publish]
+    permissions:
+      contents: write  # Needed to create the draft release and upload assets
+    uses: ./.github/workflows/offline-dist.yml
+    with:
+      version: ${{ github.ref_name }}
