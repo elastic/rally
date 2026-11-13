@@ -11,6 +11,10 @@ When Rally provisions Elasticsearch, it now runs it with the JDK that is bundled
 
 To keep running Elasticsearch on a JDK installed on the machine, specify its major version, e.g. ``--runtime-jdk=21``. Rally resolves it via ``JAVA21_HOME`` or ``JAVA_HOME`` as before. Building Elasticsearch from sources still requires a JDK.
 
+.. note::
+
+   The JDK bundled with some older Elasticsearch versions does not start on every host. For example, JDK 18.0.1.1, which is bundled with Elasticsearch 8.3.0, fails on some Linux hosts that use cgroup v2 with ``NullPointerException: Cannot invoke "jdk.internal.platform.CgroupInfo.getMountPoint()"``, and Rally then reports ``Daemon startup failed with exit code [1]``. If you benchmark such a version, specify a JDK installed on the machine with ``--runtime-jdk``.
+
 Document type fields are no longer supported
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
