@@ -132,20 +132,27 @@ jobs:
             /home/runner/.rally/benchmarks/races/**/*.log
           if-no-files-found: error
 
-  install-with-pyenv:
+  install-in-venv:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Install Python with pyenv
-        uses: gabrielfalcao/pyenv-action@v13
+      - uses: actions/checkout@v4
         with:
-          default: "3.10.9"
-          command: python3 -m pip install --user --upgrade pip
-      - name: Check Python version
-        run: python3 --version | grep "Python 3.10.9"
+          persist-credentials: false
+          sparse-checkout: .ci/variables.json
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.19"
+      - name: Create virtual environment
+        run: uv venv --python "$(jq -r .python_versions.DEFAULT_PY_VER .ci/variables.json)" "$RUNNER_TEMP/venv"
       - name: Install Rally
-        run: python3 -m pip install --user esrally
-      - run: esrally --version
+        run: uv pip install --python "$RUNNER_TEMP/venv/bin/python" esrally
+      - name: Check Rally version
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" --version
+          "$RUNNER_TEMP/venv/bin/esrally" --version
       - uses: elastic/es-perf-github-status@v2
         if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
         with:
