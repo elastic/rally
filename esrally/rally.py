@@ -1124,6 +1124,28 @@ def run_with_actor_system(runnable, cfg: types.Config, kill_running_processes=Fa
     with_actor_system(runnable, cfg)
 
 
+def wait_for_actor_system_shutdown(timeout: float = 15.0, poll_interval: float = 0.05) -> bool:
+    """Waits until the local actor system's admin no longer accepts connections.
+
+    The admin process usually closes its socket a few milliseconds after ``ActorSystem.shutdown()`` returns, so we
+    poll frequently instead of sleeping for a fixed amount of time.
+
+    Note that this check only detects a running TCP-based actor system; for other system bases it returns immediately.
+
+    :return: ``True`` if the actor system has shut down within ``timeout`` seconds, ``False`` otherwise.
+    """
+    deadline = time.monotonic() + timeout
+    logged = False
+    while actor.actor_system_already_running():
+        if time.monotonic() >= deadline:
+            return False
+        if not logged:
+            LOG.info("Actor system is still running. Waiting...")
+            logged = True
+        time.sleep(poll_interval)
+    return True
+
+
 def with_actor_system(runnable, cfg: types.Config):
     process_startup_method: actor.ProcessStartupMethod | None = cfg.opts("actor", "actor.process.startup.method", None, mandatory=False)
     if process_startup_method is not None:
@@ -1167,17 +1189,12 @@ def with_actor_system(runnable, cfg: types.Config):
             times_interrupted = 0
             while not shutdown_complete and times_interrupted < 2:
                 try:
-                    # give some time for any outstanding messages to be delivered to the actor system
-                    time.sleep(3)
+                    # No fixed delay needed here: race control waits for its top-level actor to exit, which means that
+                    # actor's log records have reached the logger (see actor.wait_for_actor_exit()). shutdown() then
+                    # blocks until the admin has stopped all remaining actors and the logger.
                     LOG.info("Attempting to shutdown internal actor system.")
                     actors.shutdown()
-                    # note that this check will only evaluate to True for a TCP-based actor system.
-                    timeout = 15
-                    while actor.actor_system_already_running() and timeout > 0:
-                        LOG.info("Actor system is still running. Waiting...")
-                        time.sleep(1)
-                        timeout -= 1
-                    if timeout > 0:
+                    if wait_for_actor_system_shutdown():
                         shutdown_complete = True
                         LOG.info("Shutdown completed.")
                     else:
