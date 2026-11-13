@@ -70,6 +70,7 @@ check-all: all
 	it \
 	it_serverless \
 	it_tracks_compat \
+	it_tracks_compat_snapshot \
 	benchmark \
 	release-checks \
 	release \
@@ -110,7 +111,7 @@ clean-venv:
 
 # It installs the Rally PyTest plugin.
 install_pytest_rally_plugin: venv
-	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git'
+	$(VENV_ACTIVATE); uv pip install 'pytest-rally @ git+https://github.com/elastic/pytest-rally.git@382e45eb9fca09a3bde332f1a548c8edf70caec1'
 
 # Old legacy alias goals
 install: venv
@@ -210,6 +211,12 @@ it_serverless: venv install_pytest_rally_plugin
 # It runs rally_tracks_compat integration tests.
 it_tracks_compat: venv install_pytest_rally_plugin
 	uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $(ARGS)
+
+# Like it_tracks_compat, but it uses the latest prebuilt Elasticsearch snapshot instead of building Elasticsearch from
+# source. Note: it registers the "es-snapshot" distribution repository in Rally's config file (~/.rally/rally.ini).
+it_tracks_compat_snapshot: install_pytest_rally_plugin
+	ES_SNAPSHOT_ARGS="$$(uv run -- python it/track_repo_compatibility/configure_es_snapshot.py)" && \
+		uv run -- pytest -s --log-cli-level=$(LOG_CI_LEVEL) it/track_repo_compatibility $$ES_SNAPSHOT_ARGS $(ARGS)
 
 # It runs benchmark tests.
 benchmark: venv
