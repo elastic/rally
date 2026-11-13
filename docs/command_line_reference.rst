@@ -569,6 +569,42 @@ This option enables a profiler on all tasks that the load test driver performs. 
 
 In this example we can spot quickly that ``Random.seed`` is called excessively, causing an accidental bottleneck in the load test driver.
 
+.. _clr_profile:
+
+``profile``
+~~~~~~~~~~~
+
+.. warning::
+
+    This option is experimental. Its configuration and the stored document format may change.
+
+Enables Elasticsearch profiling for existing ``search`` (request body searches) and ``esql`` tasks. Rally sends selected requests with ``"profile": true`` and stores the complete profile returned by Elasticsearch in the metrics store. Unlike :ref:`enable-driver-profiling <clr_enable_driver_profiling>`, which profiles Rally's load driver, this option profiles Elasticsearch requests. Profiling is disabled by default. The option accepts inline JSON or a path to a JSON file::
+
+    esrally race --track=big5 --profile='{"enabled": true, "warmup": {"iterations": [1, 4, 9]}, "post_measurement": {"extra_iterations": 3}}'
+
+All keys are optional. Unknown keys produce a warning and are ignored:
+
+* ``enabled`` (default: ``false``): Enables profiling for all ``search`` and ``esql`` tasks. Other operation types are not profiled.
+* ``warmup.enabled`` (default: ``true``): Profiles selected warmup iterations.
+* ``warmup.iterations`` (default: ``"all"``): The warmup iterations to profile: ``"all"``, a list such as ``[1, 4, 9]`` or an inclusive range such as ``"1-20"``. Iterations are 1-based and counted per client. For a ``warmup-time-period``, Rally counts the requests each client issues during the warmup period.
+* ``post_measurement.extra_iterations`` (default: ``0``): The number of additional profiled iterations each client runs after the measured iterations. These requests are additional to the measured workload.
+* ``max_response_bytes`` (default: 8388608, at most 33554432): The maximum serialized size of one profile. A larger profile is not stored and is reported as incomplete; it is never truncated. The upper bound keeps each profile document below the size limit of one bulk request to the metrics store.
+
+A task can override this configuration with the :ref:`profile <track_schedule>` property.
+
+Warmup profiling uses the existing warmup requests and adds no requests. Post-measurement profiling runs after all measured work of a task, or of all tasks of a ``parallel`` element, has finished, so it never overlaps measured requests. It uses the task's operation, parameter source and schedule. If the parameter source ends before the requested number of iterations, Rally stops profiling for that client and prints a warning. ``completed-by`` applies to the measured iterations only; every client runs all of its post-measurement iterations. Failed post-measurement requests never abort the race, regardless of ``on-error``. Failed warmup requests follow ``on-error`` like any other warmup request.
+
+Profiled requests are stored with the sample types ``profile_warmup`` and ``profile_post_measurement``. They are excluded from all results, including latency, service time, throughput and error rate. The ``service_time`` document of each profiled request carries the complete profile in ``profile_response`` and the following ``meta`` fields: ``client_id``, ``profile_iteration``, ``profile_complete``, ``profile_capture_error`` (when incomplete), ``profile_response_bytes``, ``profile_request_fingerprint`` (a SHA-256 hash of the logical request without the profile flag) and, for post-measurement profiling, ``profile_requested_iterations``. Shard and node identifiers are available inside ``profile_response`` as returned by Elasticsearch. Rally does not record the coordinating node. ``profile_response`` is stored in ``_source`` but not indexed, so it cannot be searched and does not match ``exists`` queries; filter on ``meta.profile_complete`` instead.
+
+Consider the following limitations:
+
+* Profiling every client multiplies memory use in the load driver and on the coordinating Rally machine, actor message sizes and metrics store load by the number of clients and profiled iterations. For tasks with many clients, select few warmup iterations, keep ``extra_iterations`` small and lower ``max_response_bytes`` if needed.
+* Profiled warmup requests do additional work in Elasticsearch. This may affect later measured requests indirectly, for example through caches.
+* Post-measurement profiling starts each client's parameter source from the beginning. Parameter sources that generate random requests may profile different requests than the measured ones; use ``profile_request_fingerprint`` to identify them.
+* Profiles are only retained with an :doc:`Elasticsearch metrics store </configuration>`. The in-memory metrics store discards them. Rally checks before the race that the metrics store maps ``profile_response`` as a disabled object and adds the mapping to the current index. If an existing template predates this mapping, set ``datastore.overwrite_existing_templates = true`` in the ``reporting`` section of ``rally.ini``. Otherwise profiles are recorded without their payload and marked with ``profile_capture_error: storage_failed``.
+* Profiles can contain query text and index or field names. They have the same retention and access controls as the metrics store.
+* ``paginated-search``, ``scroll-search``, ``composite-agg``, ``composite`` and custom operations cannot be profiled.
+
 .. _clr_test_mode:
 
 ``test-mode``

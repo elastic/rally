@@ -38,6 +38,7 @@ from esrally import (
     config,
     exceptions,
     paths,
+    profiling,
     storage,
     time,
     types,
@@ -2008,6 +2009,7 @@ class TrackSpecificationReader:
         default_warmup_time_period = self._r(ops_spec, "warmup-time-period", error_ctx="parallel", mandatory=False)
         default_time_period = self._r(ops_spec, "time-period", error_ctx="parallel", mandatory=False)
         default_ramp_up_time_period = self._r(ops_spec, "ramp-up-time-period", error_ctx="parallel", mandatory=False)
+        default_profile = self._r(ops_spec, "profile", error_ctx="parallel", mandatory=False)
         clients = self._r(ops_spec, "clients", error_ctx="parallel", mandatory=False)
         completed_by = self._r(ops_spec, "completed-by", error_ctx="parallel", mandatory=False)
         # now descent to each operation
@@ -2024,6 +2026,7 @@ class TrackSpecificationReader:
                     default_time_period,
                     default_ramp_up_time_period,
                     completed_by,
+                    default_profile,
                 )
             )
         for task in tasks:
@@ -2069,6 +2072,7 @@ class TrackSpecificationReader:
         default_time_period=None,
         default_ramp_up_time_period=None,
         completed_by_name=None,
+        default_profile=None,
     ):
         if "operation" not in task_spec:
             raise TrackSyntaxError("Operation missing from task spec %s in challenge '%s'." % (task_spec, challenge_name))
@@ -2081,6 +2085,7 @@ class TrackSpecificationReader:
 
         schedule = self._r(task_spec, "schedule", error_ctx=op.name, mandatory=False)
         task_name = self._r(task_spec, "name", error_ctx=op.name, mandatory=False, default_value=op.name)
+        self._parse_task_profile(task_spec, op, task_name, challenge_name, default_profile)
 
         task = track.Task(
             name=task_name,
@@ -2139,6 +2144,25 @@ class TrackSpecificationReader:
                 )
 
         return task
+
+    def _parse_task_profile(self, task_spec, op, task_name, challenge_name, default_profile):
+        profile_spec = self._r(task_spec, "profile", error_ctx=op.name, mandatory=False, default_value=default_profile)
+        if profile_spec is None:
+            return
+        try:
+            task_profile = profiling.ProfileConfig().for_task(profile_spec, task_name)
+        except exceptions.InvalidSyntax as e:
+            self._error(f"In challenge '{challenge_name}': {e}")
+            return
+        # the driver reads the property from the task's params; storing it without unknown keys (already
+        # warned about above) keeps workers silent and makes an inherited parallel-level default visible
+        task_spec["profile"] = profiling.known_keys_only(profile_spec)
+        if task_profile.enabled and op.type not in profiling.SUPPORTED_OPERATION_TYPES:
+            self._error(
+                f"Task '{task_name}' in challenge '{challenge_name}' enables profiling but operation type "
+                f"'{op.type}' does not support it. Profiling supports the operation types "
+                f"{sorted(profiling.SUPPORTED_OPERATION_TYPES)}."
+            )
 
     def parse_operations(self, ops_specs):
         # key = name, value = operation

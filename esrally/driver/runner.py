@@ -35,7 +35,7 @@ from typing import Optional
 
 import ijson
 
-from esrally import exceptions, track, types
+from esrally import exceptions, profiling, track, types
 from esrally.utils import convert
 from esrally.utils.versions import Version
 
@@ -1233,6 +1233,45 @@ def parse(
     return parsed
 
 
+def capture_profile(result, parsed_response, max_response_bytes):
+    """
+    Moves the complete, unmodified ``profile`` object of a parsed Elasticsearch response into
+    ``result`` together with capture metadata. The payload is attached only when it is present
+    and its serialized size is within ``max_response_bytes``; otherwise the capture is marked
+    incomplete with an explicit reason. Never raises.
+    """
+    profile = parsed_response.get("profile") if isinstance(parsed_response, dict) else None
+    if profile is None:
+        result["profile_complete"] = False
+        result["profile_capture_error"] = "profile_missing"
+        return
+    try:
+        serialized_bytes = len(json.dumps(profile, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+    except (TypeError, ValueError):
+        result["profile_complete"] = False
+        result["profile_capture_error"] = "serialization_failed"
+        return
+    result["profile_response_bytes"] = serialized_bytes
+    if serialized_bytes > max_response_bytes:
+        result["profile_complete"] = False
+        result["profile_capture_error"] = "size_exceeded"
+    else:
+        result["profile_complete"] = True
+        result["profile_response"] = profile
+
+
+def fingerprint_profiled_request(result, logical_request):
+    """
+    Records the fingerprint of the logical request in ``result``, or an explicit unavailability
+    marker when the request cannot be canonicalized. Must be called before profiling-specific
+    parameters are injected into the request. Never raises.
+    """
+    try:
+        result["profile_request_fingerprint"] = profiling.request_fingerprint(logical_request)
+    except profiling.CanonicalizationError:
+        result["profile_fingerprint_error"] = "canonicalization_failed"
+
+
 class Query(Runner):
     """
     Runs a request body search against Elasticsearch.
@@ -1312,8 +1351,104 @@ class Query(Runner):
         if not bool(headers):
             # counter-intuitive but preserves prior behavior
             headers = None
+        profile_capture = params.get("profile-capture", False)
+        if profile_capture and (operation_type != "search" or "pages" in params):
+            raise exceptions.RallyAssertionError(
+                f"Profile capture is not supported for operation-type [{operation_type}] with these parameters."
+            )
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
+
+        def _detailed_request_body_result(r):
+            props = parse(
+                r,
+                [
+                    "hits.total",
+                    "hits.total.value",
+                    "hits.total.relation",
+                    "timed_out",
+                    "took",
+                    "_shards.total",
+                    "_shards.successful",
+                    "_shards.skipped",
+                    "_shards.failed",
+                    "num_reduce_phases",
+                    "_clusters.total",
+                    "_clusters.successful",
+                    "_clusters.skipped",
+                    "_clusters.running",
+                    "_clusters.partial",
+                    "_clusters.failed",
+                ],
+                stop_after="hits.hits",
+                with_cluster_details=True,
+            )
+            hits_total = props.get("hits.total.value", props.get("hits.total", 0))
+            hits_relation = props.get("hits.total.relation", "eq")
+            timed_out = props.get("timed_out", False)
+            took = props.get("took", 0)
+
+            shards_total = props.get("_shards.total", 0)
+            shards_successful = props.get("_shards.successful", 0)
+            shards_skipped = props.get("_shards.skipped", 0)
+            shards_failed = props.get("_shards.failed", 0)
+
+            result = {
+                "weight": 1,
+                "unit": "ops",
+                "success": True,
+                "hits": hits_total,
+                "hits_relation": hits_relation,
+                "timed_out": timed_out,
+                "took": took,
+                "shards": {
+                    "total": shards_total,
+                    "successful": shards_successful,
+                    "skipped": shards_skipped,
+                    "failed": shards_failed,
+                },
+            }
+
+            # Optional fields (cross-cluster search, num_reduce_phases)
+            if props.get("num_reduce_phases") is not None:
+                result["num_reduce_phases"] = props["num_reduce_phases"]
+            if props.get("_clusters.total") is not None or props.get("_clusters.successful") is not None:
+                result["clusters"] = {
+                    dest: props[key]
+                    for key, dest in [
+                        ("_clusters.total", "total"),
+                        ("_clusters.successful", "successful"),
+                        ("_clusters.skipped", "skipped"),
+                        ("_clusters.running", "running"),
+                        ("_clusters.partial", "partial"),
+                        ("_clusters.failed", "failed"),
+                    ]
+                    if props.get(key) is not None
+                }
+                if props.get("_clusters.details"):
+                    result["clusters"]["details"] = props["_clusters.details"]
+
+            return result
+
+        async def _profiled_request_body_query(es, params):
+            result = {"weight": 1, "unit": "ops", "success": True}
+            fingerprint_profiled_request(
+                result,
+                {"operation-type": "search", "index": index, "body": body, "request-params": request_params},
+            )
+            body_to_send = dict(body) if body is not None else {}
+            body_to_send["profile"] = True
+            r = await self._raw_search(es, index, body_to_send, request_params, headers=headers)
+            if detailed_results:
+                result.update(_detailed_request_body_result(r))
+            try:
+                parsed = json.loads(r.getvalue())
+            except ValueError:
+                result["profile_complete"] = False
+                result["profile_capture_error"] = "serialization_failed"
+                return result
+            capture_profile(result, parsed, params.get("profile-max-response-bytes", profiling.DEFAULT_MAX_RESPONSE_BYTES))
+            return result
 
         async def _search_after_query(es, params):
             index = params.get("index", "_all")
@@ -1467,75 +1602,7 @@ class Query(Runner):
             r = await self._raw_search(es, index, body, request_params, headers=headers)
 
             if detailed_results:
-                props = parse(
-                    r,
-                    [
-                        "hits.total",
-                        "hits.total.value",
-                        "hits.total.relation",
-                        "timed_out",
-                        "took",
-                        "_shards.total",
-                        "_shards.successful",
-                        "_shards.skipped",
-                        "_shards.failed",
-                        "num_reduce_phases",
-                        "_clusters.total",
-                        "_clusters.successful",
-                        "_clusters.skipped",
-                        "_clusters.running",
-                        "_clusters.partial",
-                        "_clusters.failed",
-                    ],
-                    stop_after="hits.hits",
-                    with_cluster_details=True,
-                )
-                hits_total = props.get("hits.total.value", props.get("hits.total", 0))
-                hits_relation = props.get("hits.total.relation", "eq")
-                timed_out = props.get("timed_out", False)
-                took = props.get("took", 0)
-
-                shards_total = props.get("_shards.total", 0)
-                shards_successful = props.get("_shards.successful", 0)
-                shards_skipped = props.get("_shards.skipped", 0)
-                shards_failed = props.get("_shards.failed", 0)
-
-                result = {
-                    "weight": 1,
-                    "unit": "ops",
-                    "success": True,
-                    "hits": hits_total,
-                    "hits_relation": hits_relation,
-                    "timed_out": timed_out,
-                    "took": took,
-                    "shards": {
-                        "total": shards_total,
-                        "successful": shards_successful,
-                        "skipped": shards_skipped,
-                        "failed": shards_failed,
-                    },
-                }
-
-                # Optional fields (cross-cluster search, num_reduce_phases)
-                if props.get("num_reduce_phases") is not None:
-                    result["num_reduce_phases"] = props["num_reduce_phases"]
-                if props.get("_clusters.total") is not None or props.get("_clusters.successful") is not None:
-                    result["clusters"] = {
-                        dest: props[key]
-                        for key, dest in [
-                            ("_clusters.total", "total"),
-                            ("_clusters.successful", "successful"),
-                            ("_clusters.skipped", "skipped"),
-                            ("_clusters.running", "running"),
-                            ("_clusters.partial", "partial"),
-                            ("_clusters.failed", "failed"),
-                        ]
-                        if props.get(key) is not None
-                    }
-                    if props.get("_clusters.details"):
-                        result["clusters"]["details"] = props["_clusters.details"]
-
-                return result
+                return _detailed_request_body_result(r)
             else:
                 return {
                     "weight": 1,
@@ -1624,6 +1691,8 @@ class Query(Runner):
                     "and will be removed in a future release. Use 'scroll-search' instead."
                 )
                 return await _scroll_query(es, params)
+            elif profile_capture:
+                return await _profiled_request_body_query(es, params)
             else:
                 return await _request_body_query(es, params)
         else:
@@ -3372,6 +3441,8 @@ class Esql(Runner):
         detailed_results = params.get("detailed-results", False)
         # disable eager response parsing - responses might be huge thus skewing results
         es.return_raw_response()
+        if params.get("profile-capture", False):
+            return await self._profiled_query(es, body, request_params, headers, detailed_results, params)
         r = await es.perform_request(method="POST", path="/_query", headers=headers, body=body, params=request_params)
 
         if detailed_results:
@@ -3417,6 +3488,37 @@ class Esql(Runner):
                 result["error-type"] = "esql"
                 result["error-description"] = "ES|QL query returned partial results"
             return result
+
+    async def _profiled_query(self, es, body, request_params, headers, detailed_results, params):
+        result = {"weight": 1, "unit": "ops", "success": True}
+        fingerprint_profiled_request(result, {"operation-type": "esql", "body": body, "request-params": request_params})
+        body_to_send = dict(body)
+        body_to_send["profile"] = True
+        r = await es.perform_request(method="POST", path="/_query", headers=headers, body=body_to_send, params=request_params)
+        try:
+            parsed = json.loads(r.getvalue())
+        except ValueError:
+            result["profile_complete"] = False
+            result["profile_capture_error"] = "serialization_failed"
+            return result
+        is_partial = parsed.get("is_partial", False)
+        result["success"] = not is_partial
+        result["is_partial"] = is_partial
+        if is_partial:
+            result["error-type"] = "esql"
+            result["error-description"] = "ES|QL query returned partial results"
+        if detailed_results:
+            for prop in [
+                "took",
+                "documents_found",
+                "values_loaded",
+                "completion_time_in_millis",
+                "start_time_in_millis",
+                "expiration_time_in_millis",
+            ]:
+                result[prop] = parsed.get(prop)
+        capture_profile(result, parsed, params.get("profile-max-response-bytes", profiling.DEFAULT_MAX_RESPONSE_BYTES))
+        return result
 
     def __repr__(self, *args, **kwargs):
         return "esql"
