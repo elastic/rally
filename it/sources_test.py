@@ -61,12 +61,14 @@ def test_sources_revision_with_docker_build_method(cfg, free_benchmark_http_port
 
 @it.random_rally_config
 def test_sources_from_sources_pipeline_docker(cfg, free_benchmark_http_port: int):
-    # builds the revision that the previous test checked out
+    # Builds the revision that the previous test checked out. Unlike the other tests, which use the bundled JDK, this one
+    # runs Elasticsearch on a local JDK to cover --runtime-jdk=<major>.
     assert (
         it.race(
             cfg,
             f"--pipeline=from-sources --track=geonames --test-mode --target-hosts=127.0.0.1:{free_benchmark_http_port} "
-            f'--source-build-method=docker --challenge=append-no-conflicts-index-only --car="4gheap,basic-license,ea"',
+            f"--source-build-method=docker --challenge=append-no-conflicts-index-only "
+            f'--car="4gheap,basic-license,ea" --runtime-jdk=21',
         )
         == 0
     )
