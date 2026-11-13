@@ -92,7 +92,6 @@ jobs:
           distribution: "temurin"
           java-version: "21"
       - run: echo "JAVA21_HOME=$JAVA_HOME_21_X64" >> $GITHUB_ENV
-      - run: echo "JAVA11_HOME=$JAVA_HOME_11_X64" >> $GITHUB_ENV
       - name: Install UV
         uses: astral-sh/setup-uv@v7
         with:
