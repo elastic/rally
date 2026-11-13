@@ -25,12 +25,23 @@ from esrally.mechanic import java_resolver
 
 class TestJavaResolver:
     @mock.patch("esrally.utils.jvm.resolve_path")
-    def test_resolves_java_home_for_default_runtime_jdk(self, resolve_jvm_path):
-        resolve_jvm_path.return_value = (12, "/opt/jdk12")
+    def test_defaults_to_bundled_jdk(self, resolve_jvm_path):
         major, java_home = java_resolver.java_home("12,11,10,9,8", specified_runtime_jdk=None, provides_bundled_jdk=True)
 
+        # assumes most recent JDK
         assert major == 12
-        assert java_home == "/opt/jdk12"
+        # does not set JAVA_HOME for the bundled JDK
+        assert java_home is None
+        resolve_jvm_path.assert_not_called()
+
+    @mock.patch("esrally.utils.jvm.resolve_path")
+    def test_resolves_java_home_for_default_runtime_jdk_without_bundled_jdk(self, resolve_jvm_path):
+        resolve_jvm_path.return_value = (11, "/opt/jdk11")
+        major, java_home = java_resolver.java_home("12,11,10,9,8", specified_runtime_jdk=None, provides_bundled_jdk=False)
+
+        assert major == 11
+        assert java_home == "/opt/jdk11"
+        resolve_jvm_path.assert_called_with([12, 11, 10, 9, 8])
 
     @mock.patch("esrally.utils.jvm.resolve_path")
     def test_resolves_java_home_for_specific_runtime_jdk(self, resolve_jvm_path):
