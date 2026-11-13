@@ -52,6 +52,10 @@ from esrally.track import TrackProcessorRegistry, load_track, load_track_plugins
 from esrally.utils import console, convert, net, opts
 from esrally.utils.error_behavior import OnErrorBehavior
 
+# Workers poll for task completion this often in test mode. Tasks finish almost instantly there, so the default polling
+# interval of 5 seconds would dominate the runtime of a race.
+TEST_MODE_WAKEUP_INTERVAL_SECONDS = 0.1
+
 
 ##################################
 #
@@ -439,7 +443,7 @@ class TaskExecutionActor(actor.RallyActor):
         self.track_name = msg.track_name
         self.cfg = load_local_config(msg.cfg)
         if self.cfg.opts("track", "test.mode.enabled"):
-            self.wakeup_interval = 0.5
+            self.wakeup_interval = TEST_MODE_WAKEUP_INTERVAL_SECONDS
         track.load_track_plugins(self.cfg, self.track_name)
         self.send(self.task_preparation_actor, ReadyForWork())
 
@@ -1345,7 +1349,7 @@ class Worker(actor.RallyActor):
         self.cancel.clear()
         # we need to wake up more often in test mode
         if self.config.opts("track", "test.mode.enabled"):
-            self.wakeup_interval = 0.5
+            self.wakeup_interval = TEST_MODE_WAKEUP_INTERVAL_SECONDS
         runner.register_default_runners(self.config)
         if self.track.has_plugins:
             track.load_track_plugins(self.config, self.track.name, runner.register_runner, scheduler.register_scheduler)
