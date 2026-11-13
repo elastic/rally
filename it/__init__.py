@@ -334,7 +334,7 @@ class TestCluster:
             raise AssertionError(f"Failed to install Elasticsearch {distribution_version}.", e)
 
     def start(self, race_id):
-        cmd = f'start --runtime-jdk="bundled" --installation-id={self.installation_id} --race-id={race_id}'
+        cmd = f"start --installation-id={self.installation_id} --race-id={race_id}"
         esrally(self.cfg, cmd, check=True)
         es = client.EsClientFactory(hosts=[{"host": "127.0.0.1", "port": self.http_port}], client_options={}).create()
         client.wait_for_rest_layer(es)

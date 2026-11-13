@@ -627,21 +627,27 @@ This command line flag is used to skip telemetry collection when running ``esral
 
    esrally stop --installation-id=INSTALLATION_ID --skip-telemetry
 
+.. _clr_runtime_jdk:
+
 ``runtime-jdk``
 ~~~~~~~~~~~~~~~
 
-By default, Rally will derive the appropriate runtime JDK versions automatically per version of Elasticsearch. For example, it will choose JDK 12, 11 or 8 for Elasticsearch 7.0.0. It will choose the highest available version.
+By default, Rally runs Elasticsearch with the JDK that is bundled with it, and ignores ``JAVA_HOME``. You don't need to install a JDK.
 
-This command line parameter sets the major version of the JDK that Rally should use to run Elasticsearch. It is required that either ``JAVA_HOME`` or ``JAVAx_HOME`` (where ``x`` is the major version, e.g. ``JAVA11_HOME`` for a JDK 11) points to the appropriate JDK.
+This command line parameter sets the major version of the JDK that Rally should use to run Elasticsearch instead. It is required that either ``JAVA_HOME`` or ``JAVAx_HOME`` (where ``x`` is the major version, e.g. ``JAVA21_HOME`` for a JDK 21) points to the appropriate JDK, and that the benchmarked Elasticsearch version supports it.
 
 Example::
 
-   # Run a benchmark with defaults
+   # Run a benchmark with the JDK bundled with Elasticsearch
    esrally race --track=geonames --distribution-version={ES_CLIENT_VER}
-   # Force to run with JDK 11
-   esrally race --track=geonames --distribution-version={ES_CLIENT_VER} --runtime-jdk=11
+   # Force to run with JDK 21
+   esrally race --track=geonames --distribution-version={ES_CLIENT_VER} --runtime-jdk=21
 
-It is also possible to specify the JDK that is bundled with Elasticsearch with the special value ``bundled``. The `JDK is bundled from Elasticsearch 7.0.0 onwards <https://www.elastic.co/guide/en/elasticsearch/reference/7.0/release-highlights-7.0.0.html#_bundle_jdk_in_elasticsearch_distribution>`_.
+The special value ``bundled`` selects the bundled JDK explicitly.
+
+.. note::
+
+   If you use a custom team repository whose car does not provide a bundled JDK (``runtime.jdk.bundled = false``), Rally instead chooses the highest JDK version allowed by the car that it finds via ``JAVAx_HOME`` or ``JAVA_HOME``.
 
 .. _clr_revision:
 
