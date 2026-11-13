@@ -56,6 +56,21 @@ class TestIo:
         assert io.normalize_path("/not/normalized/path/../") == "/not/normalized"
         assert io.normalize_path("~/Documents/..") == os.path.expanduser("~")
 
+    @pytest.mark.parametrize(
+        "args, expected",
+        [
+            (("file.txt",), "./file.txt"),
+            (("file.txt", "/tmp"), "/tmp/file.txt"),
+            (("dir/file.txt", "/tmp"), "dir/file.txt"),
+            ((b"file.txt",), b"./file.txt"),
+            ((b"file.txt", b"/tmp"), b"/tmp/file.txt"),
+            ((b"dir/../file.txt",), b"./file.txt"),
+            ((b"/not/normalized/path/../",), b"/not/normalized"),
+        ],
+    )
+    def test_normalize_path_relative_to_cwd(self, args, expected):
+        assert io.normalize_path(*args) == expected
+
     def test_archive(self):
         assert io.is_archive("/tmp/some-archive.tar.gz")
         assert io.is_archive("/tmp/some-archive.tgz")

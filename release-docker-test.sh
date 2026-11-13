@@ -103,11 +103,8 @@ function test_docker_release_image {
     docker_compose down
 
     info "Testing Rally docker image uses the right version"
-    if [[ "${DEVELOPMENT}" == "YES" ]]; then
-        actual_version=${RALLY_VERSION}
-    else
-        actual_version=$(docker run --rm "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" esrally --version | cut -d ' ' -f 2,2)
-    fi
+    actual_version=$(docker run --rm "${RALLY_DOCKER_IMAGE}:${RALLY_VERSION_TAG}" esrally --version | cut -d ' ' -f 2,2)
+    info "Rally version in Docker image: [${actual_version}]"
     if [[ "${actual_version}" != "${RALLY_VERSION}" ]]; then
         echo "Rally version in Docker image: [${actual_version}] doesn't match the expected version [${RALLY_VERSION}]"
         exit 1
@@ -164,11 +161,5 @@ function tear_down {
 }
 
 trap "tear_down" EXIT
-
-if [[ $# -gt 0 && "$1" = "dev" ]] ; then
-    export DEVELOPMENT="YES"
-else 
-    export DEVELOPMENT="NO"
-fi
 
 main

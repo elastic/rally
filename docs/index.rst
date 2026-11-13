@@ -2,7 +2,7 @@ Rally |release|
 ===============
 
 
-.. ifconfig:: release.endswith('.dev0')
+.. ifconfig:: 'dev' in release
 
     .. warning::
 
@@ -74,6 +74,7 @@ Rally's source code is available on `Github <https://github.com/elastic/rally>`_
    :maxdepth: 2
 
    migrate
+   changelog
    faq
    glossary
    community

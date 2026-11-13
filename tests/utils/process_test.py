@@ -205,6 +205,65 @@ class TestProcess:
         assert not night_rally_process.killed
 
 
+def test_redact_cmdline_hides_client_and_telemetry_credentials():
+    cmdline = [
+        "esrally",
+        "race",
+        "--client-options=basic_auth_user:'elastic',basic_auth_password:'secret'",
+        "--telemetry-client-options=api_key:'op-key'",
+        "--track=geonames",
+    ]
+
+    assert process.redact_cmdline(cmdline) == [
+        "esrally",
+        "race",
+        '--client-options="*****"',
+        '--telemetry-client-options="*****"',
+        "--track=geonames",
+    ]
+
+
+def test_redact_cmdline_hides_space_separated_client_and_telemetry_credentials():
+    cmdline = [
+        "esrally",
+        "race",
+        "--client-options",
+        "basic_auth_user:'elastic',basic_auth_password:'secret'",
+        "--telemetry-client-options",
+        "api_key:'op-key'",
+        "--track=geonames",
+    ]
+
+    assert process.redact_cmdline(cmdline) == [
+        "esrally",
+        "race",
+        "--client-options",
+        '"*****"',
+        "--telemetry-client-options",
+        '"*****"',
+        "--track=geonames",
+    ]
+
+
+def test_redact_cmdline_keeps_options_sharing_a_prefix_with_credential_flags():
+    cmdline = ["esrally", "race", "--telemetry=jfr,gc", "--telemetry", "jfr", "--telemetry-params=a:b", "--track=geonames"]
+
+    assert process.redact_cmdline(cmdline) == cmdline
+
+
+def test_redact_cmdline_hides_abbreviated_credential_flags():
+    cmdline = ["esrally", "race", "--cli=api_key:'k'", "--telemetry-c", "api_key:'t'", "--telemetry-client-options=api_key:'t'"]
+
+    assert process.redact_cmdline(cmdline) == [
+        "esrally",
+        "race",
+        '--cli="*****"',
+        "--telemetry-c",
+        '"*****"',
+        '--telemetry-client-options="*****"',
+    ]
+
+
 def test_run_subprocess():
     cmd = "ls . not-a-file"
     completed_process = process.run_subprocess_with_logging_and_output(cmd)

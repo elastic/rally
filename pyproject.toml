@@ -1,9 +1,16 @@
 [build-system]
-requires = ["hatchling", "uv==0.12.6"]
+requires = ["hatchling", "hatch-vcs", "uv==0.12.6"]
 build-backend = "hatchling.build"
 
+# Create a version file without a git hash
+# N commits after X.Y.Z, version is X.Y.Z.post1.devN
 [tool.hatch.version]
-path = "esrally/_version.py"
+source = "vcs"
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+version_scheme = "no-guess-dev"
+[tool.hatch.build.hooks.vcs]
+version-file = "esrally/_version.py"
 
 [tool.hatch.build.hooks.custom]
 path = "scripts/dependency_constraints_build_hook.py"
@@ -20,7 +27,7 @@ authors = [
 description = "Macrobenchmarking framework for Elasticsearch"
 readme = "README.md"
 license = { text = "Apache License 2.0" }
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10"
 classifiers = [
     "Topic :: System :: Benchmark",
     "Development Status :: 5 - Production/Stable",
@@ -139,7 +146,9 @@ develop = [
     "werkzeug==3.1.9",
     "sphinx==5.1.1",
     "furo==2022.06.21",
-    "github3.py==3.2.0",
+    "myst-parser==1.0.0",
+    # changelog fragments, see changelog.d/README.md
+    "scriv[toml]==1.8.0",
     "pre-commit==2.20.0",
     "pylint==4.0.9",
     "trustme==0.9.0",
@@ -148,12 +157,14 @@ develop = [
     "black==26.10.1",
     # mypy
     "boto3-stubs==1.26.125",
-    "mypy==1.15.0",
+    "mypy==2.4.1",
     "types-psutil==7.2.2.20260906",
     "types-tabulate==0.8.9",
     "types-requests>=2.31.0.7,<3",
     "types-jsonschema==3.2.0",
     "types-protobuf>=4.24,<8",
+    # type annotation coverage check (type-coverage pre-commit hook)
+    "pyrefly==1.4.0",
     # Python dead library removed in version 3.13 and used to build Rally docs.
     "standard-imghdr==3.13.0",
     # For RST docs preview using the reStructuredText VS Code extension, which relies on the Esbonio language server.
@@ -177,6 +188,18 @@ esrally-storage = "esrally.storage._cli:main"
 "Issue tracker" = "https://github.com/elastic/rally/issues"
 
 
+[tool.scriv]
+# Changelog fragments live in changelog.d/ and are assembled into CHANGELOG.md at release time
+# by `python3 changelog.py collect X.Y.Z`. See changelog.d/README.md.
+format = "md"
+changelog = "CHANGELOG.md"
+categories = ["Breaking Changes", "Highlights", "Enhancements", "Bug Fixes", "Doc Changes", "Miscellaneous Changes"]
+md_header_level = "3"
+md_html_anchors = false
+compact_fragments = true
+entry_title_template = "{{ version }}"
+new_fragment_template = "file: changelog.d/new_fragment.md.j2"
+
 [tool.black]
 line-length = 140
 target-version = ['py310', 'py311', 'py312', 'py313']
@@ -190,7 +213,7 @@ log_cli = false
 log_date_format = "%Y-%m-%d %H:%M:%S"
 log_format = "%(asctime)s %(levelname)-8s %(name)s:%(filename)s:%(lineno)d %(message)s"
 log_level = "INFO"
-addopts = "--verbose --color=yes"
+addopts = "--verbose --color=yes --import-mode=importlib"
 testpaths = "tests"
 junit_family = "xunit2"
 junit_logging = "all"
@@ -212,6 +235,8 @@ markers = [
 # Ref: https://github.com/elastic/rally/pull/1798
 [tool.mypy]
 python_version = "3.13"
+# Local stubs for untyped third-party packages (see stubs/README.md).
+mypy_path = "$MYPY_CONFIG_FILE_DIR/stubs"
 # subset of "strict", kept at global config level as some of the options are
 # supported only at this level
 # https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
@@ -244,7 +269,7 @@ files = ["esrally/", "it/", "tests/"]
 [[tool.mypy.overrides]]
 module = [
     "esrally.actor",
-    "estally.log",
+    "esrally.log",
     "esrally.mechanic.team",
     "esrally.storage.*",
     "esrally.utils.cases",
@@ -255,7 +280,7 @@ module = [
     "esrally.utils.process",
     "esrally.utils.threads",
 ]
-disallow_incomplete_defs = true
+disallow_untyped_defs = true
 # this should be a copy of disabled_error_code from above
 enable_error_code = [
     "assignment",
@@ -275,6 +300,13 @@ enable_error_code = [
     "union-attr",
     "var-annotated",
 ]
+
+# Pyrefly is only used by the type-coverage pre-commit hook (annotation coverage); mypy remains the
+# type checker run by `make lint`. When run without file arguments, pyrefly uses this section instead
+# of trying to translate [tool.mypy].
+[tool.pyrefly]
+project-includes = ["esrally"]
+search-path = ["stubs"]
 
 [tool.uv]
 python-preference = "only-managed"

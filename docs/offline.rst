@@ -3,10 +3,38 @@ Offline Usage
 
 In some corporate environments servers do not have Internet access. You can still use Rally in such environments and this page summarizes all information that you need to get started.
 
-Installation and Configuration
-------------------------------
+.. _offline_install:
 
-We provide a special offline installation package. Follow the :ref:`offline installation guide <install_offline-install>` and :doc:`configure Rally as usual </configuration>` afterwards.
+.. _install_offline-install:
+
+Installation
+------------
+
+.. ifconfig:: 'dev' in release
+
+    .. warning::
+
+        This documentation is for the version of Rally currently under development. We do not provide offline installation packages for development versions.
+        Were you looking for the `documentation of the latest stable version <//esrally.readthedocs.io/en/stable/>`_?
+
+We provide an offline installation package for x86_64 Linux. There is no offline installation package for other architectures such as aarch64. It bundles all dependencies for Python 3.11, so ensure that ``python3`` on the target machine(s) is Python 3.11 (verify with ``python3 --version``). Other Python versions may fail because some bundled dependencies cannot be installed with them. On Debian and Ubuntu, also install the ``python3.11-venv`` package beforehand.
+
+1. Download the offline installation package ``esrally-dist-linux-x86_64-*.tar.gz`` for the `latest release <https://github.com/elastic/rally/releases/latest>`_ and copy it to the target machine(s).
+2. Decompress it with ``tar -xzf esrally-dist-linux-*.tar.gz``.
+3. Install Rally into a virtual environment::
+
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python3 -m pip install --no-index --find-links esrally-dist-*/bin esrally
+
+Alternatively, ``sudo ./esrally-dist-*/install.sh`` installs Rally into the system Python. This fails on Linux distributions that prevent installing packages into the system Python (`PEP 668 <https://peps.python.org/pep-0668/>`_).
+
+See the :ref:`installation requirements <install_requirements>` for the other prerequisites.
+
+Configuration
+-------------
+
+:doc:`Configure Rally as usual </configuration>` after installing it.
 
 Command Line Usage
 ------------------
@@ -48,7 +76,7 @@ Using cars
 
     You can skip this section if you use Rally only as a load generator.
 
-If you have Rally configure and start Elasticsearch then you also need the out-of-the-box configurations available. Run the following command on a machine with Internet access::
+If you use Rally to configure and start Elasticsearch then you also need the out-of-the-box configurations available. Run the following command on a machine with Internet access::
 
     git clone https://github.com/elastic/rally-teams.git ~/.rally/benchmarks/teams/default
     tar -C ~ -czf rally-teams.tar.gz .rally/benchmarks/teams/default

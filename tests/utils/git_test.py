@@ -150,6 +150,16 @@ class TestGit:
         assert exc.value.args[0] == "Your git version is [1.0.0] but Rally requires at least git 1.9. Please update git."
         run_subprocess_with_logging.assert_called_with("git -C /src --version", level=logging.DEBUG, timeout=git.GIT_TIMEOUT)
 
+    @mock.patch("esrally.utils.process.run_subprocess_with_logging")
+    @mock.patch("shutil.which", return_value=None)
+    def test_git_not_installed(self, which, run_subprocess_with_logging):
+        for operation in (lambda: git.head_revision("/src"), lambda: git.clone("/src", remote="/remote")):
+            with pytest.raises(exceptions.SystemSetupError) as exc:
+                operation()
+            assert exc.value.args[0] == "Rally requires git but it is not installed. Please install git 1.9 or newer."
+        which.assert_called_with("git")
+        run_subprocess_with_logging.assert_not_called()
+
     def test_clone_successful(self):
         git.clone(self.tmp_clone_dir, remote=self.remote_tmp_src_dir)
         assert git.is_working_copy(self.tmp_clone_dir)

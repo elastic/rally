@@ -18,12 +18,16 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-from collections.abc import Generator
+from collections.abc import Callable, Generator
+from typing import Any, ParamSpec, TypeVar
 
 from typing_extensions import Self
 
 from esrally import types
 from esrally.storage import NO_RANGE, Adapter, Executor, GetResponse, Head, RangeSet
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 @dataclasses.dataclass
@@ -66,10 +70,10 @@ class DummyAdapter(Adapter):
 
 class DummyExecutor(Executor):
 
-    def __init__(self):
-        self.tasks: list[tuple] | None = []
+    def __init__(self) -> None:
+        self.tasks: list[tuple[Callable[..., Any], tuple[Any, ...], dict[str, Any]]] | None = []
 
-    def submit(self, fn, /, *args, **kwargs):
+    def submit(self, fn: Callable[_P, _T], /, *args: _P.args, **kwargs: _P.kwargs) -> None:
         """Submits a callable to be executed with the given arguments.
 
         Schedules the callable to be executed as fn(*args, **kwargs).
@@ -78,12 +82,12 @@ class DummyExecutor(Executor):
             raise RuntimeError("Executor already closed")
         self.tasks.append((fn, args, kwargs))
 
-    def execute_tasks(self):
+    def execute_tasks(self) -> None:
         if self.tasks is None:
             raise RuntimeError("Executor already closed")
         tasks, self.tasks = self.tasks, []
         for fn, args, kwargs in tasks:
             fn(*args, **kwargs)
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         self.tasks = None

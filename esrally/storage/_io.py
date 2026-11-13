@@ -59,7 +59,7 @@ class FileDescriptor:
             start_position = self.ranges and self.ranges.start or 0
             return self.position - start_position
 
-    def close(self):
+    def close(self) -> None:
         with self.lock:
             fd, self.fd = self.fd, None
         if fd:
@@ -128,7 +128,7 @@ class FileWriter(FileDescriptor):
 
     # Flushing only empties Python buffers. This does not guarantee the file is actually persisted on disk.
     # This is an acceptable simplification because transfer manager is used in ephemeral environments.
-    def flush(self):
+    def flush(self) -> None:
         with self.lock:
             if self.fd is not None:
                 self.fd.flush()

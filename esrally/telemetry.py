@@ -1813,11 +1813,10 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
 
     serverless_status = serverless.Status.Public
 
-    def __init__(self, client, metrics_store, revision_override, client_options=None):
+    def __init__(self, client, metrics_store, client_options=None):
         super().__init__()
         self.metrics_store = metrics_store
         self.client = client
-        self.revision_override = revision_override
         self.client_options = client_options if client_options is not None else {}
 
     def on_benchmark_start(self):
@@ -1828,10 +1827,7 @@ class ClusterEnvironmentInfo(InternalTelemetryDevice):
             self.logger.exception("Could not retrieve cluster version info")
             return
         distribution_flavor = client_info["version"].get("build_flavor", "oss")
-        # serverless returns dummy build hash which gets overridden when running with operator privileges
         revision = client_info["version"].get("build_hash", distribution_flavor)
-        if self.revision_override:
-            revision = self.revision_override
         # if version number is not available default to build flavor
         distribution_version = client_info["version"].get("number", distribution_flavor)
         # overwrite static serverless version number
