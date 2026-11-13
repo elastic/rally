@@ -181,7 +181,7 @@ class Transfer:
         resume: bool = True,
         crc32c: str | None = None,
         cfg: types.Config | None = None,
-    ):
+    ) -> None:
         """
         :param client: The client to use to download file parts from a remote service.
         :param url: The URL of the remote file.
@@ -348,7 +348,7 @@ class Transfer:
             and self._done == Range(0, self._document_length)
         )
 
-    def _resume_status(self):
+    def _resume_status(self) -> None:
         status_filename = self.status_file_path
         if not os.path.isfile(status_filename):
             # There is no file to read status data from.
@@ -448,7 +448,7 @@ class Transfer:
     def _add_mirror_failure(self, *, url: str, error: str) -> None:
         self._mirror_failures[url] = TransferMirrorFailure(url=url, error=error)
 
-    def save_status(self):
+    def save_status(self) -> None:
         """It updates the status file."""
         # It synchronizes mirror failures with the client.
         mirror_failures = self.client.mirror_failures(self.url)
@@ -624,7 +624,7 @@ class Transfer:
                 finally:
                     self._finished.set()
 
-    def close(self):
+    def close(self) -> None:
         """It cancels all transfer tasks and closes all open streams."""
         self._finished.set()
         self._workers.max_count = 1

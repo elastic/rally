@@ -20,10 +20,10 @@ import socket
 import time
 import traceback
 import typing
+from collections.abc import Callable, Mapping
 from typing import Any
 
-import thespian.actors  # type: ignore[import-untyped]
-import thespian.system.messages.status  # type: ignore[import-untyped]
+import thespian.actors
 
 from esrally import exceptions, log
 from esrally.utils import console
@@ -36,7 +36,7 @@ class BenchmarkFailure:
     Indicates a failure in the benchmark execution due to an exception
     """
 
-    def __init__(self, message, cause=None):
+    def __init__(self, message: Any, cause: Any = None) -> None:
         self.message = message
         self.cause = cause
 
@@ -47,7 +47,7 @@ class BenchmarkCancelled:
     """
 
 
-def parametrized(decorator):
+def parametrized(decorator: Callable[..., Any]) -> Callable[..., Callable[[Callable[..., Any]], Any]]:
     """
 
     Helper meta-decorator that allows us to provide parameters to a decorator.
@@ -55,8 +55,8 @@ def parametrized(decorator):
     :param decorator: The decorator that should accept parameters.
     """
 
-    def inner(*args, **kwargs):
-        def g(f):
+    def inner(*args: Any, **kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
+        def g(f: Callable[..., Any]) -> Any:
             return decorator(f, *args, **kwargs)
 
         return g
@@ -65,7 +65,7 @@ def parametrized(decorator):
 
 
 @parametrized
-def no_retry(f, actor_name):
+def no_retry(f: Callable[..., Any], actor_name: str) -> Callable[..., Any]:
     """
 
     Decorator intended for Thespian message handlers with the signature ``receiveMsg_$MSG_NAME(self, msg, sender)``. Thespian will
@@ -91,7 +91,7 @@ def no_retry(f, actor_name):
     :param actor_name: A human readable name of the current actor that should be used in the exception message.
     """
 
-    def guard(self, msg, sender):
+    def guard(self: thespian.actors.Actor, msg: Any, sender: thespian.actors.ActorAddress) -> Any:
         # noinspection PyBroadException
         try:
             return f(self, msg, sender)
@@ -107,11 +107,11 @@ def no_retry(f, actor_name):
 
 class RallyActor(thespian.actors.ActorTypeDispatcher):
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.children: list[thespian.actors.ActorAddress] = []
-        self.received_responses = []
-        self.status = None
+        self.received_responses: list[Any] = []
+        self.status: Any = None
         log.post_configure_actor_logging()
         self.logger = logging.getLogger(type(self).__module__)
         console.set_assume_tty(assume_tty=False)
@@ -120,7 +120,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
     # The method name is required by the actor framework
     # noinspection PyPep8Naming
     @staticmethod
-    def actorSystemCapabilityCheck(capabilities, requirements):
+    def actorSystemCapabilityCheck(capabilities: Mapping[str, Any], requirements: Mapping[str, Any]) -> bool:
         for name, value in requirements.items():
             current = capabilities.get(name, None)
             if current != value:
@@ -128,7 +128,14 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
                 return False
         return True
 
-    def transition_when_all_children_responded(self, sender, msg, expected_status, new_status, transition):
+    def transition_when_all_children_responded(
+        self,
+        sender: thespian.actors.Actor | thespian.actors.ActorAddress,
+        msg: Any,
+        expected_status: Any,
+        new_status: Any,
+        transition: Callable[[], Any],
+    ) -> None:
         """
 
         Waits until all children have sent a specific response message and then transitions this actor to a new status.
@@ -169,7 +176,9 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
                 "Received [%s] from [%s] but we are in status [%s] instead of [%s]." % (type(msg), sender, self.status, expected_status)
             )
 
-    def send_to_children_and_transition(self, sender, msg, expected_status, new_status):
+    def send_to_children_and_transition(
+        self, sender: thespian.actors.Actor | thespian.actors.ActorAddress, msg: Any, expected_status: Any, new_status: Any
+    ) -> None:
         """
 
         Sends the provided message to all child actors and immediately transitions to the new status.
@@ -190,7 +199,7 @@ class RallyActor(thespian.actors.ActorTypeDispatcher):
                 "Received [%s] from [%s] but we are in status [%s] instead of [%s]." % (type(msg), sender, self.status, expected_status)
             )
 
-    def is_current_status_expected(self, expected_status):
+    def is_current_status_expected(self, expected_status: Any) -> bool:
         # if we don't expect anything, we're always in the right status
         if not expected_status:
             return True

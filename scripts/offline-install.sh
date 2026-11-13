@@ -42,9 +42,14 @@ fi
 readonly RALLY_VERSION=$1
 
 readonly WD=$(pwd)
-readonly RELATIVE_DOWNLOAD_DIR="esrally-dist-${RALLY_VERSION}"
+# The bundled wheels only work on the architecture they were downloaded on
+ARCH=$(uname -m)
+readonly ARCH
+readonly RELATIVE_DOWNLOAD_DIR="esrally-dist-linux-${ARCH}-${RALLY_VERSION}"
 readonly ABSOLUTE_DOWNLOAD_DIR="${WD}/${RELATIVE_DOWNLOAD_DIR}"
 readonly ABSOLUTE_DOWNLOAD_BIN_DIR="${ABSOLUTE_DOWNLOAD_DIR}/bin"
+CONSTRAINTS_FILE=$(mktemp)
+readonly CONSTRAINTS_FILE
 readonly PYTHON_INSTALL_LINK="https://esrally.readthedocs.io/en/stable/install.html#python"
 readonly PYTHON_ERROR_MSG="is required but not installed. Follow the instructions in ${PYTHON_INSTALL_LINK} and try again."
 
@@ -57,15 +62,24 @@ done
 SCRIPT_SRC_HOME="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 function main {
-    local archive_name="esrally-dist-linux-${RALLY_VERSION}.tar.gz"
+    local archive_name="${RELATIVE_DOWNLOAD_DIR}.tar.gz"
     local install_script_file="install.sh"
     local install_script="${ABSOLUTE_DOWNLOAD_DIR}/${install_script_file}"
 
     echo "Preparing offline distribution for Rally ${RALLY_VERSION}"
 
     mkdir -p "${ABSOLUTE_DOWNLOAD_BIN_DIR}"
+    # Pin dependencies to the versions from uv.lock, which the wheel ships as constraints
+    pip3 download esrally=="${RALLY_VERSION}" --no-deps --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}"
+    local wheel="${ABSOLUTE_DOWNLOAD_BIN_DIR}/esrally-${RALLY_VERSION}-py3-none-any.whl"
+    if ! python3 -c 'import sys, zipfile; sys.stdout.write(zipfile.ZipFile(sys.argv[1]).read("esrally/resources/rally-constraints.txt").decode())' "${wheel}" > "${CONSTRAINTS_FILE}"
+    then
+        echo "Error: ${wheel} does not contain esrally/resources/rally-constraints.txt."
+        echo "Offline distributions can only be built for releases that ship dependency constraints."
+        exit 1
+    fi
     # Prepare install
-    pip3 download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}" --no-binary=MarkupSafe
+    pip3 download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}" --constraint "${CONSTRAINTS_FILE}"
 
 
     echo "Preparing NOTICE file"
@@ -115,7 +129,7 @@ EOL
 }
 
 function cleanup {
-    rm -rf "${ABSOLUTE_DOWNLOAD_DIR}"
+    rm -rf "${ABSOLUTE_DOWNLOAD_DIR}" "${CONSTRAINTS_FILE}"
 }
 
 trap "cleanup" EXIT

@@ -55,8 +55,14 @@ def _with_retries(operation, *, on_retry=None):
             time.sleep(wait)
 
 
+def _ensure_git_installed():
+    if shutil.which("git") is None:
+        raise exceptions.SystemSetupError("Rally requires git but it is not installed. Please install git 1.9 or newer.")
+
+
 def probed(f):
     def probe(src, *args, **kwargs):
+        _ensure_git_installed()
         # Probe for -C
         if not process.exit_status_as_bool(
             lambda: process.run_subprocess_with_logging(
@@ -107,6 +113,7 @@ def clone(src, *, remote):
         if process.run_subprocess_with_logging("git clone %s %s" % (remote, io.escape_path(src)), timeout=GIT_TIMEOUT):
             raise exceptions.SupplyError("Could not clone from [%s] to [%s]" % (remote, src))
 
+    _ensure_git_installed()
     # A timed-out or failed clone could leave a partial directory behind, remove it so the retry starts clean.
     _with_retries(_clone, on_retry=lambda: shutil.rmtree(src, ignore_errors=True))
 

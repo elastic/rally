@@ -16,7 +16,7 @@
 # under the License.
 import json
 import logging
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Generator, Mapping, MutableMapping
 from datetime import datetime
 from typing import Any
 
@@ -68,7 +68,7 @@ class HTTPAdapter(Adapter):
         chunk_size: int = StorageConfig.DEFAULT_CHUNK_SIZE,
         connect_timeout: float = StorageConfig.DEFAULT_CONNECT_TIMEOUT,
         read_timeout: float = StorageConfig.DEFAULT_READ_TIMEOUT,
-    ):
+    ) -> None:
         if session is None:
             session = requests.Session()
         self.session = session
@@ -101,7 +101,7 @@ class HTTPAdapter(Adapter):
             response.close()
             raise
 
-        def iter_chunks():
+        def iter_chunks() -> Generator[bytes, None, None]:
             try:
                 with response:
                     yield from response.iter_content(chunk_size=self.chunk_size)

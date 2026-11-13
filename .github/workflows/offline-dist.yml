@@ -1,0 +1,72 @@
+name: Offline install package
+
+on:
+  # Called by release.yml once the release is on PyPI
+  workflow_call:
+    inputs:
+      version:
+        description: "Rally release version (git tag), e.g. 2.13.0"
+        required: true
+        type: string
+  # Allows (re)building the package for an existing release
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Rally release version (git tag), e.g. 2.13.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  offline-dist:
+    name: Build and upload offline install package
+    # Pinned so that the glibc version required by the bundled wheels stays stable
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write  # Needed to create the draft release and upload assets
+    env:
+      RALLY_VERSION: ${{ inputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: ${{ inputs.version }}
+          persist-credentials: false
+      - name: Setup python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          # Keep in sync with the Python version documented in docs/install.rst
+          python-version: "3.11"
+      - name: Wait for release to be available on PyPI
+        run: |
+          # curl also retries while PyPI does not know the version yet (404)
+          curl --fail --no-progress-meter --show-error --output /dev/null \
+            --retry 20 --retry-delay 30 --retry-all-errors \
+            "https://pypi.org/pypi/esrally/${RALLY_VERSION}/json"
+      - name: Build offline install package
+        run: |
+          scripts/offline-install.sh "${RALLY_VERSION}"
+          echo "DIST_NAME=esrally-dist-linux-$(uname -m)-${RALLY_VERSION}" >> "${GITHUB_ENV}"
+      - name: Check offline install package
+        run: |
+          sha256sum --check "${DIST_NAME}.tar.gz.sha256"
+          tar -xzf "${DIST_NAME}.tar.gz" -C "${RUNNER_TEMP}"
+          python -m venv "${RUNNER_TEMP}/venv"
+          source "${RUNNER_TEMP}/venv/bin/activate"
+          "${RUNNER_TEMP}/${DIST_NAME}/install.sh"
+          pip check
+          esrally --version
+      - name: Upload to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Draft releases are found by gh as well; create one if nobody did yet
+          if ! gh release view "${RALLY_VERSION}" --repo "${GITHUB_REPOSITORY}" > /dev/null; then
+            gh release create "${RALLY_VERSION}" --repo "${GITHUB_REPOSITORY}" --draft --verify-tag --title "${RALLY_VERSION}"
+          fi
+          gh release upload "${RALLY_VERSION}" --repo "${GITHUB_REPOSITORY}" --clobber \
+            "${DIST_NAME}.tar.gz" \
+            "${DIST_NAME}.tar.gz.sha256"

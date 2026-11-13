@@ -179,6 +179,7 @@ Key = Literal[
     "target.os",
     "team.path",
     "team.repository.dir",
+    "telemetry.options",
     "test.mode.enabled",
     "time.start",
     "track.downloader.multipart_enabled",
