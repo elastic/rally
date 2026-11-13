@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import asyncio
 import collections
 import copy
 import io
@@ -2270,7 +2271,9 @@ class TestAsyncExecutor:
             samples = sampler.samples
 
             assert len(samples) == expected_samples
-            assert len(clock.sleeps) == expected_samples - 1
+            # waits are sliced so that cancellation and completion are noticed promptly
+            assert len(clock.sleeps) >= expected_samples - 1
+            assert max(clock.sleeps) <= driver.AsyncExecutor.MAX_WAIT_SLICE
             per_client_throughput = target_throughput / task.clients
             assert sum(clock.sleeps) == pytest.approx((expected_samples - 1) / per_client_throughput)
             assert complete.is_set(), "Executor should auto-complete a task that terminates its parent"
@@ -2325,6 +2328,68 @@ class TestAsyncExecutor:
 
             sample_size = len(samples)
             assert sample_size == 0
+
+    @pytest.mark.parametrize("event_name", ["cancel", "complete"])
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_long_scheduled_wait_ends_early_when_event_is_set(self, es, event_name):
+        es.new_request_context.side_effect = lambda: self.StaticRequestTiming(task_start=time.perf_counter())
+        runner_mock = mock.AsyncMock(return_value=None)
+        query_runner = TestAsyncExecutor.context_managed(runner_mock)
+        query_runner.completed = False
+        query_runner.percent_completed = None
+
+        class ScheduleHandle:
+            def __init__(self):
+                self.ramp_up_wait_time = 0
+
+            def before_request(self, now):
+                pass
+
+            def after_request(self, now, weight, unit, meta_data):
+                pass
+
+            def start(self):
+                pass
+
+            async def __call__(self):
+                # one request right away, then one only due in an hour (e.g. a custom scheduler with long intervals)
+                for expected_scheduled_time in [0, 3600]:
+                    yield expected_scheduled_time, metrics.SampleType.Normal, None, query_runner, {}
+
+        task = track.Task(
+            "query",
+            track.Operation("query", track.OperationType.Search.to_hyphenated_string(), params={}),
+            clients=1,
+        )
+        sampler = driver.Sampler(start_timestamp=0)
+        cancel = threading.Event()
+        complete = threading.Event()
+        execute_schedule = driver.AsyncExecutor(
+            client_id=0,
+            task=task,
+            schedule=ScheduleHandle(),
+            es=driver.EsClients({"default": es}),
+            sampler=sampler,
+            cancel=cancel,
+            complete=complete,
+            on_error=OnErrorBehavior.CONTINUE,
+        )
+
+        # set the event from another thread, like the driver does
+        timer = threading.Timer(0.2, {"cancel": cancel, "complete": complete}[event_name].set)
+        timer.start()
+        try:
+            start = time.perf_counter()
+            await asyncio.wait_for(execute_schedule(), timeout=5)
+            elapsed = time.perf_counter() - start
+        finally:
+            timer.cancel()
+
+        assert elapsed < 1
+        # only the first request is issued, the client stops without issuing the one it was waiting for
+        assert runner_mock.await_count == 1
+        assert len(sampler.samples) == 1
 
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
