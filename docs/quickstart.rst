@@ -10,6 +10,8 @@ Install `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ and git 
 
     uv tool install --python 3.13 esrally
 
+To install exactly the dependency versions Rally was tested with, without installing uv or Python yourself, use the :ref:`installation script <install_uv>` instead.
+
 The race below has Rally download and start Elasticsearch, which requires an `appropriate JDK <https://www.elastic.co/support/matrix#matrix_jvm>`_ with ``JAVA_HOME`` pointing to it. You don't need a JDK to benchmark an existing cluster.
 
 
