@@ -2,8 +2,6 @@
 
 set -exo pipefail
 
-source .buildkite/retry.sh
-
 function upload_logs {
     echo "--- Upload artifacts"
     tar zcf "${RALLY_HOME}/rally-logs.tar.gz" "${RALLY_HOME}/.rally/logs"
@@ -15,25 +13,15 @@ function upload_logs {
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
 export TZ=Etc/UTC
-export DEBIAN_FRONTEND=noninteractive
-# https://askubuntu.com/questions/1367139/apt-get-upgrade-auto-restart-services
-sudo mkdir -p /etc/needrestart
-echo "\$nrconf{restart} = 'a';" | sudo tee -a /etc/needrestart/needrestart.conf > /dev/null
 
 echo "--- Check resources"
 
 free
 cat /proc/cpuinfo
 
-echo "--- System dependencies"
-
 PY_SHORT_VERSION="$1"
 
-retry 5 sudo apt-get update
-retry 5 sudo apt-get install -y \
-    git make jq \
-    openjdk-21-jdk-headless openjdk-11-jdk-headless
-export JAVA11_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+# Provided by the family/es-perf-ubuntu-2604 image (elastic/ci-agent-images, vm-images/es-perf)
 export JAVA21_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
 export PY_VERSION=$(jq -r ".python_versions.PY$(echo "${PY_SHORT_VERSION}" | tr -d '.')" .ci/variables.json)
