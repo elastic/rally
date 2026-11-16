@@ -589,7 +589,8 @@ def create_arg_parser():
     install_parser.add_argument(
         "--runtime-jdk",
         type=runtime_jdk,
-        help="The major version of the runtime JDK to use during installation.",
+        help="The major version of the runtime JDK to use during installation, or 'bundled' "
+        "(default: the JDK bundled with Elasticsearch).",
         default=None,
     )
     install_parser.add_argument(
@@ -691,7 +692,7 @@ def create_arg_parser():
     start_parser.add_argument(
         "--runtime-jdk",
         type=runtime_jdk,
-        help="The major version of the runtime JDK to use.",
+        help="The major version of the runtime JDK to use, or 'bundled' (default: the JDK bundled with Elasticsearch).",
         default=None,
     )
     start_parser.add_argument(
@@ -804,7 +805,7 @@ def create_arg_parser():
     race_parser.add_argument(
         "--runtime-jdk",
         type=runtime_jdk,
-        help="The major version of the runtime JDK to use.",
+        help="The major version of the runtime JDK to use, or 'bundled' (default: the JDK bundled with Elasticsearch).",
         default=None,
     )
     race_parser.add_argument(

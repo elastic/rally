@@ -22,9 +22,21 @@ from esrally.utils import jvm
 
 
 def java_home(car_runtime_jdks, specified_runtime_jdk=None, provides_bundled_jdk=False):
+    """
+    Resolves the JDK that should run Elasticsearch.
+
+    :param car_runtime_jdks: Comma-separated major versions of the JDKs that the car allows.
+    :param specified_runtime_jdk: A major version, "bundled" or ``None``. ``None`` selects the JDK bundled with Elasticsearch
+        if the car provides one and otherwise the highest allowed JDK that is available locally.
+    :param provides_bundled_jdk: Whether the car's Elasticsearch distribution bundles a JDK.
+    :return: A tuple of (major version, path to Java home directory). The path is ``None`` for the bundled JDK.
+    """
+
     def determine_runtime_jdks():
         if specified_runtime_jdk:
             return [specified_runtime_jdk]
+        elif provides_bundled_jdk:
+            return ["bundled"]
         else:
             return allowed_runtime_jdks
 

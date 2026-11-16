@@ -28,7 +28,7 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and git 1.
 
     uv tool install --python 3.13 esrally
 
-The race below has Rally download and start Elasticsearch, which requires an [appropriate JDK](https://www.elastic.co/support/matrix#matrix_jvm) with `JAVA_HOME` pointing to it. You don't need a JDK to benchmark an existing cluster.
+The race below has Rally download and start Elasticsearch. It runs on the JDK bundled with Elasticsearch, so you don't need to install one.
 
 
 If you have any trouble or need more detailed instructions, please look in the [detailed installation guide](https://esrally.readthedocs.io/en/latest/install.html).
@@ -37,9 +37,9 @@ If you have any trouble or need more detailed instructions, please look in the [
 
 Now we're ready to run our first race:
 
-    esrally race --distribution-version=6.0.0 --track=geonames
+    esrally race --distribution-version=9.3.0 --track=geonames
 
-This will download Elasticsearch 6.0.0 and run Rally's default track - the [geonames track](https://github.com/elastic/rally-tracks/tree/master/geonames) - against it. After the race, a summary report is written to the command line:
+This will download Elasticsearch 9.3.0 and run Rally's default track - the [geonames track](https://github.com/elastic/rally-tracks/tree/master/geonames) - against it. After the race, a summary report is written to the command line:
 
     ------------------------------------------------------
         _______             __   _____
