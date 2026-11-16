@@ -46,8 +46,9 @@ def test_sources_from_sources_pipeline_java(cfg, free_benchmark_http_port: int):
 
 @it.random_rally_config
 def test_sources_revision_with_docker_build_method(cfg, free_benchmark_http_port: int):
-    # A fixed revision (9.2.0-SNAPSHOT). It must be recent enough for its bundled JDK to start on the CI hosts: the
-    # JDK 18.0.1.1 bundled with revisions from July 2022 fails there with a NullPointerException in CgroupInfo.
+    # This fixed revision is 9.2.0-SNAPSHOT, which bundles JDK 24. Elasticsearch runs on that bundled JDK, as no
+    # --runtime-jdk is given. When changing the revision, check its bundled JDK: revisions that bundle JDK 18.0.1.1
+    # do not start on the CI hosts (NullPointerException in CgroupInfo).
     assert (
         it.race(
             cfg,
@@ -61,8 +62,8 @@ def test_sources_revision_with_docker_build_method(cfg, free_benchmark_http_port
 
 @it.random_rally_config
 def test_sources_from_sources_pipeline_docker(cfg, free_benchmark_http_port: int):
-    # Builds the revision that the previous test checked out. Unlike the other tests, which use the bundled JDK, this one
-    # runs Elasticsearch on a local JDK to cover --runtime-jdk=<major>.
+    # Builds the revision that the previous test checked out (9.2.0-SNAPSHOT), but runs Elasticsearch on a local JDK 21
+    # instead of the bundled JDK 24, to cover --runtime-jdk=<major>.
     assert (
         it.race(
             cfg,
