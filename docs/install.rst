@@ -73,7 +73,7 @@ Running Elasticsearch with Rally
 
 These requirements only apply to machines where Rally provisions Elasticsearch. If you use Rally only as a load generator to :doc:`benchmark an existing cluster </recipes>`, you can skip them.
 
-* A JDK that is `supported by the Elasticsearch version <https://www.elastic.co/support/matrix#matrix_jvm>`_ you benchmark. Rally finds it via the ``JAVA_HOME`` environment variable. To benchmark a wide range of Elasticsearch releases, you can also set ``JAVAx_HOME``, where ``x`` is the major version of a JDK (e.g. ``JAVA17_HOME``). Rally then chooses the highest JDK version that the benchmarked Elasticsearch version supports.
+* No JDK is needed by default: Rally runs Elasticsearch with the JDK that is bundled with it. You only need to install a JDK to run Elasticsearch on a different one with :ref:`--runtime-jdk <clr_runtime_jdk>`, or to build Elasticsearch from sources. In both cases it must be `supported by the Elasticsearch version <https://www.elastic.co/support/matrix#matrix_jvm>`_ you benchmark, and Rally finds it via ``JAVAx_HOME``, where ``x`` is the major version of the JDK (e.g. ``JAVA21_HOME``), or ``JAVA_HOME``.
 * The `recommended system settings <https://www.elastic.co/guide/en/elasticsearch/reference/current/system-config.html>`_ for Elasticsearch.
 
 Docker

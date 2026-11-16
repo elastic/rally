@@ -46,10 +46,13 @@ def test_sources_from_sources_pipeline_java(cfg, free_benchmark_http_port: int):
 
 @it.random_rally_config
 def test_sources_revision_with_docker_build_method(cfg, free_benchmark_http_port: int):
+    # This fixed revision is 9.2.0-SNAPSHOT, which bundles JDK 24. Elasticsearch runs on that bundled JDK, as no
+    # --runtime-jdk is given. When changing the revision, check its bundled JDK: revisions that bundle JDK 18.0.1.1
+    # do not start on the CI hosts (NullPointerException in CgroupInfo).
     assert (
         it.race(
             cfg,
-            f"--revision=@2022-07-07 --track=geonames --test-mode  --target-hosts=127.0.0.1:{free_benchmark_http_port} "
+            f"--revision=@2025-07-07 --track=geonames --test-mode  --target-hosts=127.0.0.1:{free_benchmark_http_port} "
             f"--challenge=append-no-conflicts --car=4gheap,basic-license --elasticsearch-plugins=analysis-icu "
             f"--source-build-method=docker",
         )
@@ -59,11 +62,14 @@ def test_sources_revision_with_docker_build_method(cfg, free_benchmark_http_port
 
 @it.random_rally_config
 def test_sources_from_sources_pipeline_docker(cfg, free_benchmark_http_port: int):
+    # Builds the revision that the previous test checked out (9.2.0-SNAPSHOT), but runs Elasticsearch on a local JDK 21
+    # instead of the bundled JDK 24, to cover --runtime-jdk=<major>.
     assert (
         it.race(
             cfg,
             f"--pipeline=from-sources --track=geonames --test-mode --target-hosts=127.0.0.1:{free_benchmark_http_port} "
-            f'--source-build-method=docker --challenge=append-no-conflicts-index-only --car="4gheap,basic-license,ea"',
+            f"--source-build-method=docker --challenge=append-no-conflicts-index-only "
+            f'--car="4gheap,basic-license,ea" --runtime-jdk=21',
         )
         == 0
     )

@@ -9,6 +9,13 @@ Minimum Python version is 3.13
 
 Rally 2.14.0 drops support for Python 3.10, 3.11, and 3.12. Use Python 3.13 or above and recreate existing virtual environments with that interpreter before upgrading Rally. See the :ref:`installation instructions <install_python>`.
 
+Elasticsearch runs on its bundled JDK by default
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When Rally provisions Elasticsearch, it now runs it with the JDK that is bundled with Elasticsearch unless you specify ``--runtime-jdk``. Previously, Rally chose the highest supported JDK that it found via ``JAVAx_HOME`` or ``JAVA_HOME`` and failed if there was none. ``JAVA_HOME`` is now ignored by default, so a race may run on a different JDK than before, which can affect how results compare with earlier races.
+
+To keep running Elasticsearch on a JDK installed on the machine, specify its major version, e.g. ``--runtime-jdk=21``. Rally resolves it via ``JAVA21_HOME`` or ``JAVA_HOME`` as before. Building Elasticsearch from sources still requires a JDK.
+
 Document type fields are no longer supported
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

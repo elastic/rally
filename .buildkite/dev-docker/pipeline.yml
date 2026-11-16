@@ -15,6 +15,15 @@ steps:
         default: ""
         hint: "The branch to build from e.g. 'master'. Leave blank to build from the current branch: $BUILDKITE_BRANCH."
         required: false
+      - select: "DRY_RUN"
+        key: "DRY_RUN"
+        hint: "Resolve the source and preview commands without logging in, building, testing, or publishing."
+        default: "false"
+        options:
+          - label: "Yes"
+            value: "true"
+          - label: "No"
+            value: "false"
       - select: "PUBLIC_DOCKER_REPO"
         key: "PUBLIC_DOCKER_REPO"
         hint: "Push the Docker image to the public Docker registry (default: No)."
@@ -33,6 +42,10 @@ steps:
             value: "true"
           - label: "No"
             value: "false"
+  - wait
+  - label: ":git: Resolve Rally source and image tag"
+    command: bash .buildkite/dev-docker/run.sh prepare
+    key: "prepare"
   - wait
   - label: ":docker: Build Docker Artifacts for Rally amd64"
     command: bash .buildkite/dev-docker/run.sh build amd64
