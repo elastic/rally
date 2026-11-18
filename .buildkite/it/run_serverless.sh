@@ -2,8 +2,6 @@
 
 set -exo pipefail
 
-source .buildkite/retry.sh
-
 function upload_logs {
     echo "--- Upload artifacts"
     buildkite-agent artifact upload "${RALLY_HOME}/.rally/logs/*.log"
@@ -12,20 +10,11 @@ function upload_logs {
 export TERM=dumb
 export LC_ALL=en_US.UTF-8
 export TZ=Etc/UTC
-export DEBIAN_FRONTEND=noninteractive
-# https://askubuntu.com/questions/1367139/apt-get-upgrade-auto-restart-services
-sudo mkdir -p /etc/needrestart
-echo "\$nrconf{restart} = 'a';" | sudo tee -a /etc/needrestart/needrestart.conf > /dev/null
 
 PY_SHORT_VERSION="$1"
 TEST_NAME="$2"
 
-echo "--- System dependencies"
-
-retry 5 sudo apt-get update
-retry 5 sudo apt-get install -y \
-    make jq \
-    dnsutils # provides nslookup
+# make, jq and nslookup are provided by the family/es-perf-ubuntu-2604 image
 
 export PY_VERSION=$(jq -r ".python_versions.PY$(echo "${PY_SHORT_VERSION}" | tr -d '.')" .ci/variables.json)
 
