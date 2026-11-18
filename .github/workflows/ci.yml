@@ -125,22 +125,26 @@ jobs:
             /home/runner/.rally/benchmarks/races/**/*.log
           if-no-files-found: error
 
-  install-with-uv:
+  install-in-venv:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-22.04
 
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.11.19"
-          python-version: "3.13.7"
-      - name: Install Rally
-        run: uv tool install --python 3.13.7 esrally
-      - name: Add tools to PATH
-        run: uv tool dir --bin >> "$GITHUB_PATH"
-      - run: esrally --version
+      - name: Install and verify Rally
+        run: |
+          python_version=$(jq -er '.python_versions.DEFAULT_PY_VER' .ci/variables.json)
+          uv venv --python "$python_version"
+          uv pip install --python .venv/bin/python esrally
+          .venv/bin/esrally --version
       - uses: elastic/es-perf-github-status@v2
-        if: ${{ failure() && ( github.event_name == 'schedule' || ( github.event_name == 'push' && github.ref_name == env.DEFAULT_BRANCH ) ) }}
+        if: failure()
         with:
           slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
           slack_channel: ${{ secrets.SLACK_CHANNEL }}
