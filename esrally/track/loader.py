@@ -164,8 +164,8 @@ def list_tracks(cfg: types.Config):
                 "uncompressed-size-in-bytes": t.uncompressed_size_in_bytes,
             }
             if not only_auto_generated_challenges:
-                entry["default-challenge"] = str(t.default_challenge)
-                entry["challenges"] = sorted(map(str, t.challenges))
+                entry["default-challenge"] = t.default_challenge.name
+                entry["challenges"] = sorted(c.name for c in t.challenges)
             track_list.append(entry)
         console.println(json.dumps({"tracks": track_list}, indent=2))
         return
