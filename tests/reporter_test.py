@@ -105,6 +105,16 @@ class TestComparisonReporter:
             assert comparison_reporter._diff(100, 90, True) == console.RichFormat.red("-10.00000")
             assert comparison_reporter._diff(100, 90, True, as_percentage=True) == console.RichFormat.red("-10.00%")
 
+    def test_diff_exactly_on_the_error_margin_is_not_highlighted(self):
+        comparison_reporter = self.comparison_reporter_with_error_margin(2.5)
+        with mock.patch.object(console, "format", console.RichFormat):
+            # 1.2 against 1.23 is a difference of exactly 2.5 percent, but dividing them yields 2.500000000000002
+            assert comparison_reporter._diff(1.2, 1.23, True) == console.RichFormat.neutral("+0.03000")
+            assert comparison_reporter._diff(1.2, 1.23, True, as_percentage=True) == console.RichFormat.neutral("+2.50%")
+            assert comparison_reporter._diff(1.23, 1.2, True) == console.RichFormat.neutral("-0.03000")
+            # just outside the margin is still highlighted
+            assert comparison_reporter._diff(1.2, 1.2301, True) == console.RichFormat.green("+0.03010")
+
     def test_diff_is_highlighted_without_error_margin(self):
         comparison_reporter = self.comparison_reporter_with_error_margin(0.0)
         with mock.patch.object(console, "format", console.RichFormat):

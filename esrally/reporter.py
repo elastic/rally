@@ -18,6 +18,7 @@
 import csv
 import io
 import logging
+import math
 import sys
 from functools import partial
 
@@ -1170,4 +1171,7 @@ class ComparisonReporter:
         if self.error_margin <= 0 or not baseline:
             # without a margin or a baseline to relate the difference to, every difference is significant
             return False
-        return abs(relative_diff) <= self.error_margin
+        difference = abs(relative_diff)
+        # the margin is inclusive, and dividing the metrics puts a difference that is exactly on it slightly above:
+        # 1.2 against 1.23 is 2.500000000000002 percent, so compare the boundary with a tolerance
+        return difference < self.error_margin or math.isclose(difference, self.error_margin, rel_tol=1e-9)

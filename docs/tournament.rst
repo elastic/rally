@@ -121,3 +121,5 @@ Rally highlights differences in color: green for a change in the desired directi
     esrally compare --baseline=0bfd4542-3821-4c79-81a2-0858636068ce --contender=beb154e4-0a05-4f45-ad9f-e34f9a9e51f7 --error-margin=2.5
 
 With the command above, a metric that differs by 2% between both races still appears in the report but without color coding, whereas a metric that differs by 10% is highlighted as usual.
+
+The margin treats every metric the same way, so it also hides small differences in metrics that do not fluctuate at all, such as store size, segment count or the number of garbage collections. A store that grew by 2% is a real regression, and with ``--error-margin=2.5`` it is printed without color coding. Pick the margin for the metrics you are looking at, and leave it out when comparing deterministic ones.
