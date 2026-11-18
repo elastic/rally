@@ -20,7 +20,7 @@ from unittest import mock
 
 from esrally import config, reporter
 from esrally.metrics import GlobalStats
-from esrally.utils import convert
+from esrally.utils import console, convert
 
 
 class TestFormatter:
@@ -78,6 +78,45 @@ class TestComparisonReporter:
     def test_diff_percent_ignore_formatter(self):
         formatted = self.reporter._diff(1, 0, False, formatter=convert.factor(100.0), as_percentage=True)
         assert formatted == "-100.00%"
+
+    def comparison_reporter_with_error_margin(self, error_margin):
+        def opts(section, key, default_value=None, mandatory=True):
+            if (section, key) == ("reporting", "error.margin"):
+                return error_margin
+            return True
+
+        config_mock = mock.Mock(config.Config)
+        config_mock.opts.side_effect = opts
+        return reporter.ComparisonReporter(config_mock)
+
+    def test_diff_is_not_highlighted_within_error_margin(self):
+        comparison_reporter = self.comparison_reporter_with_error_margin(5.0)
+        with mock.patch.object(console, "format", console.RichFormat):
+            assert comparison_reporter._diff(100, 102, True) == console.RichFormat.neutral("+2.00000")
+            assert comparison_reporter._diff(100, 102, True, as_percentage=True) == console.RichFormat.neutral("+2.00%")
+            assert comparison_reporter._diff(100, 98, True) == console.RichFormat.neutral("-2.00000")
+            assert comparison_reporter._diff(100, 98, True, as_percentage=True) == console.RichFormat.neutral("-2.00%")
+
+    def test_diff_is_highlighted_outside_error_margin(self):
+        comparison_reporter = self.comparison_reporter_with_error_margin(5.0)
+        with mock.patch.object(console, "format", console.RichFormat):
+            assert comparison_reporter._diff(100, 110, True) == console.RichFormat.green("+10.00000")
+            assert comparison_reporter._diff(100, 110, True, as_percentage=True) == console.RichFormat.green("+10.00%")
+            assert comparison_reporter._diff(100, 90, True) == console.RichFormat.red("-10.00000")
+            assert comparison_reporter._diff(100, 90, True, as_percentage=True) == console.RichFormat.red("-10.00%")
+
+    def test_diff_is_highlighted_without_error_margin(self):
+        comparison_reporter = self.comparison_reporter_with_error_margin(0.0)
+        with mock.patch.object(console, "format", console.RichFormat):
+            assert comparison_reporter._diff(100, 102, True) == console.RichFormat.green("+2.00000")
+            assert comparison_reporter._diff(100, 102, True, as_percentage=True) == console.RichFormat.green("+2.00%")
+
+    def test_error_margin_is_not_applied_without_baseline(self):
+        comparison_reporter = self.comparison_reporter_with_error_margin(5.0)
+        with mock.patch.object(console, "format", console.RichFormat):
+            # the relative difference is undefined, so the absolute difference decides
+            assert comparison_reporter._diff(0, 10, True) == console.RichFormat.green("+10.00000")
+            assert comparison_reporter._diff(0, 10, True, as_percentage=True) == console.RichFormat.neutral("0.00%")
 
     def test_report_gc_metrics(self):
         r1 = GlobalStats(

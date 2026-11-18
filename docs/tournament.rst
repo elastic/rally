@@ -113,3 +113,11 @@ We can see that the user tags help us to recognize races. We want to compare the
                            Nodes Stats(99.0 percentile) [ms]     4.44111      4.87003    +0.42892
                           Nodes Stats(100.0 percentile) [ms]     5.22527      5.66977    +0.44450
 
+Hiding insignificant differences
+--------------------------------
+
+Rally highlights differences in color: green for a change in the desired direction and red for one in the opposite direction. As results fluctuate between races, Rally can leave small differences unhighlighted. Pass the relative difference in percent up to which a metric should be considered unchanged with ``--error-margin``::
+
+    esrally compare --baseline=0bfd4542-3821-4c79-81a2-0858636068ce --contender=beb154e4-0a05-4f45-ad9f-e34f9a9e51f7 --error-margin=2.5
+
+With the command above, a metric that differs by 2% between both races still appears in the report but without color coding, whereas a metric that differs by 10% is highlighted as usual.

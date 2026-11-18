@@ -89,6 +89,7 @@ Key = Literal[
     "distribution.version",
     "elasticsearch.src.subdir",
     "env.name",
+    "error.margin",
     "exclude.tasks",
     "format",
     "hosts",

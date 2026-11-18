@@ -457,6 +457,7 @@ class ComparisonReporter:
         self.numbers_align = config.opts("reporting", "numbers.align", mandatory=False, default_value="decimal")
         self.cwd = config.opts("node", "rally.cwd")
         self.show_processing_time = convert.to_bool(config.opts("reporting", "output.processingtime", mandatory=False, default_value=False))
+        self.error_margin = float(config.opts("reporting", "error.margin", mandatory=False, default_value=0.0))
         self.plain = False
 
     def report(self, r1, r2):
@@ -1134,8 +1135,10 @@ class ComparisonReporter:
             color_smaller = console.format.green
             color_neutral = console.format.neutral
 
+        relative_diff = _safe_divide(contender - baseline, baseline) * 100.0
+
         if as_percentage:
-            diff = _safe_divide(contender - baseline, baseline) * 100.0
+            diff = relative_diff
             precision = 2
             suffix = "%"
         else:
@@ -1148,8 +1151,23 @@ class ComparisonReporter:
         formatted = f"{diff:.{precision}f}{suffix}"
 
         if diff >= threshold:
-            return color_greater(f"+{formatted}")
+            formatted = f"+{formatted}"
+            color = color_greater
         elif diff <= -threshold:
-            return color_smaller(formatted)
+            color = color_smaller
         else:
-            return color_neutral(formatted)
+            color = color_neutral
+
+        if self._within_error_margin(baseline, relative_diff):
+            color = color_neutral
+
+        return color(formatted)
+
+    def _within_error_margin(self, baseline, relative_diff):
+        """
+        Determines whether a difference is small enough to be considered noise and thus should not be highlighted.
+        """
+        if self.error_margin <= 0 or not baseline:
+            # without a margin or a baseline to relate the difference to, every difference is significant
+            return False
+        return abs(relative_diff) <= self.error_margin
