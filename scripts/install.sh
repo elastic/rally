@@ -133,7 +133,7 @@ function fetch_constraints {
     if [[ -n "${EXTRAS}" ]]; then
         IFS=, read -r -a extras <<< "${EXTRAS}"
         for extra in "${extras[@]}"; do
-            if ! grep -qx -- "${extra}" <<< "${available}"; then
+            if ! grep -qxF -- "${extra}" <<< "${available}"; then
                 die "esrally ${RALLY_VERSION} has no optional extra named '${extra}'. Available extras: $(paste -s -d , - <<< "${available}")."
             fi
         done
@@ -155,6 +155,21 @@ These are kept, in case you still need them:
 EOF
 }
 
+# Prints the file that new bash shells read their configuration from
+function bash_config {
+    if [[ "$(uname)" != "Darwin" ]]; then
+        echo "${HOME}/.bashrc"
+    # Terminal on macOS starts bash as a login shell, which reads the first of these files that
+    # exists, and not ~/.bashrc
+    elif [[ -e "${HOME}/.bash_profile" ]]; then
+        echo "${HOME}/.bash_profile"
+    elif [[ -e "${HOME}/.bash_login" ]]; then
+        echo "${HOME}/.bash_login"
+    else
+        echo "${HOME}/.profile"
+    fi
+}
+
 function install_rally {
     local bin_dir shell_config
     fetch_constraints
@@ -174,7 +189,7 @@ function install_rally {
     if [[ ":${PATH}:" != *":${bin_dir}:"* ]]; then
         case "$(basename "${SHELL:-}")" in
             zsh) shell_config="${HOME}/.zshrc" ;;
-            bash) shell_config="${HOME}/.bashrc" ;;
+            bash) shell_config="$(bash_config)" ;;
             *) shell_config="${HOME}/.profile" ;;
         esac
         echo "${bin_dir} is not on your PATH. To add it, run this command and open a new shell:"

@@ -107,7 +107,8 @@ jobs:
             echo "::error::install.sh installed the s3 extra without --extra s3"
             exit 1
           fi
-          if bash scripts/install.sh --version "${version}" --extra nonexistent; then
+          # Not an extra, although it matches s3 as a regular expression
+          if bash scripts/install.sh --version "${version}" --extra 's.'; then
             echo "::error::install.sh accepted an extra that does not exist"
             exit 1
           fi
