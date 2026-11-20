@@ -1357,16 +1357,14 @@ class TestModeTrackProcessor(TrackProcessor):
             for task in challenge.schedule:
                 # we need iterate over leaf tasks and await iterating over possible intermediate 'parallel' elements
                 for leaf_task in task:
-                    # iteration-based schedules are divided among all clients and we should provide
-                    # at least one iteration for each client.
-                    if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > leaf_task.clients:
-                        count = leaf_task.clients
-                        LOG.debug("Resetting warmup iterations to %d for [%s]", count, leaf_task)
-                        leaf_task.warmup_iterations = count
-                    if leaf_task.iterations is not None and leaf_task.iterations > leaf_task.clients:
-                        count = leaf_task.clients
-                        LOG.debug("Resetting measurement iterations to %d for [%s]", count, leaf_task)
-                        leaf_task.iterations = count
+                    # iterations are per client, so a single measurement iteration (and no warmup)
+                    # is enough for every client to exercise the operation once.
+                    if leaf_task.warmup_iterations is not None and leaf_task.warmup_iterations > 0:
+                        leaf_task.warmup_iterations = 0
+                        LOG.debug("Resetting warmup iterations to %d for [%s]", leaf_task.warmup_iterations, leaf_task)
+                    if leaf_task.iterations is not None and leaf_task.iterations > 1:
+                        leaf_task.iterations = 1
+                        LOG.debug("Resetting measurement iterations to %d for [%s]", leaf_task.iterations, leaf_task)
                     if leaf_task.warmup_time_period is not None and leaf_task.warmup_time_period > 0:
                         leaf_task.warmup_time_period = 0
                         LOG.debug("Resetting warmup time period for [%s] to [%d] seconds.", leaf_task, leaf_task.warmup_time_period)
