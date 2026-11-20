@@ -1,0 +1,163 @@
+name: Install script
+
+on:
+  push:
+    paths:
+      - ".github/workflows/install-script.yml"
+      - "scripts/install.sh"
+      - "scripts/dependency_constraints_build_hook.py"
+      - "pyproject.toml"
+      - "uv.lock"
+  pull_request:
+    paths:
+      - ".github/workflows/install-script.yml"
+      - "scripts/install.sh"
+      - "scripts/dependency_constraints_build_hook.py"
+      - "pyproject.toml"
+      - "uv.lock"
+  # Allows checking a release that is already on PyPI
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Rally release on PyPI to install, e.g. 2.14.0. Empty: build a wheel from this commit"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # Needed to fetch the version from git
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.12.23"
+          enable-cache: false
+      - name: Build wheel
+        # The build hook ships rally-constraints.txt, generated from uv.lock, in the wheel
+        run: uv build --wheel --out-dir dist
+      - name: Upload wheel
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: esrally-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+
+  install:
+    name: ${{ matrix.os }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest runner images that are still supported
+        os: [ubuntu-22.04, macos-15]
+    env:
+      REQUESTED_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Download wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: esrally-wheel
+          path: ${{ runner.temp }}/wheels
+      - name: Install uv for the checks
+        # install.sh ignores it and downloads its own uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.12.23"
+          enable-cache: false
+      - name: Refuse to run as root
+        run: |
+          # The check runs before anything is downloaded
+          if output="$(sudo bash scripts/install.sh 2>&1)"; then
+            echo "::error::install.sh ran as root"
+            exit 1
+          fi
+          echo "${output}"
+          grep -q "do not run this script as root" <<< "${output}"
+      - name: Install Rally
+        run: |
+          if [[ -n "${REQUESTED_VERSION}" ]]; then
+            version="${REQUESTED_VERSION}"
+          else
+            # Serve the wheel built from this commit next to PyPI, which still provides the dependencies
+            wheel="$(ls "${RUNNER_TEMP}"/wheels/esrally-*.whl)"
+            version="$(basename "${wheel}" | cut -d - -f 2)"
+            export UV_FIND_LINKS="${RUNNER_TEMP}/wheels"
+          fi
+          bash scripts/install.sh --version "${version}"
+          echo "Running the script again, as an upgrade would"
+          bash scripts/install.sh --version "${version}"
+          if [[ -e "${HOME}/.local/bin/uv" ]]; then
+            echo "::error::install.sh left its temporary uv installed"
+            exit 1
+          fi
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+      - name: Check installed dependencies against the constraints
+        run: |
+          esrally --version
+          tool_python="$(uv tool dir)/esrally/bin/python"
+          # Rally installs track dependencies with "sys.executable -m pip"
+          "${tool_python}" -m pip --version
+          constraints="$("${tool_python}" -I -c "from importlib import metadata; print(metadata.distribution('esrally').locate_file('esrally/resources/rally-constraints.txt'))")"
+          echo "CONSTRAINTS_FILE=${constraints}" >> "${GITHUB_ENV}"
+          # The constraints resolved for Rally's interpreter (which evaluates their markers) must be
+          # exactly what is installed, apart from esrally itself
+          uv pip compile --quiet --no-header --no-annotate --python "${tool_python}" "${constraints}" \
+            --output-file "${RUNNER_TEMP}/expected.txt"
+          uv pip freeze --python "${tool_python}" | grep -v '^esrally==' > "${RUNNER_TEMP}/installed.txt"
+          diff "${RUNNER_TEMP}/expected.txt" "${RUNNER_TEMP}/installed.txt"
+          echo "All $(wc -l < "${RUNNER_TEMP}/installed.txt") installed dependencies match the constraints"
+      - name: Install track dependencies through Rally
+        run: |
+          export RALLY_HOME="${RUNNER_TEMP}/rally-home"
+          tracks="${RUNNER_TEMP}/tracks"
+          mkdir -p "${tracks}/unpinned" "${tracks}/conflicting"
+          # A dependency that Rally does not pin, and one that contradicts Rally's own pins
+          pinned_elasticsearch="$(grep '^elasticsearch==' "${CONSTRAINTS_FILE}" | cut -d = -f 3)"
+          for track in unpinned conflicting; do
+            if [[ "${track}" == "conflicting" ]]; then
+              dependency="\"elasticsearch!=${pinned_elasticsearch}\""
+            else
+              dependency='"pytoml==0.1.21"'
+            fi
+            cat > "${tracks}/${track}/track.json" <<EOF
+          {
+            "version": 2,
+            "description": "Track dependencies",
+            "dependencies": [${dependency}],
+            "schedule": [{"operation": {"name": "nap", "operation-type": "sleep", "duration": 1}}]
+          }
+          EOF
+          done
+          esrally validate-track --track-path="${tracks}/unpinned" --offline --no-quiet
+          if esrally validate-track --track-path="${tracks}/conflicting" --offline; then
+            echo "::error::A track dependency overrode one of Rally's pinned dependencies"
+            exit 1
+          fi
+          grep ResolutionImpossible "${RALLY_HOME}/.rally/logs/dependency.log"
+      - name: Uninstall Rally
+        run: |
+          tool_dir="$(uv tool dir)/esrally"
+          bash scripts/install.sh --uninstall
+          if command -v esrally || [[ -e "${tool_dir}" ]]; then
+            echo "::error::esrally is still installed"
+            exit 1
+          fi

@@ -333,7 +333,7 @@ Each entry in the ``documents`` list consists of the following properties:
 
 * ``base-url`` (optional): A http(s), S3 or Google Storage URL that points to the root path where Rally can obtain the corresponding source file.
 
-  * S3 support is optional and can be installed with ``python -m pip install esrally[s3]``.
+  * S3 support needs the optional ``s3`` extra of the ``esrally`` package, which the installation script does not install (see :ref:`optional features <install_optional_features>`).
   * http(s) and Google Storage are supported by default.
 
   Rally can also download data from private S3 or Google Storage buckets if access is properly configured:
