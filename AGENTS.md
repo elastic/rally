@@ -20,7 +20,7 @@ of truth — prefer reading them or running `esrally <subcommand> --help` over g
 
 ## Prerequisites & hard rules
 
-- Rally runs on Unix (Linux/macOS). Needs Python 3.10–3.13, git 1.9+.
+- Rally runs on Unix (Linux/macOS). Needs Python 3.13, git 1.9+.
 - **Never run Rally as root** — Elasticsearch refuses to start with root privileges.
 - **Never benchmark a production or production-like cluster.** Rally creates and mutates
   indices, and any competing traffic invalidates results. Use a dedicated, quiet environment.
