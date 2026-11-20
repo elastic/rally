@@ -27,7 +27,7 @@ Verify the installation with ``esrally --version``.
 Optional features
 ~~~~~~~~~~~~~~~~~
 
-The ``esrally`` package has optional extras for some features, which the installation script does not install:
+Some features need optional extras of the ``esrally`` package, which the installation script installs with ``--extra``, for example ``bash -s -- --extra s3``. Repeat ``--extra`` for several extras. Their dependencies are pinned like Rally's. The extras are:
 
 * ``s3``: download track data from a private AWS S3 bucket.
 * ``otlp``: convert :doc:`OTLP JSON corpora </otlp_ingest>` to binary protobuf.
@@ -35,7 +35,7 @@ The ``esrally`` package has optional extras for some features, which the install
 Upgrading and uninstalling
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To upgrade Rally, run the installation script again: it installs the latest release together with the dependency versions of that release. If you have uv yourself, don't use ``uv tool upgrade esrally``, which keeps Rally at its pinned version.
+To upgrade Rally, run the installation script again, with the same ``--extra`` options: it installs the latest release together with the dependency versions of that release. Without them, it removes the extras. If you have uv yourself, don't use ``uv tool upgrade esrally``, which keeps Rally at its pinned version.
 
 To uninstall Rally, run the script with ``--uninstall``::
 

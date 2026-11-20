@@ -38,23 +38,26 @@ readonly PYTHON_VERSION="3.13"
 readonly UV_VERSION="0.12.23"
 
 RALLY_VERSION=""
+# Optional extras of the esrally package to install, comma-separated
+EXTRAS=""
 UNINSTALL="false"
 
 function usage {
     cat <<EOF
-Usage: $0 [--version RALLY_VERSION]
+Usage: $0 [--version RALLY_VERSION] [--extra EXTRA]...
        $0 --uninstall
 
-Installs Rally (esrally) as a uv tool, with Python ${PYTHON_VERSION} and all dependencies pinned to
-the versions the release was tested with. It uses a temporary uv that it deletes afterwards, so
-it does not change an existing uv installation or your shell configuration.
+Installs Rally (esrally) as a uv tool, with Python ${PYTHON_VERSION} and all dependencies pinned to the
+versions the release was tested with. It uses a temporary uv that it deletes afterwards, so it
+does not change an existing uv installation or your shell configuration.
 
 Options:
   --version VERSION  Rally release to install, e.g. 2.14.0 (default: latest release on PyPI)
+  --extra EXTRA      Also install an optional extra of Rally, s3 or otlp. Repeat it for several
   --uninstall        Uninstall Rally. Keeps Rally's configuration and data in ~/.rally
   --help             Show this help
 
-To upgrade Rally, run this script again.
+To upgrade Rally, run this script again with the same --extra options.
 EOF
 }
 
@@ -75,6 +78,13 @@ function parse_args {
                     die "--version needs a value. See --help."
                 fi
                 RALLY_VERSION="$2"
+                shift 2
+                ;;
+            --extra)
+                if [[ $# -lt 2 ]]; then
+                    die "--extra needs a value. See --help."
+                fi
+                EXTRAS="${EXTRAS:+${EXTRAS},}$2"
                 shift 2
                 ;;
             --uninstall)
@@ -117,6 +127,17 @@ function fetch_constraints {
     local dist_info=("${extract_dir}"/esrally-*.dist-info)
     RALLY_VERSION="${dist_info[0]##*/esrally-}"
     RALLY_VERSION="${RALLY_VERSION%.dist-info}"
+    # uv would only warn about an extra that the release does not have, and install without it
+    local available extra extras
+    available="$(awk '/^Provides-Extra: / && $2 != "develop" { print $2 }' "${dist_info[0]}/METADATA")"
+    if [[ -n "${EXTRAS}" ]]; then
+        IFS=, read -r -a extras <<< "${EXTRAS}"
+        for extra in "${extras[@]}"; do
+            if ! grep -qx -- "${extra}" <<< "${available}"; then
+                die "esrally ${RALLY_VERSION} has no optional extra named '${extra}'. Available extras: $(paste -s -d , - <<< "${available}")."
+            fi
+        done
+    fi
 
     CONSTRAINTS_FILE="${extract_dir}/esrally/resources/rally-constraints.txt"
     if [[ ! -s "${CONSTRAINTS_FILE}" ]]; then
@@ -138,12 +159,13 @@ function install_rally {
     local bin_dir shell_config
     fetch_constraints
 
-    info "Installing esrally ${RALLY_VERSION} with Python ${PYTHON_VERSION}"
+    local requirement="esrally${EXTRAS:+[${EXTRAS}]}==${RALLY_VERSION}"
+    info "Installing ${requirement} with Python ${PYTHON_VERSION}"
     # uv records the pinned version and the constraints in the tool's receipt, and installs again
     # when they differ from an existing esrally tool's, for example one installed without them.
     # --quiet hides uv's PATH hint, which suggests a temporary uv; this script gives its own.
     "${UV}" tool install --quiet --managed-python --python "${PYTHON_VERSION}" \
-        --constraints "${CONSTRAINTS_FILE}" "esrally==${RALLY_VERSION}"
+        --constraints "${CONSTRAINTS_FILE}" "${requirement}"
     bin_dir="$("${UV}" tool dir --bin)"
     "${bin_dir}/esrally" --version
 

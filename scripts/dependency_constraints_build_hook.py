@@ -34,6 +34,11 @@ class DependencyConstraintsBuildHook(BuildHookInterface):
             "--format",
             "requirements.txt",
             "--no-dev",
+            # Pin the optional extras too (scripts/install.sh installs them), but not the tools to
+            # develop Rally
+            "--all-extras",
+            "--no-extra",
+            "develop",
             "--no-emit-project",
             "--no-hashes",
             "--no-annotate",

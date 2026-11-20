@@ -103,8 +103,16 @@ jobs:
             export UV_FIND_LINKS="${RUNNER_TEMP}/wheels"
           fi
           bash scripts/install.sh --version "${version}"
-          echo "Running the script again, as an upgrade would"
-          bash scripts/install.sh --version "${version}"
+          if "$(uv tool dir)/esrally/bin/python" -I -c "import boto3" 2>/dev/null; then
+            echo "::error::install.sh installed the s3 extra without --extra s3"
+            exit 1
+          fi
+          if bash scripts/install.sh --version "${version}" --extra nonexistent; then
+            echo "::error::install.sh accepted an extra that does not exist"
+            exit 1
+          fi
+          echo "Running the script again, as an upgrade would, adding the optional extras"
+          bash scripts/install.sh --version "${version}" --extra s3 --extra otlp
           if [[ -e "${HOME}/.local/bin/uv" ]]; then
             echo "::error::install.sh left its temporary uv installed"
             exit 1
@@ -116,6 +124,8 @@ jobs:
           tool_python="$(uv tool dir)/esrally/bin/python"
           # Rally installs track dependencies with "sys.executable -m pip"
           "${tool_python}" -m pip --version
+          # The optional extras installed by the second run of install.sh
+          "${tool_python}" -I -c "import boto3, opentelemetry.proto, google.protobuf"
           constraints="$("${tool_python}" -I -c "from importlib import metadata; print(metadata.distribution('esrally').locate_file('esrally/resources/rally-constraints.txt'))")"
           echo "CONSTRAINTS_FILE=${constraints}" >> "${GITHUB_ENV}"
           # The constraints resolved for Rally's interpreter (which evaluates their markers) must be
