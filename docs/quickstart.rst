@@ -6,12 +6,11 @@ Rally is developed for Unix and is actively tested on Linux and macOS. Rally sup
 Install
 -------
 
-Install `uv <https://docs.astral.sh/uv/getting-started/installation/>`_ and git 1.9+, then run::
+Install git 1.9+, then run::
 
-    uv tool install --python 3.13 esrally
+    curl -sSf https://raw.githubusercontent.com/elastic/rally/master/scripts/install.sh | bash
 
-The race below has Rally download and start Elasticsearch. It runs on the JDK bundled with Elasticsearch, so you don't need to install one.
-
+This installs Rally with Python 3.13 and exactly the dependency versions it was tested with. You need neither uv nor Python on your machine.
 
 If you have any trouble or need more detailed instructions, look in the :doc:`detailed installation guide </install>`.
 

@@ -8,38 +8,40 @@ Installing Rally
 
 Rally does not support Windows and is only actively tested on macOS and Linux. Check the :ref:`requirements <install_requirements>` below first.
 
-The recommended way to install Rally is as a standalone tool with `uv <https://docs.astral.sh/uv/>`_ (see their `installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_)::
+Install Rally by running the installation script as a regular user::
 
-    uv tool install --python 3.13 esrally
+    curl -sSf https://raw.githubusercontent.com/elastic/rally/master/scripts/install.sh | bash
 
-uv installs Rally into its own isolated environment, downloading Python 3.13 if needed. If ``esrally`` is not found afterwards, run ``uv tool update-shell`` and restart your shell. `pipx <https://pipx.pypa.io/>`_ works the same way: ``pipx install esrally`` (and ``pipx ensurepath``).
+The script:
 
-Alternatively, install Rally into a virtual environment::
+1. Downloads a fixed uv version with `uv's standalone installer <https://docs.astral.sh/uv/getting-started/installation/>`__ into a temporary directory, which it deletes when it is done. It does this even if uv is installed, so that neither an existing uv installation nor your shell configuration is changed.
+2. Downloads the `esrally package <https://pypi.org/project/esrally/>`_ from PyPI and reads the constraints that ship in it, so the Rally version and the constraints always come from the same release. It refuses releases that do not ship them instead of installing unpinned dependencies.
+3. Runs ``uv tool install`` with Python 3.13 and these constraints, which puts ``esrally`` into ``~/.local/bin``. If that directory is not on your ``PATH``, the script prints the command that adds it to your shell configuration. If Python 3.13 is not installed on your system, it will download it.
 
-    python3 -m venv .venv
-    source .venv/bin/activate
-    python3 -m pip install esrally
-
-Run ``source .venv/bin/activate`` whenever you want to use Rally, and ``deactivate`` when you are done.
-
-.. note::
-
-   Avoid ``pip install --user`` or ``sudo pip install``. Many recent Linux distributions and Homebrew prevent installing packages into the system Python (`PEP 668 <https://peps.python.org/pep-0668/>`_).
+The script refuses to run as root, because Elasticsearch cannot be started as root.
 
 Verify the installation with ``esrally --version``.
+
+.. _install_optional_features:
 
 Optional features
 ~~~~~~~~~~~~~~~~~
 
-Some features need extra dependencies, which you can install with `extras <https://packaging.python.org/en/latest/specifications/dependency-specifiers/#extras>`_, e.g. ``uv tool install --python 3.13 'esrally[s3]'``:
+Some features need optional extras of the ``esrally`` package, which the installation script installs with ``--extra``, for example ``bash -s -- --extra s3``. Repeat ``--extra`` for several extras. Their dependencies are pinned like Rally's. The extras are:
 
 * ``s3``: download track data from a private AWS S3 bucket.
 * ``otlp``: convert :doc:`OTLP JSON corpora </otlp_ingest>` to binary protobuf.
 
-Upgrading
-~~~~~~~~~
+Upgrading and uninstalling
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Run ``uv tool upgrade esrally``, ``pipx upgrade esrally`` or, in a virtual environment, ``python3 -m pip install --upgrade esrally``.
+To upgrade Rally, run the installation script again, with the same ``--extra`` options: it installs the latest release together with the dependency versions of that release. Without them, it removes the extras. If you have uv yourself, don't use ``uv tool upgrade esrally``, which keeps Rally at its pinned version.
+
+To uninstall Rally, run the script with ``--uninstall``::
+
+    curl -sSf https://raw.githubusercontent.com/elastic/rally/master/scripts/install.sh | bash -s -- --uninstall
+
+This keeps Rally's configuration and data in ``~/.rally``.
 
 .. _install_requirements:
 
@@ -47,11 +49,6 @@ Requirements
 ------------
 
 .. _install_python:
-
-Python
-~~~~~~
-
-Rally requires Python 3.10 or above. Verify with ``python3 --version``, or pass ``--python`` to ``uv tool install`` as shown above.
 
 git
 ~~~
