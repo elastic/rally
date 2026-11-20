@@ -12,8 +12,6 @@ Install git 1.9+, then run::
 
 This installs Rally with Python 3.13 and exactly the dependency versions it was tested with. You need neither uv nor Python on your machine.
 
-The race below has Rally download and start Elasticsearch. It runs on the JDK bundled with Elasticsearch, so you don't need to install one.
-
 If you have any trouble or need more detailed instructions, look in the :doc:`detailed installation guide </install>`.
 
 Run your first race

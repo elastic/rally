@@ -12,13 +12,11 @@ Install Rally by running the installation script as a regular user::
 
     curl -sSf https://raw.githubusercontent.com/elastic/rally/master/scripts/install.sh | bash
 
-The script installs the latest release of the `esrally package <https://pypi.org/project/esrally/>`_ from PyPI, with Python 3.13 and exactly the dependency versions that the release was tested with (those from Rally's ``uv.lock``, shipped inside every release as ``rally-constraints.txt``). You need neither uv nor Python on your machine. To install a specific release, pass ``--version`` after ``bash -s --``, e.g. ``bash -s -- --version 2.14.0``. If you prefer to read the script before running it, download it with ``curl -sSf -o install.sh <url>`` and run ``bash install.sh``.
-
 The script:
 
 1. Downloads a fixed uv version with `uv's standalone installer <https://docs.astral.sh/uv/getting-started/installation/>`__ into a temporary directory, which it deletes when it is done. It does this even if uv is installed, so that neither an existing uv installation nor your shell configuration is changed.
-2. Downloads the Rally release from PyPI and reads the constraints that ship in it, so the Rally version and the constraints always come from the same release. It refuses releases that do not ship them instead of installing unpinned dependencies.
-3. Runs ``uv tool install`` with Python 3.13 and these constraints, which puts ``esrally`` into ``~/.local/bin``. If that directory is not on your ``PATH``, the script prints the command that adds it to your shell configuration.
+2. Downloads the `esrally package <https://pypi.org/project/esrally/>`_ from PyPI and reads the constraints that ship in it, so the Rally version and the constraints always come from the same release. It refuses releases that do not ship them instead of installing unpinned dependencies.
+3. Runs ``uv tool install`` with Python 3.13 and these constraints, which puts ``esrally`` into ``~/.local/bin``. If that directory is not on your ``PATH``, the script prints the command that adds it to your shell configuration. If Python 3.13 is not installed on your system, it will download it.
 
 The script refuses to run as root, because Elasticsearch cannot be started as root.
 
@@ -51,11 +49,6 @@ Requirements
 ------------
 
 .. _install_python:
-
-Python
-~~~~~~
-
-The installation script installs Python 3.13 for Rally, independently of any Python on your system, so you don't need to install Python yourself.
 
 git
 ~~~
