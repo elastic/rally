@@ -5599,9 +5599,10 @@ class TestRestoreSnapshot:
 
 
 class TestIndicesRecovery:
+    @mock.patch("asyncio.sleep")
     @mock.patch("elasticsearch.Elasticsearch")
     @pytest.mark.asyncio
-    async def test_waits_for_ongoing_indices_recovery(self, es):
+    async def test_waits_for_ongoing_indices_recovery(self, es, sleep):
         # empty response
         es.indices.recovery = mock.AsyncMock(
             side_effect=[
@@ -5727,8 +5728,28 @@ class TestIndicesRecovery:
         )
 
         r = runner.IndicesRecovery()
+        assert not r.completed
+        assert r.percent_completed == 0.0
+
+        sleep_progress = []
+
+        async def track_sleep(period):
+            sleep_progress.append((r.completed, r.percent_completed))
+
+        sleep.side_effect = track_sleep
 
         result = await r(es, {"completion-recheck-wait-period": 0, "index": "index1"})
+
+        assert r.completed
+        assert r.percent_completed == 1.0
+
+        # intermediate progress sampled on each sleep before completion
+        assert len(sleep_progress) == 3
+        assert sleep_progress[0] == (False, 0.0)
+        assert sleep_progress[1][0] is False
+        assert sleep_progress[1][1] == pytest.approx(168891939 / 258126184)
+        assert sleep_progress[2][0] is False
+        assert sleep_progress[2][1] == pytest.approx(237783878 / 258126184)
 
         # sum of both shards
         assert result == {
@@ -5744,6 +5765,17 @@ class TestIndicesRecovery:
         es.indices.recovery.assert_awaited_with(index="index1")
         # retries four times
         assert es.indices.recovery.await_count == 4
+
+    def test_indices_recovery_with_completion_wrapper(self):
+        r = runner.IndicesRecovery()
+        wrapped = runner._with_completion(r)
+        assert isinstance(wrapped, runner.WithCompletion)
+        assert not wrapped.completed
+        assert wrapped.percent_completed == 0.0
+        r._completed = True
+        r._percent_completed = 0.75
+        assert wrapped.completed is True
+        assert wrapped.percent_completed == 0.75
 
 
 class TestShrinkIndex:
