@@ -187,3 +187,20 @@ def test_redact_cmdline_hides_every_form_argparse_accepts_for_credential_flags(f
             redacted = process.redact_cmdline(["esrally"] + base + tokens)
             assert "top-secret" not in " ".join(redacted), f"credentials leaked for {tokens}"
     assert accepted >= 2, "expected at least the full flag in both spellings to be accepted"
+
+
+def test_compare_parser_accepts_error_margin():
+    arg_parser = rally.create_arg_parser()
+
+    args = arg_parser.parse_args(["compare", "--baseline=baseline-race-id", "--contender=contender-race-id"])
+    assert args.error_margin == 0.0
+
+    args = arg_parser.parse_args(["compare", "--baseline=baseline-race-id", "--contender=contender-race-id", "--error-margin=2.5"])
+    assert args.error_margin == 2.5
+
+
+def test_compare_parser_rejects_negative_error_margin():
+    arg_parser = rally.create_arg_parser()
+
+    with pytest.raises(SystemExit):
+        arg_parser.parse_args(["compare", "--baseline=baseline-race-id", "--contender=contender-race-id", "--error-margin=-1"])
