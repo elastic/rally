@@ -167,6 +167,8 @@ class Duration(int):
         return self.to_unit(Duration.Unit.D)
 
     def __str__(self) -> str:
+        if self < 0:
+            return f"-{Duration(-self)}"
         unit = self.unit
         if unit == Duration.Unit.NS:
             return f"{int(self)}ns"
