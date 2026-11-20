@@ -187,7 +187,10 @@ class Sampler:
             sleep_left = self.recorder.sample_interval
             while True:
                 if sleep_left <= 0:
-                    self.recorder.record()
+                    try:
+                        self.recorder.record()
+                    except Exception:
+                        logging.getLogger(__name__).exception("Could not determine %s", self.recorder)
                     sleep_left = self.recorder.sample_interval
 
                 if self.stop:
@@ -961,7 +964,7 @@ class NodeStatsRecorder:
 
         try:
             stats = self.client.nodes.stats(metric="_all")
-        except elasticsearch.TransportError:
+        except (elasticsearch.TransportError, elasticsearch.ApiError):
             logging.getLogger(__name__).exception("Could not retrieve node stats.")
             return {}
         return stats["nodes"].values()
@@ -2327,10 +2330,9 @@ class MasterNodeStatsRecorder:
         try:
             state = self.client.cluster.state(metric="master_node")
             info = self.client.nodes.info(node_id=state["master_node"], metric="os")
-        except elasticsearch.TransportError:
-            msg = f"A transport error occurred while collecting master node stats on cluster [{self.cluster_name}]"
-            self.logger.exception(msg)
-            raise exceptions.RallyError(msg)
+        except (elasticsearch.TransportError, elasticsearch.ApiError):
+            self.logger.exception("Could not retrieve master node stats.")
+            return
 
         doc = {
             "name": "master-node-stats",

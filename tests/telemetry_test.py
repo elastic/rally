@@ -83,6 +83,26 @@ class TestSamplerThread:
         assert sleep_record == [0.1] * 15
         assert recorder.record.call_count == 15
 
+    def test_sampler_continues_after_recorder_exception(self, caplog):
+        ticks = 0
+
+        def step_sleep(_seconds):
+            nonlocal ticks, sampler
+            ticks += 1
+            if ticks >= 3:
+                sampler.stop = True
+
+        recorder = mock.Mock()
+        recorder.__str__ = mock.Mock(return_value="node stats")
+        recorder.sample_interval = 1
+        recorder.record.side_effect = [raiseApiError(status=503, body={}, message="unavailable"), None, None]
+
+        sampler = telemetry.Sampler(recorder, sleep=step_sleep)
+        sampler.run()
+
+        assert recorder.record.call_count == 3
+        assert "Could not determine node stats" in caplog.text
+
 
 def create_config():
     cfg = config.Config()
@@ -3320,6 +3340,28 @@ class TestNodeStatsRecorder:
             recorder.record()
             mocked_debug.assert_called_once_with("Node cgroup stats requested with none present.")
 
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_sample_recovers_after_api_error(self, metrics_store_put_doc):
+        client = mock.Mock()
+        client.nodes.stats.side_effect = [
+            raiseApiError(status=503, body={}, message="unavailable"),
+            self.node_stats_response,
+        ]
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.NodeStatsRecorder(
+            {"node-stats-sample-interval": 1},
+            cluster_name="default",
+            client=client,
+            metrics_store=metrics_store,
+        )
+
+        recorder.record()
+        assert metrics_store_put_doc.call_count == 0
+
+        recorder.record()
+        assert metrics_store_put_doc.call_count == 1
+
 
 class TestTransformStats:
     def test_negative_sample_interval_forbidden(self):
@@ -4605,6 +4647,25 @@ class TestMasterNodeStatsRecorder:
                 ),
             ],
         )
+
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_does_not_raise_on_api_or_transport_error(self, metrics_store_put_doc, caplog):
+        client = mock.Mock()
+        client.cluster.state.side_effect = [
+            self.master_node_state_response,
+            elasticsearch.TransportError(message="transport error"),
+        ]
+        client.nodes.info.side_effect = raiseApiError(status=503, body={}, message="unavailable")
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.MasterNodeStatsRecorder(client=client, metrics_store=metrics_store, sample_interval=1)
+
+        recorder.record()
+        recorder.record()
+
+        assert "Could not retrieve master node stats." in caplog.text
+        assert metrics_store_put_doc.call_count == 0
 
 
 class TestIngestPipelineStats:
