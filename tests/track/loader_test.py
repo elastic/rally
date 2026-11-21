@@ -5356,3 +5356,84 @@ def test_install_dependencies(case: InstallDependenciesCase, monkeypatch: pytest
         "./libs",
     ]
     assert os.path.isfile("./logs/dependency.log")
+
+
+class TestTaskProfileParsing:
+    def track_specification(self, schedule):
+        return {
+            "description": "description for unit test",
+            "operations": [
+                {"name": "search-op", "operation-type": "search", "index": "_all"},
+                {"name": "esql-op", "operation-type": "esql", "query": "FROM logs | LIMIT 10"},
+                {"name": "bulk-op", "operation-type": "bulk"},
+            ],
+            "challenge": {"name": "default-challenge", "schedule": schedule},
+        }
+
+    def parse(self, schedule):
+        reader = loader.TrackSpecificationReader(selected_challenge="default-challenge")
+        return reader("unittest", self.track_specification(schedule), "/mappings")
+
+    def test_task_without_profile_is_unchanged(self):
+        resulting_track = self.parse([{"operation": "search-op"}])
+        assert "profile" not in resulting_track.challenges[0].schedule[0].params
+
+    def test_boolean_profile_is_kept_in_task_params(self):
+        resulting_track = self.parse([{"operation": "search-op", "profile": True}])
+        assert resulting_track.challenges[0].schedule[0].params["profile"] is True
+
+    def test_object_profile_is_kept_in_task_params(self):
+        profile = {"warmup": {"iterations": [1, 4, 9]}}
+        resulting_track = self.parse([{"operation": "esql-op", "profile": profile}])
+        assert resulting_track.challenges[0].schedule[0].params["profile"] == profile
+
+    def test_profile_false_is_allowed_on_any_operation_type(self):
+        resulting_track = self.parse([{"operation": "bulk-op", "profile": False}])
+        assert resulting_track.challenges[0].schedule[0].params["profile"] is False
+
+    def test_profile_on_unsupported_operation_type_is_rejected(self):
+        with pytest.raises(loader.TrackSyntaxError, match="operation type 'bulk' does not support"):
+            self.parse([{"operation": "bulk-op", "profile": True}])
+
+    def test_invalid_profile_object_is_rejected(self):
+        with pytest.raises(loader.TrackSyntaxError, match="warmup.iterations"):
+            self.parse([{"operation": "search-op", "profile": {"warmup": {"iterations": []}}}])
+
+    def test_invalid_profile_type_is_rejected(self):
+        with pytest.raises(loader.TrackSyntaxError, match="must be a boolean or an object"):
+            self.parse([{"operation": "search-op", "profile": "yes"}])
+
+    def test_parallel_profile_default_is_inherited_by_tasks(self):
+        resulting_track = self.parse(
+            [
+                {
+                    "parallel": {
+                        "profile": True,
+                        "tasks": [
+                            {"operation": "search-op"},
+                            {"operation": "esql-op", "profile": False},
+                        ],
+                    }
+                }
+            ]
+        )
+        parallel = resulting_track.challenges[0].schedule[0]
+        assert parallel.tasks[0].params["profile"] is True
+        assert parallel.tasks[1].params["profile"] is False
+
+    def test_parallel_profile_default_applies_operation_type_check(self):
+        with pytest.raises(loader.TrackSyntaxError, match="operation type 'bulk' does not support"):
+            self.parse(
+                [
+                    {
+                        "parallel": {
+                            "profile": True,
+                            "tasks": [{"operation": "bulk-op"}],
+                        }
+                    }
+                ]
+            )
+
+    def test_unknown_profile_keys_are_dropped_after_validation(self):
+        resulting_track = self.parse([{"operation": "search-op", "profile": {"warmup": {"iterations": [1], "cadence": 2}, "x": 1}}])
+        assert resulting_track.challenges[0].schedule[0].params["profile"] == {"warmup": {"iterations": [1]}}

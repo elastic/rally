@@ -133,6 +133,7 @@ Key = Literal[
     "preserve.install",
     "preserve_benchmark_candidate",
     "private.url",
+    "profile",
     "profiling",
     "quiet.mode",
     "race.id",

@@ -47,6 +47,10 @@
                 "type": "string",
                 "description": "The name of an operation in the 'tasks' block. When this operation is completed, the whole parallel element is considered to be completed."
               },
+              "profile": {
+                "type": ["boolean", "object"],
+                "description": "Experimental: default profiling override for all tasks of this parallel element. Either a boolean or an object that overrides the global profiling configuration."
+              },
               "tasks": {
                 "type": "array",
                 "minItems": 1,
@@ -123,6 +127,10 @@
                     "run-on-serverless": {
                       "type": "boolean",
                       "description": "Overrides automatic skip of unsupported serverless operations. Can be set to true or false."
+                    },
+                    "profile": {
+                      "type": ["boolean", "object"],
+                      "description": "Experimental: profiling override for this task. Either a boolean or an object that overrides the global profiling configuration."
                     }
                   },
                   "required": [
@@ -191,6 +199,10 @@
             "type": "number",
             "minimum": 0,
             "description": "Defines the number of seconds to wait between operations (inverse of target-throughput). Only one of 'target-throughput' or 'target-interval' may be defined."
+          },
+          "profile": {
+            "type": ["boolean", "object"],
+            "description": "Experimental: profiling override for this task. Either a boolean or an object that overrides the global profiling configuration."
           }
         }
       }

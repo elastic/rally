@@ -35,7 +35,7 @@ import pytest
 import urllib3.connection
 from elastic_transport import NodeConfig
 
-from esrally import client, config, exceptions, metrics, paths, time, track
+from esrally import client, config, exceptions, metrics, paths, profiling, time, track
 from esrally.metrics import GlobalStatsCalculator
 from esrally.track import Challenge, Operation, Task, Track
 from esrally.utils import cases, opts
@@ -2944,6 +2944,11 @@ class TestInMemoryMetricsStore:
         del self.metrics_store
         del self.cfg
 
+    def test_put_doc_keeps_meta_data_without_cluster_meta_info(self):
+        self.metrics_store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+        self.metrics_store.put_doc({"name": "custom"}, level=metrics.MetaInfoScope.cluster, meta_data={"shard": "0"})
+        assert self.metrics_store.docs[0]["meta"] == {"shard": "0"}
+
     def test_get_one(self):
         duration = StaticClock.NOW
         self.metrics_store.open(
@@ -4282,3 +4287,189 @@ class TestSystemStats:
                 "single": 833 * 1024 * 1024,
             },
         }
+
+
+class TestProfileSampleTypes:
+    RACE_TIMESTAMP = datetime.datetime(2016, 1, 31)
+    RACE_ID = "6ebc6e53-ee20-4b0c-99b4-09697987e9f4"
+
+    def setup_method(self, method):
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "system", "env.name", "unittest")
+        self.cfg.add(config.Scope.application, "track", "params", {})
+        self.store = metrics.InMemoryMetricsStore(self.cfg, clock=StaticClock)
+        self.store.open(self.RACE_ID, self.RACE_TIMESTAMP, "test", "append-no-conflicts", "defaults", create=True)
+
+    def teardown_method(self, method):
+        del self.store
+        del self.cfg
+
+    def put_service_time(self, value, sample_type):
+        self.store.put_value_cluster_level(
+            "service_time",
+            value,
+            "ms",
+            task="task1",
+            operation_type="search",
+            sample_type=sample_type,
+            absolute_time=StaticClock.NOW,
+        )
+
+    def test_string_sample_type_is_stored_and_filterable(self):
+        self.put_service_time(500, metrics.SampleType.Warmup)
+        self.put_service_time(600, profiling.PROFILE_WARMUP_SAMPLE_TYPE)
+        self.put_service_time(700, metrics.SampleType.Normal)
+        assert self.store.get("service_time", task="task1", sample_type=profiling.PROFILE_WARMUP_SAMPLE_TYPE) == [600]
+        assert self.store.get("service_time", task="task1", sample_type=metrics.SampleType.Warmup) == [500]
+        assert self.store.get("service_time", task="task1", sample_type=metrics.SampleType.Normal) == [700]
+
+    def test_profile_sample_types_never_match_summary_filters(self):
+        self.put_service_time(600, profiling.PROFILE_WARMUP_SAMPLE_TYPE)
+        self.put_service_time(601, profiling.PROFILE_POST_MEASUREMENT_SAMPLE_TYPE)
+        assert self.store.get("service_time", task="task1", sample_type=metrics.SampleType.Normal) == []
+        assert self.store.get_stats("service_time", task="task1", sample_type=metrics.SampleType.Normal) is None
+
+    def warmup_window(self):
+        calculator = metrics.GlobalStatsCalculator(self.store, track=None, challenge=None)
+        return calculator.warmup_time_window("task1")
+
+    def test_warmup_window_spans_warmup_and_profile_warmup(self):
+        self.store.put_value_cluster_level("service_time", 100, "ms", task="task1", sample_type=metrics.SampleType.Warmup, absolute_time=10)
+        self.store.put_value_cluster_level(
+            "service_time", 100, "ms", task="task1", sample_type=profiling.PROFILE_WARMUP_SAMPLE_TYPE, absolute_time=20
+        )
+        start, end = self.warmup_window()
+        assert start == metrics.time.to_epoch_millis(10)
+        assert end == metrics.time.to_epoch_millis(20) + 100
+
+    def test_warmup_window_works_when_all_warmup_iterations_are_profiled(self):
+        self.store.put_value_cluster_level(
+            "service_time", 100, "ms", task="task1", sample_type=profiling.PROFILE_WARMUP_SAMPLE_TYPE, absolute_time=10
+        )
+        assert self.warmup_window() is not None
+
+    def test_warmup_window_is_none_without_warmup_samples(self):
+        self.store.put_value_cluster_level("service_time", 100, "ms", task="task1", sample_type=metrics.SampleType.Normal, absolute_time=10)
+        assert self.warmup_window() is None
+
+    def test_put_doc_with_profile_response(self):
+        self.store.put_doc(
+            {
+                "name": "service_time",
+                "value": 41.3,
+                "unit": "ms",
+                "sample-type": profiling.PROFILE_WARMUP_SAMPLE_TYPE,
+                "task": "task1",
+                "operation": "op1",
+                "operation-type": "search",
+                "profile_response": {"shards": [{"node_id": "n0", "future": {"x": 1}}]},
+            },
+            level=metrics.MetaInfoScope.cluster,
+            meta_data={"client_id": 0, "profile_iteration": 4},
+        )
+        docs = self.store._get("service_time", "task1", None, profiling.PROFILE_WARMUP_SAMPLE_TYPE, None, None, lambda d: d)
+        assert len(docs) == 1
+        assert docs[0]["profile_response"] == {"shards": [{"node_id": "n0", "future": {"x": 1}}]}
+        assert docs[0]["meta"]["profile_iteration"] == 4
+
+
+class TestProfileResponseMappingPreflight:
+    RACE_TIMESTAMP = datetime.datetime(2026, 11, 3)
+
+    def setup_method(self, method):
+        self.cfg = config.Config()
+        self.cfg.add(config.Scope.application, "node", "rally.root", paths.rally_root())
+        self.client = mock.create_autospec(metrics.EsClient)
+        self.client.is_serverless = False
+
+    def handler(self, use_data_streams, template_mapping):
+        self.cfg.add(config.Scope.application, "reporting", "datastore.use_data_streams", use_data_streams)
+        properties = {"profile_response": template_mapping} if template_mapping is not None else {}
+        body = {"template": {"mappings": {"properties": properties}}}
+        if use_data_streams:
+            self.client.get_component_template.return_value.body = {"component_templates": [{"component_template": body}]}
+        else:
+            self.client.get_template.return_value.body = {"index_templates": [{"index_template": body}]}
+        return metrics.IndexHandler(self.cfg, self.client, metrics.EsStoreType.metrics)
+
+    def test_shipped_template_maps_profile_response_as_disabled_object(self):
+        template = json.loads(metrics.IndexTemplateProvider(self.cfg).get_template(metrics.EsStoreType.metrics))
+        assert template["template"]["mappings"]["properties"]["profile_response"] == {"type": "object", "enabled": False}
+
+    def test_date_based_index_gets_the_mapping(self):
+        handler = self.handler(use_data_streams=False, template_mapping=metrics.PROFILE_RESPONSE_MAPPING)
+        assert handler.ensure_profile_response_mapping(self.RACE_TIMESTAMP) is None
+        self.client.put_mapping.assert_called_once_with(
+            index="rally-metrics-2026-11", properties={"profile_response": {"type": "object", "enabled": False}}, write_index_only=False
+        )
+
+    def test_missing_data_stream_is_created_before_adding_the_mapping(self):
+        handler = self.handler(use_data_streams=True, template_mapping=metrics.PROFILE_RESPONSE_MAPPING)
+        self.client.exists.return_value = False
+        assert handler.ensure_profile_response_mapping(self.RACE_TIMESTAMP) is None
+        self.client.create_data_stream.assert_called_once_with("rally-metrics-v2")
+        self.client.put_mapping.assert_called_once_with(
+            index="rally-metrics-v2", properties={"profile_response": {"type": "object", "enabled": False}}, write_index_only=True
+        )
+
+    @pytest.mark.parametrize("use_data_streams", [True, False])
+    def test_stale_template_disables_payload_persistence(self, use_data_streams):
+        handler = self.handler(use_data_streams=use_data_streams, template_mapping=None)
+        reason = handler.ensure_profile_response_mapping(self.RACE_TIMESTAMP)
+        assert "datastore.overwrite_existing_templates" in reason
+        self.client.put_mapping.assert_not_called()
+
+    def test_template_with_different_mapping_disables_payload_persistence(self):
+        handler = self.handler(use_data_streams=False, template_mapping={"type": "object"})
+        assert handler.ensure_profile_response_mapping(self.RACE_TIMESTAMP) is not None
+
+    def test_incompatible_index_mapping_disables_payload_persistence(self):
+        handler = self.handler(use_data_streams=False, template_mapping=metrics.PROFILE_RESPONSE_MAPPING)
+        self.client.put_mapping.side_effect = exceptions.RallyError("mapper [profile_response] cannot change parameter [enabled]")
+        reason = handler.ensure_profile_response_mapping(self.RACE_TIMESTAMP)
+        assert "cannot change parameter [enabled]" in reason
+
+
+class TestBulkChunkBytes:
+    def test_bulk_requests_are_split_by_serialized_size(self):
+        # NOTE: runs the real elasticsearch-py bulk chunker; only the network call is replaced
+        sent_requests = []
+
+        def fake_bulk(self, *args, operations, **kwargs):
+            sent_requests.append(sum(len(line) + 1 for line in operations))
+            return mock.Mock(body={"items": [{"index": {"status": 201}} for _ in range(len(operations) // 2)], "errors": False})
+
+        es = elasticsearch.Elasticsearch("http://localhost:9200")
+        client = metrics.EsClient(es)
+        payload = "x" * (3 * 1024 * 1024)
+        docs = [{"_source": {"name": "service_time", "profile_response": {"blob": payload}}} for _ in range(8)]
+        with (
+            mock.patch.object(elasticsearch.Elasticsearch, "bulk", fake_bulk),
+            mock.patch.object(metrics.EsClient, "BULK_MAX_CHUNK_BYTES", 10 * 1024 * 1024),
+        ):
+            client.bulk_index(index="rally-metrics-2026-11", items=docs, use_data_streams=False)
+
+        assert len(sent_requests) == 3
+        assert all(size <= 10 * 1024 * 1024 for size in sent_requests)
+        assert sum(sent_requests) > 8 * len(payload)
+
+    def test_largest_permitted_profile_document_fits_one_bulk_request(self):
+        # NOTE: the bulk chunker sends a single document above max_chunk_bytes unsplit, so the profile size limit
+        # must keep every profile document below it
+        sent_requests = []
+
+        def fake_bulk(self, *args, operations, **kwargs):
+            sent_requests.append(sum(len(line) + 1 for line in operations))
+            return mock.Mock(body={"items": [{"index": {"status": 201}} for _ in range(len(operations) // 2)], "errors": False})
+
+        es = elasticsearch.Elasticsearch("http://localhost:9200")
+        client = metrics.EsClient(es)
+        profile = {"blob": "x" * (profiling.MAX_RESPONSE_BYTES_LIMIT - len('{"blob":""}'))}
+        assert len(json.dumps(profile, separators=(",", ":")).encode("utf-8")) == profiling.MAX_RESPONSE_BYTES_LIMIT
+        meta = {f"track-param-{i}": "v" * 64 for i in range(200)}
+        doc = {"_source": {"name": "service_time", "sample-type": "profile_warmup", "meta": meta, "profile_response": profile}}
+        with mock.patch.object(elasticsearch.Elasticsearch, "bulk", fake_bulk):
+            client.bulk_index(index="rally-metrics-2026-11", items=[doc], use_data_streams=False)
+
+        assert len(sent_requests) == 1
+        assert sent_requests[0] <= metrics.EsClient.BULK_MAX_CHUNK_BYTES

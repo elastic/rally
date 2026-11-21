@@ -32,9 +32,10 @@ import elasticsearch
 import pytest
 from elastic_transport import ApiResponse, ApiResponseMeta, HttpHeaders, NodeConfig
 
-from esrally import client, config, exceptions
+from esrally import client, config, exceptions, profiling
 from esrally.client.asynchronous import RallyAsyncElasticsearch
 from esrally.driver import runner
+from esrally.track import params, track
 
 
 class BaseUnitTestContextManagerRunner:
@@ -9303,3 +9304,312 @@ class TestOtlpIngestRunner:
 
     def test_repr(self):
         assert repr(runner.OtlpIngest()) == "otlp-ingest"
+
+
+class TestProfileCapture:
+    search_profile = {
+        "shards": [
+            {
+                "id": "[node-0][logs][0]",
+                "node_id": "node-0",
+                "shard_id": 0,
+                "index": "logs",
+                "searches": [{"query": [{"type": "TermQuery", "time_in_nanos": 100}]}],
+                "future_field": {"anything": [1, 2, 3]},
+            }
+        ]
+    }
+
+    def search_response(self, profile=True):
+        response = {
+            "timed_out": False,
+            "took": 5,
+            "_shards": {"total": 2, "successful": 2, "skipped": 0, "failed": 0},
+            "hits": {"total": {"value": 2, "relation": "eq"}, "hits": []},
+        }
+        if profile:
+            response["profile"] = self.search_profile
+        return response
+
+    def params(self, **kwargs):
+        p = {
+            "operation-type": "search",
+            "index": "unittest",
+            "body": {"query": {"match_all": {}}},
+            "profile-capture": True,
+        }
+        p.update(kwargs)
+        return p
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_captures_complete_profile_verbatim(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.search_response()).encode()))
+        params = self.params()
+        async with runner.Query() as query_runner:
+            result = await query_runner(es, params)
+        assert result["success"]
+        assert result["profile_complete"] is True
+        assert result["profile_response"] == self.search_profile
+        assert result["profile_response_bytes"] > 0
+        assert "profile_capture_error" not in result
+        fingerprint = result["profile_request_fingerprint"]
+        assert len(fingerprint) == 64
+        # the profile flag is injected into a copy; the parameter source's body is not mutated
+        assert "profile" not in params["body"]
+        sent_body = es.perform_request.await_args.kwargs["body"]
+        assert sent_body["profile"] is True
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_fingerprint_matches_unprofiled_logical_request(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.search_response()).encode()))
+        params = self.params()
+        async with runner.Query() as query_runner:
+            result = await query_runner(es, params)
+        expected = profiling.request_fingerprint(
+            {"operation-type": "search", "index": "unittest", "body": {"query": {"match_all": {}}}, "request-params": {}}
+        )
+        assert result["profile_request_fingerprint"] == expected
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_missing_profile_is_reported(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.search_response(profile=False)).encode()))
+        async with runner.Query() as query_runner:
+            result = await query_runner(es, self.params())
+        assert result["success"]
+        assert result["profile_complete"] is False
+        assert result["profile_capture_error"] == "profile_missing"
+        assert "profile_response" not in result
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_oversized_profile_is_dropped_in_full(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.search_response()).encode()))
+        async with runner.Query() as query_runner:
+            result = await query_runner(es, self.params(**{"profile-max-response-bytes": 1}))
+        assert result["profile_complete"] is False
+        assert result["profile_capture_error"] == "size_exceeded"
+        assert result["profile_response_bytes"] > 1
+        assert "profile_response" not in result
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_unparseable_response_is_reported(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(b"not json"))
+        async with runner.Query() as query_runner:
+            result = await query_runner(es, self.params())
+        assert result["success"]
+        assert result["profile_complete"] is False
+        assert result["profile_capture_error"] == "serialization_failed"
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_detailed_results_with_capture(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.search_response()).encode()))
+        async with runner.Query() as query_runner:
+            result = await query_runner(es, self.params(**{"detailed-results": True}))
+        assert result["hits"] == 2
+        assert result["hits_relation"] == "eq"
+        assert result["took"] == 5
+        assert result["shards"] == {"total": 2, "successful": 2, "skipped": 0, "failed": 0}
+        assert result["profile_complete"] is True
+
+    @pytest.mark.parametrize(
+        "params_override",
+        [
+            {"operation-type": "paginated-search", "pages": 1},
+            {"operation-type": "scroll-search", "pages": 1},
+            {"operation-type": "composite-agg"},
+            {"operation-type": "search", "pages": 1},
+        ],
+    )
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_capture_is_rejected_on_unsupported_paths(self, es, params_override):
+        es.options.return_value = es
+        async with runner.Query() as query_runner:
+            with pytest.raises(exceptions.RallyAssertionError, match="not supported"):
+                await query_runner(es, self.params(**params_override))
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_without_capture_flag_behavior_is_unchanged(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.search_response(profile=False)).encode()))
+        params = self.params()
+        del params["profile-capture"]
+        async with runner.Query() as query_runner:
+            result = await query_runner(es, params)
+        assert result == {"weight": 1, "unit": "ops", "success": True}
+        assert "profile" not in es.perform_request.await_args.kwargs["body"]
+
+    @pytest.mark.parametrize("detailed_results", [True, False])
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_capture_keeps_the_result_of_the_unprofiled_request(self, es, detailed_results):
+        # NOTE: Elasticsearch writes these fields before "hits", where the streaming parser stops
+        response = {
+            "took": 5,
+            "timed_out": False,
+            "num_reduce_phases": 2,
+            "_shards": {"total": 2, "successful": 2, "skipped": 0, "failed": 0},
+            "_clusters": {
+                "total": 2,
+                "successful": 2,
+                "skipped": 0,
+                "details": {"remote": {"status": "successful", "_shards": {"total": 1, "successful": 1}}},
+            },
+            "hits": {"total": {"value": 2, "relation": "eq"}, "hits": []},
+            "profile": self.search_profile,
+        }
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(side_effect=lambda **_: io.BytesIO(json.dumps(response).encode()))
+        params = self.params(**{"detailed-results": detailed_results})
+        unprofiled_params = dict(params)
+        del unprofiled_params["profile-capture"]
+        async with runner.Query() as query_runner:
+            profiled = await query_runner(es, params)
+            unprofiled = await query_runner(es, unprofiled_params)
+        capture_keys = {"profile_response", "profile_complete", "profile_response_bytes", "profile_request_fingerprint"}
+        assert {k: v for k, v in profiled.items() if k not in capture_keys} == unprofiled
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_capture_accepts_a_search_without_body(self, es):
+        search_track = track.Track(name="unit-test", indices=[track.Index(name="logs")])
+        source_params = params.SearchParamSource(track=search_track, params={}).params()
+        assert source_params["body"] is None
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.search_response()).encode()))
+        async with runner.Query() as query_runner:
+            result = await query_runner(es, {**source_params, "operation-type": "search", "profile-capture": True})
+        assert result["profile_complete"] is True
+        assert es.perform_request.await_args.kwargs["body"] == {"profile": True}
+
+
+class TestEsqlProfileCapture:
+    esql_profile = {
+        "query": {"took_nanos": 1000},
+        "drivers": [
+            {
+                "description": "data",
+                "cluster_name": "c1",
+                "node_name": "node-0",
+                "took_nanos": 500,
+                "operators": [{"operator": "ValuesSourceReaderOperator", "status": {"process_nanos": 100}}],
+                "future_field": True,
+            }
+        ],
+    }
+
+    def esql_response(self, profile=True, is_partial=False):
+        response = {
+            "took": 3,
+            "is_partial": is_partial,
+            "documents_found": 10,
+            "values_loaded": 20,
+            "columns": [],
+            "values": [],
+        }
+        if profile:
+            response["profile"] = self.esql_profile
+        return response
+
+    def params(self, **kwargs):
+        p = {"operation-type": "esql", "query": "FROM logs | LIMIT 10", "profile-capture": True}
+        p.update(kwargs)
+        return p
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_captures_complete_profile_verbatim(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.esql_response()).encode()))
+        async with runner.Esql() as esql_runner:
+            result = await esql_runner(es, self.params())
+        assert result["success"]
+        assert result["profile_complete"] is True
+        assert result["profile_response"] == self.esql_profile
+        assert len(result["profile_request_fingerprint"]) == 64
+        sent_body = es.perform_request.await_args.kwargs["body"]
+        assert sent_body["profile"] is True
+        assert sent_body["query"] == "FROM logs | LIMIT 10"
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_fingerprint_matches_unprofiled_logical_request(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.esql_response()).encode()))
+        async with runner.Esql() as esql_runner:
+            result = await esql_runner(es, self.params())
+        expected = profiling.request_fingerprint(
+            {"operation-type": "esql", "body": {"query": "FROM logs | LIMIT 10"}, "request-params": {}}
+        )
+        assert result["profile_request_fingerprint"] == expected
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_partial_results_are_reported_and_profile_still_captured(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.esql_response(is_partial=True)).encode()))
+        async with runner.Esql() as esql_runner:
+            result = await esql_runner(es, self.params())
+        assert result["success"] is False
+        assert result["is_partial"] is True
+        assert result["error-type"] == "esql"
+        assert result["profile_complete"] is True
+        assert result["profile_response"] == self.esql_profile
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_detailed_results_with_capture(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.esql_response()).encode()))
+        async with runner.Esql() as esql_runner:
+            result = await esql_runner(es, self.params(**{"detailed-results": True}))
+        assert result["took"] == 3
+        assert result["documents_found"] == 10
+        assert result["values_loaded"] == 20
+        assert result["profile_complete"] is True
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_missing_profile_is_reported(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.esql_response(profile=False)).encode()))
+        async with runner.Esql() as esql_runner:
+            result = await esql_runner(es, self.params())
+        assert result["profile_complete"] is False
+        assert result["profile_capture_error"] == "profile_missing"
+        assert "profile_response" not in result
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_oversized_profile_is_dropped_in_full(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.esql_response()).encode()))
+        async with runner.Esql() as esql_runner:
+            result = await esql_runner(es, self.params(**{"profile-max-response-bytes": 1}))
+        assert result["profile_complete"] is False
+        assert result["profile_capture_error"] == "size_exceeded"
+        assert "profile_response" not in result
+
+    @mock.patch("elasticsearch.Elasticsearch")
+    @pytest.mark.asyncio
+    async def test_without_capture_flag_behavior_is_unchanged(self, es):
+        es.options.return_value = es
+        es.perform_request = mock.AsyncMock(return_value=io.BytesIO(json.dumps(self.esql_response(profile=False)).encode()))
+        params = self.params()
+        del params["profile-capture"]
+        async with runner.Esql() as esql_runner:
+            result = await esql_runner(es, params)
+        assert result == {"weight": 1, "unit": "ops", "success": True, "is_partial": False}
+        assert "profile" not in es.perform_request.await_args.kwargs["body"]
