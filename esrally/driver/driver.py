@@ -2034,6 +2034,10 @@ class AsyncProfiler:
 
 
 class AsyncExecutor:
+    # Upper bound (in seconds) on how long a client waiting for its next scheduled request goes without checking
+    # whether it has been cancelled or completed.
+    MAX_WAIT_SLICE = 0.1
+
     def __init__(
         self,
         client_id,
@@ -2070,6 +2074,20 @@ class AsyncExecutor:
         self.cluster_name = cluster_name
         self.logger = logging.getLogger(__name__)
 
+    async def _wait_until(self, deadline, task_completes_parent):
+        """
+        Sleeps until ``deadline`` (in ``time.perf_counter()`` terms) but returns early once the task is cancelled or,
+        unless this task completes its parent itself, once it is completed by another task. ``cancel`` and
+        ``complete`` are ``threading.Event`` instances that may be set from other threads, so we sleep in short slices
+        and re-check them. Otherwise, clients of custom schedulers with long intervals would only notice completion
+        when their next request is due, which can be minutes later.
+        """
+        while not self.cancel.is_set() and (task_completes_parent or not self.complete.is_set()):
+            rest = deadline - time.perf_counter()
+            if rest <= 0:
+                return
+            await asyncio.sleep(min(rest, self.MAX_WAIT_SLICE))
+
     async def __call__(self, *args, **kwargs):
         any_task_completes_parent = self.task.any_completes_parent
         task_completes_parent = self.task.completes_parent
@@ -2094,9 +2112,13 @@ class AsyncExecutor:
                 absolute_expected_schedule_time = total_start + expected_scheduled_time
                 throughput_throttled = expected_scheduled_time > 0
                 if throughput_throttled:
-                    rest = absolute_expected_schedule_time - time.perf_counter()
-                    if rest > 0:
-                        await asyncio.sleep(rest)
+                    await self._wait_until(absolute_expected_schedule_time, task_completes_parent)
+                    if self.cancel.is_set():
+                        self.logger.info("User cancelled execution.")
+                        break
+                    if not task_completes_parent and self.complete.is_set():
+                        self.logger.info("Task [%s] is considered completed due to external event.", self.task)
+                        break
 
                 absolute_processing_start = time.time()
                 processing_start = time.perf_counter()
