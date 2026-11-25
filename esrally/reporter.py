@@ -334,23 +334,15 @@ class SummaryReporter:
         return lines
 
     def _report_total_time(self, name, total_time):
-        unit = "min"
         return self._join(
-            self._line(f"Cumulative {name} of primary shards", "", total_time, unit, convert.ms_to_minutes),
+            self._time_line(f"Cumulative {name} of primary shards", "", total_time),
         )
 
     def _report_total_time_per_shard(self, name, total_time_per_shard):
-        unit = "min"
         return self._join(
-            self._line(f"Min cumulative {name} across primary shards", "", total_time_per_shard.get("min"), unit, convert.ms_to_minutes),
-            self._line(
-                f"Median cumulative {name} across primary shards",
-                "",
-                total_time_per_shard.get("median"),
-                unit,
-                convert.ms_to_minutes,
-            ),
-            self._line(f"Max cumulative {name} across primary shards", "", total_time_per_shard.get("max"), unit, convert.ms_to_minutes),
+            self._time_line(f"Min cumulative {name} across primary shards", "", total_time_per_shard.get("min")),
+            self._time_line(f"Median cumulative {name} across primary shards", "", total_time_per_shard.get("median")),
+            self._time_line(f"Max cumulative {name} across primary shards", "", total_time_per_shard.get("max")),
         )
 
     def _report_total_count(self, name, total_count):
@@ -371,13 +363,13 @@ class SummaryReporter:
 
     def _report_gc_metrics(self, stats):
         return self._join(
-            self._line("Total Young Gen GC time", "", stats.young_gc_time, "s", convert.ms_to_seconds),
+            self._time_line("Total Young Gen GC time", "", stats.young_gc_time),
             self._line("Total Young Gen GC count", "", stats.young_gc_count, ""),
-            self._line("Total Old Gen GC time", "", stats.old_gc_time, "s", convert.ms_to_seconds),
+            self._time_line("Total Old Gen GC time", "", stats.old_gc_time),
             self._line("Total Old Gen GC count", "", stats.old_gc_count, ""),
-            self._line("Total ZGC Cycles GC time", "", stats.zgc_cycles_gc_time, "s", convert.ms_to_seconds),
+            self._time_line("Total ZGC Cycles GC time", "", stats.zgc_cycles_gc_time),
             self._line("Total ZGC Cycles GC count", "", stats.zgc_cycles_gc_count, ""),
-            self._line("Total ZGC Pauses GC time", "", stats.zgc_pauses_gc_time, "s", convert.ms_to_seconds),
+            self._time_line("Total ZGC Pauses GC time", "", stats.zgc_pauses_gc_time),
             self._line("Total ZGC Pauses GC count", "", stats.zgc_pauses_gc_count, ""),
         )
 
@@ -418,7 +410,7 @@ class SummaryReporter:
     def _report_ingest_pipeline_stats(self, stats):
         return self._join(
             self._line("Total Ingest Pipeline count", "", stats.ingest_pipeline_cluster_count, ""),
-            self._line("Total Ingest Pipeline time", "", stats.ingest_pipeline_cluster_time, "s", convert.ms_to_seconds),
+            self._time_line("Total Ingest Pipeline time", "", stats.ingest_pipeline_cluster_time),
             self._line("Total Ingest Pipeline failed", "", stats.ingest_pipeline_cluster_failed, ""),
         )
 
@@ -448,6 +440,10 @@ class SummaryReporter:
             return [k, task, converter(v), u]
         else:
             return []
+
+    def _time_line(self, k, task, v_ms):
+        # Pick the unit from the value itself (e.g. ms, s, min, h) so that small and large durations are both readable.
+        return self._line(k, task, v_ms, convert.ms_to_human_unit(v_ms), convert.ms_to_human_value)
 
 
 class ComparisonReporter:

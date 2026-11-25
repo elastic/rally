@@ -96,6 +96,40 @@ class TestBytesToHuman:
         assert convert.size(-881348666323).to_unit(convert.Size.Unit.GB) == -820.8199090538546
 
 
+class TestMsToHuman:
+    def test_none(self):
+        assert convert.ms_to_human_value(None) is None
+        assert convert.ms_to_human_unit(None) == "N/A"
+
+    def test_zero(self):
+        assert convert.ms_to_human_value(0) == 0
+        assert convert.ms_to_human_unit(0) == "s"
+
+    def test_sub_millisecond(self):
+        assert convert.ms_to_human_value(0.5) == 500
+        assert convert.ms_to_human_unit(0.5) == "us"
+
+    def test_milliseconds(self):
+        assert convert.ms_to_human_value(250) == 250
+        assert convert.ms_to_human_unit(250) == "ms"
+
+    def test_seconds(self):
+        assert convert.ms_to_human_value(1500) == 1.5
+        assert convert.ms_to_human_unit(1500) == "s"
+
+    def test_minutes(self):
+        assert convert.ms_to_human_value(90_000) == 1.5
+        assert convert.ms_to_human_unit(90_000) == "min"
+
+    def test_hours(self):
+        assert convert.ms_to_human_value(5_400_000) == 1.5
+        assert convert.ms_to_human_unit(5_400_000) == "h"
+
+    def test_negative(self):
+        assert convert.ms_to_human_value(-1500) == -1.5
+        assert convert.ms_to_human_unit(-1500) == "s"
+
+
 class TestBytesToUnit:
     def test_to_na(self):
         assert convert.bytes_to_unit("N/A", None) is None
