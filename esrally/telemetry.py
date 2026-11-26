@@ -20,6 +20,7 @@ import fnmatch
 import logging
 import os
 import threading
+from typing import Protocol
 
 import tabulate
 
@@ -170,43 +171,70 @@ class InternalTelemetryDevice(TelemetryDevice):
     internal = True
 
 
+class Recorder(Protocol):
+    """Contract for periodic telemetry recorders driven by ``Sampler``.
+
+    Error-handling contract:
+    - Raise ``exceptions.RallyError`` (chained with ``from e``) with a contextual
+      message on collection failures (e.g. ``TransportError``, ``ApiError``).
+    - Do not log before raising; ``Sampler.run()`` owns exception logging so
+      failures are not logged twice.
+    - Do not swallow errors and return early, so ``Sampler.run()`` can track
+      consecutive failures and stop after ``max_consecutive_failures``.
+    """
+
+    sample_interval: float
+
+    def record(self) -> None: ...
+
+    def __str__(self) -> str: ...
+
+
 class Sampler:
     """This class contains the actual logic of SamplerThread for unit test purposes."""
 
-    def __init__(self, recorder, *, sleep=time.sleep):
+    DEFAULT_MAX_CONSECUTIVE_FAILURES = 10
+
+    def __init__(self, recorder: Recorder, *, sleep=time.sleep, max_consecutive_failures=DEFAULT_MAX_CONSECUTIVE_FAILURES):
         self.stop = False
         self.recorder = recorder
         self.sleep = sleep
+        self.max_consecutive_failures = max_consecutive_failures
+        self.logger = logging.getLogger(__name__)
 
     def finish(self):
         self.stop = True
 
     def run(self):
-        # noinspection PyBroadException
-        try:
-            sleep_left = self.recorder.sample_interval
-            while True:
-                if sleep_left <= 0:
-                    try:
-                        self.recorder.record()
-                    except Exception:
-                        logging.getLogger(__name__).exception("Could not determine %s", self.recorder)
-                    sleep_left = self.recorder.sample_interval
+        if self.stop:
+            return
+        sleep_left = self.recorder.sample_interval
+        consecutive_failures = 0
+        while True:
+            if sleep_left <= 0:
+                try:
+                    self.recorder.record()
+                    consecutive_failures = 0
+                except Exception:
+                    consecutive_failures += 1
+                    self.logger.exception("Could not determine %s", self.recorder)
+                    if consecutive_failures >= self.max_consecutive_failures:
+                        self.logger.error("Stopping %s after %d consecutive failures", self.recorder, consecutive_failures)
+                        break
+                sleep_left = self.recorder.sample_interval
 
-                if self.stop:
-                    break
-                # check for self.stop at least every second
-                sleep_seconds = min(sleep_left, 1)
-                self.sleep(sleep_seconds)
-                sleep_left -= sleep_seconds
-        except BaseException:
-            logging.getLogger(__name__).exception("Could not determine %s", self.recorder)
+            if self.stop:
+                break
+            # check for self.stop at least every second
+            sleep_seconds = min(sleep_left, 1)
+            self.sleep(sleep_seconds)
+            sleep_left -= sleep_seconds
 
 
 class SamplerThread(Sampler, threading.Thread):
-    def __init__(self, recorder):
+    def __init__(self, recorder: Recorder, *, max_consecutive_failures=Sampler.DEFAULT_MAX_CONSECUTIVE_FAILURES):
         threading.Thread.__init__(self)
-        Sampler.__init__(self, recorder)
+        Sampler.__init__(self, recorder, max_consecutive_failures=max_consecutive_failures)
 
     def finish(self):
         super().finish()
@@ -445,7 +473,6 @@ class CcrStats(TelemetryDevice):
         self.samplers = []
 
     def on_benchmark_start(self):
-        recorder = []
         for cluster_name in self.specified_cluster_names:
             recorder = CcrStatsRecorder(
                 cluster_name,
@@ -506,12 +533,11 @@ class CcrStatsRecorder:
             stats = self.client.perform_request(
                 method="GET", path=ccr_stats_api_endpoint, params={"human": "false", "filter_path": filter_path}
             )
-        except elasticsearch.TransportError:
-            msg = "A transport error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on cluster [{}]".format(
+        except (elasticsearch.TransportError, elasticsearch.ApiError) as e:
+            msg = "An error occurred while collecting CCR stats from the endpoint [{}?filter_path={}] on cluster [{}]".format(
                 ccr_stats_api_endpoint, filter_path, self.cluster_name
             )
-            self.logger.exception(msg)
-            raise exceptions.RallyError(msg)
+            raise exceptions.RallyError(msg) from e
 
         if filter_path in stats and "indices" in stats[filter_path]:
             for indices in stats[filter_path]["indices"]:
@@ -653,10 +679,8 @@ class RecoveryStatsRecorder:
 
         try:
             stats = self.client.indices.recovery(index=self.indices, active_only=True, detailed=False)
-        except elasticsearch.TransportError:
-            msg = f"A transport error occurred while collecting recovery stats on cluster [{self.cluster_name}]"
-            self.logger.exception(msg)
-            raise exceptions.RallyError(msg)
+        except (elasticsearch.TransportError, elasticsearch.ApiError) as e:
+            raise exceptions.RallyError(f"An error occurred while collecting recovery stats on cluster [{self.cluster_name}]") from e
 
         for idx, idx_stats in stats.items():
             for shard in idx_stats["shards"]:
@@ -744,10 +768,8 @@ class ShardStatsRecorder:
 
         try:
             sample = self.client.nodes.stats(metric="_all", level="shards")
-        except elasticsearch.TransportError:
-            msg = f"A transport error occurred while collecting shard stats on cluster [{self.cluster_name}]"
-            self.logger.exception(msg)
-            raise exceptions.RallyError(msg)
+        except (elasticsearch.TransportError, elasticsearch.ApiError) as e:
+            raise exceptions.RallyError(f"An error occurred while collecting shard stats on cluster [{self.cluster_name}]") from e
 
         shard_metadata = {"cluster": self.cluster_name}
 
@@ -964,9 +986,8 @@ class NodeStatsRecorder:
 
         try:
             stats = self.client.nodes.stats(metric="_all")
-        except (elasticsearch.TransportError, elasticsearch.ApiError):
-            logging.getLogger(__name__).exception("Could not retrieve node stats.")
-            return {}
+        except (elasticsearch.TransportError, elasticsearch.ApiError) as e:
+            raise exceptions.RallyError(f"An error occurred while collecting node stats on cluster [{self.cluster_name}]") from e
         return stats["nodes"].values()
 
 
@@ -1082,11 +1103,8 @@ class TransformStatsRecorder:
 
         try:
             stats = self.client.transform.get_transform_stats(transform_id="_all")
-
-        except elasticsearch.TransportError:
-            msg = f"A transport error occurred while collecting transform stats on cluster [{self.cluster_name}]"
-            self.logger.exception(msg)
-            raise exceptions.RallyError(msg)
+        except (elasticsearch.TransportError, elasticsearch.ApiError) as e:
+            raise exceptions.RallyError(f"An error occurred while collecting transform stats on cluster [{self.cluster_name}]") from e
 
         for transform in stats["transforms"]:
             try:
@@ -1287,16 +1305,21 @@ class SearchableSnapshotsStatsRecorder:
             # https://www.elastic.co/guide/en/elasticsearch/reference/current/searchable-snapshots-api-stats.html
             stats = self.client.perform_request(method="GET", path=stats_api_endpoint, params={"level": level})
         except elasticsearch.NotFoundError as e:
-            if "No searchable snapshots indices found" in e.info.get("error").get("reason"):
+            error = e.info.get("error") if isinstance(e.info, dict) else None
+            reason = error.get("reason") if isinstance(error, dict) else None
+            if isinstance(reason, str) and "No searchable snapshots indices found" in reason:
                 self.logger.info(
                     "Unable to find valid indices while collecting searchable snapshots stats on cluster [%s]", self.cluster_name
                 )
                 # allow collection, indices might be mounted later on
                 return
-        except elasticsearch.TransportError:
             raise exceptions.RallyError(
-                f"A transport error occurred while collecting searchable snapshots stats on cluster [{self.cluster_name}]"
-            ) from None
+                f"An error occurred while collecting searchable snapshots stats on cluster [{self.cluster_name}]"
+            ) from e
+        except (elasticsearch.TransportError, elasticsearch.ApiError) as e:
+            raise exceptions.RallyError(
+                f"An error occurred while collecting searchable snapshots stats on cluster [{self.cluster_name}]"
+            ) from e
 
         total_stats = stats.get("total", [])
         for lucene_file_stats in total_stats:
@@ -1431,10 +1454,8 @@ class DataStreamStatsRecorder:
 
         try:
             sample = self.client.indices.data_streams_stats(name="")
-        except elasticsearch.TransportError:
-            msg = f"A transport error occurred while collecting data stream stats on cluster [{self.cluster_name}]"
-            self.logger.exception(msg)
-            raise exceptions.RallyError(msg)
+        except (elasticsearch.TransportError, elasticsearch.ApiError) as e:
+            raise exceptions.RallyError(f"An error occurred while collecting data stream stats on cluster [{self.cluster_name}]") from e
 
         data_stream_metadata = {"cluster": self.cluster_name}
 
@@ -2330,9 +2351,8 @@ class MasterNodeStatsRecorder:
         try:
             state = self.client.cluster.state(metric="master_node")
             info = self.client.nodes.info(node_id=state["master_node"], metric="os")
-        except (elasticsearch.TransportError, elasticsearch.ApiError):
-            self.logger.exception("Could not retrieve master node stats.")
-            return
+        except (elasticsearch.TransportError, elasticsearch.ApiError) as e:
+            raise exceptions.RallyError("An error occurred while collecting master node stats") from e
 
         doc = {
             "name": "master-node-stats",
@@ -2563,14 +2583,8 @@ class BlobStoreStatsRecorder:
         try:
             stats_api_endpoint = "/_internal/blob_store/stats"
             stats = self.client.perform_request(method="GET", path=stats_api_endpoint, params={})
-        except elasticsearch.ApiError as e:
-            msg = f"An API error [{e}] occurred while collecting [{self}] on cluster [{self.rally_cluster_name}]"
-            self.logger.error(msg)
-            return
-        except elasticsearch.TransportError as e:
-            msg = f"A transport error [{e}] occurred while collecting [{self}] on cluster [{self.rally_cluster_name}]"
-            self.logger.error(msg)
-            return
+        except (elasticsearch.TransportError, elasticsearch.ApiError) as e:
+            raise exceptions.RallyError(f"An error occurred while collecting [{self}] on cluster [{self.rally_cluster_name}]") from e
 
         self._push_stats(stats)
 
