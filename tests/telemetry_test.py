@@ -83,6 +83,56 @@ class TestSamplerThread:
         assert sleep_record == [0.1] * 15
         assert recorder.record.call_count == 15
 
+    def test_sampler_continues_after_recorder_exception(self, caplog):
+        ticks = 0
+
+        def step_sleep(_seconds):
+            nonlocal ticks, sampler
+            ticks += 1
+            if ticks >= 3:
+                sampler.stop = True
+
+        recorder = mock.Mock()
+        recorder.__str__ = mock.Mock(return_value="node stats")
+        recorder.sample_interval = 1
+        recorder.record.side_effect = [raiseApiError(status=503, body={}, message="unavailable"), None, None]
+
+        sampler = telemetry.Sampler(recorder, sleep=step_sleep)
+        sampler.run()
+
+        assert recorder.record.call_count == 3
+        assert "Could not determine node stats" in caplog.text
+
+    def test_sampler_stops_after_consecutive_failures_and_resets_on_success(self, caplog):
+        ticks = 0
+
+        def step_sleep(_seconds):
+            nonlocal ticks, sampler
+            ticks += 1
+            if ticks >= 30:
+                sampler.stop = True
+
+        recorder = mock.Mock()
+        recorder.__str__ = mock.Mock(return_value="node stats")
+        recorder.sample_interval = 1
+        recorder.record.side_effect = [exceptions.RallyError("transient")] * 2 + [None] + [exceptions.RallyError("permanent")] * 11
+
+        sampler = telemetry.Sampler(recorder, sleep=step_sleep)
+        sampler.run()
+
+        assert recorder.record.call_count == 13
+        assert "Stopping node stats after 10 consecutive failures" in caplog.text
+
+    def test_sampler_propagates_base_exception(self):
+        recorder = mock.Mock()
+        recorder.__str__ = mock.Mock(return_value="node stats")
+        recorder.sample_interval = 1
+        recorder.record.side_effect = KeyboardInterrupt()
+
+        sampler = telemetry.Sampler(recorder, sleep=lambda _seconds: None)
+        with pytest.raises(KeyboardInterrupt):
+            sampler.run()
+
 
 def create_config():
     cfg = config.Config()
@@ -520,17 +570,21 @@ class TestCcrStats:
 class TestCcrStatsRecorder:
     java_signed_maxlong = (2**63) - 1
 
-    def test_raises_exception_on_transport_error(self):
+    def test_raises_exception_on_transport_error(self, caplog):
         client = Client(transport_client=TransportClient(response={}, force_error=True))
         cfg = create_config()
         metrics_store = metrics.EsMetricsStore(cfg)
-        with pytest.raises(
-            exceptions.RallyError,
-            match=r"A transport error occurred while collecting CCR stats from the endpoint "
-            r"\[/_ccr/stats\?filter_path=follow_stats\] on "
-            r"cluster \[remote\]",
-        ):
-            telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1).record()
+        with caplog.at_level(logging.ERROR, logger="esrally.telemetry"):
+            caplog.clear()
+            with pytest.raises(
+                exceptions.RallyError,
+                match=r"An error occurred while collecting CCR stats from the endpoint "
+                r"\[/_ccr/stats\?filter_path=follow_stats\] on "
+                r"cluster \[remote\]",
+            ) as exc_info:
+                telemetry.CcrStatsRecorder(cluster_name="remote", client=client, metrics_store=metrics_store, sample_interval=1).record()
+            assert isinstance(exc_info.value.__cause__, elasticsearch.TransportError)
+            assert len(caplog.records) == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
     def test_stores_default_ccr_stats(self, metrics_store_put_doc):
@@ -3320,6 +3374,36 @@ class TestNodeStatsRecorder:
             recorder.record()
             mocked_debug.assert_called_once_with("Node cgroup stats requested with none present.")
 
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_sample_raises_rally_error_on_api_error_without_logging(self, metrics_store_put_doc, caplog):
+        client = mock.Mock()
+        api_err = raiseApiError(status=503, body={}, message="unavailable")
+        client.nodes.stats.side_effect = [
+            api_err,
+            self.node_stats_response,
+        ]
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.NodeStatsRecorder(
+            {"node-stats-sample-interval": 1},
+            cluster_name="default",
+            client=client,
+            metrics_store=metrics_store,
+        )
+
+        with caplog.at_level(logging.ERROR, logger="esrally.telemetry"):
+            caplog.clear()
+            with pytest.raises(
+                exceptions.RallyError, match=r"An error occurred while collecting node stats on cluster \[default\]"
+            ) as exc_info:
+                recorder.record()
+            assert exc_info.value.__cause__ is api_err
+            assert len(caplog.records) == 0
+        assert metrics_store_put_doc.call_count == 0
+
+        recorder.record()
+        assert metrics_store_put_doc.call_count == 1
+
 
 class TestTransformStats:
     def test_negative_sample_interval_forbidden(self):
@@ -4606,6 +4690,32 @@ class TestMasterNodeStatsRecorder:
             ],
         )
 
+    @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
+    def test_raises_rally_error_on_api_or_transport_error_without_logging(self, metrics_store_put_doc, caplog):
+        client = mock.Mock()
+        transport_err = elasticsearch.TransportError(message="transport error")
+        api_err = raiseApiError(status=503, body={}, message="unavailable")
+        client.cluster.state.side_effect = [
+            self.master_node_state_response,
+            transport_err,
+        ]
+        client.nodes.info.side_effect = api_err
+
+        cfg = create_config()
+        metrics_store = metrics.EsMetricsStore(cfg)
+        recorder = telemetry.MasterNodeStatsRecorder(client=client, metrics_store=metrics_store, sample_interval=1)
+
+        with caplog.at_level(logging.ERROR, logger="esrally.telemetry"):
+            caplog.clear()
+            with pytest.raises(exceptions.RallyError, match="An error occurred while collecting master node stats") as exc1:
+                recorder.record()
+            assert exc1.value.__cause__ is api_err
+            with pytest.raises(exceptions.RallyError, match="An error occurred while collecting master node stats") as exc2:
+                recorder.record()
+            assert exc2.value.__cause__ is transport_err
+            assert len(caplog.records) == 0
+        assert metrics_store_put_doc.call_count == 0
+
 
 class TestIngestPipelineStats:
     ingest_pipeline_stats_start_response = {
@@ -5612,8 +5722,15 @@ class TestBlobStoreStatsRecorder:
         metrics_store = metrics.EsMetricsStore(cfg)
 
         recorder = telemetry.BlobStoreStatsRecorder(cluster_name="default", client=client, metrics_store=metrics_store, sample_interval=1)
-        recorder.record()
-        assert "An API error [ApiError(429, 'api error')] occurred while collecting [blob-store-stats] on cluster [default]" in caplog.text
+        with caplog.at_level(logging.ERROR, logger="esrally.telemetry"):
+            caplog.clear()
+            with pytest.raises(
+                exceptions.RallyError,
+                match=r"An error occurred while collecting \[blob-store-stats\] on cluster \[default\]",
+            ) as exc_info:
+                recorder.record()
+            assert isinstance(exc_info.value.__cause__, elasticsearch.ApiError)
+            assert len(caplog.records) == 0
         assert metrics_store_put_doc.call_count == 0
 
     @mock.patch("esrally.metrics.EsMetricsStore.put_doc")
@@ -5623,6 +5740,13 @@ class TestBlobStoreStatsRecorder:
         metrics_store = metrics.EsMetricsStore(cfg)
 
         recorder = telemetry.BlobStoreStatsRecorder(cluster_name="default", client=client, metrics_store=metrics_store, sample_interval=1)
-        recorder.record()
-        assert "A transport error [transport error] occurred while collecting [blob-store-stats] on cluster [default]" in caplog.text
+        with caplog.at_level(logging.ERROR, logger="esrally.telemetry"):
+            caplog.clear()
+            with pytest.raises(
+                exceptions.RallyError,
+                match=r"An error occurred while collecting \[blob-store-stats\] on cluster \[default\]",
+            ) as exc_info:
+                recorder.record()
+            assert isinstance(exc_info.value.__cause__, elasticsearch.TransportError)
+            assert len(caplog.records) == 0
         assert metrics_store_put_doc.call_count == 0
