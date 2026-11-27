@@ -1766,7 +1766,7 @@ class ThroughputCalculator:
             # sort all samples by time
             if k in self.task_stats:
                 samples = itertools.chain(v, self.task_stats[k].unprocessed)
-                # re-added below if they still cannot complete a bucket
+                # these are now part of current_samples
                 self.task_stats[k].unprocessed = []
             else:
                 samples = v
