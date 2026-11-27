@@ -1468,6 +1468,39 @@ class TestMetricsAggregation:
         assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 8000, "byte/s")
         assert throughput[2] == (38597, 23, metrics.SampleType.Normal, 8000, "byte/s")
 
+    @staticmethod
+    def sample(op, absolute_time, time_period):
+        return driver.Sample(
+            0, absolute_time, absolute_time, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 1, "ops", time_period, 0
+        )
+
+    def test_samples_carried_over_between_calculations_are_held_once(self):
+        op = track.Operation("long-running", track.OperationType.Search, param_source="driver-test-param-source")
+        calculator = driver.ThroughputCalculator()
+        calculator.calculate([self.sample(op, 100, 1)])
+        calculator.calculate([self.sample(op, 200, 101)])
+
+        # Each of these started before the latest sample already seen, so none can complete a bucket and all of
+        # them have to be carried over to the next calculation.
+        for i in range(10):
+            calculator.calculate([self.sample(op, 150 + i, 51 + i)])
+
+        assert len(calculator.task_stats[(op, None)].unprocessed) == 10
+
+    def test_samples_carried_over_between_calculations_are_counted_once(self):
+        op = track.Operation("long-running", track.OperationType.Search, param_source="driver-test-param-source")
+        calculator = driver.ThroughputCalculator()
+        calculator.calculate([self.sample(op, 100, 1)])
+        calculator.calculate([self.sample(op, 200, 101)])
+        for i in range(10):
+            calculator.calculate([self.sample(op, 150 + i, 51 + i)])
+
+        throughput = calculator.calculate([self.sample(op, 300, 201)])[(op, None)]
+
+        # 13 operations in total (two earlier samples, ten carried over, this one) over the 201 seconds since the start
+        assert len(throughput) == 1
+        assert throughput[0][3] == 13 / 201
+
     def calculate_global_throughput(self, samples):
         return driver.ThroughputCalculator().calculate(samples)
 

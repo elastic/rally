@@ -1766,6 +1766,10 @@ class ThroughputCalculator:
             # sort all samples by time
             if k in self.task_stats:
                 samples = itertools.chain(v, self.task_stats[k].unprocessed)
+                # These samples are processed again below and carried over again if they still cannot complete a
+                # bucket, so they must leave `unprocessed` now. Otherwise each one is appended a second time and the
+                # list more than doubles with every calculation that completes no bucket.
+                self.task_stats[k].unprocessed = []
             else:
                 samples = v
             current_samples = sorted(samples, key=lambda s: s.absolute_time)
