@@ -260,6 +260,8 @@ def _patched_prepare_track(ask_result):
         mock.patch("esrally.racecontrol.actor.bootstrap_actor_system", return_value=actor_system),
         mock.patch("esrally.racecontrol.track.load_track", return_value=_track_with_challenge("unittest")),
         mock.patch("esrally.racecontrol.track.resolve_challenge_and_invoke_validators"),
+        # attached to actor_system so that its mock_calls record the order of tell() and wait_for_actor_exit()
+        mock.patch("esrally.racecontrol.actor.wait_for_actor_exit", new=actor_system.wait_for_actor_exit),
     ):
         yield actor_system, prep_actor
 
@@ -269,6 +271,9 @@ def _assert_preparation_actor_stopped(actor_system, prep_actor):
     stopped_actor, exit_msg = actor_system.tell.call_args.args
     assert stopped_actor is prep_actor
     assert isinstance(exit_msg, racecontrol.thespian.actors.ActorExitRequest)
+    actor_system.wait_for_actor_exit.assert_called_once_with(prep_actor)
+    stop_calls = [name for name, _, _ in actor_system.mock_calls if name in ("tell", "wait_for_actor_exit")]
+    assert stop_calls == ["tell", "wait_for_actor_exit"]
 
 
 def test_prepare_track_succeeds_on_track_prepared():
