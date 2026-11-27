@@ -1766,6 +1766,8 @@ class ThroughputCalculator:
             # sort all samples by time
             if k in self.task_stats:
                 samples = itertools.chain(v, self.task_stats[k].unprocessed)
+                # these are now part of current_samples
+                self.task_stats[k].unprocessed = []
             else:
                 samples = v
             current_samples = sorted(samples, key=lambda s: s.absolute_time)
