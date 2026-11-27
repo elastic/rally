@@ -1468,38 +1468,27 @@ class TestMetricsAggregation:
         assert throughput[1] == (38596, 22, metrics.SampleType.Normal, 8000, "byte/s")
         assert throughput[2] == (38597, 23, metrics.SampleType.Normal, 8000, "byte/s")
 
-    @staticmethod
-    def sample(op, absolute_time, time_period):
-        return driver.Sample(
-            0, absolute_time, absolute_time, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 1, "ops", time_period, 0
-        )
-
-    def test_samples_carried_over_between_calculations_are_held_once(self):
+    def test_carried_over_samples_are_held_and_counted_once(self):
         op = track.Operation("long-running", track.OperationType.Search, param_source="driver-test-param-source")
-        calculator = driver.ThroughputCalculator()
-        calculator.calculate([self.sample(op, 100, 1)])
-        calculator.calculate([self.sample(op, 200, 101)])
 
-        # Each of these started before the latest sample already seen, so none can complete a bucket and all of
-        # them have to be carried over to the next calculation.
+        def sample(absolute_time, time_period):
+            return driver.Sample(
+                0, absolute_time, absolute_time, 0, op, metrics.SampleType.Normal, None, -1, -1, -1, None, 1, "ops", time_period, 0
+            )
+
+        calculator = driver.ThroughputCalculator()
+        calculator.calculate([sample(100, 1)])
+        calculator.calculate([sample(200, 101)])
+        # older than the latest sample, so none of these completes a bucket
         for i in range(10):
-            calculator.calculate([self.sample(op, 150 + i, 51 + i)])
+            calculator.calculate([sample(150 + i, 51 + i)])
 
         assert len(calculator.task_stats[(op, None)].unprocessed) == 10
 
-    def test_samples_carried_over_between_calculations_are_counted_once(self):
-        op = track.Operation("long-running", track.OperationType.Search, param_source="driver-test-param-source")
-        calculator = driver.ThroughputCalculator()
-        calculator.calculate([self.sample(op, 100, 1)])
-        calculator.calculate([self.sample(op, 200, 101)])
-        for i in range(10):
-            calculator.calculate([self.sample(op, 150 + i, 51 + i)])
+        throughput = calculator.calculate([sample(300, 201)])[(op, None)]
 
-        throughput = calculator.calculate([self.sample(op, 300, 201)])[(op, None)]
-
-        # 13 operations in total (two earlier samples, ten carried over, this one) over the 201 seconds since the start
-        assert len(throughput) == 1
-        assert throughput[0][3] == 13 / 201
+        # 13 operations over the 201 seconds since the start
+        assert throughput == [(300, 300, metrics.SampleType.Normal, 13 / 201, "ops/s")]
 
     def calculate_global_throughput(self, samples):
         return driver.ThroughputCalculator().calculate(samples)
