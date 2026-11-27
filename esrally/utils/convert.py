@@ -219,6 +219,21 @@ def ms_to_minutes(x: int | float | None) -> float | None:
     return duration(x, Duration.Unit.MS).m()
 
 
+def ms_to_human_value(x: int | float | None) -> float | None:
+    if x is None:
+        return None
+    d = duration(x, Duration.Unit.MS)
+    return d.to_unit(d.unit)
+
+
+def ms_to_human_unit(x: int | float | None) -> str:
+    if x is None:
+        return "N/A"
+    unit = duration(x, Duration.Unit.MS).unit
+    # The summary report has always labelled minutes as "min"; keep that instead of Duration's "m".
+    return "min" if unit == Duration.Unit.M else str(unit)
+
+
 N = TypeVar("N", float, int)
 
 

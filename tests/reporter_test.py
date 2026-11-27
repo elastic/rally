@@ -65,6 +65,62 @@ class TestFormatter:
         assert len(formatted.splitlines()) == 1 + 4
 
 
+class TestSummaryReporter:
+    def setup_method(self, method):
+        config_mock = mock.Mock(config.Config)
+        config_mock.opts.return_value = False
+        self.reporter = reporter.SummaryReporter(results=None, config=config_mock)
+
+    def test_report_total_time_picks_unit_from_value(self):
+        assert self.reporter._report_total_time("indexing time", 250) == [
+            ["Cumulative indexing time of primary shards", "", 250, "ms"],
+        ]
+        assert self.reporter._report_total_time("indexing time", 1500) == [
+            ["Cumulative indexing time of primary shards", "", 1.5, "s"],
+        ]
+        assert self.reporter._report_total_time("indexing time", 90_000) == [
+            ["Cumulative indexing time of primary shards", "", 1.5, "min"],
+        ]
+        assert self.reporter._report_total_time("indexing time", 5_400_000) == [
+            ["Cumulative indexing time of primary shards", "", 1.5, "h"],
+        ]
+
+    def test_report_total_time_per_shard_picks_unit_per_value(self):
+        metrics = self.reporter._report_total_time_per_shard("merge time", {"min": 500, "median": 30_000, "max": 120_000})
+        assert metrics == [
+            ["Min cumulative merge time across primary shards", "", 500, "ms"],
+            ["Median cumulative merge time across primary shards", "", 30, "s"],
+            ["Max cumulative merge time across primary shards", "", 2, "min"],
+        ]
+
+    def test_report_total_time_skips_missing_value(self):
+        assert self.reporter._report_total_time("indexing time", None) == []
+
+    def test_report_gc_metrics(self):
+        stats = GlobalStats(
+            {
+                "young_gc_time": 100,
+                "young_gc_count": 1,
+                "old_gc_time": 2_000,
+                "old_gc_count": 1,
+                "zgc_cycles_gc_time": 180_000,
+                "zgc_cycles_gc_count": 1,
+                "zgc_pauses_gc_time": 0,
+                "zgc_pauses_gc_count": 0,
+            }
+        )
+        assert self.reporter._report_gc_metrics(stats) == [
+            ["Total Young Gen GC time", "", 100, "ms"],
+            ["Total Young Gen GC count", "", 1, ""],
+            ["Total Old Gen GC time", "", 2, "s"],
+            ["Total Old Gen GC count", "", 1, ""],
+            ["Total ZGC Cycles GC time", "", 3, "min"],
+            ["Total ZGC Cycles GC count", "", 1, ""],
+            ["Total ZGC Pauses GC time", "", 0, "s"],
+            ["Total ZGC Pauses GC count", "", 0, ""],
+        ]
+
+
 class TestComparisonReporter:
     def setup_method(self, method):
         config_mock = mock.Mock(config.Config)
