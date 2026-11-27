@@ -367,7 +367,7 @@ The runner distinguishes three error types, which appear in the ``error-type`` f
 Corpus Preparation
 ------------------
 
-When you run ``esrally prepare-track`` (or the first time ``esrally race`` is called with a new corpus), Rally converts the OTLP JSON file to a binary protobuf file. To convert locally, first install the optional dependencies with ``python -m pip install 'esrally[otlp]'``. Conversion is a one-time cost per machine.
+When you run ``esrally prepare-track`` (or the first time ``esrally race`` is called with a new corpus), Rally converts the OTLP JSON file to a binary protobuf file. Converting locally needs the optional ``otlp`` extra of the ``esrally`` package, which the installation script installs with ``--extra otlp`` (see :ref:`optional features <install_optional_features>`). Conversion is a one-time cost per machine.
 
 The preparation strategy is:
 
