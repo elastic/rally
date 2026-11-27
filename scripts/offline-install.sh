@@ -53,6 +53,12 @@ readonly CONSTRAINTS_FILE
 readonly PYTHON_INSTALL_LINK="https://esrally.readthedocs.io/en/stable/install.html#python"
 readonly PYTHON_ERROR_MSG="is required but not installed. Follow the instructions in ${PYTHON_INSTALL_LINK} and try again."
 
+# The dependency bundle contains wheels for Python 3.13.
+python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 13))' || {
+    echo >&2 "Python 3.13 is required. Follow the instructions in ${PYTHON_INSTALL_LINK} and try again."
+    exit 1
+}
+
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
   DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
@@ -70,7 +76,7 @@ function main {
 
     mkdir -p "${ABSOLUTE_DOWNLOAD_BIN_DIR}"
     # Pin dependencies to the versions from uv.lock, which the wheel ships as constraints
-    pip3 download esrally=="${RALLY_VERSION}" --no-deps --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}"
+    python3 -m pip download esrally=="${RALLY_VERSION}" --no-deps --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}"
     local wheel="${ABSOLUTE_DOWNLOAD_BIN_DIR}/esrally-${RALLY_VERSION}-py3-none-any.whl"
     if ! python3 -c 'import sys, zipfile; sys.stdout.write(zipfile.ZipFile(sys.argv[1]).read("esrally/resources/rally-constraints.txt").decode())' "${wheel}" > "${CONSTRAINTS_FILE}"
     then
@@ -79,7 +85,7 @@ function main {
         exit 1
     fi
     # Prepare install
-    pip3 download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}" --constraint "${CONSTRAINTS_FILE}"
+    python3 -m pip download esrally=="${RALLY_VERSION}" --dest "${ABSOLUTE_DOWNLOAD_BIN_DIR}" --constraint "${CONSTRAINTS_FILE}"
 
 
     echo "Preparing NOTICE file"
@@ -109,9 +115,14 @@ echo "Installing Rally ${RALLY_VERSION}..."
 
 # Check if mandatory prerequisites are installed
 command -v python3 >/dev/null 2>&1 || { echo >&2 "Python3 ${PYTHON_ERROR_MSG}"; exit 1; }
-command -v pip3 >/dev/null 2>&1 || { echo >&2 "pip3 ${PYTHON_ERROR_MSG}"; exit 1; }
+# The dependency bundle contains wheels for Python 3.13.
+python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 13))' || {
+    echo >&2 "Python 3.13 is required. Follow the instructions in ${PYTHON_INSTALL_LINK} and try again."
+    exit 1
+}
+python3 -m pip --version >/dev/null 2>&1 || { echo >&2 "pip ${PYTHON_ERROR_MSG}"; exit 1; }
 
-pip3 install esrally==${RALLY_VERSION} --no-index --find-links file://\${SRC_HOME}/bin
+python3 -m pip install esrally==${RALLY_VERSION} --no-index --find-links file://\${SRC_HOME}/bin
 EOL
     chmod u+x ${install_script}
 
